@@ -1,6 +1,9 @@
 # Dependencies (matches node_modules in any folder: Frontend/, Backend/, ...)
 node_modules/
 
+# Client handover pack (reference material, kept local only)
+Masti-CRM-Handover/
+
 # Build output
 dist/
 dist-ssr/
