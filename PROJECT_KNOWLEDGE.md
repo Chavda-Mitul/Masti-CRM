@@ -1418,15 +1418,16 @@ Masti CRM/
 │   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,
 │   │   │                            audit), *.schemas.ts (zod, frontend-shareable)
 │   │   ├── auth/                 ← login/logout/me/change-password + session.ts, password.ts (argon2id),
-│   │   │                            identifier.ts (mobile/email), permissions.ts (can, isHodOf), officeNetwork.ts
+│   │   │                            identifier.ts (login identifier), permissions.ts (can, isHodOf), officeNetwork.ts
 │   │   ├── users/                ← user management (Head only) + user.ts (withDepartments, toUserDto)
 │   │   ├── clients/              ← client master: clients, extra numbers, members, notes, lookup/search, settings;
 │   │   │                            access.ts (who may edit), duplicates.ts (confirmDuplicates), readiness.ts (assertInvoiceReady)
 │   │   ├── departments/          ← active department list
 │   │   └── health/               ← server and database status
-│   ├── src/middleware/           ← auth.ts (requireAuth, requireHead, requireDepartment,
+│   ├── src/middleware/           ← auth.ts (requireAuth, actorOf, requireHead, requireDepartment,
 │   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
-│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers)
+│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers),
+│                                contact.ts (mobile/email clean-up), prismaErrors.ts (rethrowUnique)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
@@ -1437,7 +1438,7 @@ Masti CRM/
     ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
-    ├── src/components/           ← AppShell (approved sidebar), Toast (ToastProvider), FormField, ConfirmDialog
+    ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog
     ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
     └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors), shell.css, auth.css, clients.css
 ```
@@ -1459,9 +1460,9 @@ Masti CRM/
 **Rules every new route must follow:**
 - Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
 - A route with no department check needs `requireUserType(...)`, e.g. `("HEAD", "OFFICE")` for desktop-only data. Field staff get only `/api/auth/*` and, later, `/api/field/*` (their own jobs).
-- Read the user with `currentUser(req)`.
+- Read the user with `currentUser(req)`, or `actorOf(req)` (user + IP) for services that audit.
 - Check finer rules with `can()` / `isHodOf()` from `src/modules/auth/permissions.ts`.
-- Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction.
+- Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction. Pass `clientId` when the change belongs to a client (a visa file, an invoice…), so it shows in that client's history.
 - Throw `HttpError` / `badRequest()` / `forbidden()` etc.; `errorHandler` turns them (and zod errors) into JSON.
 - State-changing requests must be JSON (`requireJson`, the CSRF guard).
 
