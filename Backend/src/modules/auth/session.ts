@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { Request, Response } from "express";
-import { env, isProduction } from "../config/env";
-import { prisma } from "../config/prisma";
-import { withDepartments } from "./user";
+import type { Response } from "express";
+import { env, isProduction } from "../../config/env";
+import { prisma } from "../../config/prisma";
+import { withDepartments } from "../users/user";
 
 export const SESSION_COOKIE = "masti_sid";
 
@@ -18,7 +18,13 @@ function nextExpiry(createdAt: Date, now = new Date()): Date {
   return new Date(Math.min(idle, absolute));
 }
 
-export async function createSession(userId: string, req: Request) {
+/** Where a login came from, recorded on the session. */
+export interface ClientInfo {
+  ip: string | null;
+  userAgent: string | null;
+}
+
+export async function createSession(userId: string, client: ClientInfo) {
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const session = await prisma.session.create({
@@ -28,8 +34,8 @@ export async function createSession(userId: string, req: Request) {
       createdAt: now,
       lastSeenAt: now,
       expiresAt: nextExpiry(now, now),
-      ip: req.ip ?? null,
-      userAgent: req.get("user-agent")?.slice(0, 500) ?? null,
+      ip: client.ip,
+      userAgent: client.userAgent?.slice(0, 500) ?? null,
     },
   });
   return { token, session };

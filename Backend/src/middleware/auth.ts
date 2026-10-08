@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from "express";
 import type { Access, UserType } from "../../generated/prisma/client";
-import { officeNetworkAllows } from "../auth/officeNetwork";
-import { can } from "../auth/permissions";
-import { clearSessionCookie, findSession, SESSION_COOKIE, setSessionCookie, touchSession } from "../auth/session";
+import { officeNetworkAllows } from "../modules/auth/officeNetwork";
+import { can } from "../modules/auth/permissions";
+import { clearSessionCookie, findSession, SESSION_COOKIE, setSessionCookie, touchSession } from "../modules/auth/session";
 import { forbidden, unauthorized } from "../lib/httpError";
 
 /** Requires a valid session for an active user. Sets req.auth. */

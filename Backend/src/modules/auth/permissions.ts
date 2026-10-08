@@ -1,5 +1,5 @@
-import type { Access } from "../../generated/prisma/client";
-import type { UserWithDepartments } from "./user";
+import type { Access } from "../../../generated/prisma/client";
+import type { UserWithDepartments } from "../users/user";
 
 export type DepartmentCode = "VISA" | "HOLIDAYS" | "HOTELS" | "INSURANCE" | "TICKETS" | "ACCOUNTS";
 

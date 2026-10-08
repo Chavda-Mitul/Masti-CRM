@@ -6,9 +6,9 @@
  * If there is no Head but a user with the SEED_HEAD mobile/email exists, that user is made Head instead.
  */
 import "dotenv/config";
-import { normaliseEmail, normaliseMobile } from "../src/auth/identifier";
-import { generateTempPassword, hashPassword } from "../src/auth/password";
-import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/auth/officeNetwork";
+import { normaliseEmail, normaliseMobile } from "../src/modules/auth/identifier";
+import { generateTempPassword, hashPassword } from "../src/modules/auth/password";
+import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
 import { prisma } from "../src/config/prisma";
 import { audit } from "../src/lib/audit";
 

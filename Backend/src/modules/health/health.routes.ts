@@ -1,16 +1,10 @@
 import { Router } from "express";
-import { prisma } from "../config/prisma";
+import * as healthService from "./health.service";
 
 const router = Router();
 
 router.get("/", async (_req, res) => {
-  let database: "up" | "down" = "up";
-
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-  } catch {
-    database = "down";
-  }
+  const database = await healthService.databaseStatus();
 
   res.status(database === "up" ? 200 : 503).json({
     status: database === "up" ? "ok" : "error",

@@ -1,4 +1,4 @@
-import type { UserWithDepartments } from "../auth/user";
+import type { UserWithDepartments } from "../modules/users/user";
 
 declare global {
   namespace Express {

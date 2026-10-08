@@ -1,46 +1,17 @@
-import { Router } from "express";
-import { z } from "zod";
-import { Prisma, UserType } from "../../generated/prisma/client";
-import { prisma } from "../config/prisma";
+import { Prisma, type UserType } from "../../../generated/prisma/client";
+import { prisma } from "../../config/prisma";
+import { audit } from "../../lib/audit";
+import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
 import { normaliseEmail, normaliseMobile } from "../auth/identifier";
-import { generateTempPassword, hashPassword, MIN_PASSWORD_LENGTH } from "../auth/password";
-import { toUserDto, withDepartments } from "../auth/user";
-import { audit } from "../lib/audit";
-import { badRequest, conflict, HttpError, notFound } from "../lib/httpError";
-import { currentUser, requireAuth, requireHead, requirePasswordChanged } from "../middleware/auth";
+import { generateTempPassword, hashPassword } from "../auth/password";
+import { toUserDto, withDepartments, type UserWithDepartments } from "./user";
+import type { CreateUserInput, Membership, UpdateUserInput } from "./users.schemas";
 
-/**
- * User management. Head only for now.
- * (Whether HODs can manage their own department's users is an open question.)
- */
-const router = Router();
-router.use(requireAuth, requirePasswordChanged, requireHead);
-
-const membershipSchema = z.object({
-  departmentCode: z.string().trim().min(1),
-  role: z.enum(["STAFF", "HOD"]),
-  access: z.enum(["VIEW", "EDIT"]),
-});
-
-const createSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name.").max(100),
-  mobile: z.string().trim().max(30).nullish(),
-  email: z.string().trim().max(200).nullish(),
-  type: z.enum(UserType).default("OFFICE"),
-  departments: z.array(membershipSchema).default([]),
-  /** Optional: if missing, a temporary password is generated and returned once. */
-  password: z.string().min(MIN_PASSWORD_LENGTH).max(200).optional(),
-});
-
-const updateSchema = z.object({
-  name: z.string().trim().min(1, "Enter a name.").max(100).optional(),
-  mobile: z.string().trim().max(30).nullish(),
-  email: z.string().trim().max(200).nullish(),
-  type: z.enum(UserType).optional(),
-  departments: z.array(membershipSchema).optional(),
-});
-
-type Membership = z.infer<typeof membershipSchema>;
+/** Who is making the change, for permission rules and the audit log. */
+export interface Actor {
+  user: UserWithDepartments;
+  ip: string | null;
+}
 
 /** "" and null clear the field; undefined means "not sent". */
 function cleanMobile(value: string | null | undefined): string | null | undefined {
@@ -110,36 +81,35 @@ async function anotherActiveHeadExists(userId: string) {
   return (await prisma.user.count({ where: { type: "HEAD", isActive: true, id: { not: userId } } })) > 0;
 }
 
-router.get("/", async (_req, res) => {
+export async function listUsers() {
   const users = await prisma.user.findMany({ include: withDepartments, orderBy: { name: "asc" } });
-  res.json({ users: users.map(toUserDto) });
-});
+  return users.map(toUserDto);
+}
 
-router.get("/:id", async (req, res) => {
-  res.json({ user: toUserDto(await getUserOr404(req.params.id)) });
-});
+export async function getUser(id: string) {
+  return toUserDto(await getUserOr404(id));
+}
 
-router.post("/", async (req, res) => {
-  const body = createSchema.parse(req.body);
-  const actor = currentUser(req);
-  const mobile = cleanMobile(body.mobile) ?? null;
-  const email = cleanEmail(body.email) ?? null;
+/** Creates a user. `tempPassword` is set (and must be shown once) when no password was given. */
+export async function createUser(input: CreateUserInput, actor: Actor) {
+  const mobile = cleanMobile(input.mobile) ?? null;
+  const email = cleanEmail(input.email) ?? null;
   if (!mobile && !email) throw badRequest("Enter a mobile number or an email (or both).");
-  assertFitsType(body.type, mobile, body.departments.length);
+  assertFitsType(input.type, mobile, input.departments.length);
   await assertUnique(mobile, email);
-  const memberships = await resolveMemberships(body.departments);
+  const memberships = await resolveMemberships(input.departments);
 
-  const tempPassword = body.password ? undefined : generateTempPassword();
-  const passwordHash = await hashPassword(body.password ?? (tempPassword as string));
+  const tempPassword = input.password ? undefined : generateTempPassword();
+  const passwordHash = await hashPassword(input.password ?? (tempPassword as string));
 
   const user = await prisma
     .$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
-          name: body.name,
+          name: input.name,
           mobile,
           email,
-          type: body.type,
+          type: input.type,
           passwordHash,
           mustChangePassword: true,
           departments: { create: memberships },
@@ -147,32 +117,30 @@ router.post("/", async (req, res) => {
         include: withDepartments,
       });
       await audit(
-        { actorId: actor.id, action: "user.create", entityType: "User", entityId: created.id, after: toUserDto(created), ip: req.ip ?? null },
+        { actorId: actor.user.id, action: "user.create", entityType: "User", entityId: created.id, after: toUserDto(created), ip: actor.ip },
         tx,
       );
       return created;
     })
     .catch(rethrowUnique);
 
-  res.status(201).json({ user: toUserDto(user), ...(tempPassword ? { tempPassword } : {}) });
-});
+  return { user: toUserDto(user), tempPassword };
+}
 
-router.patch("/:id", async (req, res) => {
-  const body = updateSchema.parse(req.body);
-  const actor = currentUser(req);
-  const before = await getUserOr404(req.params.id);
+export async function updateUser(id: string, input: UpdateUserInput, actor: Actor) {
+  const before = await getUserOr404(id);
 
-  const mobile = cleanMobile(body.mobile);
-  const email = cleanEmail(body.email);
+  const mobile = cleanMobile(input.mobile);
+  const email = cleanEmail(input.email);
   const finalMobile = mobile === undefined ? before.mobile : mobile;
   const finalEmail = email === undefined ? before.email : email;
   if (!finalMobile && !finalEmail) throw badRequest("A user needs a mobile number or an email (or both).");
 
-  const finalType = body.type ?? before.type;
+  const finalType = input.type ?? before.type;
   if (before.type === "HEAD" && finalType !== "HEAD" && before.isActive && !(await anotherActiveHeadExists(before.id))) {
     throw new HttpError(409, "There must always be at least one active Head.");
   }
-  const memberships = body.departments ? await resolveMemberships(body.departments) : undefined;
+  const memberships = input.departments ? await resolveMemberships(input.departments) : undefined;
   // Becoming Head or field staff drops any department access the user had.
   const finalDepartmentCount = memberships ? memberships.length : finalType === "OFFICE" ? before.departments.length : 0;
   assertFitsType(finalType, finalMobile, finalDepartmentCount);
@@ -186,10 +154,10 @@ router.patch("/:id", async (req, res) => {
       await tx.user.update({
         where: { id: before.id },
         data: {
-          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(input.name !== undefined ? { name: input.name } : {}),
           ...(mobile !== undefined ? { mobile } : {}),
           ...(email !== undefined ? { email } : {}),
-          ...(body.type !== undefined ? { type: body.type } : {}),
+          ...(input.type !== undefined ? { type: input.type } : {}),
         },
       });
       if (finalType === "OFFICE" && memberships) {
@@ -199,13 +167,13 @@ router.patch("/:id", async (req, res) => {
       const user = await tx.user.findUniqueOrThrow({ where: { id: before.id }, include: withDepartments });
       await audit(
         {
-          actorId: actor.id,
+          actorId: actor.user.id,
           action: "user.update",
           entityType: "User",
           entityId: user.id,
           before: toUserDto(before),
           after: toUserDto(user),
-          ip: req.ip ?? null,
+          ip: actor.ip,
         },
         tx,
       );
@@ -213,13 +181,12 @@ router.patch("/:id", async (req, res) => {
     })
     .catch(rethrowUnique);
 
-  res.json({ user: toUserDto(updated) });
-});
+  return toUserDto(updated);
+}
 
-router.post("/:id/deactivate", async (req, res) => {
-  const actor = currentUser(req);
-  const before = await getUserOr404(req.params.id);
-  if (before.id === actor.id) throw badRequest("You can't deactivate yourself.");
+export async function deactivateUser(id: string, actor: Actor) {
+  const before = await getUserOr404(id);
+  if (before.id === actor.user.id) throw badRequest("You can't deactivate yourself.");
   if (before.type === "HEAD" && before.isActive && !(await anotherActiveHeadExists(before.id))) {
     throw new HttpError(409, "There must always be at least one active Head.");
   }
@@ -229,35 +196,34 @@ router.post("/:id/deactivate", async (req, res) => {
     // Ends access immediately: every open session for this user is deleted.
     await tx.session.deleteMany({ where: { userId: before.id } });
     await audit(
-      { actorId: actor.id, action: "user.deactivate", entityType: "User", entityId: user.id, before: toUserDto(before), after: toUserDto(user), ip: req.ip ?? null },
+      { actorId: actor.user.id, action: "user.deactivate", entityType: "User", entityId: user.id, before: toUserDto(before), after: toUserDto(user), ip: actor.ip },
       tx,
     );
     return user;
   });
 
-  res.json({ user: toUserDto(updated) });
-});
+  return toUserDto(updated);
+}
 
-router.post("/:id/activate", async (req, res) => {
-  const actor = currentUser(req);
-  const before = await getUserOr404(req.params.id);
+export async function activateUser(id: string, actor: Actor) {
+  const before = await getUserOr404(id);
 
   const updated = await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({ where: { id: before.id }, data: { isActive: true }, include: withDepartments });
     await audit(
-      { actorId: actor.id, action: "user.activate", entityType: "User", entityId: user.id, before: toUserDto(before), after: toUserDto(user), ip: req.ip ?? null },
+      { actorId: actor.user.id, action: "user.activate", entityType: "User", entityId: user.id, before: toUserDto(before), after: toUserDto(user), ip: actor.ip },
       tx,
     );
     return user;
   });
 
-  res.json({ user: toUserDto(updated) });
-});
+  return toUserDto(updated);
+}
 
-router.post("/:id/reset-password", async (req, res) => {
-  const actor = currentUser(req);
-  const before = await getUserOr404(req.params.id);
-  if (before.id === actor.id) throw badRequest("Use 'Change password' to change your own password.");
+/** Sets a new temporary password (returned once) and ends all of the user's sessions. */
+export async function resetPassword(id: string, actor: Actor) {
+  const before = await getUserOr404(id);
+  if (before.id === actor.user.id) throw badRequest("Use 'Change password' to change your own password.");
 
   const tempPassword = generateTempPassword();
   const passwordHash = await hashPassword(tempPassword);
@@ -269,11 +235,9 @@ router.post("/:id/reset-password", async (req, res) => {
       include: withDepartments,
     });
     await tx.session.deleteMany({ where: { userId: before.id } });
-    await audit({ actorId: actor.id, action: "user.password.reset", entityType: "User", entityId: user.id, ip: req.ip ?? null }, tx);
+    await audit({ actorId: actor.user.id, action: "user.password.reset", entityType: "User", entityId: user.id, ip: actor.ip }, tx);
     return user;
   });
 
-  res.json({ user: toUserDto(updated), tempPassword });
-});
-
-export default router;
+  return { user: toUserDto(updated), tempPassword };
+}

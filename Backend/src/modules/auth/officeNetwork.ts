@@ -1,8 +1,7 @@
 import { BlockList, isIP } from "node:net";
-import { z } from "zod";
-import { UserType } from "../../generated/prisma/client";
-import { prisma } from "../config/prisma";
-import type { UserWithDepartments } from "./user";
+import { prisma } from "../../config/prisma";
+import type { UserWithDepartments } from "../users/user";
+import { officeNetworkSchema, type OfficeNetworkSetting } from "./auth.schemas";
 
 /**
  * "IP-based" CRM login (open question Q14): when enabled, users may only use the CRM from the office network.
@@ -10,15 +9,6 @@ import type { UserWithDepartments } from "./user";
  * Stored in the Setting table under this key.
  */
 export const OFFICE_NETWORK_KEY = "officeNetwork";
-
-export const officeNetworkSchema = z.object({
-  enabled: z.boolean(),
-  /** IPs or CIDR ranges, IPv4 or IPv6, e.g. "203.0.113.10" or "203.0.113.0/24". */
-  allow: z.array(z.string()),
-  exemptUserTypes: z.array(z.enum(UserType)),
-});
-
-export type OfficeNetworkSetting = z.infer<typeof officeNetworkSchema>;
 
 export const DEFAULT_OFFICE_NETWORK: OfficeNetworkSetting = { enabled: false, allow: [], exemptUserTypes: ["FIELD"] };
 

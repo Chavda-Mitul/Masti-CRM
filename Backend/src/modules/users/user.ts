@@ -1,4 +1,4 @@
-import type { Prisma } from "../../generated/prisma/client";
+import type { Prisma } from "../../../generated/prisma/client";
 
 /** Prisma include that loads a user's department roles with the department rows. */
 export const withDepartments = {

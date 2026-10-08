@@ -6,10 +6,10 @@ import morgan from "morgan";
 import { env, trustProxySetting } from "./config/env";
 import { apiNotFound, errorHandler } from "./middleware/error";
 import { requireJson } from "./middleware/requireJson";
-import authRoutes from "./routes/auth.routes";
-import departmentRoutes from "./routes/departments.routes";
-import healthRoutes from "./routes/health.routes";
-import userRoutes from "./routes/users.routes";
+import authRoutes from "./modules/auth/auth.routes";
+import departmentRoutes from "./modules/departments/departments.routes";
+import healthRoutes from "./modules/health/health.routes";
+import userRoutes from "./modules/users/users.routes";
 
 const app = express();
 

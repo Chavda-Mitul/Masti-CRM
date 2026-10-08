@@ -41,7 +41,7 @@ Staff are not technical, and the collection boy has only a phone.
 |---|---|
 | Head | `User.isHead`: everything. *Replaced by `User.type` (HEAD/OFFICE/FIELD) in [0002](0002-user-types.md).* |
 | Departments | Per-department `UserDepartment(role STAFF/HOD, access VIEW/EDIT)`. An HOD always has EDIT in their department. |
-| Helpers | `can()` and `isHodOf()` in `Backend/src/auth/permissions.ts`; middleware `requireAuth`, `requireHead`, `requireDepartment(code, access)` |
+| Helpers | `can()` and `isHodOf()` in `Backend/src/modules/auth/permissions.ts`; middleware `requireAuth`, `requireHead`, `requireDepartment(code, access)` |
 | Departments as data | Department rows, not an enum, so Phase-2 departments don't need a migration |
 | User management | Head only for now (whether HODs manage their own team is open) |
 

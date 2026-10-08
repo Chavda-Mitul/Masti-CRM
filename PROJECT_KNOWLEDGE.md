@@ -1396,12 +1396,16 @@ Masti CRM/
 │   ├── prisma/seed.ts            ← departments + first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
-│   ├── src/auth/                 ← session.ts, password.ts (argon2id), identifier.ts (mobile/email),
-│   │                                permissions.ts (can, isHodOf), officeNetwork.ts, user.ts (DTO)
+│   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,
+│   │   │                            audit), *.schemas.ts (zod, frontend-shareable)
+│   │   ├── auth/                 ← login/logout/me/change-password + session.ts, password.ts (argon2id),
+│   │   │                            identifier.ts (mobile/email), permissions.ts (can, isHodOf), officeNetwork.ts
+│   │   ├── users/                ← user management (Head only) + user.ts (withDepartments, toUserDto)
+│   │   ├── departments/          ← active department list
+│   │   └── health/               ← server and database status
 │   ├── src/middleware/           ← auth.ts (requireAuth, requireHead, requireDepartment,
 │   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
 │   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts
-│   ├── src/routes/               ← health, auth, users (Head only), departments
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
@@ -1430,7 +1434,7 @@ Masti CRM/
 - Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
 - A route with no department check needs `requireUserType(...)`, e.g. `("HEAD", "OFFICE")` for desktop-only data. Field staff get only `/api/auth/*` and, later, `/api/field/*` (their own jobs).
 - Read the user with `currentUser(req)`.
-- Check finer rules with `can()` / `isHodOf()` from `src/auth/permissions.ts`.
+- Check finer rules with `can()` / `isHodOf()` from `src/modules/auth/permissions.ts`.
 - Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction.
 - Throw `HttpError` / `badRequest()` / `forbidden()` etc.; `errorHandler` turns them (and zod errors) into JSON.
 - State-changing requests must be JSON (`requireJson`, the CSRF guard).
@@ -1474,10 +1478,15 @@ Masti CRM/
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 
 **Conventions:**
-- Backend routes live in `src/routes/*.routes.ts` and are mounted under `/api/...`. The backend compiles to **CommonJS**, so relative imports stay extensionless.
+- Backend features live in `src/modules/<feature>/`, mounted under `/api/...` in `app.ts`:
+  - `<feature>.routes.ts` handles HTTP only: middleware, `schema.parse(req.body)`, call the service, send the response (and cookies). Express 5 async handlers, no controller layer.
+  - `<feature>.service.ts` holds the business rules, every Prisma query and `$transaction`, and the `audit()` calls. It takes plain inputs (parsed body, ids, the acting user and IP), never `req`/`res`, and returns DTOs.
+  - `<feature>.schemas.ts` holds the zod schemas and their inferred input types. It imports only `zod`, the generated enums (`generated/prisma/enums`) and other schema files, so it can later be shared with the frontend.
+  - Shared infrastructure stays outside modules: `config/`, `lib/` (audit, httpError), `middleware/`, `types/`.
+- The backend compiles to **CommonJS**, so relative imports stay extensionless.
 - **Prisma 7:**
   - The datasource URL and the seed command live in `prisma.config.ts`.
-  - The client is generated to `generated/prisma` and imported from `../../generated/prisma/client`.
+  - The client is generated to `generated/prisma` and imported from `generated/prisma/client` (`../../../generated/prisma/client` inside a module; pure enums from `generated/prisma/enums`).
   - A driver adapter (`PrismaPg`) is required.
   - **Departments are rows, not enums**; keep masters as tables too.
 - **Express 5** forwards rejected promises from async handlers to the error middleware, so just `throw`.

@@ -1,8 +1,8 @@
 import request from "supertest";
 import type { Access, DepartmentRole, UserType } from "../generated/prisma/client";
 import app from "../src/app";
-import { clearOfficeNetworkCache } from "../src/auth/officeNetwork";
-import { hashPassword } from "../src/auth/password";
+import { clearOfficeNetworkCache } from "../src/modules/auth/officeNetwork";
+import { hashPassword } from "../src/modules/auth/password";
 import { prisma } from "../src/config/prisma";
 
 export const PASSWORD = "Correct-Horse-9";

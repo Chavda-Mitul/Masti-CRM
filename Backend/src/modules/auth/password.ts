@@ -1,8 +1,6 @@
 import { hash, verify } from "@node-rs/argon2";
 import { randomInt } from "node:crypto";
 
-export const MIN_PASSWORD_LENGTH = 8;
-
 /** argon2id with the library's recommended defaults. */
 export function hashPassword(password: string): Promise<string> {
   return hash(password);

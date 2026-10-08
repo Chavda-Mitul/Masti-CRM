@@ -34,8 +34,10 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`).
 
-Inside the route:
-- Read the user with `currentUser(req)`.
+Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod and `generated/prisma/enums`).
+
+Inside the route and its service:
+- Read the user with `currentUser(req)` in the route and pass it to the service.
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
 - Throw `HttpError` helpers for errors.

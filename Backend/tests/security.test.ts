@@ -1,9 +1,9 @@
 import cookieParser from "cookie-parser";
 import express from "express";
 import { beforeEach, describe, expect, it } from "vitest";
-import { clearOfficeNetworkCache, ipAllowed, OFFICE_NETWORK_KEY } from "../src/auth/officeNetwork";
-import { can } from "../src/auth/permissions";
-import type { UserWithDepartments } from "../src/auth/user";
+import { clearOfficeNetworkCache, ipAllowed, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
+import { can } from "../src/modules/auth/permissions";
+import type { UserWithDepartments } from "../src/modules/users/user";
 import { requireAuth, requireDepartment } from "../src/middleware/auth";
 import { errorHandler } from "../src/middleware/error";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
