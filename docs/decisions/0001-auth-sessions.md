@@ -30,7 +30,7 @@ Staff are not technical, and the collection boy has only a phone.
 | Topic | Choice |
 |---|---|
 | Hashing | argon2id (`@node-rs/argon2`) |
-| New users and resets | Get a readable temporary password, shown once, which must be changed at first login (`mustChangePassword`) |
+| New users and resets | Get a readable temporary password, shown once, which must be changed at first login (`mustChangePassword`). The forced change asks only for the new password (twice), not the temporary one again. That is safe because a temporary-password session ends after `TEMP_PASSWORD_SESSION_MINUTES` (15) and a reset ends every session, so any such session was opened by typing the temporary password moments earlier. Normal changes still need the current password |
 | Login | **Mobile number or email** in one field. Mobiles are normalised to `+91XXXXXXXXXX`; emails are lowercased. |
 | Failed logins | One generic error message. A dummy hash check runs for unknown users, so timing doesn't reveal accounts. |
 | Rate limit | 10 failed attempts per 15 min per IP + identifier |

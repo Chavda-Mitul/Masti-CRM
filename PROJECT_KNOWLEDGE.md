@@ -1427,7 +1427,7 @@ Masti CRM/
 | `POST /api/auth/login` | anyone | `{ identifier, password }`. The identifier is a mobile number (any Indian format) or an email. Sets the `masti_sid` cookie. |
 | `POST /api/auth/logout` | anyone | Ends the session |
 | `GET /api/auth/me` | signed in | Current user with departments |
-| `POST /api/auth/change-password` | signed in | Clears `mustChangePassword` and logs out other devices |
+| `POST /api/auth/change-password` | signed in | Clears `mustChangePassword` and logs out other devices. Needs `currentPassword`, except for the forced change right after a temporary-password login |
 | `GET /api/departments` | Head, office staff | Active departments |
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
@@ -1475,6 +1475,7 @@ Masti CRM/
 | `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
 | `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
+| `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
 | `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |

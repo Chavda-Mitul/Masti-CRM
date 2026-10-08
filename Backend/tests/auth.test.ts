@@ -111,9 +111,7 @@ describe("change password", () => {
     const phone = await loginAs("new@masti.test");
     const laptop = await loginAs("new@masti.test");
 
-    const res = await laptop
-      .post("/api/auth/change-password")
-      .send({ currentPassword: PASSWORD, newPassword: "A-brand-new-one-7" });
+    const res = await laptop.post("/api/auth/change-password").send({ newPassword: "A-brand-new-one-7" });
     expect(res.status).toBe(200);
     expect(res.body.user.mustChangePassword).toBe(false);
 
@@ -127,5 +125,42 @@ describe("change password", () => {
     const agent = await loginAs("pw@masti.test");
     expect((await agent.post("/api/auth/change-password").send({ currentPassword: "wrong-one", newPassword: "Long-enough-1" })).status).toBe(400);
     expect((await agent.post("/api/auth/change-password").send({ currentPassword: PASSWORD, newPassword: "short" })).status).toBe(400);
+  });
+
+  it("needs the current password for a normal change", async () => {
+    await createUser({ email: "normal@masti.test", departments: [{ code: "VISA" }] });
+    const agent = await loginAs("normal@masti.test");
+    const res = await agent.post("/api/auth/change-password").send({ newPassword: "Long-enough-1" });
+    expect(res.status).toBe(400);
+    expect((await agent.post("/api/auth/change-password").send({ currentPassword: PASSWORD, newPassword: "Long-enough-1" })).status).toBe(200);
+  });
+
+  it("refuses the temporary password as the new one, even if a different current password is sent", async () => {
+    await createUser({ email: "same@masti.test", mustChangePassword: true, departments: [{ code: "VISA" }] });
+    const agent = await loginAs("same@masti.test");
+    expect((await agent.post("/api/auth/change-password").send({ newPassword: PASSWORD })).status).toBe(400);
+    expect((await agent.post("/api/auth/change-password").send({ currentPassword: "Something-else-1", newPassword: PASSWORD })).status).toBe(400);
+  });
+
+  it("ends a temporary-password session that wasn't used to change the password in time", async () => {
+    const user = await createUser({ email: "late@masti.test", mustChangePassword: true, departments: [{ code: "VISA" }] });
+    const agent = await loginAs("late@masti.test");
+    await prisma.session.updateMany({ where: { userId: user.id }, data: { createdAt: new Date(Date.now() - 16 * 60 * 1000) } });
+
+    expect((await agent.post("/api/auth/change-password").send({ newPassword: "A-brand-new-one-7" })).status).toBe(401);
+    expect((await agent.get("/api/auth/me")).status).toBe(401);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+
+    // Logging in again with the temporary password opens a fresh window.
+    const again = await loginAs("late@masti.test");
+    expect((await again.post("/api/auth/change-password").send({ newPassword: "A-brand-new-one-7" })).status).toBe(200);
+  });
+
+  it("keeps the session going normally once the password is changed", async () => {
+    const user = await createUser({ email: "done@masti.test", mustChangePassword: true, departments: [{ code: "VISA" }] });
+    const agent = await loginAs("done@masti.test");
+    expect((await agent.post("/api/auth/change-password").send({ newPassword: "A-brand-new-one-7" })).status).toBe(200);
+    await prisma.session.updateMany({ where: { userId: user.id }, data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) } });
+    expect((await agent.get("/api/auth/me")).status).toBe(200);
   });
 });

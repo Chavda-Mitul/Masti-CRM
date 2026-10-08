@@ -23,7 +23,9 @@ export function ChangePasswordPage() {
     setLocalError(null)
     if (newPassword.length < MIN_LENGTH) return setLocalError(`Use at least ${MIN_LENGTH} characters.`)
     if (newPassword !== confirm) return setLocalError('The two new passwords don’t match.')
-    change.mutate({ currentPassword, newPassword }, { onSuccess: () => navigate('/', { replace: true }) })
+    // The forced change after a temporary-password login doesn't ask for that password again.
+    const input = forced ? { newPassword } : { currentPassword, newPassword }
+    change.mutate(input, { onSuccess: () => navigate('/', { replace: true }) })
   }
 
   const error = localError ?? (change.error instanceof ApiError ? change.error.message : null)
@@ -43,16 +45,18 @@ export function ChangePasswordPage() {
         </div>
 
         <form onSubmit={onSubmit} noValidate>
-          <label className="field">
-            {forced ? 'Temporary password' : 'Current password'}
-            <input
-              className="input"
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </label>
+          {!forced && (
+            <label className="field">
+              Current password
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrent(e.target.value)}
+              />
+            </label>
+          )}
           <label className="field">
             New password
             <input
@@ -81,7 +85,7 @@ export function ChangePasswordPage() {
             </div>
           )}
 
-          <button className="btn btn-primary" type="submit" disabled={change.isPending || !currentPassword || !newPassword}>
+          <button className="btn btn-primary" type="submit" disabled={change.isPending || (!forced && !currentPassword) || !newPassword}>
             {change.isPending ? 'Saving…' : 'Save password'}
           </button>
         </form>

@@ -11,7 +11,8 @@ export const loginSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1).max(200),
+  /** Required, except for the forced change after logging in with a temporary password. */
+  currentPassword: z.string().min(1).max(200).optional(),
   newPassword: z
     .string()
     .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`)

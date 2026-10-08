@@ -45,7 +45,7 @@ export function useLogout() {
 export function useChangePassword() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { currentPassword: string; newPassword: string }) =>
+    mutationFn: (input: { currentPassword?: string; newPassword: string }) =>
       api<{ user: User }>('/auth/change-password', { method: 'POST', body: input }),
     onSuccess: ({ user }) => queryClient.setQueryData(ME_KEY, user),
   })
