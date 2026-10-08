@@ -19,6 +19,8 @@ import type {
 // they write the returned profile into the detail query, or invalidate what they changed.
 
 const PAGE_SIZE = 25
+/** How many notes the profile carries (PROFILE_NOTES in Backend clients.service.ts). */
+export const PROFILE_NOTES = 20
 
 export const clientKeys = {
   all: ['clients'] as const,
@@ -59,9 +61,10 @@ export function useClient(id: string) {
   })
 }
 
-/** The full notes log (the profile only carries the latest 20). */
-export function useClientNotes(id: string) {
+/** The full notes log (the profile only carries the latest 20). Loaded only when `enabled`. */
+export function useClientNotes(id: string, enabled: boolean) {
   return useQuery({
+    enabled,
     queryKey: clientKeys.notes(id),
     queryFn: async () => (await api<{ notes: ClientNote[] }>(`/clients/${id}/notes`)).notes,
   })
@@ -202,8 +205,10 @@ export function useAddNote(clientId: string) {
     mutationFn: async (body: { body: string }) =>
       (await api<{ note: ClientNote }>(`/clients/${clientId}/notes`, { method: 'POST', body })).note,
     onSuccess: (note) => {
+      queryClient.setQueryData<ClientProfile>(clientKeys.detail(clientId), (client) =>
+        client ? { ...client, notes: [note, ...client.notes].slice(0, PROFILE_NOTES) } : client,
+      )
       queryClient.setQueryData<ClientNote[]>(clientKeys.notes(clientId), (notes) => (notes ? [note, ...notes] : notes))
-      void queryClient.invalidateQueries({ queryKey: clientKeys.notes(clientId) })
     },
   })
 }

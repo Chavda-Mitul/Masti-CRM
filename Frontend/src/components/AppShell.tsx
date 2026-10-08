@@ -1,12 +1,14 @@
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE } from '../lib/departments'
 import { initials } from '../lib/format'
+import { ErrorBoundary } from './ErrorBoundary'
 
 const SELLING_DEPARTMENTS = ['VISA', 'HOLIDAYS', 'HOTELS', 'INSURANCE', 'TICKETS'] as const
 
 /** Sidebar layout from the approved demo. Modules not built yet are shown greyed out. */
 export function AppShell() {
+  const location = useLocation()
   const { data: user } = useMe()
   const logout = useLogout()
   const navigate = useNavigate()
@@ -74,7 +76,9 @@ export function AppShell() {
       </aside>
 
       <main className="main">
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   )
