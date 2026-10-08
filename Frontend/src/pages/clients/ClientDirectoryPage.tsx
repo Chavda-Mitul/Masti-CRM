@@ -73,7 +73,7 @@ export function ClientDirectoryPage() {
         )}
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card card-fill" style={{ overflow: 'hidden' }}>
         <div className="pad toolbar">
           <input
             className="input search"
@@ -104,20 +104,16 @@ export function ClientDirectoryPage() {
             <option value="true">Details missing for invoicing</option>
             <option value="false">Ready to invoice</option>
           </select>
-          {/* Always rendered so the toolbar keeps its width; toggling it in and out resized the search box. */}
-          <span className="muted small" style={{ visibility: list.isFetching && !list.isFetchingNextPage ? 'visible' : 'hidden' }}>
-            Searching…
-          </span>
         </div>
 
         {list.isPending ? (
-          <div className="pad muted">Loading…</div>
+          <div className="pad muted card-fill-empty">Loading…</div>
         ) : list.isError ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(list.error)}</div>
           </div>
         ) : rows.length === 0 ? (
-          <div className="pad muted">
+          <div className="pad muted card-fill-empty">
             {filtering ? 'No clients match. Try part of the mobile number, or fewer filters.' : 'No clients yet.'}
           </div>
         ) : (

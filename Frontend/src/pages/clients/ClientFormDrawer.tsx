@@ -112,11 +112,11 @@ export function ClientFormDrawer({
                 </FormField>
               )}
               <FormField label={kind === 'CORPORATE' ? 'Company name' : 'Name'} error={errors.name?.message}>
-                <input className="input" {...register('name')} />
+                <input className="input" {...register('name')} placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'} />
               </FormField>
               {kind === 'CORPORATE' && (
                 <FormField label="Contact person" error={errors.contactPerson?.message} hint="The person we deal with.">
-                  <input className="input" {...register('contactPerson')} />
+                  <input className="input" {...register('contactPerson')} placeholder="Rajesh Patel" />
                 </FormField>
               )}
               <FormField label="Email" error={errors.email?.message}>
@@ -146,7 +146,7 @@ export function ClientFormDrawer({
                 </select>
               </FormField>
               <FormField label="PIN code" error={errors.pincode?.message}>
-                <input className="input mono" {...register('pincode')} inputMode="numeric" maxLength={6} />
+                <input className="input mono" {...register('pincode')} placeholder="395007" inputMode="numeric" maxLength={6} />
               </FormField>
             </div>
 
@@ -165,7 +165,7 @@ export function ClientFormDrawer({
             <div className="form-grid">
               <FormField label="Code in accounting software" error={errors.accountingCode?.message}>
                 {canEditAccounts ? (
-                  <input className="input mono" {...register('accountingCode')} />
+                  <input className="input mono" {...register('accountingCode')} placeholder="MT-0142" />
                 ) : (
                   <input className="input mono" value={form.getValues('accountingCode') || 'Not set'} readOnly disabled />
                 )}

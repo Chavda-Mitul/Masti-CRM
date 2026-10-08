@@ -96,7 +96,7 @@ export function UsersPage() {
         </button>
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card card-fill" style={{ overflow: 'hidden' }}>
         <div className="pad" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14 }}>
           <h2 className="h2">Staff &amp; roles</h2>
           <span className="chip chip-muted">
@@ -105,7 +105,7 @@ export function UsersPage() {
         </div>
 
         {users.isPending ? (
-          <div className="pad muted">Loading…</div>
+          <div className="pad muted card-fill-empty">Loading…</div>
         ) : users.isError ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(users.error)}</div>

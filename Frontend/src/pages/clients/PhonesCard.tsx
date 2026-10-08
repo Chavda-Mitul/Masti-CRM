@@ -115,7 +115,7 @@ function AddPhoneForm({ clientId }: { clientId: string }) {
             <input className="input mono" {...register('mobile')} placeholder="98250 41234" inputMode="tel" />
           </FormField>
           <FormField label="Whose / which" error={formState.errors.label?.message}>
-            <input className="input" {...register('label')} placeholder="Office, wife's number…" />
+            <input className="input" {...register('label')} placeholder="Whose number is this?" />
           </FormField>
           <button type="submit" className="btn" disabled={add.isPending}>
             {add.isPending ? 'Adding…' : 'Add'}

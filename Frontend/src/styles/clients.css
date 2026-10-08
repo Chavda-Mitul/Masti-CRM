@@ -157,9 +157,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap; /* when space runs out, the buttons drop below the number */
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid var(--divider);
+}
+/* Never break a phone number across lines. */
+.plain-list .mono {
+  white-space: nowrap;
 }
 .plain-list li .chip {
   margin-top: 4px;
@@ -169,15 +174,16 @@
   flex-direction: column;
   gap: 10px;
 }
+/* The two fields share the row and the button sits under them, so both placeholders fit in the narrow card. */
 .add-phone-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   align-items: start;
 }
 .add-phone-row .btn {
-  margin-top: 25px;
-  height: 42px;
+  grid-column: 1 / -1;
+  justify-self: end;
 }
 
 /* Notes */

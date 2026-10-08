@@ -154,6 +154,62 @@ a:hover {
   background: var(--surface);
   color: var(--ink);
 }
+/* Our own chevron instead of the browser's arrow, which sits too close to the edge. Stroke is --text-muted. */
+.select {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a746b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+.select:disabled {
+  cursor: default;
+}
+/* Rounded option list to match the fields. Only browsers with customizable <select> (Chrome/Edge 135+) can style
+   it; others keep their native list, which still works. */
+@supports (appearance: base-select) {
+  .select,
+  .select::picker(select) {
+    appearance: base-select;
+  }
+  .select {
+    display: flex;
+    align-items: center;
+  }
+  .select::picker-icon {
+    display: none; /* we already draw the chevron as a background */
+  }
+  .select::picker(select) {
+    margin-top: 6px;
+    padding: 6px;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-input);
+    background: var(--surface);
+    box-shadow: var(--shadow-pop);
+  }
+  .select option {
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .select option::checkmark {
+    display: none;
+  }
+  .select option:hover,
+  .select option:focus-visible {
+    background: var(--fill-hover);
+    outline: none;
+  }
+  .select option:checked {
+    background: var(--primary-tint);
+    color: var(--primary);
+    font-weight: 700;
+  }
+}
 .input:focus,
 .select:focus,
 .btn:focus-visible {
@@ -315,7 +371,8 @@ a:hover {
 }
 .input:disabled,
 .select:disabled {
-  background: var(--fill-muted);
+  /* background-color, not the shorthand, so a disabled select keeps its chevron. */
+  background-color: var(--fill-muted);
   color: var(--text-3);
 }
 .upper {

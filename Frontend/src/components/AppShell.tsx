@@ -42,9 +42,6 @@ export function AppShell() {
             </span>
           )
         })}
-        <span className="nav nav-sub nav-disabled">
-          Transport · Cruise <span className="tag">Phase 2</span>
-        </span>
 
         <span className="nav nav-disabled">
           Follow-ups <span className="tag">Soon</span>
