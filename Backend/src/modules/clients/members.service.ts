@@ -1,11 +1,13 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { cleanMobile } from "../../lib/contact";
 import { istToday, toDbDate } from "../../lib/dates";
 import { badRequest, notFound } from "../../lib/httpError";
-import { assertCanEditClients, type Actor } from "./access";
+import type { Actor } from "../users/user";
+import { assertCanEditClients } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "./changes";
-import { cleanMobile, toMemberDto } from "./client";
+import { toMemberDto } from "./client";
 import type { CreateMemberInput, UpdateMemberInput } from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";
 import { checkDuplicates, confirmedDuplicatesNote, findPassportDuplicates } from "./duplicates";

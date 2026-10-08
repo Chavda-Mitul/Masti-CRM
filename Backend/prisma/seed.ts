@@ -6,7 +6,7 @@
  * If there is no Head but a user with the SEED_HEAD mobile/email exists, that user is made Head instead.
  */
 import "dotenv/config";
-import { normaliseEmail, normaliseMobile } from "../src/modules/auth/identifier";
+import { normaliseEmail, normaliseMobile } from "../src/lib/contact";
 import { generateTempPassword, hashPassword } from "../src/modules/auth/password";
 import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
 import { seedClientLookups } from "../src/modules/clients/clients.seed";

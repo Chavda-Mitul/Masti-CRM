@@ -4,6 +4,7 @@ import { officeNetworkAllows } from "../modules/auth/officeNetwork";
 import { can, type DepartmentCode } from "../modules/auth/permissions";
 import { clearSessionCookie, findSession, SESSION_COOKIE, setSessionCookie, touchSession } from "../modules/auth/session";
 import { forbidden, unauthorized } from "../lib/httpError";
+import type { Actor } from "../modules/users/user";
 
 /** Requires a valid session for an active user. Sets req.auth. */
 export const requireAuth: RequestHandler = async (req, res, next) => {
@@ -31,6 +32,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
 export function currentUser(req: Request) {
   if (!req.auth) throw unauthorized();
   return req.auth.user;
+}
+
+/** The current user and IP, passed to services for permission rules and the audit log. Use after requireAuth. */
+export function actorOf(req: Request): Actor {
+  return { user: currentUser(req), ip: req.ip ?? null };
 }
 
 /** Head (owner) only. Use after requireAuth. */

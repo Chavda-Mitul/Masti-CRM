@@ -1,6 +1,5 @@
-import { Router, type Request } from "express";
-import { currentUser, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import type { Actor } from "./access";
+import { Router } from "express";
+import { actorOf, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
   addNoteSchema,
   addPhoneSchema,
@@ -25,7 +24,6 @@ import * as membersService from "./members.service";
 const router = Router();
 router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"));
 
-const actor = (req: Request): Actor => ({ user: currentUser(req), ip: req.ip ?? null });
 
 // Fixed paths first, so they aren't taken for a client id.
 
@@ -44,7 +42,7 @@ router.get("/settings", async (_req, res) => {
 
 router.put("/settings", requireHead, async (req, res) => {
   const body = updateClientSettingsSchema.parse(req.body);
-  res.json({ settings: await clientsService.updateSettings(body, actor(req)) });
+  res.json({ settings: await clientsService.updateSettings(body, actorOf(req)) });
 });
 
 router.get("/", async (req, res) => {
@@ -53,7 +51,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const body = createClientSchema.parse(req.body);
-  res.status(201).json({ client: await clientsService.createClient(body, actor(req)) });
+  res.status(201).json({ client: await clientsService.createClient(body, actorOf(req)) });
 });
 
 router.get("/:id", async (req, res) => {
@@ -62,12 +60,12 @@ router.get("/:id", async (req, res) => {
 
 router.patch("/:id", async (req, res) => {
   const body = updateClientSchema.parse(req.body);
-  res.json({ client: await clientsService.updateClient(req.params.id, body, actor(req)) });
+  res.json({ client: await clientsService.updateClient(req.params.id, body, actorOf(req)) });
 });
 
 router.put("/:id/mobile", async (req, res) => {
   const body = changeMobileSchema.parse(req.body);
-  res.json({ client: await clientsService.changeMobile(req.params.id, body, actor(req)) });
+  res.json({ client: await clientsService.changeMobile(req.params.id, body, actorOf(req)) });
 });
 
 router.get("/:id/readiness", async (req, res) => {
@@ -76,26 +74,26 @@ router.get("/:id/readiness", async (req, res) => {
 
 router.post("/:id/phones", async (req, res) => {
   const body = addPhoneSchema.parse(req.body);
-  res.status(201).json({ phone: await clientsService.addPhone(req.params.id, body, actor(req)) });
+  res.status(201).json({ phone: await clientsService.addPhone(req.params.id, body, actorOf(req)) });
 });
 
 router.delete("/:id/phones/:phoneId", async (req, res) => {
-  await clientsService.removePhone(req.params.id, req.params.phoneId, actor(req));
+  await clientsService.removePhone(req.params.id, req.params.phoneId, actorOf(req));
   res.status(204).end();
 });
 
 router.post("/:id/members", async (req, res) => {
   const body = createMemberSchema.parse(req.body);
-  res.status(201).json({ member: await membersService.createMember(req.params.id, body, actor(req)) });
+  res.status(201).json({ member: await membersService.createMember(req.params.id, body, actorOf(req)) });
 });
 
 router.patch("/:id/members/:memberId", async (req, res) => {
   const body = updateMemberSchema.parse(req.body);
-  res.json({ member: await membersService.updateMember(req.params.id, req.params.memberId, body, actor(req)) });
+  res.json({ member: await membersService.updateMember(req.params.id, req.params.memberId, body, actorOf(req)) });
 });
 
 router.post("/:id/members/:memberId/archive", async (req, res) => {
-  res.json({ member: await membersService.archiveMember(req.params.id, req.params.memberId, actor(req)) });
+  res.json({ member: await membersService.archiveMember(req.params.id, req.params.memberId, actorOf(req)) });
 });
 
 router.get("/:id/notes", async (req, res) => {
@@ -104,7 +102,7 @@ router.get("/:id/notes", async (req, res) => {
 
 router.post("/:id/notes", async (req, res) => {
   const body = addNoteSchema.parse(req.body);
-  res.status(201).json({ note: await clientsService.addNote(req.params.id, body, actor(req)) });
+  res.status(201).json({ note: await clientsService.addNote(req.params.id, body, actorOf(req)) });
 });
 
 export default router;

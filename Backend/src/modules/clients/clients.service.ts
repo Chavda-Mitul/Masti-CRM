@@ -2,11 +2,13 @@ import { Prisma, type Client } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { istToday, toDbDate } from "../../lib/dates";
+import { cleanEmail, normaliseMobile } from "../../lib/contact";
 import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
-import { normaliseMobile } from "../auth/identifier";
-import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients, type Actor } from "./access";
+import { rethrowUnique } from "../../lib/prismaErrors";
+import type { Actor } from "../users/user";
+import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "./changes";
-import { cleanEmail, clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
+import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
 import {
   GST_STATES,
   type AddNoteInput,
@@ -82,12 +84,7 @@ async function getClientRowOr404(id: string) {
 }
 
 /** Fallback if two requests race past the checks. */
-function rethrowUnique(err: unknown): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-    throw conflict("This mobile number or accounting code is already used by another client.");
-  }
-  throw err;
-}
+const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code is already used by another client.");
 
 /**
  * Turns the request into column changes and applies the cross-field rules:
@@ -304,7 +301,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
       );
       return client;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(created.id);
 }
@@ -341,7 +338,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
         tx,
       );
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(id);
 }
@@ -380,7 +377,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
         tx,
       );
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(id);
 }
@@ -413,7 +410,7 @@ export async function addPhone(clientId: string, input: AddPhoneInput, actor: Ac
       );
       return created;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return toPhoneDto(phone);
 }

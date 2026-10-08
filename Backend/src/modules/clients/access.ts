@@ -8,12 +8,6 @@ import type { UserWithDepartments } from "../users/user";
 // - changing: the Head, or an office user with EDIT in at least one department
 // - accounting code, billing cycle, payment habit: Accounts EDIT (or the Head)
 
-/** Who is making the change, for permission rules and the audit log. */
-export interface Actor {
-  user: UserWithDepartments;
-  ip: string | null;
-}
-
 export function canEditClients(user: UserWithDepartments): boolean {
   return canEditAnyDepartment(user);
 }
