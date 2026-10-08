@@ -2,7 +2,7 @@
 
 > **What this is:** the single context file for anyone, human or AI, working on this project. It distils everything in `Masti-CRM-Handover/` (handover pack, the Project Initiation Document, the client's written requirements, the meeting summary and the approved clickable demo) plus the current state of `Backend/` and `Frontend/`.
 >
-> **Last updated:** 7 Oct 2026, after a full read of the meeting transcript. **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
+> **Last updated:** 8 Oct 2026: answers for Visa Step 1 (intake) recorded; the intake design is proposed in `docs/decisions/0003-visa-intake.md`. **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
 
 ## Contents
 
@@ -461,7 +461,7 @@ These are used by every module.
   - Corporates appear as clients too ("Sunrise Textiles", "Gajera Diamonds").
 - **Family and travellers** ✅: name, relation (Self, Spouse, Son 12…), passport valid till (with a "renew soon" flag), and consent status ("On file · 28 Sep" or "Not on file").
 - **Profile page:** history across all departments, open cases, business with us (₹ total · trips), balance still to pay, WhatsApp messages sent, and notes (free text, never reported on).
-- Importing existing client data ❓ (Q29).
+- **Importing existing client data (Q29, decided 8 Oct 2026):** Masti will send the old data as an Excel file. An import job is built later; the mobile number is the match key.
 
 ### 10.2 Enquiry: the unit of work across departments
 
@@ -495,6 +495,7 @@ These are used by every module.
   | When | Date/time slots |
 
 - A visa query sits in a **common follow-up pool**, worked only by follow-up staff, until it **matures** (documents complete). Then processing takes over ✅.
+  - **Changed 8 Oct 2026 (Q2/M4, project lead):** visa follow-up is done by **the Visa employee assigned to the case**, not a shared pool. ⚠️ This differs from what Vimal said in the meeting (6:48 PM, below) and from the demo's follow-up desk → processing handover. Confirm it with Vimal in writing. The design lets the owner change at maturity, so either way works.
   - The visa HOD asked for the client's first message to name the staff member handling the query. Vimal said the query stays common in the pool at that stage, so there's no named handler until it matures *(transcript, 6:48 PM)*.
 - Postponed cases carry a resume date and resurface then ("Postponed to Jan — confirm new month").
 - After a visa file is submitted, the case is **not touched until the expected collection date** ✅ (a future follow-up).
@@ -521,6 +522,7 @@ These are used by every module.
 - **Scanning happens in the office only**, by anyone except the main processor (the follow-up person is suggested) ✅. **Clients never upload** ✅.
 - **How documents reach us:** the client brings them, or staff **send the collection boy** with the document list, number, address and time slot ✅.
 - **Booklets** (current + old passports) are counted at intake and checked again at handover ✅ ("4 current + 3 old").
+- **Document master (decided 8 Oct 2026, B1/B4):** choosing a country and visa type at intake fills the checklist automatically from the master, copied onto each traveller (so later master edits don't change open cases). Seeded with dummy France Tourist data until Masti sends the real lists.
 - The same checklist mechanism is reused for **insurance claims**, per claim type ✅.
 
 ### 10.5 Consent and liability form
@@ -582,7 +584,7 @@ All intervals are configurable masters. The values below are demo samples (⚠�
 
 | Trigger | Demo default |
 |---|---|
-| Visa pending-document reminder to the client | every 2 days at 11:00 (Q5) |
+| Visa pending-document reminder to the client | every 2 days at 11:00. An admin setting, not a constant (Q5, decided 8 Oct) |
 | Claim pending-document reminder | every 2 days |
 | Hotel hold expiring | 6 h before |
 | Web check-in list | 72 h before departure (Q21) |
@@ -730,17 +732,17 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 ### 12.3 New enquiry
 
 - **Intro copy:** "Take only what the client tells you now. The document list and price go out by themselves; the rest comes in with the documents."
-- **Fill in from a message** ✅ (PID): "Hindi, Gujarati or English · text or screenshot"; buttons "Add a screenshot" and "Fill in the form". The AI is **assistive**: staff check what it filled.
+- **Fill in from a message** ✅ (PID): "Hindi, Gujarati or English · text or screenshot"; buttons "Add a screenshot" and "Fill in the form". The AI is **assistive**: staff check what it filled. **Deferred (8 Oct 2026):** the plain manual form is built first; this button comes later.
 - **Who is asking:** the mobile number is "the only detail needed now". An existing client is found by it ✅.
 - **Came in through:** WhatsApp · Landline · Mobile · Social media · Email ✅. Add Justdial etc. as source tags.
 - **What do they want?** Multi-select: Visa · Holiday · Hotel · Insurance · Ticket ⚠️.
-- **Visa, just four things:** Country, Visa type, Adults (min 1), Children (min 0) ✅. "Names, travel dates, duration and single/multiple entry are filled later, when the documents come in."
+- **Visa, just four things:** Country, Visa type, Adults (min 1), Children (min 0) ✅, **plus the travel month/date** (the written doc's "time", decided 8 Oct 2026; captured at intake only). "Names, travel dates, duration and single/multiple entry are filled later, when the documents come in."
 - **"Save and send document list"**, with a "When you save" panel:
   - the document list and price breakup go to the client on WhatsApp ✅
   - reminders start (every 2 days at 11:00 ⚠️) until the documents are complete
   - a follow-up lands on the follow-up desk for tomorrow ⚠️
   - anyone without a consent form on file is flagged ✅
-- **WhatsApp preview** ⚠️ format: "Masti Travels — France visa documents" with a numbered list ("1. Passport (original) + old passports, 2. 2 photos, 35×45 mm, white background, 3. Bank statement, last 6 months…") and "Price per person: Embassy fee · VFS · Service · Courier".
+- **WhatsApp preview** ⚠️ format (placeholder wording in the build until Masti approves the real text, Q8): "Masti Travels — France visa documents" with a numbered list ("1. Passport (original) + old passports, 2. 2 photos, 35×45 mm, white background, 3. Bank statement, last 6 months…") and "Price per person: Embassy fee · VFS · Service · Courier".
 - Intake forms for the other departments aren't designed in the demo. Only visa's is shown.
 
 ### 12.4 Visa: the 8-step case
@@ -1524,14 +1526,14 @@ Masti CRM/
 
 | # | Topic | What the sources say | Working assumption until confirmed |
 |---|---|---|---|
-| 1 | Pending-document reminder schedule | Client: the company sets the interval (e.g. 1, 2 or 3 days); no time of day mentioned. Demo: "every 2 days at 11:00". PID: "reminders every 2 days". | Configurable interval and send time, seeded with 2 days / 11:00. Confirm the time and who configures it (Q5). |
+| 1 | Pending-document reminder schedule | Client: the company sets the interval (e.g. 1, 2 or 3 days); no time of day mentioned. Demo: "every 2 days at 11:00". PID: "reminders every 2 days". | **Decided 8 Oct 2026:** an admin setting (interval, send time, channel), seeded with 2 days / 11:00. Masti can still tell us their preferred values (Q5). |
 | 2 | Web check-in window | Written doc: 48 h. Meeting: Vimal said "48 hours", then settled on "give us the list 72 hours before" (8:16 PM). Demo and PID: 72 h. | Configurable, seeded with 72 h (the PID and Vimal's last word). Confirm in writing (Q21). |
 | 3 | Visa decision granularity | Client: "status only: refused or approved". Demo and PID: per traveller. Handover guide: per-traveller is our assumption. | Build per traveller (the PID's wording). Confirm (Q11). |
 | 4 | Hotel options per quote | Client: max 3–4 (5 tolerated). Demo and PID: up to 4. | Limit 4, configurable. |
 | 5 | Hotel markup floor | Client: nice-to-have ("no big need right now"), by category or price range. PID: "minimum markup is set by star rating". Demo: 3★ 10%, 4★ 8%, 5★ 6%. | In scope (PID), by star rating. The values are samples (Q17). |
 | 6 | Hotel competitor sites | Client: the company picks its competitors (e.g. 4; MakeMyTrip + 3). PID and demo: MakeMyTrip, Agoda, Booking.com + vendor. | A configurable list, seeded with the PID's three + vendor (Q18). |
 | 7 | When the visa invoice is raised | Written doc: before couriering to the vendor. Meeting: at courier time, or earlier where fees are paid upfront (VFS). Demo: it must be locked before the docket leaves. | It must exist before dispatch; allow it earlier (Q6). |
-| 8 | Visa intake fields | Written doc: "country, time, type, no. of pax". Meeting and demo: country, visa type, adults, children (+ mobile). | The demo's four + mobile. Ask what "time" meant (travel month?). |
+| 8 | Visa intake fields | Written doc: "country, time, type, no. of pax". Meeting and demo: country, visa type, adults, children (+ mobile). | **Decided 8 Oct 2026:** "time" is the travel month/date, captured at intake. Intake = country, visa type, adults, children, travel month (+ optional exact date) + mobile. |
 | 9 | Additional-invoice limit outside visa | Only stated for visa files (max 1) | Apply it to visa; ask before generalising. |
 | 10 | Ticket fare changes vs locked invoices | The fare-change log shows "Add to invoice" | Bill through a new invoice or a credit note. Never edit an issued invoice. Confirm the mechanism. |
 | 11 | Routine accounts tasks | Vimal: optional, can be dropped (it's in Excel). Demo and PID: included. | In scope, lowest priority, Stage 3. |
@@ -1544,8 +1546,8 @@ Masti CRM/
 | 18 | Timeline | Meeting: "two months" mentioned. PID: go-live 1 Jan 2027 (buffer 15 Jan). | The PID wins. |
 | 19 | Insurance premium examples | Meeting ₹1,000 / 1,200 / 1,500; written doc ₹100 / 200 / 500 | Examples only, not a rule. |
 | 20 | Masti's office in the demo messages | The demo WhatsApp says "collect from our Vesu office"; Masti is in Varachha. | Demo wording. Vimal writes the real messages (Q8). |
-| 21 | Case-number prefixes | The demo uses both `I-0577` and `IN-0561` for insurance | Define a real scheme. |
-| 22 | Email as an enquiry source | Vimal: no email channel today, "maybe in future" (6:46 PM). Ticketing head: ticket queries come by WhatsApp and email (7:52 PM). Demo: Email is a source option. | Keep Email as a source. Ask whether ticket emails should be captured automatically (A13). |
+| 21 | Case-number prefixes | The demo uses both `I-0577` and `IN-0561` for insurance | **Decided 8 Oct 2026:** `{prefix}-{YYYY}-{NNNN}`, e.g. `VISA-2026-0001`. The prefix is set per department (not hard-coded); the counter runs per department per calendar year. |
+| 22 | Email as an enquiry source | Vimal: no email channel today, "maybe in future" (6:46 PM). Ticketing head: ticket queries come by WhatsApp and email (7:52 PM). Demo: Email is a source option. | **Decided 8 Oct 2026:** no automatic email capture for now. Email stays a source staff can pick. Later, enquiries also arrive automatically from a WhatsApp bot and website forms, so intake is built to accept them. |
 | 23 | Rate check for predefined hotels | Vimal: "comparison doesn't come in" for the 10–20 predefined hotels where Masti is "master" (7:30 PM). PID and demo: a rate check before any quote. | Build the check for every quote. Add a per-hotel exemption only if the client confirms it (Q31). |
 | 24 | Galileo GDS | Vimal showed a quote from "our Galileo" (8:03 PM); the ticketing head said "GDS nahi hai" ("there's no GDS"). | Unclear (Q32). It affects how fares get into the quote: typed in, parsed from screenshots, or taken from GDS output. |
 | 25 | Vimal's stated purposes | Mid-meeting: "loss tracking and automation" (8:18 PM). At the close: "lead generation and automation" (8:50 PM). | Loss tracking + automation. Capturing every lead is part of that. |
@@ -1571,16 +1573,24 @@ Masti CRM/
 - hosting on Masti's own cloud
 - routine accounts tasks are in scope but low priority (Stage 3)
 
+**Answered 8 Oct 2026 (project lead), for Visa Step 1.** Details are in §10, §12.3 and §17; the design is `docs/decisions/0003-visa-intake.md`.
+- **Q2:** visa follow-up is done by the Visa employee assigned to the case (⚠️ confirm with Vimal: it differs from the meeting and the demo).
+- **Q5:** the reminder schedule is an admin setting, seeded with every 2 days at 11:00.
+- **Q8:** placeholder wording in the build; the real text is decided later and approved by the client. Still needed from Masti.
+- **Q29:** old clients come as an Excel file; an import job is built later.
+- **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
+- **AI fill-in from a message:** deferred; the manual form comes first.
+
 | # | Question | Who | Blocks |
 |---|---|---|---|
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? | Y→C | 1 |
-| 2 | Follow-up team split: separate teams for visa, tickets and packages, or one pool? | C | 1 |
+| 2 | ~~Follow-up team split~~ **Answered 8 Oct:** the assigned Visa employee follows up (confirm with Vimal) | C | 1 |
 | 3 | Collection boy's device: phone or tablet; web app or WhatsApp-only jobs? | Y→C | 1 |
 | 4 | Click-to-login: how it works, which portals it supports | Y | 1 |
-| 5 | Reminder schedule for pending documents: interval, time of day, who sets it | C | 1 |
+| 5 | ~~Reminder schedule~~ **Answered 8 Oct:** an admin setting, seeded 2 days / 11:00 | C | 1 |
 | 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
-| 8 | WhatsApp message step list and wording (urgent: Meta approval) | C | 1 |
+| 8 | WhatsApp message step list and wording (urgent: Meta approval). **8 Oct:** placeholder text until then; still needed | C | 1 |
 | 9 | Consent wording (passport-transit risk, booking-before-visa risk) | C | 1 |
 | 10 | Covering-letter formats (which processes and family types); the "100 subscription" remark | C | 1 |
 | 11 | Decision per traveller or per case? | C | 1 |
@@ -1601,7 +1611,7 @@ Masti CRM/
 | 26 | Accounting software: its name; export file now or in phase 2? | C | 3 |
 | 27 | Reports: what goes into the Visa, Staff workload, Outstanding and Cross-sell tabs | C | 3 |
 | 28 | Dashboards per role (Staff / HOD / Head) | C | 3 |
-| 29 | Existing data to import (clients, open cases)? Format? | C | 1 |
+| 29 | ~~Existing data to import~~ **Answered 8 Oct:** Excel file; import job built later | C | 1 |
 | 30 | Notification of the 3rd follow-up: the permission flow, and who approves | C | 3 |
 | 31 | Can office staff (e.g. Accounts) cover the collection run, using the same phone screen? The data model allows it; today `/tasks` is field staff only. | C | 1 |
 | 31 | **New:** Does the hotel rate check apply to staff's predefined hotels, where Masti is "master"? | C | 2 |
