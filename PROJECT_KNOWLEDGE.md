@@ -1415,7 +1415,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master, is accepted and being built on `feat/system-masters`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master, is built (API + tests, no screens yet) on `feat/system-masters`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1424,10 +1424,12 @@ Masti CRM/
 ├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
 │   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
 │   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
-│   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation
+│   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation,
+│   │                                Country, VisaType, Embassy, VisaOffering, DocumentMaster, VisaChecklistItem, Holiday, HolidayTarget, ApiClient
 │   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers),
-│   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle)
-│   ├── prisma/seed.ts            ← departments, client lookups + settings, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
+│   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle),
+│   │                                *_system_masters + *_holiday_weekday_check (holiday date/source/target CHECKs, code formats)
+│   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
 │   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,
@@ -1437,12 +1439,17 @@ Masti CRM/
 │   │   ├── users/                ← user management (Head only) + user.ts (withDepartments, toUserDto)
 │   │   ├── clients/              ← client master: clients, extra numbers, members, notes, lookup/search, settings;
 │   │   │                            access.ts (who may edit), duplicates.ts (confirmDuplicates), readiness.ts (assertInvoiceReady)
+│   │   ├── visaMasters/          ← countries, visa types, embassies, documents, country × type offerings, checklists (0005)
+│   │   ├── holidays/             ← holiday calendar, blockedDays() (the one blocked-date rule), bot pushes (holidaysBot.service.ts)
+│   │   ├── apiClients/           ← machine accounts (Head only): hashed API keys, scopes, IP allowlist
+│   │   ├── inbound/              ← machine-to-machine routes (API key, no session): /api/inbound/holidays
 │   │   ├── departments/          ← active department list
 │   │   └── health/               ← server and database status
 │   ├── src/middleware/           ← auth.ts (requireAuth, actorOf, requireHead, requireDepartment,
-│   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
+│   │                                requireUserType, requirePasswordChanged), apiClient.ts (requireApiClient), error.ts, requireJson.ts
 │   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers),
-│                                contact.ts (mobile/email clean-up), prismaErrors.ts (rethrowUnique)
+│                                contact.ts (mobile/email clean-up), prismaErrors.ts (rethrowUnique),
+│                                changes.ts (onlyChanged, definedOnly, optimistic locking)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
@@ -1471,10 +1478,16 @@ Masti CRM/
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
 | `/api/clients/*` | Head, office staff (edit: any department EDIT; billing fields: Accounts) | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
+| `/api/masters/*` | Visa VIEW to read; Visa HOD (or Head) to write. Embassies: office staff read, any HOD writes | Countries, visa types, embassies, documents, country × type offerings, and their checklists (`PUT …/visa-offerings/:id/checklist` replaces the whole list). Full list in `docs/decisions/0005-system-masters.md`. |
+| `/api/holidays/*` | Head, office staff read; Head or any HOD write; settings: Head | Holiday calendar: list, add, edit (optimistic locking), confirm (bot entries), remove, `GET /blocked` (date pickers), `GET /targets`, settings |
+| `/api/api-clients/*` | Head | Machine accounts: create and rotate (key shown once), edit, deactivate/activate |
+| `/api/inbound/holidays` | Machine account with `HOLIDAYS_PUSH` (Bearer API key) | The AI bot: push holidays in batches (by its own key; PENDING until a person confirms), read its entries back, list target codes |
 
 **Rules every new route must follow:**
 - Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
 - A route with no department check needs `requireUserType(...)`, e.g. `("HEAD", "OFFICE")` for desktop-only data. Field staff get only `/api/auth/*` and, later, `/api/field/*` (their own jobs).
+- Machine-to-machine routes go under `/api/inbound/*` with `requireApiClient(scope)` (an API key, never a session). Audit them with `apiClientId` instead of `actorId`.
+- Inside an interactive transaction, include at most one relation in a read; load the full DTO after commit. Prisma 7 + adapter-pg runs multi-relation reads in parallel on the transaction's single connection (0005, *Built* #8).
 - Read the user with `currentUser(req)`, or `actorOf(req)` (user + IP) for services that audit.
 - Check finer rules with `can()` / `isHodOf()` from `src/modules/auth/permissions.ts`.
 - Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction. Pass `clientId` when the change belongs to a client (a visa file, an invoice…), so it shows in that client's history.
@@ -1496,7 +1509,7 @@ Masti CRM/
 | Backend | `npm run db:up` / `db:down` | Start/stop the local Postgres container (`docker compose`) |
 | Backend | `npm run db:migrate` | `prisma migrate dev` |
 | Backend | `npm run db:generate` | `prisma generate` (run after every schema change) |
-| Backend | `npm run db:seed` | Departments, client lookups and settings, first Head user (prints a one-time temporary password). Never overwrites existing rows. |
+| Backend | `npm run db:seed` | Departments, client lookups and settings, dummy visa masters and the weekly Sunday off, holiday settings, first Head user (prints a one-time temporary password). Never overwrites existing rows. |
 | Backend | `npm run db:studio` | Prisma Studio |
 | Backend | `npm run dev` | tsx watch on `src/server.ts` (port 5000) |
 | Backend | `npm test` | vitest: creates and migrates `masti_crm_test`, wipes it before each test |
@@ -1541,7 +1554,8 @@ Masti CRM/
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).
 
 **Not there yet:**
-- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, masters screens, any business module beyond the client master.
+- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
+- **Frontend:** the Settings → Masters screens (holiday calendar, checklists, machine accounts).
 - **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
 - **Project setup:** CI/CD and deploy scripts.
 

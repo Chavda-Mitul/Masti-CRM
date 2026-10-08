@@ -1,6 +1,6 @@
 # 0005 · System masters: holiday calendar and visa document master
 
-- **Status:** accepted (8 Oct 2026, project lead; all seven review points confirmed below)
+- **Status:** accepted (8 Oct 2026, project lead; all seven review points confirmed below) and built (8 Oct 2026). What changed while building is listed under *Built*, at the end.
 - **Date:** 8 Oct 2026
 - **Scope:** two of the System Masters on Settings → *Masters & holiday calendar* (demo screen 29): the **holiday calendar** and the **visa document master** (documents and country × visa type checklists). Reminder rules, vendors, dropdown reasons and the other masters come in later records.
 - **Changes:** takes over the visa master tables proposed in [0003](0003-visa-intake.md) (`Country`, `VisaType`, `VisaOffering`, `DocumentMaster`, `VisaChecklistItem`), which aren't built. The changes are listed in Decision 7. 0003's intake contract (`GET /api/visa/offerings`, the checklist copy at intake) still holds.
@@ -91,7 +91,7 @@ The bot doesn't exist yet. These hooks let it slot in without a schema change:
 - **`externalKey`** (unique) is the bot's own stable id for an announcement, e.g. `cn-embassy-2026-national-day`. Pushing the same key again updates that entry instead of adding a second one, so the bot can re-scrape daily without duplicates.
 - **`reference`** records where it was announced ("IVS", or the embassy notice URL). It is shown as "from IVS" in the *Added* column. It is display text only; nothing reports on it.
 - **AI assists; staff confirm (rule 12).** Bot entries arrive as **`PENDING`**. A Visa HOD or the Head confirms them (→ `ACTIVE`, blocking) or removes them. Whether review is needed is a setting (`holidays.botEntriesNeedReview`, seeded `true`), so Masti can let a trusted bot publish directly later.
-- **Humans win.** The bot may change its own entries only while they are `PENDING`. Once a person has confirmed, edited or removed an entry, pushes for that key are reported back as `skipped` and change nothing. If an embassy changes an announced closure, the bot sends it under a new key; the reviewer confirms the new entry and removes the old one.
+- **Humans win.** The bot may change its own entries only until a person has reviewed them. Once a person has confirmed, edited or removed an entry, pushes for that key are reported back as `skipped` and change nothing. If an embassy changes an announced closure, the bot sends it under a new key; the reviewer confirms the new entry and removes the old one.
 - **Removed means removed.** Removing sets `status = REMOVED` instead of deleting the row, so a rejected bot entry isn't recreated on the next scrape, and the history stays.
 
 ### 5. Machine accounts (`ApiClient`)
@@ -168,7 +168,9 @@ One new row in `Setting`, validated with zod like `officeNetwork`:
 
 The "show new holidays on the dashboard and in the login popup" part belongs to the Notice board (§12.18, Stage 3). Until then, Today can list entries created in the last `newForDays` days.
 
-## Proposed Prisma schema
+## Prisma schema
+
+As proposed; the built schema is in `Backend/prisma/schema.prisma`, and the differences are listed under *Built*.
 
 Additions to `Backend/prisma/schema.prisma`. Existing models change only where marked.
 
@@ -301,7 +303,7 @@ enum HolidayTargetKind {
 /// Checks in the migration:
 /// - repeat = NONE   ⇒ endDate is set, endDate >= startDate, weekday is null
 /// - repeat = WEEKLY ⇒ weekday between 1 and 7; endDate null or >= startDate
-/// - source = MANUAL ⇒ addedById is set, apiClientId is null
+/// - source = MANUAL ⇒ apiClientId and externalKey null (addedById is null only for seeded rows)
 /// - source = AI_BOT ⇒ apiClientId and externalKey are set
 model Holiday {
   id           String          @id @default(uuid())
@@ -666,3 +668,26 @@ All seven points were confirmed as proposed:
 5. **Permissions:** holidays are edited by the Head or any HOD; visa checklists by the Head or the Visa HOD.
 6. **Occupation-specific documents are not modelled.** Staff mark them "Not needed" per traveller in Step 2.
 7. **No yearly-repeat rule.** Every dated holiday is entered for its year.
+
+## Built (8 Oct 2026)
+
+**Code:** `Backend/src/modules/holidays/` (staff routes, `blockedDays.ts`, `holidaysBot.service.ts` for pushes, labels in `holiday.ts`), `visaMasters/` (masters and checklists, the dummy seed), `apiClients/` (machine accounts, `apiKey.ts`), `inbound/` (machine routes), and `src/middleware/apiClient.ts` (`requireApiClient`). **Migrations:** `20261008133011_system_masters` and `20261008134500_holiday_weekday_check`. **Tests:** `tests/holidays.test.ts`, `tests/visaMasters.test.ts`, `tests/inbound.test.ts`.
+
+What differs from the proposal above, and why:
+
+1. **Seeded holidays have no author.** The seed runs before any user exists, so the database rule is "manual ⇒ no machine account or bot key" (the author may be null), and "bot ⇒ machine account and key, no author".
+2. **The bot may correct an entry until a person reviews it**, not only while it's `PENDING`. With review switched off, bot entries go straight to `ACTIVE`, and the bot can still fix its own mistakes. Once a person has confirmed, edited or removed an entry, the bot can't change it.
+3. **The bot targets embassies only** (`ALL_EMBASSIES`, `COUNTRY`, `EMBASSY`). Our office closures are staff-entered.
+4. **New routes `GET /api/holidays/settings` and `PUT /api/holidays/settings`** (the Head writes), like `/api/clients/settings`. They are audited as `setting.update`.
+5. **Codes never change.** `PATCH` ignores `code`, and the database checks the code formats (country `FR`; embassy `FR-MUM`; others `A-Z0-9_`).
+6. **Editing a holiday counts as a review** (it sets `reviewedBy`). Removing a holiday that is already removed changes nothing.
+7. **A follow-up migration fixes the weekday check.** `NULL BETWEEN 1 AND 7` is unknown, and a CHECK accepts unknown, so a weekly holiday with no weekday got through; `20261008134500_holiday_weekday_check` adds `weekday IS NOT NULL`. A test caught it.
+8. **No reads with several relations inside a transaction.** Inside an interactive transaction, Prisma 7 with the pg adapter runs the relation reads in parallel on the transaction's single connection. pg warns, and in one test run this stalled a transaction that held locks. Services include at most one relation inside a transaction and load the full DTO after commit (see the comment on `holidayInclude`).
+9. **Shared helpers:**
+   - `changes.ts` moved from the clients module to `src/lib/` (`onlyChanged` now compares arrays, and `definedOnly` is new).
+   - `isHodOfAny()` is in `permissions.ts`; `isIpOrCidr()` is in `officeNetwork.ts`.
+   - `audit()` takes `apiClientId`, and `key` / `keyHash` never reach the audit log.
+   - Date helpers `addDays`, `daysInclusive` and `isoWeekday` are in `src/lib/dates.ts`.
+
+**Not built yet:** the Settings → Masters screens (frontend), and wiring `blockedDays()` into Visa Step 5 and field jobs (built with those features).
+
