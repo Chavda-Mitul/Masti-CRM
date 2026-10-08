@@ -6,7 +6,7 @@ import { istToday, toDbDate } from "../../lib/dates";
 import { badRequest, notFound } from "../../lib/httpError";
 import type { Actor } from "../users/user";
 import { assertCanEditClients } from "./access";
-import { assertFresh, onlyChanged, pick, staleError } from "./changes";
+import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { toMemberDto } from "./client";
 import type { CreateMemberInput, UpdateMemberInput } from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";

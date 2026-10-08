@@ -1,10 +1,16 @@
-import { HttpError } from "../../lib/httpError";
+import { HttpError } from "./httpError";
 
 // Helpers for partial updates: which fields really changed, and optimistic locking on updatedAt.
 
 function same(a: unknown, b: unknown): boolean {
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((value, i) => same(value, b[i]));
   return a === b;
+}
+
+/** Drops keys that weren't sent (undefined), so a partial update only touches what the request names. */
+export function definedOnly<T extends object>(input: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> };
 }
 
 /** Keeps only the fields whose value differs from the current row. */

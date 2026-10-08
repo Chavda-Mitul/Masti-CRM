@@ -43,3 +43,11 @@ export function isHodOf(user: UserWithDepartments, departmentCode: DepartmentCod
   if (user.type !== "OFFICE") return false;
   return user.departments.some((d) => d.department.code === departmentCode && d.department.isActive && d.role === "HOD");
 }
+
+/** HOD of at least one active department, or Head. Masters shared by every department (the holiday calendar) use it. */
+export function isHodOfAny(user: UserWithDepartments): boolean {
+  if (!user.isActive) return false;
+  if (user.type === "HEAD") return true;
+  if (user.type !== "OFFICE") return false;
+  return user.departments.some((d) => d.department.isActive && d.role === "HOD");
+}

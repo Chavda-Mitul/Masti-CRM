@@ -67,6 +67,9 @@ model User {
   clientPhonesAdded  ClientPhone[]    @relation("ClientPhoneCreatedBy")
   clientMembersAdded ClientMember[]   @relation("ClientMemberCreatedBy")
   clientNotes        ClientNote[]     @relation("ClientNoteAuthor")
+  holidaysAdded      Holiday[]        @relation("HolidayAddedBy")
+  holidaysReviewed   Holiday[]        @relation("HolidayReviewedBy")
+  apiClientsCreated  ApiClient[]      @relation("ApiClientCreatedBy")
 
   @@index([type, isActive])
 }
@@ -129,23 +132,27 @@ model Session {
 // ---------------------------------------------------------------------------
 
 model AuditLog {
-  id         BigInt   @id @default(autoincrement())
-  actorId    String?
-  action     String
-  entityType String
-  entityId   String?
+  id          BigInt     @id @default(autoincrement())
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String?
   /// The client the change belongs to (the client, its numbers, members, notes, later its files), so a client's
   /// history is one indexed query. No foreign key: audit rows must never block or follow changes to other tables.
-  clientId   String?
-  before     Json?
-  after      Json?
-  ip         String?
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  clientId    String?
+  /// Set instead of actorId when a machine account (e.g. the holiday bot) made the change.
+  apiClientId String?
+  before      Json?
+  after       Json?
+  ip          String?
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  actor       User?      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  apiClient   ApiClient? @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
 
   @@index([entityType, entityId])
   @@index([clientId, createdAt])
   @@index([actorId])
+  @@index([apiClientId])
   @@index([createdAt])
 }
 
@@ -310,6 +317,249 @@ model ClientNote {
   author    User     @relation("ClientNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
   @@index([clientId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Machine accounts: server-to-server callers such as the holiday bot.
+// See docs/decisions/0005-system-masters.md.
+// ---------------------------------------------------------------------------
+
+/// What a machine account may call. Routes check these in code, so an enum.
+enum ApiScope {
+  /// Push embassy holidays to /api/inbound/holidays.
+  HOLIDAYS_PUSH
+}
+
+/// Never deleted (the audit log points here); switched off instead.
+model ApiClient {
+  id          String     @id @default(uuid())
+  /// "Holiday bot"
+  name        String     @unique
+  /// The random part after "mcrm_", kept in clear to show "mcrm_3fa9c2d1_…". Not secret.
+  keyPrefix   String     @unique
+  /// SHA-256 of the full key. The key itself is shown once and never stored.
+  keyHash     String     @unique
+  scopes      ApiScope[]
+  /// Single IPs or CIDR ranges. Empty = any address.
+  allowedIps  String[]
+  isActive    Boolean    @default(true)
+  lastUsedAt  DateTime?  @db.Timestamptz(3)
+  lastUsedIp  String?
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+  createdById String
+  createdBy   User       @relation("ApiClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  holidays    Holiday[]
+  auditLogs   AuditLog[]
+}
+
+// ---------------------------------------------------------------------------
+// System masters: countries, visa types, embassies (admin-edited in Settings → Masters).
+// See docs/decisions/0005-system-masters.md.
+// ---------------------------------------------------------------------------
+
+model Country {
+  id             Int             @id @default(autoincrement())
+  /// ISO 3166-1 alpha-2, e.g. "FR". Also how the bot names a country. Never changes.
+  code           String          @unique
+  name           String /// "France"
+  /// Shown in brackets: "France (Schengen)".
+  zone           String?
+  sortOrder      Int             @default(0)
+  isActive       Boolean         @default(true)
+  offerings      VisaOffering[]
+  embassies      Embassy[]
+  holidayTargets HolidayTarget[]
+}
+
+model VisaType {
+  id        Int            @id @default(autoincrement())
+  /// TOURIST, BUSINESS, STUDENT… Never changes.
+  code      String         @unique
+  name      String
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  offerings VisaOffering[]
+}
+
+/// A post where files are submitted: an embassy, consulate or visa centre.
+model Embassy {
+  id             Int             @id @default(autoincrement())
+  /// Stable key, e.g. "FR-MUM". The bot uses it to target one post. Never changes.
+  code           String          @unique
+  countryId      Int
+  name           String /// "French embassy, Mumbai"
+  city           String /// "Mumbai"
+  sortOrder      Int             @default(0)
+  isActive       Boolean         @default(true)
+  country        Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  holidayTargets HolidayTarget[]
+
+  @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Holiday calendar
+// ---------------------------------------------------------------------------
+
+/// Who created the entry. Code branches on it (review flow, bot update rules), so an enum.
+enum HolidaySource {
+  /// Staff, or the seed (then addedById is null).
+  MANUAL
+  AI_BOT
+}
+
+enum HolidayStatus {
+  /// From the bot, waiting for a person. Warns but doesn't block.
+  PENDING
+  /// Blocks dates.
+  ACTIVE
+  /// Taken off the calendar (or a rejected bot entry). Kept so the bot can't recreate it.
+  REMOVED
+}
+
+enum HolidayRepeat {
+  /// startDate…endDate inclusive (equal for one day).
+  NONE
+  /// Every `weekday`, from startDate until endDate (or for good).
+  WEEKLY
+}
+
+enum HolidayTargetKind {
+  ALL_EMBASSIES
+  /// Every post of countryId.
+  COUNTRY
+  /// One post: embassyId.
+  EMBASSY
+  /// Masti's office, collections and deliveries.
+  MASTI_OFFICE
+}
+
+/// Checks in the migration:
+/// - repeat = NONE   ⇒ endDate set, endDate >= startDate, weekday null
+/// - repeat = WEEKLY ⇒ weekday 1–7, endDate null or >= startDate
+/// - source = MANUAL ⇒ apiClientId and externalKey null
+/// - source = AI_BOT ⇒ apiClientId and externalKey set, addedById null
+model Holiday {
+  id           String          @id @default(uuid())
+  /// "Dussehra", "National Day week". A label, not a reported value.
+  name         String
+  repeat       HolidayRepeat   @default(NONE)
+  startDate    DateTime        @db.Date
+  endDate      DateTime?       @db.Date
+  /// ISO weekday, 1 = Monday … 7 = Sunday. WEEKLY only.
+  weekday      Int?            @db.SmallInt
+  status       HolidayStatus   @default(ACTIVE)
+  source       HolidaySource   @default(MANUAL)
+  /// The bot's own id for this announcement. A push with the same key updates this row.
+  externalKey  String?         @unique
+  /// Where it was announced: "IVS", or the embassy notice URL. Display only.
+  reference    String?
+  /// The staff member who added it. Null for bot entries and seeded ones.
+  addedById    String?
+  /// The machine account that pushed it. Bot entries only.
+  apiClientId  String?
+  /// Who confirmed, edited or removed it last. Once set on a bot entry, the bot can no longer change it.
+  reviewedById String?
+  reviewedAt   DateTime?       @db.Timestamptz(3)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  /// Also the optimistic-lock token for PATCH.
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
+  addedBy      User?           @relation("HolidayAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  reviewedBy   User?           @relation("HolidayReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+  apiClient    ApiClient?      @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
+  targets      HolidayTarget[]
+
+  @@index([status, startDate])
+  @@index([apiClientId, updatedAt])
+}
+
+/// What a holiday applies to. At least one per holiday (checked in the service).
+/// Checks in the migration: COUNTRY ⇒ countryId only; EMBASSY ⇒ embassyId only; otherwise neither.
+/// Unique (holidayId, kind, countryId, embassyId) NULLS NOT DISTINCT, in the migration.
+model HolidayTarget {
+  id        Int               @id @default(autoincrement())
+  holidayId String
+  kind      HolidayTargetKind
+  countryId Int?
+  embassyId Int?
+  holiday   Holiday           @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  country   Country?          @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  embassy   Embassy?          @relation(fields: [embassyId], references: [id], onDelete: Restrict)
+
+  @@index([holidayId])
+  @@index([kind, countryId])
+  @@index([kind, embassyId])
+}
+
+// ---------------------------------------------------------------------------
+// Visa document master
+// ---------------------------------------------------------------------------
+
+/// A visa Masti processes: country × visa type. The checklist (and, later, fees) hang off it.
+model VisaOffering {
+  id         Int                 @id @default(autoincrement())
+  countryId  Int
+  visaTypeId Int
+  isActive   Boolean             @default(true)
+  createdAt  DateTime            @default(now()) @db.Timestamptz(3)
+  /// Bumped when the checklist is replaced: the optimistic-lock token for PUT …/checklist.
+  updatedAt  DateTime            @updatedAt @db.Timestamptz(3)
+  country    Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  visaType   VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  checklist  VisaChecklistItem[]
+
+  @@unique([countryId, visaTypeId])
+}
+
+/// Every document a checklist can ask for. No department: insurance claim checklists reuse it later.
+model DocumentMaster {
+  id             Int                 @id @default(autoincrement())
+  /// PASSPORT, OLD_PASSPORTS, BANK_STATEMENT_6M… Never changes.
+  code           String              @unique
+  /// "Bank statement, last 6 months"
+  name           String
+  /// Shown to the client with the name, e.g. "35×45 mm, white background".
+  detail         String?
+  sortOrder      Int                 @default(0)
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
+  checklistItems VisaChecklistItem[]
+}
+
+/// What we need. Code branches on it (Original/Xerox toggle, "Made" for things we arrange), so an enum.
+enum DocumentRequirement {
+  ORIGINAL
+  XEROX_OK
+  ARRANGED_BY_US
+}
+
+/// Which travellers a checklist line (or, later, a fee) applies to.
+enum TravellerGroup {
+  ALL
+  ADULTS
+  CHILDREN
+}
+
+/// One line of a country × visa type checklist. Copied onto each traveller at intake,
+/// so replacing lines never changes an open case.
+model VisaChecklistItem {
+  id          Int                 @id @default(autoincrement())
+  offeringId  Int
+  documentId  Int
+  requirement DocumentRequirement
+  appliesTo   TravellerGroup      @default(ALL)
+  /// "Photos 35×45 mm (2)". 1–20 (database check).
+  quantity    Int                 @default(1) @db.SmallInt
+  /// A per-visa instruction for the client ("signed by both parents"). Display only.
+  note        String?
+  sortOrder   Int                 @default(0)
+  offering    VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  document    DocumentMaster      @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([offeringId, documentId])
+  @@index([documentId])
 }
 
 // ---------------------------------------------------------------------------

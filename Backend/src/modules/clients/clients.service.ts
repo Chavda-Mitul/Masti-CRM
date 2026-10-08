@@ -7,7 +7,7 @@ import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
 import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
-import { assertFresh, onlyChanged, pick, staleError } from "./changes";
+import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
 import {
   GST_STATES,

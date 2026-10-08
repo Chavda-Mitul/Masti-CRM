@@ -9,12 +9,14 @@ export interface AuditEntry {
   entityId?: string | null;
   /** The client this change belongs to (the client itself, or one of its numbers, members, notes, later its files), for a client's history. */
   clientId?: string | null;
+  /** The machine account that made the change (e.g. the holiday bot), instead of actorId. */
+  apiClientId?: string | null;
   before?: unknown;
   after?: unknown;
   ip?: string | null;
 }
 
-const SECRET_KEYS = new Set(["passwordHash", "tokenHash", "password", "newPassword", "currentPassword", "tempPassword"]);
+const SECRET_KEYS = new Set(["passwordHash", "tokenHash", "password", "newPassword", "currentPassword", "tempPassword", "key", "keyHash"]);
 
 /** JSON-safe copy without secrets. Dates become ISO strings, BigInts become strings. */
 function snapshot(value: unknown): Prisma.InputJsonValue | undefined {
@@ -41,6 +43,7 @@ export async function audit(entry: AuditEntry, db: Db = prisma): Promise<void> {
       actorId: entry.actorId ?? null,
       entityId: entry.entityId ?? null,
       clientId: entry.clientId ?? null,
+      apiClientId: entry.apiClientId ?? null,
       ip: entry.ip ?? null,
       ...(before !== undefined ? { before } : {}),
       ...(after !== undefined ? { after } : {}),

@@ -34,6 +34,17 @@ function normaliseIp(ip: string): string {
   return ip.startsWith("::ffff:") && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
 }
 
+/** True for a single IP ("203.0.113.10") or a CIDR range ("203.0.113.0/24", "2001:db8::/32"). */
+export function isIpOrCidr(entry: string): boolean {
+  const [base, prefix, extra] = entry.trim().split("/");
+  if (!base || extra !== undefined) return false;
+  const family = isIP(base);
+  if (!family) return false;
+  if (prefix === undefined) return true;
+  if (!/^[0-9]{1,3}$/.test(prefix)) return false;
+  return Number(prefix) <= (family === 6 ? 128 : 32);
+}
+
 export function ipAllowed(ip: string | undefined, allow: string[]): boolean {
   if (!ip) return false;
   const address = normaliseIp(ip);

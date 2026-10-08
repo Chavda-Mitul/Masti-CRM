@@ -14,7 +14,8 @@ const DEPARTMENTS = ["VISA", "HOLIDAYS", "HOTELS", "INSURANCE", "TICKETS", "ACCO
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
     'TRUNCATE "AuditLog", "Session", "FieldJob", "UserDepartment", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
-      '"BillingCycle", "PaymentHabit", "Relation", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
+      '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "ApiClient", "VisaChecklistItem", "VisaOffering", ' +
+      '"DocumentMaster", "Embassy", "VisaType", "Country", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
   );
   await prisma.department.createMany({
     data: DEPARTMENTS.map((code, i) => ({ code, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
