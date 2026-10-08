@@ -1,5 +1,5 @@
 /**
- * Seeds the departments and the first Head user.
+ * Seeds the departments, the client lookup tables and settings, and the first Head user.
  *   npm run db:seed
  * Head details come from SEED_HEAD_NAME, SEED_HEAD_MOBILE, SEED_HEAD_EMAIL, SEED_HEAD_PASSWORD (Backend/.env).
  * If no password is given, a temporary one is generated and printed once. Safe to run again.
@@ -9,6 +9,13 @@ import "dotenv/config";
 import { normaliseEmail, normaliseMobile } from "../src/modules/auth/identifier";
 import { generateTempPassword, hashPassword } from "../src/modules/auth/password";
 import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
+import { seedClientLookups } from "../src/modules/clients/clients.seed";
+import {
+  DEFAULT_EXPIRY_WARNINGS,
+  DEFAULT_INVOICE_READINESS,
+  EXPIRY_WARNINGS_KEY,
+  INVOICE_READINESS_KEY,
+} from "../src/modules/clients/clients.settings";
 import { prisma } from "../src/config/prisma";
 import { audit } from "../src/lib/audit";
 
@@ -32,6 +39,16 @@ async function main() {
     update: {},
     create: { key: OFFICE_NETWORK_KEY, value: DEFAULT_OFFICE_NETWORK },
   });
+
+  // Client master: lookup tables and the ⚠️ settings (docs/decisions/0004-client-master.md). Existing rows are kept.
+  await seedClientLookups(prisma);
+  for (const [key, value] of [
+    [INVOICE_READINESS_KEY, DEFAULT_INVOICE_READINESS],
+    [EXPIRY_WARNINGS_KEY, DEFAULT_EXPIRY_WARNINGS],
+  ] as const) {
+    await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
+  }
+  console.log("Client lookups and settings ready.");
 
   if (await prisma.user.findFirst({ where: { type: "HEAD" } })) {
     console.log("A Head user already exists. Skipping.");

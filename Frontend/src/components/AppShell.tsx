@@ -49,9 +49,9 @@ export function AppShell() {
         <span className="nav nav-disabled">
           Follow-ups <span className="tag">Soon</span>
         </span>
-        <span className="nav nav-disabled">
-          Clients <span className="tag">Soon</span>
-        </span>
+        <NavLink to="/clients" className="nav">
+          Clients
+        </NavLink>
         <span className="nav nav-disabled">
           Accounts <span className="tag">Soon</span>
         </span>

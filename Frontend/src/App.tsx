@@ -2,6 +2,8 @@ import { Link, Route, Routes } from 'react-router'
 import { RequireAuth, RequireDesktop, RequireField, RequireHead } from './auth/guards'
 import { AppShell } from './components/AppShell'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { ClientDetailPage } from './pages/clients/ClientDetailPage'
+import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { TasksPage } from './pages/TasksPage'
 import { TodayPage } from './pages/TodayPage'
@@ -50,6 +52,8 @@ export default function App() {
         }
       >
         <Route index element={<TodayPage />} />
+        <Route path="clients" element={<ClientDirectoryPage />} />
+        <Route path="clients/:id" element={<ClientDetailPage />} />
         <Route
           path="settings/users"
           element={

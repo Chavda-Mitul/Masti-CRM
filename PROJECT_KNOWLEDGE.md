@@ -462,6 +462,18 @@ These are used by every module.
 - **Family and travellers** ✅: name, relation (Self, Spouse, Son 12…), passport valid till (with a "renew soon" flag), and consent status ("On file · 28 Sep" or "Not on file").
 - **Profile page:** history across all departments, open cases, business with us (₹ total · trips), balance still to pay, WhatsApp messages sent, and notes (free text, never reported on).
 - **Importing existing client data (Q29, decided 8 Oct 2026):** Masti will send the old data as an Excel file. An import job is built later; the mobile number is the match key.
+- **Built 8 Oct 2026 (project lead): the client master, before the System Masters.** Design: `docs/decisions/0004-client-master.md`.
+  - **Tables:** `Client`, `ClientPhone` (extra numbers), `ClientMember` (family & travellers, or a company's employees), `ClientNote`, plus the seeded lookups `BillingCycle`, `PaymentHabit`, `Relation`.
+  - **Client fields:** kind (individual / company), name, contact person (companies only), email, address line, area, city, GST state, PIN code, PAN, GSTIN, accounting code (unique), billing cycle, payment habit, client since.
+    - A GSTIN must contain the PAN; an empty PAN and state are filled from it.
+    - PAN is a typed field only: **PAN verification is not built** (Q23).
+  - **Extra mobile numbers:** lookup matches them too. WhatsApp always goes to the main number. The main number can be swapped for another.
+  - **Members:** passport name, relation, DOB (age is worked out), own mobile, current passport number and expiry. Passport status is VALID / RENEW_SOON / EXPIRED; the window is a setting (12 months ⚠️, Q35). Members are archived, never deleted. Consent comes with Visa Step 2, keyed to the member.
+  - **"Complete before invoicing" is a setting** (`clients.invoiceReadiness`, the required fields per kind, ⚠️ Q33). The invoice module must call `assertInvoiceReady()`.
+  - **Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings** (409, then save again with `confirmDuplicates: true`; audited). A second client with the same **main** number is refused.
+  - **Accounting code, billing cycle and payment habit:** only Accounts (or the Head) can set them (Q34).
+  - **Saves use optimistic locking** on `updatedAt`.
+- **Document vault (reusable passport/PAN scans per client): not built** (decided 8 Oct 2026). It isn't in the demo, and nobody at Masti asked for it, so it may be a change request (Q37). If it is built, it stores Drive/OneDrive links, not S3 uploads (rule 4). **Aadhaar numbers are not stored** (Aadhaar rules, DPDP, S11).
 
 ### 10.2 Enquiry: the unit of work across departments
 
@@ -1179,9 +1191,12 @@ This is the biggest technical unknown (§16.2).
 |---|---|
 | User | name, mobile, email, type (HEAD / OFFICE / FIELD), department roles (Staff / HOD, OFFICE only), active. Disabling it revokes sessions and vault access. |
 | Department | Visa, Holidays, Hotels, Insurance, Tickets, Accounts; colour; stage flow (as data). Field staff are a user type, not a department. |
-| Client | mobile (unique lookup key), name, email, addresses, individual/corporate, accounting client code, billing cycle (default monthly), completeness, source |
-| Traveller | client, passport name, relation, DOB, current passport no., passport expiry, child flag/age |
-| Consent | person (one per lifetime), staff-filled details, wording version, link token, accepted at, channel, stored link |
+| Client ✅ built (0004) | mobile (unique lookup key), kind (individual/corporate), name, contact person, email, address line, area, city, GST state, PIN, PAN, GSTIN, accounting code (unique), billing cycle (default monthly), payment habit, client since. Completeness is worked out from the `clients.invoiceReadiness` setting, not stored. |
+| ClientPhone ✅ built | client, extra mobile, label. Matched by lookup; not unique across clients. |
+| ClientMember ✅ built (the "Traveller") | client, passport name, relation (master), DOB (age/child worked out), own mobile, current passport no., passport expiry, archived at. Case travellers (`VisaCaseTraveller`) link here in Visa Step 2. |
+| ClientNote ✅ built | client, body, author, at. Append-only, never reported on. |
+| BillingCycle / PaymentHabit / Relation ✅ built | Seeded lookup tables (masters); admin screens come with System Masters |
+| Consent | person (one per lifetime; keyed to `ClientMember`), staff-filled details, wording version, link token, accepted at, channel, stored link |
 | Enquiry | case no., client, department, source, services, summary, stage, next step, due at, owner, desk, status (open / postponed / cancelled / lost / closed) + reason, origin (direct or cross-sell lead) |
 | FollowUp | enquiry, due at, done at, by, what happened, next step, next date |
 | VisaCase | country, visa type, adults, children, entry type, duration, travel date, hotel stay, vendor, docket, vendor file no., expected collection date, recall |
@@ -1385,7 +1400,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests. Decision record: `docs/decisions/0001-auth-sessions.md`. The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1393,9 +1408,11 @@ Masti CRM/
 ├── docs/decisions/               ← decision records (0001-auth-sessions.md)
 ├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
 │   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
-│   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting
-│   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers)
-│   ├── prisma/seed.ts            ← departments + first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
+│   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
+│   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation
+│   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers),
+│   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle)
+│   ├── prisma/seed.ts            ← departments, client lookups + settings, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
 │   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,
@@ -1403,20 +1420,26 @@ Masti CRM/
 │   │   ├── auth/                 ← login/logout/me/change-password + session.ts, password.ts (argon2id),
 │   │   │                            identifier.ts (mobile/email), permissions.ts (can, isHodOf), officeNetwork.ts
 │   │   ├── users/                ← user management (Head only) + user.ts (withDepartments, toUserDto)
+│   │   ├── clients/              ← client master: clients, extra numbers, members, notes, lookup/search, settings;
+│   │   │                            access.ts (who may edit), duplicates.ts (confirmDuplicates), readiness.ts (assertInvoiceReady)
 │   │   ├── departments/          ← active department list
 │   │   └── health/               ← server and database status
 │   ├── src/middleware/           ← auth.ts (requireAuth, requireHead, requireDepartment,
 │   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
-│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts
+│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
-    ├── src/main.tsx, App.tsx     ← React Query + React Router 8; routes /login, /change-password, /, /settings/users, /tasks (field staff)
-    ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead
-    ├── src/components/AppShell   ← approved sidebar (unbuilt modules greyed out)
+    ├── src/main.tsx, App.tsx     ← React Query + React Router 8 + ToastProvider; routes /login, /change-password, /, /clients,
+    │                                /clients/:id, /settings/users, /tasks (field staff)
+    ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
+    │                                permissions.ts (can, canEditClients, canEditAccountsFields: mirrors the backend)
     ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
-    ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts
-    └── src/styles/               ← tokens.css (demo colours/fonts), base.css, shell.css, auth.css
+    │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
+    │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
+    ├── src/components/           ← AppShell (approved sidebar), Toast (ToastProvider), FormField, ConfirmDialog
+    ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors), shell.css, auth.css, clients.css
 ```
 
 **API so far:**
@@ -1431,6 +1454,7 @@ Masti CRM/
 | `GET /api/departments` | Head, office staff | Active departments |
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
+| `/api/clients/*` | Head, office staff (edit: any department EDIT; billing fields: Accounts) | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
 
 **Rules every new route must follow:**
 - Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
@@ -1456,7 +1480,7 @@ Masti CRM/
 | Backend | `npm run db:up` / `db:down` | Start/stop the local Postgres container (`docker compose`) |
 | Backend | `npm run db:migrate` | `prisma migrate dev` |
 | Backend | `npm run db:generate` | `prisma generate` (run after every schema change) |
-| Backend | `npm run db:seed` | Departments + first Head user (prints a one-time temporary password) |
+| Backend | `npm run db:seed` | Departments, client lookups and settings, first Head user (prints a one-time temporary password). Never overwrites existing rows. |
 | Backend | `npm run db:studio` | Prisma Studio |
 | Backend | `npm run dev` | tsx watch on `src/server.ts` (port 5000) |
 | Backend | `npm test` | vitest: creates and migrates `masti_crm_test`, wipes it before each test |
@@ -1500,7 +1524,7 @@ Masti CRM/
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).
 
 **Not there yet:**
-- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, masters screens, any business module.
+- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, masters screens, any business module beyond the client master.
 - **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
 - **Project setup:** CI/CD and deploy scripts.
 
@@ -1582,6 +1606,12 @@ Masti CRM/
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
+**Decided 8 Oct 2026 (project lead), for the client master.** Details are in §10.1; the design is `docs/decisions/0004-client-master.md`.
+- The client master is built **before** the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
+- Clients get extra mobile numbers, a GSTIN and a PAN (typed, not verified). "Complete before invoicing" is a setting, not code.
+- Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings staff confirm, not errors.
+- The client document vault is **not built** (Q37). Aadhaar numbers are not stored.
+
 | # | Question | Who | Blocks |
 |---|---|---|---|
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? | Y→C | 1 |
@@ -1617,8 +1647,13 @@ Masti CRM/
 | 31 | Can office staff (e.g. Accounts) cover the collection run, using the same phone screen? The data model allows it; today `/tasks` is field staff only. | C | 1 |
 | 31 | **New:** Does the hotel rate check apply to staff's predefined hotels, where Masti is "master"? | C | 2 |
 | 32 | **New:** Does the ticket desk use the Galileo GDS? (It affects how fares get into the quote.) | C | 2 |
+| 33 | **New:** Which client details must be on file before an invoice, for individuals and for companies? Is an accounting code needed for every client? Seeded ⚠️: individuals need name, address, city, state; companies also need a contact person and GSTIN (`clients.invoiceReadiness`). | C | 1 |
+| 34 | **New:** Only Accounts (and the Head) may set the accounting code, billing cycle and payment habit. Is that right, or may each department set them when it creates a client? Built Accounts-only. | Y→C | 1 |
+| 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
+| 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
+| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: Drive/OneDrive links, not uploads. | S | 2 |
 
-Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log.
+Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) are in `05_Open_Questions.md`.
 
 ---
 

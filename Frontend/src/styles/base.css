@@ -11,6 +11,11 @@ body,
   height: 100%;
 }
 
+/* Reserve the scrollbar's space so pages don't shift sideways when a list gets shorter or longer. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   background: var(--bg-page);
@@ -289,4 +294,136 @@ a:hover {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+/* Small text, warnings and form feedback */
+.small {
+  font-size: 12.5px;
+}
+.alert-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.field-error {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--bad);
+}
+.field-invalid .input,
+.field-invalid .select {
+  border-color: var(--bad);
+}
+.input:disabled,
+.select:disabled {
+  background: var(--fill-muted);
+  color: var(--text-3);
+}
+.upper {
+  text-transform: uppercase;
+}
+.textarea {
+  height: auto;
+  min-height: 64px;
+  padding: 10px 12px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.45;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+}
+.chip-sm {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+
+/* Drawer and dialog layout */
+.drawer-wide {
+  width: min(640px, 100%);
+}
+.drawer-head {
+  border-bottom: 1px solid var(--border-card);
+}
+.drawer-head p {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+}
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+.drawer-foot {
+  border-top: 1px solid var(--border-card);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.dialog-wide {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.section-lbl {
+  margin-top: 6px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Toasts (useToast) */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100% - 40px));
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 13px 15px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-pop);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.toast-ok {
+  border-left: 4px solid var(--ok);
+}
+.toast-warn {
+  border-left: 4px solid var(--warn);
+}
+.toast-bad {
+  border-left: 4px solid var(--bad);
+}
+.toast-info {
+  border-left: 4px solid var(--primary);
 }

@@ -63,6 +63,10 @@ model User {
   sessions           Session[]
   auditEntries       AuditLog[]
   assignedFieldJobs  FieldJob[]       @relation("FieldJobAssignee")
+  clientsCreated     Client[]         @relation("ClientCreatedBy")
+  clientPhonesAdded  ClientPhone[]    @relation("ClientPhoneCreatedBy")
+  clientMembersAdded ClientMember[]   @relation("ClientMemberCreatedBy")
+  clientNotes        ClientNote[]     @relation("ClientNoteAuthor")
 
   @@index([type, isActive])
 }
@@ -139,6 +143,163 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Client master: lookup tables (seeded; admin screens come with System Masters).
+// See docs/decisions/0004-client-master.md.
+// ---------------------------------------------------------------------------
+
+/// Weekly / half-monthly / monthly ✅, default monthly ✅. Rows, because billing cycles are a master (§7 rule 9).
+model BillingCycle {
+  id        Int      @id @default(autoincrement())
+  /// WEEKLY, HALF_MONTHLY, MONTHLY
+  code      String   @unique
+  name      String
+  /// At most one row is the default (partial unique index in the migration). New clients get it.
+  isDefault Boolean  @default(false)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  clients   Client[]
+}
+
+/// "Pays: Part advance, rest on delivery". Demo values ⚠️.
+model PaymentHabit {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  clients   Client[]
+}
+
+/// Self, Spouse, Son, Daughter… and Employee for corporate clients.
+model Relation {
+  id        Int            @id @default(autoincrement())
+  code      String         @unique
+  name      String
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  members   ClientMember[]
+}
+
+// ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+/// Code branches on it (contact person, readiness rules per kind), so an enum.
+enum ClientKind {
+  INDIVIDUAL
+  CORPORATE
+}
+
+/// Saved against the mobile number ✅: an enquiry needs only that.
+/// Completed before invoicing; which fields are required is the clients.invoiceReadiness setting.
+/// Never deleted: enquiries and invoices will point here.
+model Client {
+  id             String         @id @default(uuid())
+  kind           ClientKind     @default(INDIVIDUAL)
+  /// +91XXXXXXXXXX. The lookup key, the WhatsApp number, and the match key for the Excel import.
+  mobile         String         @unique
+  /// The person's name, or the company's. Null until known (intake, bot and import may create with the mobile only).
+  name           String?
+  /// CORPORATE only (database check): the person we deal with.
+  contactPerson  String?
+  /// Stored lowercased.
+  email          String?
+  addressLine    String?
+  /// "Vesu"
+  area           String?
+  city           String?
+  /// GST state code ("24" = Gujarat). Decides the place of supply on invoices.
+  stateCode      String?        @db.Char(2)
+  pincode        String?        @db.Char(6)
+  /// Uppercase AAAAA9999A. Typed in by staff; not verified (PAN verification is Q23, out of scope).
+  pan            String?
+  /// Uppercase, 15 characters. Characters 3–12 equal pan when both are set (database check).
+  gstin          String?
+  /// The client's code in Masti's accounting software ✅.
+  accountingCode String?        @unique
+  billingCycleId Int
+  paymentHabitId Int?
+  /// The service sets the IST date; the Excel import may set an earlier one.
+  clientSince    DateTime       @default(now()) @db.Date
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  /// Also the optimistic-lock token: PATCH sends back the updatedAt it read.
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  /// Null when created by the WhatsApp bot, a website form or the import.
+  createdById    String?
+  billingCycle   BillingCycle   @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
+  paymentHabit   PaymentHabit?  @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
+  createdBy      User?          @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  phones         ClientPhone[]
+  members        ClientMember[]
+  notes          ClientNote[]
+
+  @@index([name])
+  @@index([pan])
+  @@index([gstin])
+}
+
+/// Extra numbers. Lookup matches them too; WhatsApp always goes to Client.mobile.
+/// Not unique across clients (an office accountant's number can sit on two clients): a match is a warning staff confirm.
+model ClientPhone {
+  id          String   @id @default(uuid())
+  clientId    String
+  /// +91XXXXXXXXXX
+  mobile      String
+  /// "Office", "Wife's number". Display only; never reported on.
+  label       String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy   User     @relation("ClientPhoneCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, mobile])
+  @@index([mobile])
+}
+
+/// Family & travellers ✅ (or a corporate's employees). Visa Step 2 links case travellers to these rows.
+/// Consent is its own model (one per person for life, keyed to the member, not the passport), built with Visa Step 2.
+model ClientMember {
+  id             String    @id @default(uuid())
+  clientId       String
+  /// As printed in the passport, once seen.
+  name           String
+  relationId     Int
+  /// Age ("Son, 12") is worked out from this.
+  dateOfBirth    DateTime? @db.Date
+  mobile         String?
+  /// Current passport only. Uppercase, no spaces. Not unique: a duplicate is a warning staff confirm.
+  /// Earlier numbers stay in the audit log.
+  passportNumber String?
+  passportExpiry DateTime? @db.Date
+  sortOrder      Int       @default(0)
+  /// Taken off the family list. Never deleted: past cases will point here.
+  archivedAt     DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  /// Optimistic-lock token, as on Client.
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  createdById    String
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  relation       Relation  @relation(fields: [relationId], references: [id], onDelete: Restrict)
+  createdBy      User      @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([clientId])
+  @@index([passportNumber])
+}
+
+/// Free text with author and date (demo). Never read by reports or rules (§7 rule 2). Append-only.
+model ClientNote {
+  id        String   @id @default(uuid())
+  clientId  String
+  body      String
+  authorId  String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  author    User     @relation("ClientNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

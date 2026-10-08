@@ -12,6 +12,29 @@ export function initials(name: string): string {
   return (first + last).toUpperCase()
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** A date-only value "2027-06-15" → "Jun 2027" (no time zone shift). */
+export function formatMonthYear(date: string | null): string {
+  if (!date) return '—'
+  const [y, m] = date.split('-')
+  return `${MONTHS[Number(m) - 1] ?? ''} ${y}`
+}
+
+/** A date-only value "2027-06-15" → "15 Jun 2027". */
+export function formatDate(date: string | null): string {
+  if (!date) return '—'
+  const [y, m, d] = date.split('-')
+  return `${Number(d)} ${MONTHS[Number(m) - 1] ?? ''} ${y}`
+}
+
+/** Today in India as "2026-10-08", for date inputs and comparisons. */
+export function istToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    new Date(),
+  )
+}
+
 /** "8 Oct, 4:12 pm" in Indian time. */
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—'

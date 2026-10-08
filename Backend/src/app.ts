@@ -7,6 +7,7 @@ import { env, trustProxySetting } from "./config/env";
 import { apiNotFound, errorHandler } from "./middleware/error";
 import { requireJson } from "./middleware/requireJson";
 import authRoutes from "./modules/auth/auth.routes";
+import clientRoutes from "./modules/clients/clients.routes";
 import departmentRoutes from "./modules/departments/departments.routes";
 import healthRoutes from "./modules/health/health.routes";
 import userRoutes from "./modules/users/users.routes";
@@ -26,6 +27,7 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/clients", clientRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);
