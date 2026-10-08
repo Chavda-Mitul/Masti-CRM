@@ -250,6 +250,11 @@ export async function getReadiness(id: string) {
   return readinessOf(client, (await getClientSettings()).invoiceReadiness);
 }
 
+/** States by name for the dropdown, with the "Other Territory" catch-all kept last. */
+const STATES_BY_NAME = [...GST_STATES].sort((a, b) =>
+  a.code === "97" ? 1 : b.code === "97" ? -1 : a.name.localeCompare(b.name, "en-IN"),
+);
+
 /** The dropdowns on the client forms. */
 export async function getClientOptions() {
   const active = { where: { isActive: true }, orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] };
@@ -258,7 +263,7 @@ export async function getClientOptions() {
     prisma.paymentHabit.findMany({ ...active, select: { id: true, code: true, name: true } }),
     prisma.relation.findMany({ ...active, select: { id: true, code: true, name: true } }),
   ]);
-  return { kinds: ["INDIVIDUAL", "CORPORATE"], billingCycles, paymentHabits, relations, states: GST_STATES };
+  return { kinds: ["INDIVIDUAL", "CORPORATE"], billingCycles, paymentHabits, relations, states: STATES_BY_NAME };
 }
 
 // ---------------------------------------------------------------------------

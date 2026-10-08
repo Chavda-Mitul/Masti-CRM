@@ -419,5 +419,8 @@ describe("notes and options", () => {
     expect(res.body.billingCycles.find((c: { isDefault: boolean }) => c.isDefault).code).toBe("MONTHLY");
     expect(res.body.relations.map((r: { code: string }) => r.code)).toContain("EMPLOYEE");
     expect(res.body.states).toContainEqual({ code: "24", name: "Gujarat" });
+    const names: string[] = res.body.states.map((s: { name: string }) => s.name);
+    expect(names[0]).toBe("Andaman and Nicobar Islands");
+    expect(names.at(-1)).toBe("Other Territory");
   });
 });
