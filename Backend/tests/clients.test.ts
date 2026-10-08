@@ -134,6 +134,34 @@ describe("database rules (they also guard the Excel import)", () => {
     await expect(prisma.billingCycle.create({ data: { code: "QUARTERLY", name: "Quarterly", isDefault: true } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "AAACS1234K", gstin: gstinFor("AAACS1234K") } })).resolves.toBeTruthy();
   });
+
+  it("defaults clientSince to today's date in India", async () => {
+    const billingCycleId = (await prisma.billingCycle.findUniqueOrThrow({ where: { code: "MONTHLY" } })).id;
+    const client = await prisma.client.create({ data: { billingCycleId, mobile: "+919825041234" } });
+    expect(client.clientSince.toISOString().slice(0, 10)).toBe(istToday());
+  });
+});
+
+describe("client history", () => {
+  it("tags every change to a client and its numbers, members and notes with the client id", async () => {
+    const visa = await visaAgent();
+    const client = await createClient(visa, { mobile: "9825041234" });
+    const other = await createClient(visa, { mobile: "9825041235" });
+    const phone = await visa.post(`/api/clients/${client.id}/phones`).send({ mobile: "9898989898" });
+    await visa.delete(`/api/clients/${client.id}/phones/${phone.body.phone.id}`).send({});
+    await visa.post(`/api/clients/${client.id}/members`).send({ name: "Riya Patel", relationId: await relationId("DAUGHTER") });
+    await visa.post(`/api/clients/${client.id}/notes`).send({ body: "Prefers WhatsApp" });
+
+    const history = await prisma.auditLog.findMany({ where: { clientId: client.id }, orderBy: { id: "asc" } });
+    expect(history.map((h) => h.action)).toEqual([
+      "client.create",
+      "client.phone.add",
+      "client.phone.remove",
+      "client.member.create",
+      "client.note.add",
+    ]);
+    expect(await prisma.auditLog.count({ where: { clientId: other.id } })).toBe(1);
+  });
 });
 
 describe("duplicate warnings (confirmDuplicates)", () => {

@@ -7,6 +7,8 @@ export interface AuditEntry {
   action: string;
   entityType: string;
   entityId?: string | null;
+  /** The client this change belongs to (the client itself, or one of its numbers, members, notes, later its files), for a client's history. */
+  clientId?: string | null;
   before?: unknown;
   after?: unknown;
   ip?: string | null;
@@ -38,6 +40,7 @@ export async function audit(entry: AuditEntry, db: Db = prisma): Promise<void> {
       entityType: entry.entityType,
       actorId: entry.actorId ?? null,
       entityId: entry.entityId ?? null,
+      clientId: entry.clientId ?? null,
       ip: entry.ip ?? null,
       ...(before !== undefined ? { before } : {}),
       ...(after !== undefined ? { after } : {}),

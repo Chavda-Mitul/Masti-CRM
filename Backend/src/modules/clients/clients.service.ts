@@ -294,6 +294,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
           action: "client.create",
           entityType: "Client",
           entityId: client.id,
+          clientId: client.id,
           after: { ...client, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
         },
@@ -331,6 +332,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
           action: "client.update",
           entityType: "Client",
           entityId: id,
+          clientId: id,
           before: pick(before, keys),
           after: { ...pick(after, keys), ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
@@ -378,6 +380,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
           action: "client.mobile.change",
           entityType: "Client",
           entityId: id,
+          clientId: id,
           before: { mobile: before.mobile },
           after: { mobile, keptOldAsSecondary: input.keepOldAsSecondary, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
@@ -411,6 +414,7 @@ export async function addPhone(clientId: string, input: AddPhoneInput, actor: Ac
           action: "client.phone.add",
           entityType: "ClientPhone",
           entityId: created.id,
+          clientId: clientId,
           after: { ...created, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
         },
@@ -431,7 +435,7 @@ export async function removePhone(clientId: string, phoneId: string, actor: Acto
   await prisma.$transaction(async (tx) => {
     await tx.clientPhone.delete({ where: { id: phone.id } });
     await audit(
-      { actorId: actor.user.id, action: "client.phone.remove", entityType: "ClientPhone", entityId: phone.id, before: phone, ip: actor.ip },
+      { actorId: actor.user.id, action: "client.phone.remove", entityType: "ClientPhone", entityId: phone.id, clientId, before: phone, ip: actor.ip },
       tx,
     );
   });
@@ -459,6 +463,7 @@ export async function addNote(clientId: string, input: AddNoteInput, actor: Acto
         action: "client.note.add",
         entityType: "ClientNote",
         entityId: created.id,
+        clientId: clientId,
         after: { clientId, body: created.body },
         ip: actor.ip,
       },
