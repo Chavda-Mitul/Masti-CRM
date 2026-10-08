@@ -535,6 +535,12 @@ These are used by every module.
 - **How documents reach us:** the client brings them, or staff **send the collection boy** with the document list, number, address and time slot ✅.
 - **Booklets** (current + old passports) are counted at intake and checked again at handover ✅ ("4 current + 3 old").
 - **Document master (decided 8 Oct 2026, B1/B4):** choosing a country and visa type at intake fills the checklist automatically from the master, copied onto each traveller (so later master edits don't change open cases). Seeded with dummy France Tourist data until Masti sends the real lists.
+- **Document master design (accepted 8 Oct 2026, project lead):** `docs/decisions/0005-system-masters.md`.
+  - `DocumentMaster` (every document any checklist can ask for; no department, so claims reuse it) → `VisaOffering` (country × visa type) → `VisaChecklistItem` (requirement Original / Xerox is fine / Arranged by us; applies to all, adults or children; quantity; a short client note).
+  - A document appears at most once per checklist; a child alternative is a different document marked children-only.
+  - Who counts as a child is set by staff at intake, not by an age rule.
+  - Checklists are saved whole (one `PUT`), with optimistic locking. Only the Head or the Visa HOD edits them.
+  - **Occupation-specific documents** (salary slips for the employed, GST papers for business owners) are not modelled: staff mark them "Not needed" per traveller in Step 2.
 - The same checklist mechanism is reused for **insurance claims**, per claim type ✅.
 
 ### 10.5 Consent and liability form
@@ -1130,6 +1136,12 @@ This is the biggest technical unknown (§16.2).
 - **Holiday calendar, per embassy:**
   - each entry: date (single, range, or recurring, e.g. "Every Sunday · Weekly off · Collections & deliveries"), holiday name, embassy/applies to ("China embassy & visa centres", "All embassies in India · our office", "French embassy, Mumbai"), and added by (+ "from IVS")
   - "Can't be picked as collection dates. New entries show on the dashboard and in the visa team's login popup."
+  - **Design accepted 8 Oct 2026 (project lead):** `docs/decisions/0005-system-masters.md`.
+    - A holiday is a date range or a weekly rule (no yearly repeat: each year is entered), with one or more targets: all embassies, one country, one embassy (new `Embassy` master), or `MASTI_OFFICE` (our office, collections and deliveries; one kind until M15 says otherwise).
+    - "Every Sunday · Weekly off" is seeded data for embassies and our office ⚠️, not code.
+    - Edited by the Head or any HOD. One function (`blockedDays()`) serves the date pickers and the server-side checks.
+    - **Ready for an AI bot** that scrapes embassy holidays: entries record `source` (MANUAL / AI_BOT), the machine account that pushed them and the bot's own key. A Head-managed machine account (API key, scopes, IP allowlist) pushes batches to `/api/inbound/holidays`.
+    - Bot entries arrive **PENDING** (a warning, not a block) until a person confirms them (setting `holidays.botEntriesNeedReview`, seeded on). After review, the bot can no longer change an entry.
 - **Reminder rules** (§10.9).
 - **Vendors:** location, countries covered, Approved / Waiting HOD. "Staff can only pick approved vendors."
 - **Hotels, minimum markup** by star rating, plus the required competitor sites.
@@ -1200,6 +1212,7 @@ This is the biggest technical unknown (§16.2).
 | Enquiry | case no., client, department, source, services, summary, stage, next step, due at, owner, desk, status (open / postponed / cancelled / lost / closed) + reason, origin (direct or cross-sell lead) |
 | FollowUp | enquiry, due at, done at, by, what happened, next step, next date |
 | VisaCase | country, visa type, adults, children, entry type, duration, travel date, hotel stay, vendor, docket, vendor file no., expected collection date, recall |
+| DocumentMaster / VisaOffering / VisaChecklistItem (0005) | document (code, name, detail); country × visa type; line: requirement, adults/children/all, quantity, note, order |
 | ChecklistItem | case or claim, traveller, document type, requirement (Original / Xerox / Arranged by us / Not needed), received as (O/X), received at, by |
 | Docket | number, vendor, courier, docket/AWB no., files, dispatched at, vendor-confirmed at, vendor email sent at |
 | VisaDecision | case, traveller, approved/refused, sticker no., validity, refusal-letter link |
@@ -1219,7 +1232,9 @@ This is the biggest technical unknown (§16.2).
 | WebCheckIn | booking, departure at, status (done / client did it / paid seat offered), boarding-pass link |
 | FareChange | booking, change type, amount, billed via (new invoice / credit note) |
 | Vendor | type, location, countries/services, approval status, approved by |
-| EmbassyHoliday | embassy/applies to, date / range / recurrence, name, source |
+| Embassy (0005) | country, code (`FR-MUM`), name, city: a post where files are submitted |
+| Holiday / HolidayTarget (0005) | name, dates (range or weekly), status (pending / active / removed), source (manual / AI bot), bot key, reference; targets: all embassies / country / embassy / our office |
+| ApiClient (0005) | machine account (e.g. the holiday bot): hashed key, scopes, IP allowlist, active |
 | PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only |
 | PortalUsageLog | user, portal, at, case |
 | Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag |
@@ -1400,7 +1415,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master, is accepted and being built on `feat/system-masters`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1440,7 +1455,7 @@ Masti CRM/
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
     ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog
     ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
-    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors), shell.css, auth.css, clients.css
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list), shell.css, auth.css, clients.css
 ```
 
 **API so far:**
@@ -1614,6 +1629,13 @@ Masti CRM/
 - Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings staff confirm, not errors.
 - The client document vault is **not built** (Q37). Aadhaar numbers are not stored.
 
+**Decided 8 Oct 2026 (project lead), for the System Masters (holiday calendar and visa document master).** Details are in §10.4 and §12.20; the design is `docs/decisions/0005-system-masters.md`. Reminder rules, vendors and the dropdown admin screens come later.
+- Holiday entries from a future AI bot wait as PENDING (warn, don't block) until a person confirms them; a setting can switch review off later.
+- "Our office" and "Collections & deliveries" are one target (`MASTI_OFFICE`). The Sunday block is seeded data. Both stay open with the client (M15, inputs B2).
+- A separate `Embassy` master, linked to the country.
+- Holidays: the Head or any HOD edits them. Visa checklists: the Head or the Visa HOD.
+- Occupation-specific documents are not modelled (staff mark them "Not needed"). No yearly-repeat holidays.
+
 | # | Question | Who | Blocks |
 |---|---|---|---|
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? | Y→C | 1 |
@@ -1654,8 +1676,9 @@ Masti CRM/
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
 | 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: Drive/OneDrive links, not uploads. | S | 2 |
+| 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits; bot suggestions wait for review. | C | 1 |
 
-Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) are in `05_Open_Questions.md`.
+Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.
 
 ---
 
