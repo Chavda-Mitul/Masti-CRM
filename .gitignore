@@ -17,6 +17,7 @@ Backend/generated/
 .env
 .env.*
 !.env.example
+!.env.*.example
 *.local
 
 # Logs

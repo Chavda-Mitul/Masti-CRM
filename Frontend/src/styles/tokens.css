@@ -1,0 +1,56 @@
+/* Design tokens from the approved demo ("Option C": warm cream, sea-blue accents). See PROJECT_KNOWLEDGE.md §15. */
+:root {
+  /* Surfaces */
+  --bg-page: #fbf8f3;
+  --bg-sidebar: #f4eee4;
+  --surface: #ffffff;
+  --fill-tile: #f7f2ea;
+  --fill-track: #f1eadf;
+  --fill-hover: #f6f1e8;
+  --fill-nav-hover: #ece4d7;
+  --fill-table-head: #fcfaf6;
+  --fill-muted: #f3eee5;
+  --row-hover: #f3f7fd;
+
+  /* Borders */
+  --border-card: #ede6da;
+  --border-input: #e2d9ca;
+  --border-input-hover: #d8cdbb;
+  --divider: #f4efe6;
+
+  /* Text */
+  --ink: #1f2a37;
+  --ink-hover: #33404f;
+  --text-2: #4a453e;
+  --text-3: #5e584f;
+  --text-sidebar: #3f3a33;
+  --text-muted: #7a746b;
+  --text-faint: #a39b8e;
+
+  /* Primary: sea blue */
+  --primary: #1e5aa8;
+  --primary-hover: #174a8c;
+  --primary-tint: #e7effa;
+  --primary-tint-2: #e2eaf6;
+
+  /* Status chips: background / text */
+  --ok-bg: #e5f5ec;
+  --ok: #1f7a4b;
+  --warn-bg: #fdf1da;
+  --warn: #8a5a00;
+  --bad-bg: #fdece7;
+  --bad: #b9452a;
+  --late: #e0623a;
+
+  /* Type */
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-body: "Nunito Sans", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+
+  /* Shape */
+  --radius-card: 20px;
+  --radius-btn: 14px;
+  --radius-input: 12px;
+  --shadow-card: 0 1px 2px rgba(31, 42, 55, 0.04);
+  --shadow-pop: 0 12px 32px rgba(31, 42, 55, 0.12);
+}

@@ -70,9 +70,9 @@ When the sources conflict, see §17. Don't silently pick one.
   - automatic WhatsApp updates to clients
   - staff never see portal passwords
   - everything is configurable
-- **Code today (7 Oct 2026) is scaffolding only:**
-  - `Backend/`: Express 5 + TypeScript + Prisma 7 + PostgreSQL, with a health check
-  - `Frontend/`: React 19 + Vite 8, showing the backend's health
+- **Code today (8 Oct 2026):** authentication, users, department roles and the audit log are built and tested (§16.4).
+  - `Backend/`: Express 5 + TypeScript + Prisma 7 + PostgreSQL (server-side sessions, Head / Office / Field account types, Staff/HOD department roles, append-only audit log)
+  - `Frontend/`: React 19 + Vite 8 + TypeScript (login, forced password change, app shell, Users admin screen)
 
 ---
 
@@ -378,6 +378,13 @@ Read these before writing any code.
 | **HOD** | One per department | The department's work, plus HOD-only powers: refund override on recall, vendor approval, portal password resets. Edits masters (demo: "Only Vimal and HODs can change them" ⚠️). |
 | **Staff** | ~11 people in the demo ⚠️ | View or edit within their department(s) ✅ |
 | **Field staff** | Collection/delivery boy | Mobile view of his run of stops: pickups, deliveries, payment collection, handover proof |
+
+**In the code** (`docs/decisions/0002-user-types.md`): each user has one `type`.
+- `HEAD`: everything.
+- `OFFICE`: Staff/HOD roles per department.
+- `FIELD`: the `/tasks` phone view only, with no departments; a mobile is required. Field staff see the jobs assigned to them, whatever department raised them.
+
+The database refuses department rows for anyone but `OFFICE`. Whether office staff can also cover a run is open (§18 #31).
 
 **Visibility and special rules:**
 - Holiday land cost and margin are visible to **owners and accounts only** ✅.
@@ -1168,8 +1175,8 @@ This is the biggest technical unknown (§16.2).
 
 | Entity | Key fields / notes |
 |---|---|
-| User | name, mobile, email, department(s), role (Staff / HOD / Head / Field), active. Disabling it revokes sessions and vault access. |
-| Department | Visa, Holidays, Hotels, Insurance, Tickets, Accounts (+ Field); colour; stage flow (as data) |
+| User | name, mobile, email, type (HEAD / OFFICE / FIELD), department roles (Staff / HOD, OFFICE only), active. Disabling it revokes sessions and vault access. |
+| Department | Visa, Holidays, Hotels, Insurance, Tickets, Accounts; colour; stage flow (as data). Field staff are a user type, not a department. |
 | Client | mobile (unique lookup key), name, email, addresses, individual/corporate, accounting client code, billing cycle (default monthly), completeness, source |
 | Traveller | client, passport name, relation, DOB, current passport no., passport expiry, child flag/age |
 | Consent | person (one per lifetime), staff-filled details, wording version, link token, accepted at, channel, stored link |
@@ -1180,7 +1187,7 @@ This is the biggest technical unknown (§16.2).
 | Docket | number, vendor, courier, docket/AWB no., files, dispatched at, vendor-confirmed at, vendor email sent at |
 | VisaDecision | case, traveller, approved/refused, sticker no., validity, refusal-letter link |
 | PassportMovement | case, status (with vendor / in transit / in stock / handed over), expected at, received at, booklet count, by |
-| FieldJob | type (document pickup / passport delivery / payment collection), assignee, address, slot, amount, status, proof (OTP verified, photo link, selfie link, lat/long, time) |
+| FieldJob | department that raised it, assignee (any user; skeleton table exists), type (document pickup / passport delivery / payment collection), address, slot, amount, status, proof (OTP verified, photo link, selfie link, lat/long, time) |
 | Quote / QuoteOption / QuoteLine | enquiry, version, price breakup lines, options (hotel A/B/C, insurance plans, fare families), totals, margin (restricted visibility) |
 | HotelRateCheck | quote option, competitor, rate per night, vendor rate |
 | Booking | hotel block/book (where, confirmation no., time limit, reference, source), ticket PNR, policy no. |
@@ -1374,85 +1381,116 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 10. Testing approach, especially for the money and rule logic.
 11. Data migration plan, if Masti's existing clients are imported.
 
-### 16.4 Current codebase (as of 7 Oct 2026)
+### 16.4 Current codebase (as of 8 Oct 2026)
+
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests. Decision record: `docs/decisions/0001-auth-sessions.md`. The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
-├── CLAUDE.md                     ← short auto-loaded context for Claude Code (points here)
-├── PROJECT_KNOWLEDGE.md          ← this file
-├── QUESTIONS_TO_ASK.md           ← every open question, split by who to ask (Shivanshu / Masti) and by stage
-├── Backend/                      ← Express 5 + TypeScript + Prisma 7 + PostgreSQL
-│   ├── package.json              ← scripts below; "type": "commonjs"; "main": dist/src/server.js
-│   ├── tsconfig.json             ← strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes,
-│   │                                isolatedModules, module/moduleResolution nodenext, target esnext
-│   ├── prisma.config.ts          ← schema path, migrations path (prisma/migrations), DATABASE_URL from env
-│   ├── prisma/schema.prisma      ← generator "prisma-client" → ../generated/prisma (cjs); postgresql; NO MODELS YET
-│   ├── generated/prisma/         ← generated client (gitignored; regenerate with npm run db:generate)
-│   ├── src/server.ts             ← listens on PORT; graceful shutdown on SIGINT/SIGTERM (prisma.$disconnect)
-│   ├── src/app.ts                ← helmet, cors (CLIENT_URL comma list, credentials), express.json, morgan;
-│   │                                mounts /api/health
-│   ├── src/config/env.ts         ← zod-validated env; exits on invalid env
-│   ├── src/config/prisma.ts      ← PrismaClient with @prisma/adapter-pg (driver adapter)
-│   ├── src/routes/health.routes.ts ← GET /api/health → { status, database, uptime, timestamp }; 503 if DB down
-│   ├── .env                      ← DATABASE_URL, PORT, CLIENT_URL (gitignored — never commit)
-│   └── .claude/skills/, .agents/skills/ ← Prisma agent skills (composer + platform core concepts)
-├── Frontend/                     ← React 19 + Vite 8, plain JavaScript/JSX
-│   ├── vite.config.js            ← dev proxy: /api → http://localhost:5000
-│   ├── index.html                ← <title>Masti CRM</title>
-│   ├── src/main.jsx, src/App.jsx ← placeholder page that shows the backend health
-│   ├── src/lib/api.js            ← fetch wrapper: base = VITE_API_URL || '/api', credentials 'include',
-│   │                                JSON headers, throws Error(data.message || status) when !ok
-│   └── .oxlintrc.json            ← oxlint with react + oxc plugins (rules-of-hooks = error)
-└── Masti-CRM-Handover/           ← source pack (read-only reference)
+├── CLAUDE.md, PROJECT_KNOWLEDGE.md, QUESTIONS_TO_ASK.md
+├── docs/decisions/               ← decision records (0001-auth-sessions.md)
+├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
+│   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
+│   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting
+│   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers)
+│   ├── prisma/seed.ts            ← departments + first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
+│   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
+│   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
+│   ├── src/auth/                 ← session.ts, password.ts (argon2id), identifier.ts (mobile/email),
+│   │                                permissions.ts (can, isHodOf), officeNetwork.ts, user.ts (DTO)
+│   ├── src/middleware/           ← auth.ts (requireAuth, requireHead, requireDepartment,
+│   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
+│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts
+│   ├── src/routes/               ← health, auth, users (Head only), departments
+│   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
+│   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
+└── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
+    ├── src/main.tsx, App.tsx     ← React Query + React Router 8; routes /login, /change-password, /, /settings/users, /tasks (field staff)
+    ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead
+    ├── src/components/AppShell   ← approved sidebar (unbuilt modules greyed out)
+    ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
+    ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css, shell.css, auth.css
 ```
+
+**API so far:**
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/health` | anyone | Server and database status |
+| `POST /api/auth/login` | anyone | `{ identifier, password }`. The identifier is a mobile number (any Indian format) or an email. Sets the `masti_sid` cookie. |
+| `POST /api/auth/logout` | anyone | Ends the session |
+| `GET /api/auth/me` | signed in | Current user with departments |
+| `POST /api/auth/change-password` | signed in | Clears `mustChangePassword` and logs out other devices |
+| `GET /api/departments` | Head, office staff | Active departments |
+| `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
+| `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
+
+**Rules every new route must follow:**
+- Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
+- A route with no department check needs `requireUserType(...)`, e.g. `("HEAD", "OFFICE")` for desktop-only data. Field staff get only `/api/auth/*` and, later, `/api/field/*` (their own jobs).
+- Read the user with `currentUser(req)`.
+- Check finer rules with `can()` / `isHodOf()` from `src/auth/permissions.ts`.
+- Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction.
+- Throw `HttpError` / `badRequest()` / `forbidden()` etc.; `errorHandler` turns them (and zod errors) into JSON.
+- State-changing requests must be JSON (`requireJson`, the CSRF guard).
 
 **Versions** (from `package.json`):
 
 | Part | Packages |
 |---|---|
-| Backend | `express ^5.2.1`, `typescript ^6.0.3`, `prisma` / `@prisma/client` / `@prisma/adapter-pg ^7.10.0`, `pg ^8.23.1`, `zod ^4.6.5`, `helmet ^8.3.0`, `cors ^2.8.6`, `morgan ^1.12.1`, `dotenv ^18.0.6`, `tsx ^4.23.15` |
-| Frontend | `react` / `react-dom ^19.2.8`, `vite ^8.3.0`, `@vitejs/plugin-react ^6.1.1`, `oxlint ^1.81.0` |
-| Local | Node v24.13, npm 11.12 |
+| Backend | `express ^5.2.1`, `typescript ^6.0.3`, `prisma` / `@prisma/client` / `@prisma/adapter-pg ^7.10.0`, `pg`, `zod ^4`, `@node-rs/argon2`, `cookie-parser`, `express-rate-limit ^8`, `helmet`, `cors`, `morgan`, `dotenv`, `tsx`; tests: `vitest ^5`, `supertest` |
+| Frontend | `react` / `react-dom ^19.2`, `react-router ^8`, `@tanstack/react-query ^5`, `@fontsource/*` (Outfit, Nunito Sans, DM Mono, self-hosted), `vite ^8.3`, `typescript ^6.0.3`, `oxlint` |
+| Local | Node v24.13, npm 11.12, Docker (dev Postgres) |
 
 **Commands:**
 
 | Where | Command | What it does |
 |---|---|---|
-| Backend | `npm run dev` | tsx watch on `src/server.ts` (port 5000 by default) |
-| Backend | `npm run build` / `npm start` | `tsc` → `dist/`, then `node dist/src/server.js` |
-| Backend | `npm run typecheck` | `tsc --noEmit` |
+| Backend | `npm run db:up` / `db:down` | Start/stop the local Postgres container (`docker compose`) |
 | Backend | `npm run db:migrate` | `prisma migrate dev` |
 | Backend | `npm run db:generate` | `prisma generate` (run after every schema change) |
+| Backend | `npm run db:seed` | Departments + first Head user (prints a one-time temporary password) |
 | Backend | `npm run db:studio` | Prisma Studio |
-| Frontend | `npm run dev` | Vite dev server (port 5173), proxies `/api` to the backend |
-| Frontend | `npm run build` / `npm run preview` | Production build / preview |
-| Frontend | `npm run lint` | oxlint |
+| Backend | `npm run dev` | tsx watch on `src/server.ts` (port 5000) |
+| Backend | `npm test` | vitest: creates and migrates `masti_crm_test`, wipes it before each test |
+| Backend | `npm run typecheck` | Typechecks src, tests and seed (`tsconfig.check.json`) |
+| Backend | `npm run build` / `npm start` | `tsc` → `dist/`, then `node dist/src/server.js` |
+| Frontend | `npm run dev` | Vite (port 5173), proxies `/api` to the backend |
+| Frontend | `npm run build` | `tsc -b && vite build` |
+| Frontend | `npm run typecheck` / `npm run lint` | `tsc -b` / oxlint |
 
 **Environment variables:**
 
 | Where | Variable | Notes |
 |---|---|---|
 | `Backend/.env` | `DATABASE_URL` | Required |
-| `Backend/.env` | `PORT` | Default 5000 |
-| `Backend/.env` | `CLIENT_URL` | Default `http://localhost:5173`; a comma-separated list, used for CORS |
-| `Backend/.env` | `NODE_ENV` | `development` / `production` / `test` |
+| `Backend/.env` | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | Local docker-compose DB; must match `DATABASE_URL` |
+| `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
+| `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
+| `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
+| `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
+| `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 
-**Conventions so far:**
-- Routes live in `src/routes/*.routes.ts` and are mounted under `/api/...`. Config lives in `src/config/`. Env is validated with zod at startup.
-- The backend compiles to **CommonJS** (package `type: commonjs`, Prisma `moduleFormat = "cjs"`), so relative imports stay extensionless.
+**Conventions:**
+- Backend routes live in `src/routes/*.routes.ts` and are mounted under `/api/...`. The backend compiles to **CommonJS**, so relative imports stay extensionless.
 - **Prisma 7:**
-  - The datasource URL lives in `prisma.config.ts`, not `schema.prisma`.
+  - The datasource URL and the seed command live in `prisma.config.ts`.
   - The client is generated to `generated/prisma` and imported from `../../generated/prisma/client`.
   - A driver adapter (`PrismaPg`) is required.
-- **Express 5** forwards rejected promises from async handlers to the error middleware.
+  - **Departments are rows, not enums**; keep masters as tables too.
+- **Express 5** forwards rejected promises from async handlers to the error middleware, so just `throw`.
 - **TypeScript is very strict** (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Write code that satisfies it rather than loosening the config.
-- The frontend calls the API only through `api()` in `src/lib/api.js`, with paths relative to `/api`.
+- **Frontend:**
+  - Call the API only through `api()` in `src/lib/api.ts`. A 401 anywhere marks the user signed out (see `main.tsx`).
+  - Use the CSS tokens in `src/styles/tokens.css`, never raw hex.
+- **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).
 
 **Not there yet:**
-- **Backend:** auth/sessions, RBAC, any data model or migrations, a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, error-handling middleware, tests.
-- **Frontend:** routing, UI components, design tokens in CSS.
-- **Project setup:** CI/CD, Docker/deploy scripts, a git repository.
+- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, masters screens, any business module.
+- **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
+- **Project setup:** CI/CD and deploy scripts.
 
 **Portability note:** production must run on Masti's own server or cloud. Keep plain PostgreSQL through `@prisma/adapter-pg`, and don't depend on hosted-only services (e.g. Prisma Accelerate or Prisma Postgres, or vendor-specific serverless platforms) unless Shivanshu and Masti agree. The Prisma "platform" skill in `Backend/.claude/skills/` describes such hosted products.
 
@@ -1556,6 +1594,7 @@ Masti CRM/
 | 28 | Dashboards per role (Staff / HOD / Head) | C | 3 |
 | 29 | Existing data to import (clients, open cases)? Format? | C | 1 |
 | 30 | Notification of the 3rd follow-up: the permission flow, and who approves | C | 3 |
+| 31 | Can office staff (e.g. Accounts) cover the collection run, using the same phone screen? The data model allows it; today `/tasks` is field staff only. | C | 1 |
 | 31 | **New:** Does the hotel rate check apply to staff's predefined hotels, where Masti is "master"? | C | 2 |
 | 32 | **New:** Does the ticket desk use the Galileo GDS? (It affects how fares get into the quote.) | C | 2 |
 

@@ -1,0 +1,6 @@
+{
+  // Typecheck everything, including tests and the seed script (the build only compiles src/).
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src", "generated", "tests", "prisma/seed.ts"]
+}

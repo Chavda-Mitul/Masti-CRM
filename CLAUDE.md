@@ -16,18 +16,31 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 | Folder | What it is |
 |---|---|
-| `Backend/` | Express 5 + TypeScript (strict, compiles to CommonJS) + Prisma 7 (`prisma-client` generator → `generated/prisma`, `@prisma/adapter-pg`) + PostgreSQL. Only `GET /api/health` exists; there are no models yet. |
-| `Frontend/` | React 19 + Vite 8 (JavaScript/JSX). Vite proxies `/api` to `http://localhost:5000`. All API calls go through `src/lib/api.js`. |
-| `Masti-CRM-Handover/` | Requirements, the contract (PID), and the approved clickable demo and its screenshots |
+| `Backend/` | Express 5 + TypeScript (strict, compiles to CommonJS) + Prisma 7 (`prisma-client` generator → `generated/prisma`, `@prisma/adapter-pg`) + PostgreSQL. Auth is built: server-side sessions, account types (Head / Office / Field) with Staff/HOD roles per department for office staff, an append-only audit log, a Head-only users API, and tests. |
+| `Frontend/` | React 19 + Vite 8 + TypeScript, React Router, TanStack Query. Vite proxies `/api` to `http://localhost:5000`. All API calls go through `src/lib/api.ts`. |
+| `docs/decisions/` | Decision records (start with `0001-auth-sessions.md`) |
+| `Masti-CRM-Handover/` | Requirements, the contract (PID), and the approved clickable demo and its screenshots. Gitignored, local only. |
 
 ## Commands
 
 | Where | Commands |
 |---|---|
-| `Backend/` | `npm run dev` (port 5000), `npm run typecheck`, `npm run build`, `npm start`, `npm run db:migrate`, `npm run db:generate` (run after every schema change), `npm run db:studio` |
-| `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run lint` (oxlint) |
+| `Backend/` | `npm run db:up` (local Postgres via docker compose), `npm run db:migrate`, `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test`, `npm run typecheck`, `npm run build` |
+| `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
 
-`Backend/.env` holds `DATABASE_URL` (required), `PORT` and `CLIENT_URL` (a comma-separated list, used for CORS). It is gitignored; never commit it or print its values.
+`Backend/.env` (see `.env.example`) and `Backend/.env.test` are gitignored; never commit them or print their values. Tests wipe the database named in `.env.test`.
+
+## Building new routes
+
+Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`).
+
+Inside the route:
+- Read the user with `currentUser(req)`.
+- Check finer rules with `can()` / `isHodOf()`.
+- Write `audit({...}, tx)` for every change, in the same transaction.
+- Throw `HttpError` helpers for errors.
+
+See PROJECT_KNOWLEDGE.md §16.4.
 
 ## Non-negotiable rules
 

@@ -89,6 +89,7 @@ Every question we still need answered before or during the build, in one place. 
 | M32 | Dashboards: what should staff, HODs and you see on the home screen? | "My dashboard the way I want." | Q28 | |
 | M33 | Third follow-up on an invoice: who gives permission (only you, or HODs too)? Should the permission be requested inside the CRM? | The rule is clear; the approval flow isn't. | Q30 | |
 | M34 | Routine accounts tasks: keep them in the CRM, or leave them in Excel? If in the CRM, please send the task list with how often each happens and who does it. | You called them optional. | §17 #11, inputs B11 | |
+| M35 | Collection run: when the collection boy is off, does someone from the office (e.g. Accounts) do the run? Should they use the same phone screen? | Decides whether the phone screen is only for field staff or for anyone given a job. Cheap to change either way. | §18 #31 | |
 
 ---
 
