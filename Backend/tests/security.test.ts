@@ -2,23 +2,25 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import { beforeEach, describe, expect, it } from "vitest";
 import { clearOfficeNetworkCache, ipAllowed, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
-import { can } from "../src/modules/auth/permissions";
-import type { UserWithDepartments } from "../src/modules/users/user";
+import { can, canEditAnyDepartment, isHodOf, type DepartmentCode } from "../src/modules/auth/permissions";
+import { toUserDto, type UserWithDepartments } from "../src/modules/users/user";
 import { requireAuth, requireDepartment } from "../src/middleware/auth";
 import { errorHandler } from "../src/middleware/error";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 
 beforeEach(resetDb);
 
-function fakeUser(partial: Partial<UserWithDepartments> & { depts?: [string, "STAFF" | "HOD", "VIEW" | "EDIT"][] }) {
+type FakeMembership = [DepartmentCode, "STAFF" | "HOD", "VIEW" | "EDIT", "switched off"?];
+
+function fakeUser(partial: Partial<UserWithDepartments> & { depts?: FakeMembership[] }) {
   return {
     isActive: true,
     type: "OFFICE",
     ...partial,
-    departments: (partial.depts ?? []).map(([code, role, access]) => ({
+    departments: (partial.depts ?? []).map(([code, role, access, off]) => ({
       role,
       access,
-      department: { code, isActive: true },
+      department: { code, name: code, isActive: !off },
     })),
   } as unknown as UserWithDepartments;
 }
@@ -45,6 +47,25 @@ describe("permissions: can()", () => {
     ["Field staff", field, "VISA", "VIEW", false],
   ] as const)("%s → %s %s = %s", (_label, user, dept, access, expected) => {
     expect(can(user, dept, access)).toBe(expected);
+  });
+});
+
+describe("permissions: switched-off departments grant nothing", () => {
+  const offHod = fakeUser({ depts: [["VISA", "HOD", "EDIT", "switched off"], ["HOTELS", "STAFF", "VIEW"]] });
+
+  it("an HOD of a switched-off department loses its access and HOD powers", () => {
+    expect(can(offHod, "VISA", "VIEW")).toBe(false);
+    expect(isHodOf(offHod, "VISA")).toBe(false);
+    expect(isHodOf(fakeUser({ depts: [["VISA", "HOD", "EDIT"]] }), "VISA")).toBe(true);
+  });
+
+  it("EDIT only in a switched-off department doesn't count as EDIT anywhere", () => {
+    expect(canEditAnyDepartment(offHod)).toBe(false);
+    expect(canEditAnyDepartment(fakeUser({ depts: [["HOTELS", "STAFF", "EDIT"]] }))).toBe(true);
+  });
+
+  it("the browser isn't sent memberships of switched-off departments", () => {
+    expect(toUserDto(offHod).departments.map((d) => d.code)).toEqual(["HOTELS"]);
   });
 });
 

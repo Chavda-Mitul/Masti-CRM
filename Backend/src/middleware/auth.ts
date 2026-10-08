@@ -1,7 +1,7 @@
 import type { Request, RequestHandler } from "express";
 import type { Access, UserType } from "../../generated/prisma/client";
 import { officeNetworkAllows } from "../modules/auth/officeNetwork";
-import { can } from "../modules/auth/permissions";
+import { can, type DepartmentCode } from "../modules/auth/permissions";
 import { clearSessionCookie, findSession, SESSION_COOKIE, setSessionCookie, touchSession } from "../modules/auth/session";
 import { forbidden, unauthorized } from "../lib/httpError";
 
@@ -52,7 +52,7 @@ export function requireUserType(...types: UserType[]): RequestHandler {
 }
 
 /** VIEW or EDIT access to a department (Head always passes). Use after requireAuth. */
-export function requireDepartment(departmentCode: string, access: Access): RequestHandler {
+export function requireDepartment(departmentCode: DepartmentCode, access: Access): RequestHandler {
   return (req, _res, next) => {
     if (!can(currentUser(req), departmentCode, access)) throw forbidden();
     next();

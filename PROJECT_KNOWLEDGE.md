@@ -1498,6 +1498,7 @@ Masti CRM/
 | `Backend/.env` | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | Local docker-compose DB; must match `DATABASE_URL` |
 | `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
 | `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
+| `Backend/.env` | `COOKIE_SECURE` (`auto`) | Session cookie over HTTPS only; `auto` = production only. `false` only for a plain-HTTP office deployment, or login silently fails |
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |

@@ -20,7 +20,7 @@ Staff are not technical, and the collection boy has only a phone.
 | Topic | Choice |
 |---|---|
 | How sessions work | Server-side sessions stored in Postgres (`Session` table), not JWTs |
-| Cookie | Random 32-byte token in an httpOnly `masti_sid` cookie. `SameSite=Lax`, and `Secure` in production. |
+| Cookie | Random 32-byte token in an httpOnly `masti_sid` cookie. `SameSite=Lax`, and `Secure` in production (`COOKIE_SECURE`: `auto` by default, `true` or `false`). |
 | What's stored | Only the token's SHA-256 hash |
 | Expiry | Idle timeout 12 h and an absolute limit of 7 days (`SESSION_IDLE_HOURS`, `SESSION_MAX_DAYS`) |
 | Deactivation | Deactivating a user (or resetting their password) deletes their sessions, so the next request returns 401 |
@@ -68,3 +68,4 @@ A stateless token stays valid until it expires, so deactivation wouldn't be imme
 - One extra indexed lookup per request (the session and user with departments). The `lastSeenAt` write happens at most every 5 minutes.
 - If the CRM is served on a different domain from the API, `CLIENT_URL` and the cookie settings need revisiting. Same-origin via a reverse proxy is the expected production setup.
 - Production behind nginx needs `TRUST_PROXY` set so `req.ip` (audit, rate limit, office network) is the real client IP.
+- A `Secure` cookie is dropped by the browser over plain HTTP, so login fails without an error. Serve production over HTTPS; set `COOKIE_SECURE=false` only if Masti deliberately runs it over HTTP inside the office network.

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Response } from "express";
-import { env, isProduction } from "../../config/env";
+import { cookieSecure, env } from "../../config/env";
 import { prisma, type Db } from "../../config/prisma";
 import { withDepartments } from "../users/user";
 
@@ -89,7 +89,7 @@ export async function revokeUserSessions(userId: string, exceptSessionId?: strin
 export function setSessionCookie(res: Response, token: string, expiresAt: Date) {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: isProduction,
+    secure: cookieSecure,
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
@@ -97,5 +97,5 @@ export function setSessionCookie(res: Response, token: string, expiresAt: Date) 
 }
 
 export function clearSessionCookie(res: Response) {
-  res.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: isProduction, sameSite: "lax", path: "/" });
+  res.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: cookieSecure, sameSite: "lax", path: "/" });
 }
