@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Response } from "express";
 import { env, isProduction } from "../../config/env";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { withDepartments } from "../users/user";
 
 export const SESSION_COOKIE = "masti_sid";
@@ -24,10 +24,10 @@ export interface ClientInfo {
   userAgent: string | null;
 }
 
-export async function createSession(userId: string, client: ClientInfo) {
+export async function createSession(userId: string, client: ClientInfo, db: Db = prisma) {
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
-  const session = await prisma.session.create({
+  const session = await db.session.create({
     data: {
       tokenHash: hashToken(token),
       userId,
@@ -69,8 +69,8 @@ export async function revokeSession(sessionId: string) {
 }
 
 /** Ends every session for a user (deactivation, password reset), optionally keeping the current one. */
-export async function revokeUserSessions(userId: string, exceptSessionId?: string) {
-  await prisma.session.deleteMany({
+export async function revokeUserSessions(userId: string, exceptSessionId?: string, db: Db = prisma) {
+  await db.session.deleteMany({
     where: { userId, ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}) },
   });
 }

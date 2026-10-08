@@ -1,7 +1,5 @@
 import type { Prisma } from "../../generated/prisma/client";
-import { prisma } from "../config/prisma";
-
-type Db = Prisma.TransactionClient | typeof prisma;
+import { prisma, type Db } from "../config/prisma";
 
 export interface AuditEntry {
   actorId?: string | null;

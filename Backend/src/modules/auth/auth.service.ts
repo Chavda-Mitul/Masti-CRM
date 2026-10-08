@@ -49,15 +49,16 @@ export async function login(input: LoginInput, client: ClientInfo) {
     throw forbidden("The CRM can only be used from the office network.");
   }
 
-  const { token, session } = await createSession(user.id, client);
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-    include: withDepartments,
+  return prisma.$transaction(async (tx) => {
+    const { token, session } = await createSession(user.id, client, tx);
+    const updated = await tx.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+      include: withDepartments,
+    });
+    await audit({ actorId: user.id, action: "auth.login.success", entityType: "User", entityId: user.id, ip: client.ip }, tx);
+    return { user: toUserDto(updated), token, expiresAt: session.expiresAt };
   });
-  await audit({ actorId: user.id, action: "auth.login.success", entityType: "User", entityId: user.id, ip: client.ip });
-
-  return { user: toUserDto(updated), token, expiresAt: session.expiresAt };
 }
 
 /** Ends the session for this cookie token, if it is still valid. */
@@ -82,13 +83,17 @@ export async function changePassword(
     throw badRequest("Choose a new password that is different from the current one.");
   }
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: await hashPassword(input.newPassword), mustChangePassword: false },
-    include: withDepartments,
-  });
-  await revokeUserSessions(user.id, currentSessionId);
-  await audit({ actorId: user.id, action: "auth.password.change", entityType: "User", entityId: user.id, ip });
+  // Hash before opening the transaction: argon2 is deliberately slow.
+  const passwordHash = await hashPassword(input.newPassword);
 
-  return toUserDto(updated);
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: user.id },
+      data: { passwordHash, mustChangePassword: false },
+      include: withDepartments,
+    });
+    await revokeUserSessions(user.id, currentSessionId, tx);
+    await audit({ actorId: user.id, action: "auth.password.change", entityType: "User", entityId: user.id, ip }, tx);
+    return toUserDto(updated);
+  });
 }
