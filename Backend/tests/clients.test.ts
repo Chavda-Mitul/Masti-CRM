@@ -369,6 +369,21 @@ describe("mobile numbers", () => {
     expect(res.body.client.mobile).toBe("+919898989898");
     expect(res.body.client.phones.map((p: { mobile: string }) => p.mobile)).toEqual(["+919825041234"]);
   });
+
+  it("won't keep the old main number when that goes past the extra-number limit", async () => {
+    const visa = await visaAgent();
+    const client = await createClient(visa, { mobile: "9825041234" });
+    for (const mobile of ["9898989891", "9898989892", "9898989893", "9898989894", "9898989895"]) {
+      expect((await visa.post(`/api/clients/${client.id}/phones`).send({ mobile })).status).toBe(201);
+    }
+    const url = `/api/clients/${client.id}/mobile`;
+
+    expect((await visa.put(url).send({ mobile: "9000000001" })).status).toBe(400);
+    // Promoting an extra number frees its slot, so the old main number fits.
+    expect((await visa.put(url).send({ mobile: "9898989891" })).status).toBe(200);
+    expect((await visa.put(url).send({ mobile: "9000000001", keepOldAsSecondary: false })).status).toBe(200);
+    expect(await prisma.clientPhone.count({ where: { clientId: client.id } })).toBe(5);
+  });
 });
 
 describe("searching clients", () => {

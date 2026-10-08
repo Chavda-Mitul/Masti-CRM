@@ -75,6 +75,12 @@ export async function touchSession(session: { id: string; createdAt: Date; lastS
   return expiresAt;
 }
 
+/** Deletes sessions past their expiry. Expired ones are refused anyway; this only keeps the table small. */
+export async function deleteExpiredSessions() {
+  const { count } = await prisma.session.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+  return count;
+}
+
 export async function revokeSession(sessionId: string) {
   await prisma.session.deleteMany({ where: { id: sessionId } });
 }

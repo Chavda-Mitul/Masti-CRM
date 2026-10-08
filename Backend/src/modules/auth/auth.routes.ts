@@ -24,7 +24,24 @@ const loginLimiter = rateLimit({
   },
 });
 
-router.post("/login", loginLimiter, async (req, res) => {
+/**
+ * 50 failed attempts per 15 minutes from one IP, whatever the identifier. Stops someone cycling through
+ * made-up identifiers to dodge the limit above (each failure is a permanent audit row).
+ * Generous because the whole office may share one IP.
+ */
+const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? "unknown"),
+  handler: (_req, res) => {
+    res.status(429).json({ message: "Too many login attempts. Please wait 15 minutes and try again." });
+  },
+});
+
+router.post("/login", loginIpLimiter, loginLimiter, async (req, res) => {
   const body = loginSchema.parse(req.body);
   const { user, token, expiresAt } = await authService.login(body, {
     ip: req.ip ?? null,

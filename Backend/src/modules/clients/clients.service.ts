@@ -354,6 +354,14 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
   if (owner) {
     throw new HttpError(409, "This number is already the main number of another client.", { code: "CLIENT_EXISTS", clientId: owner.id });
   }
+  if (input.keepOldAsSecondary) {
+    // The new main number leaves the extra list if it was on it; the old main number joins it.
+    const phones = await prisma.clientPhone.findMany({ where: { clientId: id }, select: { mobile: true } });
+    const extrasAfter = phones.filter((p) => p.mobile !== mobile).length + 1;
+    if (extrasAfter > MAX_EXTRA_PHONES) {
+      throw badRequest(`A client can have at most ${MAX_EXTRA_PHONES} extra numbers. Remove one, or don't keep the old main number.`);
+    }
+  }
   const confirmed = checkDuplicates([await findMobileDuplicates(mobile, id)], input.confirmDuplicates);
 
   await prisma
