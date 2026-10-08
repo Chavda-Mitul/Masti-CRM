@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Same mark as the sidebar .brand-mark (shell.css): orange gradient tile with a white "M". -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2994a"/>
+      <stop offset="1" stop-color="#e8734a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#g)"/>
+  <path fill="#fff" d="M15 47V17h7.5L32 31l9.5-14H49v30h-7.5V30.5L35 40h-6l-6.5-9.5V47z"/>
+</svg>

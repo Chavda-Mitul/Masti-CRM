@@ -17,6 +17,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import App from './App'
 import { ME_KEY } from './auth/useAuth'
+import { ToastProvider } from './components/Toast'
 import { ApiError } from './lib/api'
 
 // If any request comes back 401 (session ended, user deactivated), mark the user as signed out.
@@ -41,9 +42,11 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

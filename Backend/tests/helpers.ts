@@ -3,20 +3,23 @@ import type { Access, DepartmentRole, UserType } from "../generated/prisma/clien
 import app from "../src/app";
 import { clearOfficeNetworkCache } from "../src/modules/auth/officeNetwork";
 import { hashPassword } from "../src/modules/auth/password";
+import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { prisma } from "../src/config/prisma";
 
 export const PASSWORD = "Correct-Horse-9";
 
 const DEPARTMENTS = ["VISA", "HOLIDAYS", "HOTELS", "INSURANCE", "TICKETS", "ACCOUNTS"];
 
-/** Wipes every table and recreates the departments. TRUNCATE is allowed on the append-only audit log. */
+/** Wipes every table and recreates the departments and client lookups. TRUNCATE is allowed on the append-only audit log. */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "FieldJob", "UserDepartment", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
+    'TRUNCATE "AuditLog", "Session", "FieldJob", "UserDepartment", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
+      '"BillingCycle", "PaymentHabit", "Relation", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
   );
   await prisma.department.createMany({
     data: DEPARTMENTS.map((code, i) => ({ code, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
   });
+  await seedClientLookups(prisma);
   clearOfficeNetworkCache();
 }
 

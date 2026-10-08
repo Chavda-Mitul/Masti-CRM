@@ -6,7 +6,8 @@ import { withDepartments } from "../users/user";
 
 export const SESSION_COOKIE = "masti_sid";
 
-const HOUR = 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
 const TOUCH_EVERY_MS = 5 * 60 * 1000;
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -41,14 +42,24 @@ export async function createSession(userId: string, client: ClientInfo, db: Db =
   return { token, session };
 }
 
-/** The session for a cookie token, with its user. Expired sessions are deleted and treated as missing. */
+/**
+ * The session for a cookie token, with its user. Expired sessions are deleted and treated as missing.
+ *
+ * While the user still has a temporary password, the session only lasts TEMP_PASSWORD_SESSION_MINUTES.
+ * Such a session was opened by typing the temporary password (a reset ends every session), so the
+ * forced password change can skip asking for it again without leaving a long-lived bypass.
+ */
 export async function findSession(token: string) {
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: { include: withDepartments } },
   });
   if (!session) return null;
-  if (session.expiresAt <= new Date()) {
+  const now = new Date();
+  const tempPasswordExpired =
+    session.user.mustChangePassword &&
+    session.createdAt.getTime() + env.TEMP_PASSWORD_SESSION_MINUTES * MINUTE <= now.getTime();
+  if (session.expiresAt <= now || tempPasswordExpired) {
     await prisma.session.deleteMany({ where: { id: session.id } });
     return null;
   }

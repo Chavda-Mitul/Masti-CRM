@@ -1,6 +1,6 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** proposed (for review; nothing is implemented yet)
+- **Status:** proposed (for review; nothing is implemented yet). The `Client` model below is superseded by [0004](0004-client-master.md), which is built; this design keeps working with it.
 - **Date:** 8 Oct 2026
 - **Scope:** the New enquiry form for Visa (demo screen 05) and the Step 1 view of a case (demo screen 06)
 

@@ -122,7 +122,22 @@
 .main {
   flex: 1;
   min-width: 0;
-  padding: 28px 32px 48px;
+  padding: 28px 32px;
+  /* Column so a page's main card can take the leftover height with .card-fill. */
+  display: flex;
+  flex-direction: column;
+}
+.card-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+/* Empty or loading message centred in the space a .card-fill leaves below its toolbar. */
+.card-fill-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
 }
 .page-head {
   display: flex;

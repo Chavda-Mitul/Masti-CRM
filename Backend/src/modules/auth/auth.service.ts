@@ -69,17 +69,30 @@ export async function logout(token: string, ip: string | null) {
   await audit({ actorId: session.userId, action: "auth.logout", entityType: "User", entityId: session.userId, ip });
 }
 
-/** Changes the user's own password and signs out every other device (keeps `currentSessionId`). */
+/**
+ * Changes the user's own password and signs out every other device (keeps `currentSessionId`).
+ *
+ * The forced change after a temporary-password login doesn't ask for the temporary password again:
+ * the user typed it to open this session, and findSession ends such sessions after a few minutes.
+ * Every other change needs the current password.
+ */
 export async function changePassword(
   user: UserWithDepartments,
   currentSessionId: string | undefined,
   input: ChangePasswordInput,
   ip: string | null,
 ) {
-  if (!(await verifyPassword(user.passwordHash, input.currentPassword))) {
-    throw badRequest("Your current password is not correct.");
+  if (!user.mustChangePassword) {
+    if (!input.currentPassword) throw badRequest("Enter your current password.");
+    if (!(await verifyPassword(user.passwordHash, input.currentPassword))) {
+      throw badRequest("Your current password is not correct.");
+    }
   }
-  if (input.newPassword === input.currentPassword) {
+  // A forced change may send no current password, so compare the new one with the stored hash.
+  const sameAsCurrent = user.mustChangePassword
+    ? await verifyPassword(user.passwordHash, input.newPassword)
+    : input.newPassword === input.currentPassword;
+  if (sameAsCurrent) {
     throw badRequest("Choose a new password that is different from the current one.");
   }
 

@@ -12,6 +12,8 @@ const envSchema = z.object({
   // Sessions expire after this many idle hours, and always after SESSION_MAX_DAYS.
   SESSION_IDLE_HOURS: z.coerce.number().positive().default(12),
   SESSION_MAX_DAYS: z.coerce.number().positive().default(7),
+  // A session opened with a temporary password ends after this many minutes if the password isn't changed.
+  TEMP_PASSWORD_SESSION_MINUTES: z.coerce.number().positive().default(15),
 });
 
 const parsed = envSchema.safeParse(process.env);
