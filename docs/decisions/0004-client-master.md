@@ -108,7 +108,7 @@ All under `/api/clients`. Errors use the existing shape: `{ message }`, `{ messa
 
 | Method + path | Who | Purpose |
 | --- | --- | --- |
-| `GET /lookup?mobile=` | View | "Existing client" check. \`{ mobile, client: { id, name, kind, mobile, matchedOn: "PRIMARY" |
+| `GET /lookup?mobile=` | View | "Existing client" check. `{ mobile, client: { id, name, kind, mobile, matchedOn: "PRIMARY" \| "SECONDARY" } \| null, alsoMatches }`. 400 for a bad number. |
 | `GET /?q=&kind=&incomplete=&cursor=&limit=` | View | Search by name, contact person, member name, mobile (any part, main or extra), passport number, PAN, GSTIN or accounting code. `incomplete=true/false` filters by the readiness setting. Ordered by name; `{ clients, nextCursor }`. The "any part of" matches use pg_trgm GIN indexes. |
 | `GET /options` | View | Billing cycles (with `isDefault`), payment habits, relations, GST states (by name, "Other Territory" last), kinds |
 | `GET /settings` · `PUT /settings` | View · Head | `{ settings: { invoiceReadiness, expiryWarnings } }`; `PUT` takes either key |
