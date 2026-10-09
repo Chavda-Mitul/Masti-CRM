@@ -76,6 +76,8 @@ model User {
   enquiriesOwned     Enquiry[]          @relation("EnquiryOwner")
   enquiriesCreated   Enquiry[]          @relation("EnquiryCreatedBy")
   documentsReceived  VisaCaseDocument[] @relation("DocumentReceivedBy")
+  followUpsLogged    FollowUp[]         @relation("FollowUpBy")
+  visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
 
   @@index([type, isActive])
 }
@@ -280,30 +282,32 @@ model ClientPhone {
 }
 
 /// Family & travellers ✅ (or a corporate's employees). Visa Step 2 links case travellers to these rows.
-/// Consent is its own model (one per person for life, keyed to the member, not the passport), built with Visa Step 2.
+/// Consent is its own model (one per person for life, keyed to the member, not the passport): see Consent.
 model ClientMember {
-  id             String    @id @default(uuid())
+  id             String              @id @default(uuid())
   clientId       String
   /// As printed in the passport, once seen.
   name           String
   relationId     Int
   /// Age ("Son, 12") is worked out from this.
-  dateOfBirth    DateTime? @db.Date
+  dateOfBirth    DateTime?           @db.Date
   mobile         String?
   /// Current passport only. Uppercase, no spaces. Not unique: a duplicate is a warning staff confirm.
   /// Earlier numbers stay in the audit log.
   passportNumber String?
-  passportExpiry DateTime? @db.Date
-  sortOrder      Int       @default(0)
+  passportExpiry DateTime?           @db.Date
+  sortOrder      Int                 @default(0)
   /// Taken off the family list. Never deleted: past cases will point here.
-  archivedAt     DateTime? @db.Timestamptz(3)
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  archivedAt     DateTime?           @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token, as on Client.
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
   createdById    String
-  client         Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  relation       Relation  @relation(fields: [relationId], references: [id], onDelete: Restrict)
-  createdBy      User      @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  client         Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  relation       Relation            @relation(fields: [relationId], references: [id], onDelete: Restrict)
+  createdBy      User                @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  travellers     VisaCaseTraveller[]
+  consent        Consent?
 
   @@index([clientId])
   @@index([passportNumber])
@@ -553,7 +557,7 @@ model CaseCounter {
   @@id([departmentId, year])
 }
 
-/// Code branches on it (lists, Today, reports), so an enum. Postpone/cancel *reasons* will be a master table.
+/// Code branches on it (lists, Today, reports), so an enum. The *reasons* are master data (EnquiryReason).
 enum EnquiryStatus {
   OPEN
   POSTPONED
@@ -584,6 +588,48 @@ model EnquirySource {
   enquiries       Enquiry[]
 }
 
+// Follow-up and reason dropdowns (0006 Decision 7). Shared by every department, edited by the Head or any HOD.
+// The seeded values are demo samples ⚠️. Switched off, never deleted. Codes never change (format checked in the migration).
+
+/// "What happened" on a follow-up. Only a label: no outcome triggers anything (staff postpone or cancel themselves).
+model FollowUpOutcome {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  followUps FollowUp[]
+}
+
+/// "Next step" on a follow-up.
+model FollowUpNextStep {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  followUps FollowUp[]
+}
+
+/// Which action a reason belongs to. LOST comes when closing and losing are built.
+enum EnquiryReasonKind {
+  POSTPONE
+  CANCEL
+}
+
+/// Why an enquiry was postponed or cancelled. No free text (§7 rule 2).
+model EnquiryReason {
+  id        Int               @id @default(autoincrement())
+  kind      EnquiryReasonKind
+  code      String            @unique
+  name      String
+  sortOrder Int               @default(0)
+  isActive  Boolean           @default(true)
+  enquiries Enquiry[]
+
+  @@index([kind, isActive])
+}
+
 model Enquiry {
   id             String          @id @default(uuid())
   /// VISA-2026-0001. Never changes once issued.
@@ -600,9 +646,14 @@ model Enquiry {
   ownerId        String?
   /// When someone must next act on it: the list order, Today, the follow-up desk and "running late".
   dueAt          DateTime?       @db.Timestamptz(3)
+  /// Why it was postponed or cancelled. Checked in the migration: POSTPONED and CANCELLED need one.
+  reasonId       Int?
+  /// When a postponed enquiry comes back (POSTPONED needs one). dueAt is set to that day.
+  resumeOn       DateTime?       @db.Date
   /// Null when an integration created it.
   createdById    String?
   createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  /// Optimistic-lock token for the case actions (follow-up, postpone, reassign, mature…).
   updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
   department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   client         Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
@@ -610,7 +661,9 @@ model Enquiry {
   stage          DepartmentStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
   owner          User?           @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   createdBy      User?           @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reason         EnquiryReason?  @relation(fields: [reasonId], references: [id], onDelete: Restrict)
   visa           VisaCase?
+  followUps      FollowUp[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -618,40 +671,89 @@ model Enquiry {
   @@index([clientId])
 }
 
+/// A logged follow-up: What happened → Next step → When (0006 Decision 6). Append-only. Logging one sets the
+/// enquiry's dueAt to nextAt.
+model FollowUp {
+  id         String           @id @default(uuid())
+  enquiryId  String
+  outcomeId  Int
+  nextStepId Int
+  /// "When": the next contact, also the enquiry's new dueAt.
+  nextAt     DateTime         @db.Timestamptz(3)
+  byId       String
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  enquiry    Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  outcome    FollowUpOutcome  @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  nextStep   FollowUpNextStep @relation(fields: [nextStepId], references: [id], onDelete: Restrict)
+  by         User             @relation("FollowUpBy", fields: [byId], references: [id], onDelete: Restrict)
+
+  @@index([enquiryId, createdAt])
+}
+
 // ---------------------------------------------------------------------------
 // Visa cases: the visa part of an Enquiry (same id)
 // ---------------------------------------------------------------------------
 
+/// Code branches on it later (the field app makes a pickup job for COLLECTION_BOY), so an enum.
+enum DocumentArrival {
+  CLIENT_BRINGS
+  COLLECTION_BOY
+}
+
 /// Traveller counts come from the VisaCaseTraveller rows.
-/// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month.
+/// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
+/// booklet counts are 0–50.
 model VisaCase {
-  enquiryId   String              @id
-  offeringId  Int
+  enquiryId       String              @id
+  offeringId      Int
   /// The month they plan to travel, stored as the 1st (M9).
-  travelMonth DateTime            @db.Date
+  travelMonth     DateTime            @db.Date
   /// The exact date, if the client knows it at intake.
-  travelDate  DateTime?           @db.Date
-  enquiry     Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  offering    VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  travellers  VisaCaseTraveller[]
+  travelDate      DateTime?           @db.Date
+  /// Step 2: "Client brings them" or "Send collection boy".
+  arrival         DocumentArrival?
+  /// Step 2: passports received (current + old). Checked again at handover.
+  bookletsCurrent Int?                @db.SmallInt
+  bookletsOld     Int?                @db.SmallInt
+  /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
+  maturedAt       DateTime?           @db.Timestamptz(3)
+  maturedById     String?
+  enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  travellers      VisaCaseTraveller[]
 
   @@index([offeringId])
 }
 
-/// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2,
-/// which also links them to the client's family member.
+/// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
+/// the client's family member (0006 Decision 3), which brings the passport and the consent.
 model VisaCaseTraveller {
   id        String             @id @default(uuid())
   caseId    String
   /// 1, 2, 3… Adults first, then children.
   position  Int
   isChild   Boolean
-  /// Passport name. Filled in Step 2.
+  /// Passport name, copied from the member when linked: what the case was filed under.
   name      String?
+  memberId  String?
   visaCase  VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  member    ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents VisaCaseDocument[]
 
   @@unique([caseId, position])
+  @@unique([caseId, memberId])
+  @@index([memberId])
+}
+
+/// The consent & liability form: one per person, for life; stays valid if the passport changes (§10.5).
+/// Filled by the "I agree" link, which comes with WhatsApp. Until then the case shows "None on file — flagged".
+model Consent {
+  id        String       @id @default(uuid())
+  memberId  String       @unique
+  agreedAt  DateTime     @db.Timestamptz(3)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  member    ClientMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
 }
 
 enum DocumentStatus {

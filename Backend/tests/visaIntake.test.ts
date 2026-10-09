@@ -327,8 +327,10 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     const staff = await visaStaff();
     const postponed = (await staff.post("/api/visa/cases").send(await body())).body.case;
     const cancelled = (await staff.post("/api/visa/cases").send(await body())).body.case;
-    await prisma.enquiry.update({ where: { id: postponed.id }, data: { status: "POSTPONED" } });
-    await prisma.enquiry.update({ where: { id: cancelled.id }, data: { status: "CANCELLED" } });
+    const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
+    const resumeOn = new Date(`${addMonths(istToday(), 1)}T00:00:00Z`);
+    await prisma.enquiry.update({ where: { id: postponed.id }, data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn } });
+    await prisma.enquiry.update({ where: { id: cancelled.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED") } });
 
     const open = (await staff.get("/api/clients/lookup?mobile=9825041234")).body.openEnquiries;
     expect(open.map((e: { caseNo: string }) => e.caseNo)).toEqual([postponed.caseNo]);

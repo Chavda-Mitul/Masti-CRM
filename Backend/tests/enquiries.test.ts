@@ -130,7 +130,8 @@ describe("GET /api/enquiries", () => {
     expect(await codes("rakesh")).toEqual([a2.caseNo]);
     expect(await codes("98250 41")).toEqual([a1.caseNo]);
 
-    await prisma.enquiry.update({ where: { id: n1.id }, data: { status: "CANCELLED" } });
+    const tripCancelled = await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } });
+    await prisma.enquiry.update({ where: { id: n1.id }, data: { status: "CANCELLED", reasonId: tripCancelled.id } });
     expect((await aarti.get("/api/enquiries")).body.enquiries).toHaveLength(2);
     expect((await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([n1.id]);
 

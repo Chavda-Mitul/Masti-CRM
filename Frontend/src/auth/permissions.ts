@@ -47,5 +47,7 @@ export const canEditVisaMasters = (user: User) => isHodOf(user, 'VISA')
 export const canEditHolidays = (user: User) => isHodOfAny(user)
 /** Embassies are holiday targets for every department: the Head or any HOD. */
 export const canEditEmbassies = (user: User) => isHodOfAny(user)
+/** Follow-up outcomes, next steps and postpone/cancel reasons are shared by every department: the Head or any HOD (0006). */
+export const canEditEnquiryMasters = (user: User) => isHodOfAny(user)
 /** The visa masters are readable with Visa VIEW (the Head always). */
 export const canViewVisaMasters = (user: User) => can(user, 'VISA', 'VIEW')

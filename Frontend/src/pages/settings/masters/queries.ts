@@ -8,7 +8,9 @@ import type {
   ChecklistLineBody,
   Country,
   DocumentMaster,
+  EnquiryReason,
   EnquirySource,
+  FollowUpOption,
   Embassy,
   Holiday,
   HolidayBody,
@@ -131,6 +133,9 @@ interface MasterRow {
   embassies: Embassy
   documents: DocumentMaster
   'enquiry-sources': EnquirySource
+  'follow-up-outcomes': FollowUpOption
+  'follow-up-next-steps': FollowUpOption
+  'enquiry-reasons': EnquiryReason
 }
 
 /** The JSON key each list and save comes back under. */
@@ -140,6 +145,9 @@ const LIST_KEY = {
   embassies: 'embassies',
   documents: 'documents',
   'enquiry-sources': 'sources',
+  'follow-up-outcomes': 'outcomes',
+  'follow-up-next-steps': 'nextSteps',
+  'enquiry-reasons': 'reasons',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -147,6 +155,9 @@ const ITEM_KEY = {
   embassies: 'embassy',
   documents: 'document',
   'enquiry-sources': 'source',
+  'follow-up-outcomes': 'outcome',
+  'follow-up-next-steps': 'nextStep',
+  'enquiry-reasons': 'reason',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */

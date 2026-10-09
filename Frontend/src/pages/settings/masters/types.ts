@@ -179,5 +179,29 @@ export interface EnquirySource {
   staffSelectable: boolean
 }
 
+/** A follow-up "What happened" or "Next step" (shared by every department). */
+export interface FollowUpOption {
+  id: number
+  code: string
+  name: string
+  sortOrder: number
+  isActive: boolean
+}
+
+export type EnquiryReasonKind = 'POSTPONE' | 'CANCEL'
+
+/** Why a case was postponed or cancelled. The kind never changes. */
+export interface EnquiryReason extends FollowUpOption {
+  kind: EnquiryReasonKind
+}
+
 /** The small lists, by their API path. */
-export type MasterResource = 'countries' | 'visa-types' | 'embassies' | 'documents' | 'enquiry-sources'
+export type MasterResource =
+  | 'countries'
+  | 'visa-types'
+  | 'embassies'
+  | 'documents'
+  | 'enquiry-sources'
+  | 'follow-up-outcomes'
+  | 'follow-up-next-steps'
+  | 'enquiry-reasons'

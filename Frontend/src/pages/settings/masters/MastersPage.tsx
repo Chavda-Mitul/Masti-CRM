@@ -6,7 +6,7 @@ import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { useMasterList, useOfferings } from './queries'
 
 /** Masters on the demo that aren't built yet. Shown greyed out, like Phase-2 items in the sidebar. */
-const NOT_BUILT = ['Reminder rules', 'Vendors', 'Hotels — minimum markup', 'Dropdown reasons', 'Covering letters', 'Accounts routine tasks']
+const NOT_BUILT = ['Reminder rules', 'Vendors', 'Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
 
 /**
  * Settings → Masters & holiday calendar (demo screen 29): "The lists and rules the rest of the system reads from."
@@ -22,6 +22,9 @@ export function MastersPage() {
   const documents = useMasterList('documents', visa)
   const sources = useMasterList('enquiry-sources', visa)
   const embassies = useMasterList('embassies')
+  const outcomes = useMasterList('follow-up-outcomes')
+  const nextSteps = useMasterList('follow-up-next-steps')
+  const reasons = useMasterList('enquiry-reasons')
 
   const active = (rows: { isActive: boolean }[] | undefined) => (rows ? String(rows.filter((r) => r.isActive).length) : '…')
 
@@ -77,6 +80,23 @@ export function MastersPage() {
           <Link className="kv-line" to="/settings/masters/lists?tab=embassies">
             <span>Embassies &amp; visa centres</span>
             <strong>{active(embassies.data)}</strong>
+          </Link>
+        </section>
+
+        <section className="card pad master-card">
+          <h2 className="h2">Follow-ups &amp; reasons</h2>
+          <p className="muted small">The dropdowns on every case. No free text anywhere: reports count these.</p>
+          <Link className="kv-line" to="/settings/masters/lists?tab=follow-up-outcomes">
+            <span>What happened</span>
+            <strong>{active(outcomes.data)}</strong>
+          </Link>
+          <Link className="kv-line" to="/settings/masters/lists?tab=follow-up-next-steps">
+            <span>Next steps</span>
+            <strong>{active(nextSteps.data)}</strong>
+          </Link>
+          <Link className="kv-line" to="/settings/masters/lists?tab=enquiry-reasons">
+            <span>Postpone &amp; cancel reasons</span>
+            <strong>{active(reasons.data)}</strong>
           </Link>
         </section>
 
