@@ -110,12 +110,19 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     prisma.enquiry.count({ where: { AND: [where, { dueAt: { lt: new Date() } }] } }),
     prisma.departmentStage.findMany({
       where: { departmentId: { in: departments.map((d) => d.id) } },
-      orderBy: [{ departmentId: "asc" }, { sortOrder: "asc" }],
-      select: { departmentId: true, code: true, name: true },
+      orderBy: [{ departmentId: "asc" }, { flow: "asc" }, { sortOrder: "asc" }],
+      select: { departmentId: true, flow: true, code: true, name: true },
     }),
   ]);
 
-  const stagesOf = (departmentId: number) => stages.filter((s) => s.departmentId === departmentId).map(({ code, name }) => ({ code, name }));
+  const stagesOf = (departmentId: number, flow: string) =>
+    stages.filter((s) => s.departmentId === departmentId && s.flow === flow).map(({ code, name }) => ({ code, name }));
+  /** A department's flows with their steps, for the side panel: each row shows its own flow's steps. */
+  const flowsOf = (departmentId: number) =>
+    [...new Set(stages.filter((s) => s.departmentId === departmentId).map((s) => s.flow))].map((flow) => ({
+      code: flow,
+      stages: stagesOf(departmentId, flow),
+    }));
   const page = rows.slice(0, query.limit);
   const last = page[page.length - 1];
   return {
@@ -126,7 +133,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       client: row.client,
       summary: summaryOf(row),
       status: row.status,
-      stage: toStageRef(row.stage, stagesOf(row.departmentId).length),
+      stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       source: row.source,
       origin: row.origin,
       owner: row.owner,
@@ -138,7 +145,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       code: d.code,
       name: d.name,
       count: perDepartment.find((c) => c.departmentId === d.id)?._count._all ?? 0,
-      stages: stagesOf(d.id),
+      flows: flowsOf(d.id),
     })),
     lateCount: late,
   };

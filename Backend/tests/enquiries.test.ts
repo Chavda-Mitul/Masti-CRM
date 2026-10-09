@@ -32,7 +32,7 @@ async function saveVisa(agent: Agent, mobile: string, extra: Record<string, unkn
 async function hotelsEnquiry(clientMobile: string) {
   const hotels = await prisma.department.findUniqueOrThrow({ where: { code: "HOTELS" } });
   const stage = await prisma.departmentStage.create({
-    data: { departmentId: hotels.id, code: "ENQUIRY", name: "Enquiry", sortOrder: 1, statusLabel: "New", nextStepLabel: "Check rates" },
+    data: { departmentId: hotels.id, flow: "HOTELS", code: "ENQUIRY", name: "Enquiry", sortOrder: 1, statusLabel: "New", nextStepLabel: "Check rates" },
   });
   const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
   const client = await prisma.client.create({ data: { mobile: clientMobile, name: "Hotel Guest", billingCycleId: cycle.id } });
@@ -65,14 +65,15 @@ describe("GET /api/enquiries", () => {
     expect(res.body.enquiries[0]).toMatchObject({
       department: { code: "VISA", name: "Visa" },
       summary: "France (Schengen) · Tourist · 2 adults, 1 child",
-      stage: { code: "ENQUIRY", step: 1, of: 8, nextStepLabel: "Start collecting documents" },
+      stage: { flow: "VISA", code: "ENQUIRY", step: 1, of: 8, nextStepLabel: "Start collecting documents" },
       source: { code: "WHATSAPP" },
       owner: { name: "Aarti Patel" },
       client: { mobile: "+919825000002" },
     });
     // Only the departments Aarti can see, with counts and steps for the side panel.
     expect(res.body.departments).toEqual([expect.objectContaining({ code: "VISA", count: 3 })]);
-    expect(res.body.departments[0].stages).toHaveLength(8);
+    expect(res.body.departments[0].flows).toEqual([{ code: "VISA", stages: expect.any(Array) }]);
+    expect(res.body.departments[0].flows[0].stages).toHaveLength(8);
   });
 
   it("shows each user only the departments they can view", async () => {
@@ -139,6 +140,39 @@ describe("GET /api/enquiries", () => {
     expect(page2.body.enquiries).toHaveLength(1);
     expect(page2.body.nextCursor).toBeNull();
     expect(page2.body.enquiries[0].id).not.toBe(page1.body.enquiries[0].id);
+  });
+
+  it("counts steps within each flow, so one department can run two (Insurance: policies and claims)", async () => {
+    const insurance = await prisma.department.findUniqueOrThrow({ where: { code: "INSURANCE" } });
+    const steps = (flow: string, names: string[]) =>
+      Promise.all(
+        names.map((name, i) =>
+          prisma.departmentStage.create({
+            data: { departmentId: insurance.id, flow, code: name.toUpperCase(), name, sortOrder: i + 1, statusLabel: name, nextStepLabel: "Next" },
+          }),
+        ),
+      );
+    const policy = await steps("INSURANCE_POLICY", ["Lead", "Options", "Chosen", "Issued"]);
+    const claim = await steps("INSURANCE_CLAIM", ["Registered", "Documents", "Insurer", "Approved", "Payment", "Confirms", "Closed"]);
+
+    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+    const client = await prisma.client.create({ data: { mobile: "+919825000099", name: "Insured", billingCycleId: cycle.id } });
+    const source = await prisma.enquirySource.findUniqueOrThrow({ where: { code: "LANDLINE" } });
+    const base = { departmentId: insurance.id, clientId: client.id, sourceId: source.id };
+    await prisma.enquiry.create({ data: { ...base, caseNo: "INS-2026-0001", stageId: policy[1]!.id } });
+    await prisma.enquiry.create({ data: { ...base, caseNo: "INS-2026-0002", stageId: claim[1]!.id } });
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const res = await head.get("/api/enquiries?department=INSURANCE");
+    const byCase = Object.fromEntries(res.body.enquiries.map((e: { caseNo: string; stage: unknown }) => [e.caseNo, e.stage]));
+    expect(byCase["INS-2026-0001"]).toMatchObject({ flow: "INSURANCE_POLICY", step: 2, of: 4 });
+    expect(byCase["INS-2026-0002"]).toMatchObject({ flow: "INSURANCE_CLAIM", step: 2, of: 7 });
+    const flows = res.body.departments.find((d: { code: string }) => d.code === "INSURANCE").flows;
+    expect(flows.map((f: { code: string; stages: unknown[] }) => [f.code, f.stages.length])).toEqual([
+      ["INSURANCE_CLAIM", 7],
+      ["INSURANCE_POLICY", 4],
+    ]);
   });
 
   it("walks every page once, in order, past enquiries with no due time and equal due times", async () => {

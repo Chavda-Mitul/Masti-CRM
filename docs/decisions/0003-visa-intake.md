@@ -35,7 +35,7 @@ Since this record was proposed, the client master ([0004](0004-client-master.md)
 
 | Method + path | Guard | Purpose |
 | --- | --- | --- |
-| `GET /api/enquiries?department=&mine=&q=&status=&cursor=&limit=` | departments the caller can VIEW (403 for one they can't) | `{ enquiries, nextCursor, departments: [{ code, name, count, stages }], lateCount }`. Ordered by `dueAt` (nulls last), then `createdAt`, then id. `cursor` is opaque (the last row's sort values, base64url): Prisma's own cursor can't page a nullable sort key with a LIMIT, so the keyset condition is hand-written. `q` matches the case number, the client's name, or any part of the client's main or extra mobile. `status` defaults to OPEN. |
+| `GET /api/enquiries?department=&mine=&q=&status=&cursor=&limit=` | departments the caller can VIEW (403 for one they can't) | `{ enquiries, nextCursor, departments: [{ code, name, count, flows: [{ code, stages }] }], lateCount }` (each row's `stage.flow` picks its flow; `step`/`of` count within it). Ordered by `dueAt` (nulls last), then `createdAt`, then id. `cursor` is opaque (the last row's sort values, base64url): Prisma's own cursor can't page a nullable sort key with a LIMIT, so the keyset condition is hand-written. `q` matches the case number, the client's name, or any part of the client's main or extra mobile. `status` defaults to OPEN. |
 | `GET /api/enquiries/sources` | — | Active, staff-selectable sources |
 | `GET /api/visa/offerings` | Visa VIEW | `{ countries: [{ id, code, name, zone, label, visaTypes: [{ offeringId, id, code, name }] }] }` |
 | `POST /api/visa/cases` | Visa EDIT | Body `{ mobile, sourceCode, offeringId, adults, children, travelMonth, travelDate }`, optional `Idempotency-Key`. Returns `201 { case, clientCreated }`, or `200` for a repeated key. |
@@ -79,7 +79,8 @@ So each case has one `Enquiry` row, and visa-only fields live in `VisaCase` (1:1
 
 ### 2. Stages are data, statuses are an enum
 
-- `DepartmentStage` holds the 8 visa steps and their labels ("Enquiry saved" until messaging is built, then the demo's "Document list sent"; "Start collecting documents"). The labels are demo wording ⚠️, so they are editable.
+- `DepartmentStage` holds the steps per department **and flow** (added 9 Oct 2026, migration `20261009140000_department_stage_flow`): Visa has one flow, `VISA`; Insurance will run `INSURANCE_POLICY` (4 steps) and `INSURANCE_CLAIM` (7), §10.2. Steps are unique per department + flow, and "step 2 of 7" counts the flow only.
+- For Visa it holds the 8 visa steps and their labels ("Enquiry saved" until messaging is built, then the demo's "Document list sent"; "Start collecting documents"). The labels are demo wording ⚠️, so they are editable.
 - `EnquiryStatus` (open / postponed / cancelled / lost / closed) is an enum. Code branches on it, the same reasoning as `UserType`.
 - The *reasons* for postponing or cancelling will be a master table when that feature is built.
 

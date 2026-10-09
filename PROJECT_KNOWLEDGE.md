@@ -1429,7 +1429,9 @@ Masti CRM/
 │   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle),
 │   │                                *_system_masters + *_holiday_weekday_check (holiday date/target CHECKs, code formats),
 │   │                                *_remove_machine_accounts_and_bot (drops ApiClient, bot columns, PENDING),
-│   │                                *_visa_intake (casePrefix backfill, travel month/date CHECKs)
+│   │                                *_visa_intake (casePrefix backfill, travel month/date CHECKs),
+│   │                                *_client_name_required (Client.name NOT NULL + not-blank CHECK),
+│   │                                *_department_stage_flow (steps per department + flow, e.g. Insurance policy vs claim)
 │   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)

@@ -210,7 +210,7 @@ function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; o
       <td>
         <div className="client-cell">
           <span className="avatar" style={{ background: style.tint, color: style.text }}>
-            {row.client.name ? initials(row.client.name) : '?'}
+            {initials(row.client.name)}
           </span>
           <div style={{ minWidth: 0 }}>
             <button type="button" className="enq-name" onClick={(ev) => {
@@ -290,7 +290,7 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
         {row.department.name} steps
       </div>
       <ol className="step-list">
-        {(department?.stages ?? []).map((s, i) => {
+        {(department?.flows.find((f) => f.code === row.stage.flow)?.stages ?? []).map((s, i) => {
           const done = i + 1 < row.stage.step
           const now = i + 1 === row.stage.step
           return (

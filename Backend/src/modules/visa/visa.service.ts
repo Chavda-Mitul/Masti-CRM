@@ -7,6 +7,7 @@ import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError"
 import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
+import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
@@ -104,7 +105,9 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 
   const department = await prisma.department.findUnique({ where: { code: VISA } });
   if (!department?.isActive) throw new HttpError(500, "The Visa department is not set up. Run the database seed.");
-  const stage = await prisma.departmentStage.findUnique({ where: { departmentId_code: { departmentId: department.id, code: FIRST_STAGE } } });
+  const stage = await prisma.departmentStage.findUnique({
+    where: { departmentId_flow_code: { departmentId: department.id, flow: VISA_FLOW, code: FIRST_STAGE } },
+  });
   if (!stage) throw new HttpError(500, "The visa steps are not set up. Run the database seed.");
 
   // Copied as it is now: later edits to the master never change this case (0003 Decision 3).
@@ -226,19 +229,20 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 // Reading a case
 // ---------------------------------------------------------------------------
 
-async function stageCount(departmentId: number) {
-  return prisma.departmentStage.count({ where: { departmentId } });
+/** Steps in the case's flow: "step 2 of 8". */
+async function stageCount(stage: { departmentId: number; flow: string }) {
+  return prisma.departmentStage.count({ where: { departmentId: stage.departmentId, flow: stage.flow } });
 }
 
 async function getVisaCaseById(id: string) {
   const row = await prisma.enquiry.findUniqueOrThrow({ where: { id }, include: visaCaseInclude });
-  return toVisaCaseDto(row, await stageCount(row.departmentId));
+  return toVisaCaseDto(row, await stageCount(row.stage));
 }
 
 export async function getVisaCase(caseNo: string) {
   const row = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: visaCaseInclude });
   if (!row?.visa) throw notFound("Case not found.");
-  return toVisaCaseDto(row, await stageCount(row.departmentId));
+  return toVisaCaseDto(row, await stageCount(row.stage));
 }
 
 // ---------------------------------------------------------------------------

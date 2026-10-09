@@ -517,11 +517,15 @@ model VisaChecklistItem {
 // Enquiries (shared by every department). See docs/decisions/0003-visa-intake.md.
 // ---------------------------------------------------------------------------
 
-/// A department's steps, in order. The labels are demo wording ⚠️, so they live here, not in code.
+/// A department's steps, in order, per flow. The labels are demo wording ⚠️, so they live here, not in code.
+/// A department can run more than one flow: Insurance has policies (4 steps) and claims (7 steps, §10.2).
+/// An enquiry's flow is its stage's flow; "step 2 of 7" counts that flow only.
 model DepartmentStage {
   id            Int        @id @default(autoincrement())
   departmentId  Int
-  /// Stable key the code uses: "ENQUIRY", "DOCUMENTS"… Never changes.
+  /// Stable key the code uses: "VISA"; later e.g. "INSURANCE_POLICY", "INSURANCE_CLAIM". Never changes.
+  flow          String
+  /// Stable key the code uses: "ENQUIRY", "DOCUMENTS"… Unique within the flow. Never changes.
   code          String
   /// "Enquiry"
   name          String
@@ -534,8 +538,8 @@ model DepartmentStage {
   department    Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   enquiries     Enquiry[]
 
-  @@unique([departmentId, code])
-  @@unique([departmentId, sortOrder])
+  @@unique([departmentId, flow, code])
+  @@unique([departmentId, flow, sortOrder])
 }
 
 /// The last case number issued, per department per calendar year (IST). Bumped in the enquiry's own transaction,

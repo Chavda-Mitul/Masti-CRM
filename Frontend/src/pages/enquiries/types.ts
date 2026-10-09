@@ -4,9 +4,11 @@ export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSE
 export type EnquiryOrigin = 'STAFF' | 'WHATSAPP_BOT' | 'WEBSITE_FORM' | 'CROSS_SELL' | 'IMPORT'
 
 export interface StageRef {
+  /** The department's flow this step belongs to: "VISA"; later "INSURANCE_POLICY" / "INSURANCE_CLAIM". */
+  flow: string
   code: string
   name: string
-  /** 1, 2, 3… */
+  /** 1, 2, 3… within the flow */
   step: number
   of: number
   statusLabel: string
@@ -38,7 +40,8 @@ export interface DepartmentChip {
   code: string
   name: string
   count: number
-  stages: { code: string; name: string }[]
+  /** Each flow's steps, in order. A row shows its own flow's steps (row.stage.flow). */
+  flows: { code: string; stages: { code: string; name: string }[] }[]
 }
 
 export interface EnquiryListPage {

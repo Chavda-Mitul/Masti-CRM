@@ -14,6 +14,9 @@ export const ENQUIRY_SOURCES = [
   { code: "WHATSAPP_BOT", name: "WhatsApp bot", sortOrder: 7, staffSelectable: false },
 ];
 
+/** Visa's one flow of steps. Insurance will add INSURANCE_POLICY and INSURANCE_CLAIM (§10.2). */
+export const VISA_FLOW = "VISA";
+
 /**
  * The 8 visa steps with the demo's labels ⚠️ (PROJECT_KNOWLEDGE.md §12.4). Step codes are what the code uses.
  * Step 1 says "Enquiry saved", not the demo's "Document list sent": nothing is sent until the WhatsApp outbox is built (0003).
@@ -37,9 +40,9 @@ export async function seedEnquiryMasters(db: Db) {
   const visa = await db.department.findUniqueOrThrow({ where: { code: "VISA" } });
   for (const [i, stage] of VISA_STAGES.entries()) {
     await db.departmentStage.upsert({
-      where: { departmentId_code: { departmentId: visa.id, code: stage.code } },
+      where: { departmentId_flow_code: { departmentId: visa.id, flow: VISA_FLOW, code: stage.code } },
       update: {},
-      create: { ...stage, departmentId: visa.id, sortOrder: i + 1 },
+      create: { ...stage, departmentId: visa.id, flow: VISA_FLOW, sortOrder: i + 1 },
     });
   }
 }
