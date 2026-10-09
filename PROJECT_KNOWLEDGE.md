@@ -1453,7 +1453,8 @@ Masti CRM/
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
-    ├── src/main.tsx, App.tsx     ← React Query + React Router 8 + ToastProvider; routes /login, /change-password, /, /clients,
+    ├── src/main.tsx, App.tsx     ← React Query + React Router 8 data router (createBrowserRouter + RouterProvider, one catch-all route
+    │                                rendering App's <Routes>, so useBlocker works) + ToastProvider; routes /login, /change-password, /, /clients,
     │                                /clients/:id, /settings/* (masters, checklists, lists, users, machine-accounts), /tasks (field staff)
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
     │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
@@ -1556,6 +1557,8 @@ Masti CRM/
 - **TypeScript is very strict** (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`). Write code that satisfies it rather than loosening the config.
 - **Frontend:**
   - Call the API only through `api()` in `src/lib/api.ts`. A 401 anywhere marks the user signed out (see `main.tsx`).
+  - A screen holding unsaved work (e.g. the checklist editor) guards it with `useBlocker` (every in-app navigation: links, `navigate()`, Back/Forward) plus `beforeunload` (tab close, reload). Let navigation to `/login` through.
+  - Forms and drawers use react-hook-form + zod, with the schemas next to the page (`schemas.ts`).
   - Use the CSS tokens in `src/styles/tokens.css`, never raw hex.
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).
 

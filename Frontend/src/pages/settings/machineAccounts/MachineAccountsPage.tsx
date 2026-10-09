@@ -1,17 +1,18 @@
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
 import { ConfirmDialog } from '../../../components/ConfirmDialog'
 import { FormField } from '../../../components/FormField'
 import { SecretOnceDialog } from '../../../components/SecretOnceDialog'
 import { api } from '../../../lib/api'
-import { errorText } from '../../../lib/apiErrors'
+import { applyServerIssues, errorText } from '../../../lib/apiErrors'
 import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { apiClientBody, apiClientFormSchema, type ApiClientBody, type ApiClientFormValues, type ApiScope } from './schemas'
 
 // Machine accounts (docs/decisions/0005-system-masters.md §5): programs that call the CRM with an API key instead of a
 // login, e.g. the holiday bot. Head only (the route guard and the API both check). The key is shown once.
-
-type ApiScope = 'HOLIDAYS_PUSH'
 
 interface ApiClient {
   id: string
@@ -197,7 +198,10 @@ export function MachineAccountsPage() {
   )
 }
 
-/** Add a machine account (the key comes back once) or change its name, permissions and allowed addresses. */
+/**
+ * Add a machine account (the key comes back once) or change its name, permissions and allowed addresses.
+ * Editing sends only the fields that changed, and closes without a request when nothing did.
+ */
 function ApiClientDrawer({
   client,
   onClose,
@@ -207,61 +211,79 @@ function ApiClientDrawer({
   onClose: () => void
   onSaved: (result: { client: ApiClient; key?: string }) => void
 }) {
-  const [name, setName] = useState(client?.name ?? '')
-  const [scopes, setScopes] = useState<ApiScope[]>(client?.scopes ?? ['HOLIDAYS_PUSH'])
-  const [ips, setIps] = useState((client?.allowedIps ?? []).join('\n'))
+  const { register, handleSubmit, control, setError, formState } = useForm<ApiClientFormValues>({
+    resolver: zodResolver(apiClientFormSchema),
+    defaultValues: { name: client?.name ?? '', scopes: client?.scopes ?? ['HOLIDAYS_PUSH'], allowedIps: (client?.allowedIps ?? []).join('\n') },
+  })
+  const { errors } = formState
 
   const save = useMutation({
-    mutationFn: (body: { name: string; scopes: ApiScope[]; allowedIps: string[] }) =>
+    mutationFn: (body: ApiClientBody) =>
       client
         ? api<{ client: ApiClient }>(`/api-clients/${client.id}`, { method: 'PATCH', body })
         : api<{ client: ApiClient; key: string }>('/api-clients', { method: 'POST', body }),
     onSuccess: onSaved,
+    onError: (err) => applyServerIssues(err, setError, ['name', 'scopes', 'allowedIps']),
   })
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    const allowedIps = ips
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    save.mutate({ name: name.trim(), scopes, allowedIps })
-  }
+  const onSubmit = handleSubmit((values) => {
+    const body = apiClientBody(values, client ? (field) => Boolean(formState.dirtyFields[field]) : () => true)
+    if (client && Object.keys(body).length === 0) return onClose()
+    save.mutate(body)
+  })
 
   return (
     <div className="overlay" onClick={onClose}>
-      <form className="drawer" onClick={(e) => e.stopPropagation()} onSubmit={submit} noValidate>
+      <form className="drawer" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
         <div className="pad drawer-head">
           <h2 className="h2">{client ? `Edit ${client.name}` : 'Add a machine account'}</h2>
           <p className="muted">{client ? 'The key stays the same.' : 'You’ll see its key once, after saving.'}</p>
         </div>
         <div className="pad drawer-body">
-          <FormField label="Name">
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Holiday bot" autoFocus maxLength={80} />
+          <FormField label="Name" error={errors.name?.message}>
+            <input className="input" {...register('name')} placeholder="Holiday bot" autoFocus />
           </FormField>
 
           <span className="lbl section-lbl">It can</span>
-          {SCOPES.map((s) => (
-            <label key={s.value} className="check">
-              <input
-                type="checkbox"
-                checked={scopes.includes(s.value)}
-                onChange={(e) => setScopes(e.target.checked ? [...scopes, s.value] : scopes.filter((x) => x !== s.value))}
-              />
-              <span>
-                {s.label}
-                <span className="hint" style={{ display: 'block' }}>
-                  {s.hint}
-                </span>
-              </span>
-            </label>
-          ))}
+          <Controller
+            control={control}
+            name="scopes"
+            render={({ field }) => (
+              <>
+                {SCOPES.map((s) => (
+                  <label key={s.value} className="check">
+                    <input
+                      type="checkbox"
+                      checked={field.value.includes(s.value)}
+                      onChange={(e) => field.onChange(e.target.checked ? [...field.value, s.value] : field.value.filter((x) => x !== s.value))}
+                      onBlur={field.onBlur}
+                    />
+                    <span>
+                      {s.label}
+                      <span className="hint" style={{ display: 'block' }}>
+                        {s.hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </>
+            )}
+          />
+          {errors.scopes?.message && (
+            <span className="field-error" role="alert">
+              {errors.scopes.message}
+            </span>
+          )}
 
-          <FormField label="Allowed from (optional)" hint="One IP address or range per line, e.g. 203.0.113.10 or 203.0.113.0/24. Empty: any address.">
-            <textarea className="input textarea mono" value={ips} onChange={(e) => setIps(e.target.value)} rows={3} placeholder="203.0.113.10" />
+          <FormField
+            label="Allowed from (optional)"
+            error={errors.allowedIps?.message}
+            hint="One IP address or range per line, e.g. 203.0.113.10 or 203.0.113.0/24. Empty: any address."
+          >
+            <textarea className="input textarea mono" {...register('allowedIps')} rows={3} placeholder="203.0.113.10" />
           </FormField>
 
-          {save.error && (
+          {errorText(save.error) && (
             <div className="alert alert-bad" role="alert">
               {errorText(save.error)}
             </div>
@@ -271,7 +293,7 @@ function ApiClientDrawer({
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={save.isPending || !name.trim() || scopes.length === 0}>
+          <button type="submit" className="btn btn-primary" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : client ? 'Save changes' : 'Add and show key'}
           </button>
         </div>

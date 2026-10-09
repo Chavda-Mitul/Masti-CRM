@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useBlocker, useParams } from 'react-router'
 import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
@@ -80,7 +80,6 @@ export function ChecklistEditorPage() {
 function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checklist; documents: DocumentMaster[]; canEdit: boolean }) {
   const offeringId = checklist.offering.id
   const toast = useToast()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const offerings = useOfferings()
   const replace = useReplaceChecklist(offeringId)
@@ -97,9 +96,15 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
 
   const [view, setView] = useState<View>('ALL')
   const [stale, setStale] = useState(false)
-  const [leaving, setLeaving] = useState(false)
 
-  // Closing the tab or reloading with unsaved changes asks first. (In-app links on this page ask too; see leave().)
+  // Any navigation away while there are unsaved changes asks first: sidebar, tabs, links, Back/Forward.
+  // Same-page changes (the query string) and going to the login page (logging out, session ended) are let through.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && nextLocation.pathname !== currentLocation.pathname && nextLocation.pathname !== '/login',
+  )
+
+  // Closing the tab, reloading or typing a new address isn't a router navigation: the browser asks instead.
   useEffect(() => {
     if (!dirty) return
     const warn = (e: BeforeUnloadEvent) => e.preventDefault()
@@ -150,7 +155,6 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
   )
 
   const reload = () => void queryClient.invalidateQueries({ queryKey: masterKeys.checklist(offeringId) })
-  const leave = () => (dirty ? setLeaving(true) : navigate('/settings/masters/checklists'))
   const listError = formState.errors.items?.message ?? formState.errors.items?.root?.message
   const message = isStale(replace.error) ? null : errorText(replace.error)
 
@@ -158,9 +162,9 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
     <form onSubmit={onSave} noValidate className="checklist-editor">
       <div className="page-head">
         <div>
-          <button type="button" className="back-link btn-link" onClick={leave}>
+          <Link to="/settings/masters/checklists" className="back-link">
             ‹ Checklists
-          </button>
+          </Link>
           <h1 className="h1">{checklist.offering.label}</h1>
           <p>
             {checklist.offering.isActive ? 'Offered at intake.' : 'Switched off: not offered at intake.'} Changes apply to new cases
@@ -353,7 +357,7 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
         </div>
       )}
 
-      {leaving && (
+      {blocker.state === 'blocked' && (
         <ConfirmDialog
           title="Leave without saving?"
           body="Your changes to this checklist will be lost."
@@ -361,8 +365,8 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
           danger
           pending={false}
           error={null}
-          onCancel={() => setLeaving(false)}
-          onConfirm={() => navigate('/settings/masters/checklists')}
+          onCancel={() => blocker.reset()}
+          onConfirm={() => blocker.proceed()}
         />
       )}
     </form>
