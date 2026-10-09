@@ -222,7 +222,7 @@ export async function lookupByMobile(raw: string, user: UserWithDepartments) {
     ...secondary.map((p) => ({ ...p.client, matchedOn: "SECONDARY" as const })),
   ];
   const client = matches[0] ?? null;
-  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user) : [];
+  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user, "department") : [];
   return { mobile, client, alsoMatches: matches.slice(1), openEnquiries };
 }
 
@@ -279,7 +279,7 @@ export async function getClient(id: string, user: UserWithDepartments) {
   const [notes, settings, openEnquiries] = await Promise.all([
     prisma.clientNote.findMany({ where: { clientId: id }, include: noteInclude, orderBy: { createdAt: "desc" }, take: PROFILE_NOTES }),
     getClientSettings(),
-    listOpenEnquiriesOfClient(id, user),
+    listOpenEnquiriesOfClient(id, user, "visible"),
   ]);
   return { ...toClientProfile(client, notes, istToday(), settings), openEnquiries };
 }

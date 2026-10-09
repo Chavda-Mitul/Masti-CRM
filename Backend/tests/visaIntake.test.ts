@@ -317,10 +317,21 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     const second = (await staff.post("/api/visa/cases").send(await body({ adults: 1, children: 0 }))).body.case;
     const lookup = await staff.get("/api/clients/lookup?mobile=98250%2041234");
     expect(lookup.status).toBe(200);
+    const aarti = { id: expect.any(String), name: "Aarti Patel" };
     expect(lookup.body.openEnquiries).toEqual([
-      { caseNo: second.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 1 adult", stage: "Enquiry" },
-      { caseNo: first.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 2 adults, 2 children", stage: "Enquiry" },
+      { caseNo: second.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 1 adult", stage: "Enquiry", owner: aarti },
+      { caseNo: first.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 2 adults, 2 children", stage: "Enquiry", owner: aarti },
     ]);
+
+    // A colleague sees them too, with whose they are, though she can't open them (0006 Decision 1).
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    const theirs = (await neha.get("/api/clients/lookup?mobile=9825041234")).body.openEnquiries;
+    expect(theirs.map((e: { caseNo: string; owner: { name: string } }) => [e.caseNo, e.owner.name])).toEqual([
+      [second.caseNo, "Aarti Patel"],
+      [first.caseNo, "Aarti Patel"],
+    ]);
+    expect((await neha.get(`/api/visa/cases/${first.caseNo}`)).status).toBe(403);
   });
 
   it("keeps postponed cases, leaves out finished ones", async () => {
@@ -347,13 +358,24 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     expect(lookup.body.openEnquiries).toEqual([]);
   });
 
-  it("are on the client profile too, for the departments the user can view", async () => {
+  it("are on the client profile too, but only the cases the user may open", async () => {
     const staff = await visaStaff();
     const saved = (await staff.post("/api/visa/cases").send(await body())).body.case;
     const profile = await staff.get(`/api/clients/${saved.client.id}`);
     expect(profile.body.client.openEnquiries).toEqual([
-      { caseNo: saved.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 2 adults, 2 children", stage: "Enquiry" },
+      {
+        caseNo: saved.caseNo,
+        department: "VISA",
+        summary: "France (Schengen) · Tourist · 2 adults, 2 children",
+        stage: "Enquiry",
+        owner: { id: expect.any(String), name: "Aarti Patel" },
+      },
     ]);
+
+    // A colleague's case isn't on her profile view (the lookup still shows it).
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
 
     // A save returns the profile with them as well.
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });

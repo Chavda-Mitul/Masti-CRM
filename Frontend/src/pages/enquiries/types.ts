@@ -90,6 +90,8 @@ export interface OpenEnquiry {
   summary: string
   /** Stage name, e.g. "Documents" */
   stage: string
+  /** Whose case it is. Null while it waits for the HOD (e.g. matured, no processor yet). */
+  owner: { id: string; name: string } | null
 }
 
 export interface ClientLookup {

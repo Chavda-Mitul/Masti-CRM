@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { Link, useBlocker, useNavigate, useSearchParams } from 'react-router'
-import { can } from '../../auth/permissions'
+import { can, canSeeEnquiry } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FormField, RequiredMark } from '../../components/FormField'
@@ -192,10 +192,15 @@ export function NewEnquiryPage() {
             <ul>
               {openEnquiries.map((e) => (
                 <li key={e.caseNo}>
-                  <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
-                    {e.caseNo}
-                  </Link>{' '}
-                  · {departmentStyle(e.department).label} · {e.summary} · {e.stage}
+                  {/* A colleague's case is listed so nobody opens a duplicate, but only its owner, the HOD and the Head open it. */}
+                  {canSeeEnquiry(me, e) ? (
+                    <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
+                      {e.caseNo}
+                    </Link>
+                  ) : (
+                    <span className="mono">{e.caseNo}</span>
+                  )}{' '}
+                  · {departmentStyle(e.department).label} · {e.summary} · {e.stage} · {e.owner ? `with ${e.owner.name}` : 'waiting for the HOD'}
                 </li>
               ))}
             </ul>

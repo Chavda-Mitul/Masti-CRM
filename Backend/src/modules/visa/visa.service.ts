@@ -8,10 +8,11 @@ import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
+import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
-import type { Actor } from "../users/user";
+import type { Actor, UserWithDepartments } from "../users/user";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
 import { FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
@@ -239,9 +240,11 @@ async function getVisaCaseById(id: string) {
   return toVisaCaseDto(row, await stageCount(row.stage));
 }
 
-export async function getVisaCase(caseNo: string) {
+/** The case page. Staff open only their own cases, the HOD the department's, the Head all (0006 Decision 1). */
+export async function getVisaCase(caseNo: string, user: UserWithDepartments) {
   const row = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: visaCaseInclude });
   if (!row?.visa) throw notFound("Case not found.");
+  assertCanSeeEnquiry(user, row);
   return toVisaCaseDto(row, await stageCount(row.stage));
 }
 

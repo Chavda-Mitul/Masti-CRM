@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { actorOf, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
+import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import { createVisaCaseSchema, idempotencyKeySchema, updateVisaSettingsSchema } from "./visa.schemas";
 import * as visaService from "./visa.service";
 
@@ -26,7 +26,7 @@ router.post("/cases", visaEdit, async (req, res) => {
 });
 
 router.get("/cases/:caseNo", visaView, async (req, res) => {
-  res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo)) });
+  res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
 });
 
 router.get("/settings", visaView, async (_req, res) => {

@@ -139,7 +139,10 @@ function CasesCard({ client }: { client: ClientProfile }) {
                   </Link>
                   <div className="muted small">{e.summary}</div>
                 </div>
-                <span className="small">{e.stage}</span>
+                <div className="small" style={{ textAlign: 'right' }}>
+                  {e.stage}
+                  <div className="muted">{e.owner ? e.owner.name : 'Waiting for the HOD'}</div>
+                </div>
               </li>
             )
           })}

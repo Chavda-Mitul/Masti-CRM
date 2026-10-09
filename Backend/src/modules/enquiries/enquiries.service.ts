@@ -8,6 +8,7 @@ import { countTravellers, travellersLabel } from "../visa/visaCase";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
+import { visibleEnquiryWhere } from "./visibility";
 
 // The All enquiries list (§12.2): every department in one list, late first, then by time due (§9).
 // Each department adds its own part (VisaCase now; holidays, hotels… in Stage 2) and its own one-line summary.
@@ -89,9 +90,10 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     if (shown.length === 0) throw forbidden("You don't have access to this department's enquiries.");
   }
 
-  // Everything but the department, so the department chips can show their counts.
+  // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
+  // HODs their department's, the Head everything (visibility.ts).
   const base: Prisma.EnquiryWhereInput[] = [
-    { departmentId: { in: departments.map((d) => d.id) } },
+    visibleEnquiryWhere(user, departments),
     { status: query.status },
     ...(query.mine ? [{ ownerId: user.id }] : []),
     ...(query.q ? [searchWhere(query.q)] : []),
@@ -155,18 +157,30 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
 const OPEN_STATUSES = ["OPEN", "POSTPONED"] as const;
 
 /**
- * The client's unfinished cases in the departments the user can view, newest first. The New enquiry form shows them so
- * staff can spot an existing case before making a duplicate; it warns but doesn't block, since a family can plan two
- * trips (0003, GET /api/clients/lookup).
+ * The client's unfinished cases, newest first, with whose they are.
+ * - `visible` (the client profile): only the cases this user may open (visibility.ts).
+ * - `department` (the New enquiry lookup): every case in the departments the user can view, colleagues' too, so staff spot
+ *   an existing case before making a duplicate. It warns but doesn't block, since a family can plan two trips (0003).
  */
-export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments) {
+export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments, scope: "visible" | "department") {
   const departments = await viewableDepartments(user);
   const rows = await prisma.enquiry.findMany({
-    where: { clientId, status: { in: [...OPEN_STATUSES] }, departmentId: { in: departments.map((d) => d.id) } },
+    where: {
+      AND: [
+        { clientId, status: { in: [...OPEN_STATUSES] } },
+        scope === "visible" ? visibleEnquiryWhere(user, departments) : { departmentId: { in: departments.map((d) => d.id) } },
+      ],
+    },
     include: rowInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
-  return rows.map((row) => ({ caseNo: row.caseNo, department: row.department.code, summary: summaryOf(row), stage: row.stage.name }));
+  return rows.map((row) => ({
+    caseNo: row.caseNo,
+    department: row.department.code,
+    summary: summaryOf(row),
+    stage: row.stage.name,
+    owner: row.owner,
+  }));
 }
 
 /** "Came in through" on the New enquiry form: active sources staff may pick. */

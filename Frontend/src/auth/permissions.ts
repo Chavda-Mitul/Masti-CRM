@@ -32,6 +32,15 @@ export function isHodOf(user: User, departmentCode: string): boolean {
   return user.type === 'OFFICE' && user.departments.some((d) => d.code === departmentCode && d.role === 'HOD')
 }
 
+/**
+ * May this user open this enquiry? Staff open their own, the HOD the department's, the Head all (0006 Decision 1).
+ * Mirrors canSeeEnquiry in Backend/src/modules/enquiries/visibility.ts.
+ */
+export function canSeeEnquiry(user: User, enquiry: { department: string; owner: { id: string } | null }): boolean {
+  if (!can(user, enquiry.department, 'VIEW')) return false
+  return isHodOf(user, enquiry.department) || enquiry.owner?.id === user.id
+}
+
 /** HOD of any department, or the Head. Mirrors isHodOfAny in the backend. */
 export function isHodOfAny(user: User): boolean {
   if (!user.isActive) return false
