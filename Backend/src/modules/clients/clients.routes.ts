@@ -55,7 +55,7 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  res.json({ client: await clientsService.getClient(req.params.id) });
+  res.json({ client: await clientsService.getClient(req.params.id, currentUser(req)) });
 });
 
 router.patch("/:id", async (req, res) => {

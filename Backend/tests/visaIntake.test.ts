@@ -342,4 +342,21 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     expect(lookup.body.client).not.toBeNull();
     expect(lookup.body.openEnquiries).toEqual([]);
   });
+
+  it("are on the client profile too, for the departments the user can view", async () => {
+    const staff = await visaStaff();
+    const saved = (await staff.post("/api/visa/cases").send(await body())).body.case;
+    const profile = await staff.get(`/api/clients/${saved.client.id}`);
+    expect(profile.body.client.openEnquiries).toEqual([
+      { caseNo: saved.caseNo, department: "VISA", summary: "France (Schengen) · Tourist · 2 adults, 2 children", stage: "Enquiry" },
+    ]);
+
+    // A save returns the profile with them as well.
+    const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
+    expect(edited.body.client.openEnquiries).toHaveLength(1);
+
+    await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
+    const holidays = await loginAs("hetal@masti.test");
+    expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
+  });
 });

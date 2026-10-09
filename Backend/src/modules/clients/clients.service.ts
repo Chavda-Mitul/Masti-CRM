@@ -256,14 +256,16 @@ export async function listClients(query: ListClientsQuery) {
   };
 }
 
-export async function getClient(id: string) {
+/** The client's profile, with their open cases in the departments this user can see. */
+export async function getClient(id: string, user: UserWithDepartments) {
   const client = await prisma.client.findUnique({ where: { id }, include: clientProfileInclude });
   if (!client) throw notFound("Client not found.");
-  const [notes, settings] = await Promise.all([
+  const [notes, settings, openEnquiries] = await Promise.all([
     prisma.clientNote.findMany({ where: { clientId: id }, include: noteInclude, orderBy: { createdAt: "desc" }, take: PROFILE_NOTES }),
     getClientSettings(),
+    listOpenEnquiriesOfClient(id, user),
   ]);
-  return toClientProfile(client, notes, istToday(), settings);
+  return { ...toClientProfile(client, notes, istToday(), settings), openEnquiries };
 }
 
 export async function getReadiness(id: string) {
@@ -328,7 +330,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(created.id);
+  return getClient(created.id, actor.user);
 }
 
 /**
@@ -366,7 +368,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
 
   const changes = await resolveChanges(input, before, istToday());
   const keys = Object.keys(changes);
-  if (keys.length === 0) return getClient(id);
+  if (keys.length === 0) return getClient(id, actor.user);
   assertCanChangeAccountsFields(actor.user, accountsFieldsIn(changes, false));
   await assertAccountingCodeFree(changes.accountingCode, id);
   const confirmed = checkDuplicates(await taxIdDuplicates(changes, id), input.confirmDuplicates);
@@ -393,7 +395,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(id);
+  return getClient(id, actor.user);
 }
 
 /** Makes another number the main one (lookup key and WhatsApp number). The old one can stay as an extra number. */
@@ -401,7 +403,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
   assertCanEditClients(actor.user);
   const before = await getClientRowOr404(id);
   const mobile = requireMobile(input.mobile);
-  if (mobile === before.mobile) return getClient(id);
+  if (mobile === before.mobile) return getClient(id, actor.user);
 
   const owner = await prisma.client.findUnique({ where: { mobile }, select: { id: true } });
   if (owner) {
@@ -441,7 +443,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(id);
+  return getClient(id, actor.user);
 }
 
 export async function addPhone(clientId: string, input: AddPhoneInput, actor: Actor) {
