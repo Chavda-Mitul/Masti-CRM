@@ -7,6 +7,7 @@ import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError"
 import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
+import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
 import type { Actor } from "../users/user";
@@ -115,7 +116,9 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
   if (checklist.length === 0) throw badRequest("This visa has no document checklist yet. Ask the Visa HOD to set it up in Settings → Masters.");
 
   const { firstFollowUp } = await getVisaSettings();
-  const dueAt = istDateTimeToUtc(addDays(today, firstFollowUp.afterDays), firstFollowUp.at);
+  // A follow-up due on a day the office is closed (the weekly Sunday off, an office holiday) moves to the next open day,
+  // or Monday morning would open with Saturday's enquiries already late.
+  const dueAt = istDateTimeToUtc(await nextOpenDay(addDays(today, firstFollowUp.afterDays), { office: true }), firstFollowUp.at);
   const year = Number(today.slice(0, 4));
 
   const save = () =>

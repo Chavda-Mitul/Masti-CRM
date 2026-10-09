@@ -14,6 +14,7 @@ Since this record was proposed, the client master ([0004](0004-client-master.md)
 | `FeeHead`, `VisaFee` seeded with intake | **Dropped.** Price breakups are designed with the quote/invoice model (as 0005 §7 says). |
 | `MessageTemplate`, `OutboundMessage`, the preview endpoint, "Save and send document list" | **Deferred** to the WhatsApp provider work (M2). Saving writes the case only; the button says **"Save enquiry"** and the toast "Enquiry VISA-2026-0001 saved for …", so staff aren't told something was sent when it wasn't. For the same reason step 1's status label is seeded as **"Enquiry saved"**, not "Document list sent". All three go back to the demo wording when the outbox is built. |
 | `visa.documentReminders`, `VisaCase.remindersOn` / `nextReminderAt` | **Deferred** with messaging. Only `visa.firstFollowUp` is built, because `Enquiry.dueAt` drives the list. |
+| Follow-up due "tomorrow 11:00" | Today + `afterDays`, then moved to the next day the office is open (`nextOpenDay()` with the `MASTI_OFFICE` holidays, so the seeded Sunday off counts; embassy-only holidays don't). Otherwise Monday would open with Saturday's enquiries already late. |
 | `VisaCaseDocument` copies the name and requirement | Also copies `detail`, `quantity` and `note` (0005 added the last two to checklist lines). |
 | Owner picker, `GET /api/visa/assignees` | Not built. The owner is the person saving; reassigning comes with the enquiry actions. |
 | The enquiries list "not in Step 1" | **Built:** `GET /api/enquiries` and the All enquiries screen. |

@@ -179,6 +179,26 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(new Date(second.body.case.dueAt)).toEqual(istDateTimeToUtc(addDays(istToday(), 2), "16:30"));
   });
 
+  it("moves the first follow-up past days the office is closed, but not past embassy-only holidays", async () => {
+    const staff = await visaStaff();
+    const tomorrow = addDays(istToday(), 1);
+    const holiday = (name: string, from: string, to: string, kind: "MASTI_OFFICE" | "ALL_EMBASSIES") =>
+      prisma.holiday.create({
+        data: { name, repeat: "NONE", startDate: new Date(`${from}T00:00:00Z`), endDate: new Date(`${to}T00:00:00Z`), targets: { create: [{ kind }] } },
+      });
+
+    // Embassies shut tomorrow: the office still works, so nothing moves.
+    const embassies = await holiday("Embassy holiday", tomorrow, tomorrow, "ALL_EMBASSIES");
+    const first = await staff.post("/api/visa/cases").send(await body());
+    expect(new Date(first.body.case.dueAt)).toEqual(istDateTimeToUtc(tomorrow, "11:00"));
+
+    // The office is shut tomorrow and the day after: the follow-up lands on the next open day.
+    await prisma.holiday.update({ where: { id: embassies.id }, data: { status: "REMOVED" } });
+    await holiday("Diwali", tomorrow, addDays(tomorrow, 1), "MASTI_OFFICE");
+    const second = await staff.post("/api/visa/cases").send(await body());
+    expect(new Date(second.body.case.dueAt)).toEqual(istDateTimeToUtc(addDays(tomorrow, 2), "11:00"));
+  });
+
   it("keeps the case's copy when the master checklist changes later", async () => {
     const staff = await visaStaff();
     const created = await staff.post("/api/visa/cases").send(await body({ adults: 1, children: 0 }));
