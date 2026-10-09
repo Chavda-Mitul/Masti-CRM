@@ -38,7 +38,7 @@ Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTT
 
 Inside the route and its service:
 - Read the user with `currentUser(req)` (or `actorOf(req)`, the user plus IP for audited changes) in the route and pass it to the service.
-- Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`rethrowUnique`), `dates.ts`, `audit.ts`, `httpError.ts`. Reuse them rather than copying.
+- Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`isUniqueViolation`, `rethrowUnique`), `settings.ts` (`saveSetting`), `dates.ts`, `audit.ts`, `httpError.ts`. Reuse them rather than copying.
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
 - Throw `HttpError` helpers for errors.
@@ -66,3 +66,17 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 - **Out-of-scope work:** a feature that isn't in the demo screens may be a paid change request. Flag it; don't build it quietly.
 - **Testing:** test the money and rule logic (invoice immutability, refunds, follow-up caps, holiday-blocked dates, permissions).
 - **Keeping docs current:** when a decision is made, update `PROJECT_KNOWLEDGE.md` and `Masti-CRM-Handover/05_Open_Questions.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `Chavda-Mitul/Masti-CRM`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. `CONTEXT.md` sits at the root and is created lazily. Decision records live in `docs/decisions/`, not `docs/adr/`. See `docs/agents/domain.md`.
