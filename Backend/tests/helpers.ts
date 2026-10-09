@@ -8,17 +8,25 @@ import { prisma } from "../src/config/prisma";
 
 export const PASSWORD = "Correct-Horse-9";
 
-const DEPARTMENTS = ["VISA", "HOLIDAYS", "HOTELS", "INSURANCE", "TICKETS", "ACCOUNTS"];
+const DEPARTMENTS = [
+  { code: "VISA", casePrefix: "VISA" },
+  { code: "HOLIDAYS", casePrefix: "HOL" },
+  { code: "HOTELS", casePrefix: "HOT" },
+  { code: "INSURANCE", casePrefix: "INS" },
+  { code: "TICKETS", casePrefix: "TKT" },
+  { code: "ACCOUNTS", casePrefix: "ACC" },
+];
 
 /** Wipes every table and recreates the departments and client lookups. TRUNCATE is allowed on the append-only audit log. */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "FieldJob", "UserDepartment", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
+    'TRUNCATE "AuditLog", "Session", "FieldJob", "VisaCaseDocument", "VisaCaseTraveller", "VisaCase", "Enquiry", "CaseCounter", ' +
+      '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
       '"DocumentMaster", "Embassy", "VisaType", "Country", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
   );
   await prisma.department.createMany({
-    data: DEPARTMENTS.map((code, i) => ({ code, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
+    data: DEPARTMENTS.map(({ code, casePrefix }, i) => ({ code, casePrefix, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
   });
   await seedClientLookups(prisma);
   clearOfficeNetworkCache();

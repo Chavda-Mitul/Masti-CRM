@@ -1,10 +1,9 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { can } from '../auth/permissions'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
-import { DEPARTMENT_STYLE } from '../lib/departments'
+import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
 import { ErrorBoundary } from './ErrorBoundary'
-
-const SELLING_DEPARTMENTS = ['VISA', 'HOLIDAYS', 'HOTELS', 'INSURANCE', 'TICKETS'] as const
 
 /** Sidebar layout from the approved demo. Modules not built yet are shown greyed out. */
 export function AppShell() {
@@ -14,6 +13,10 @@ export function AppShell() {
   const navigate = useNavigate()
 
   if (!user) return null
+
+  // The department sub-items are the list filtered by ?department=; the New enquiry form counts as Visa (demo).
+  const onEnquiries = location.pathname === '/enquiries' || location.pathname.startsWith('/enquiries/')
+  const department = location.pathname === '/enquiries/new' ? 'VISA' : new URLSearchParams(location.search).get('department')?.toUpperCase()
 
   const onLogout = () => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
 
@@ -32,16 +35,28 @@ export function AppShell() {
           Today
         </NavLink>
 
-        <span className="nav nav-disabled">
-          Enquiries <span className="tag">Soon</span>
-        </span>
+        <Link to="/enquiries" className={`nav${onEnquiries && !department ? ' active' : ''}`}>
+          Enquiries
+        </Link>
         {SELLING_DEPARTMENTS.map((code) => {
           const style = DEPARTMENT_STYLE[code]!
+          if (!can(user, code, 'VIEW')) {
+            return (
+              <span key={code} className="nav nav-sub nav-disabled">
+                <span className="dot" style={{ background: style.solid }} />
+                {style.label}
+              </span>
+            )
+          }
           return (
-            <span key={code} className="nav nav-sub nav-disabled">
+            <Link
+              key={code}
+              to={`/enquiries?department=${code}`}
+              className={`nav nav-sub${onEnquiries && department === code ? ' active' : ''}`}
+            >
               <span className="dot" style={{ background: style.solid }} />
               {style.label}
-            </span>
+            </Link>
           )
         })}
 

@@ -32,7 +32,7 @@ function gstinFor(pan: string, state = "24") {
 }
 
 async function createClient(agent: Agent, body: Record<string, unknown>) {
-  const res = await agent.post("/api/clients").send(body);
+  const res = await agent.post("/api/clients").send({ name: "Test Client", ...body });
   if (res.status !== 201) throw new Error(`create failed (${res.status}): ${JSON.stringify(res.body)}`);
   return res.body.client;
 }
@@ -57,15 +57,15 @@ describe("clients API access", () => {
     const viewer = await loginAs("viewer@masti.test");
 
     expect((await viewer.get(`/api/clients/${client.id}`)).status).toBe(200);
-    expect((await viewer.post("/api/clients").send({ mobile: "9825041235" })).status).toBe(403);
+    expect((await viewer.post("/api/clients").send({ name: "Test Client", mobile: "9825041235" })).status).toBe(403);
     expect((await viewer.post(`/api/clients/${client.id}/notes`).send({ body: "Hi" })).status).toBe(403);
   });
 });
 
 describe("creating clients", () => {
-  it("needs only the mobile, and fills in the defaults", async () => {
+  it("needs the mobile and the name, and fills in the defaults", async () => {
     const visa = await visaAgent();
-    const res = await visa.post("/api/clients").send({ mobile: "098250 41234" });
+    const res = await visa.post("/api/clients").send({ name: "Test Client", mobile: "098250 41234" });
     expect(res.status).toBe(201);
     const { client } = res.body;
     expect(client.mobile).toBe("+919825041234");
@@ -73,30 +73,40 @@ describe("creating clients", () => {
     expect(client.billingCycle.code).toBe("MONTHLY");
     expect(client.clientSince).toBe(istToday());
     expect(client.readiness.ready).toBe(false);
-    expect(client.readiness.missing.map((m: { field: string }) => m.field)).toEqual(["name", "addressLine", "city", "stateCode"]);
+    expect(client.readiness.missing.map((m: { field: string }) => m.field)).toEqual(["addressLine", "city", "stateCode"]);
 
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "client.create" } });
     expect(entry.entityId).toBe(client.id);
   });
 
+  it("refuses a client without a name (decided 9 Oct 2026)", async () => {
+    const visa = await visaAgent();
+    for (const name of [undefined, "", "   ", null]) {
+      const res = await visa.post("/api/clients").send({ mobile: "9825041234", ...(name === undefined ? {} : { name }) });
+      expect(res.status, JSON.stringify(name)).toBe(400);
+      expect(res.body.issues.name).toEqual(["Enter the client's name."]);
+    }
+    expect(await prisma.client.count()).toBe(0);
+  });
+
   it("refuses a second client with the same main number, pointing at the first", async () => {
     const visa = await visaAgent();
     const first = await createClient(visa, { mobile: "9825041234" });
-    const res = await visa.post("/api/clients").send({ mobile: "+91 98250 41234" });
+    const res = await visa.post("/api/clients").send({ name: "Test Client", mobile: "+91 98250 41234" });
     expect(res.status).toBe(409);
     expect(res.body.details).toEqual({ code: "CLIENT_EXISTS", clientId: first.id });
   });
 
   it("validates mobile, PAN, GSTIN and state", async () => {
     const visa = await visaAgent();
-    expect((await visa.post("/api/clients").send({ mobile: "12345" })).status).toBe(400);
-    expect((await visa.post("/api/clients").send({ mobile: "9825041234", pan: "ABCDE12345" })).status).toBe(400);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "12345" })).status).toBe(400);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", pan: "ABCDE12345" })).status).toBe(400);
     const good = gstinFor("ABCDE1234F");
     const badCheck = good.slice(0, 14) + (good.endsWith("0") ? "1" : "0");
-    const res = await visa.post("/api/clients").send({ mobile: "9825041234", gstin: badCheck });
+    const res = await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", gstin: badCheck });
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body.issues)).toMatch(/typo/);
-    expect((await visa.post("/api/clients").send({ mobile: "9825041234", stateCode: "99" })).status).toBe(400);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", stateCode: "99" })).status).toBe(400);
   });
 
   it("fills PAN and state from the GSTIN, and refuses a PAN that doesn't match it", async () => {
@@ -107,14 +117,14 @@ describe("creating clients", () => {
     expect(client.pan).toBe("AAACS1234K");
     expect(client.stateCode).toBe("24");
 
-    const res = await visa.post("/api/clients").send({ mobile: "9825041235", gstin: gstinFor("AAACG9999Q"), pan: "AAACS1234K" });
+    const res = await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041235", gstin: gstinFor("AAACG9999Q"), pan: "AAACS1234K" });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/doesn't match/);
   });
 
   it("only lets companies have a contact person", async () => {
     const visa = await visaAgent();
-    expect((await visa.post("/api/clients").send({ mobile: "9825041234", contactPerson: "Mr Shah" })).status).toBe(400);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", contactPerson: "Mr Shah" })).status).toBe(400);
 
     const company = await createClient(visa, { mobile: "9825041234", kind: "CORPORATE", name: "Gajera Diamonds", contactPerson: "Mr Shah" });
     const res = await visa.patch(`/api/clients/${company.id}`).send({ kind: "INDIVIDUAL", updatedAt: company.updatedAt });
@@ -169,14 +179,14 @@ describe("duplicate warnings (confirmDuplicates)", () => {
     const visa = await visaAgent();
     const first = await createClient(visa, { mobile: "9825041234", name: "Rakesh Mehta", pan: "ABCPM1234K" });
 
-    const warned = await visa.post("/api/clients").send({ mobile: "9825041235", pan: "abcpm1234k" });
+    const warned = await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041235", pan: "abcpm1234k" });
     expect(warned.status).toBe(409);
     expect(warned.body.details.code).toBe("DUPLICATE");
     expect(warned.body.details.duplicates[0]).toMatchObject({ field: "pan", value: "ABCPM1234K" });
     expect(warned.body.details.duplicates[0].matches[0]).toMatchObject({ clientId: first.id, clientName: "Rakesh Mehta" });
     expect(await prisma.client.count()).toBe(1);
 
-    const confirmed = await visa.post("/api/clients").send({ mobile: "9825041235", pan: "abcpm1234k", confirmDuplicates: true });
+    const confirmed = await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041235", pan: "abcpm1234k", confirmDuplicates: true });
     expect(confirmed.status).toBe(201);
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "client.create", entityId: confirmed.body.client.id } });
     expect(JSON.stringify(entry.after)).toMatch(/confirmedDuplicates/);
@@ -187,14 +197,34 @@ describe("duplicate warnings (confirmDuplicates)", () => {
     const first = await createClient(visa, { mobile: "9825041234" });
     expect((await visa.post(`/api/clients/${first.id}/phones`).send({ mobile: "9898989898" })).status).toBe(201);
 
-    const res = await visa.post("/api/clients").send({ mobile: "9898989898" });
+    const res = await visa.post("/api/clients").send({ name: "Test Client", mobile: "9898989898" });
     expect(res.status).toBe(409);
     expect(res.body.details.duplicates[0].field).toBe("mobile");
-    expect((await visa.post("/api/clients").send({ mobile: "9898989898", confirmDuplicates: true })).status).toBe(201);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9898989898", confirmDuplicates: true })).status).toBe(201);
   });
 });
 
 describe("updating clients", () => {
+  it("never clears the name, and asks a nameless client for one before other changes", async () => {
+    const visa = await visaAgent();
+    const named = await createClient(visa, { mobile: "9825041234" });
+    for (const name of ["", null]) {
+      const res = await visa.patch(`/api/clients/${named.id}`).send({ updatedAt: named.updatedAt, name });
+      expect(res.status, JSON.stringify(name)).toBe(400);
+      expect(res.body.issues.name).toEqual(["Enter the client's name."]);
+    }
+
+    // Made with only the mobile (intake before 9 Oct, the bot, the import).
+    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+    const bare = await prisma.client.create({ data: { mobile: "+919825041235", billingCycleId: cycle.id } });
+    const cityOnly = await visa.patch(`/api/clients/${bare.id}`).send({ updatedAt: bare.updatedAt.toISOString(), city: "Surat" });
+    expect(cityOnly.status).toBe(400);
+    expect(cityOnly.body.issues.name).toEqual(["Enter the client's name before saving other changes."]);
+    const withName = await visa.patch(`/api/clients/${bare.id}`).send({ updatedAt: bare.updatedAt.toISOString(), name: "Rakesh Mehta", city: "Surat" });
+    expect(withName.status).toBe(200);
+    expect(withName.body.client).toMatchObject({ name: "Rakesh Mehta", city: "Surat" });
+  });
+
   it("uses updatedAt for optimistic locking", async () => {
     const visa = await visaAgent();
     const client = await createClient(visa, { mobile: "9825041234" });
@@ -232,7 +262,7 @@ describe("updating clients", () => {
     const weekly = await prisma.billingCycle.findUniqueOrThrow({ where: { code: "WEEKLY" } });
     const monthly = await prisma.billingCycle.findUniqueOrThrow({ where: { code: "MONTHLY" } });
 
-    expect((await visa.post("/api/clients").send({ mobile: "9825041234", accountingCode: "C-101" })).status).toBe(403);
+    expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", accountingCode: "C-101" })).status).toBe(403);
     const client = await createClient(visa, { mobile: "9825041234" });
 
     const refused = await visa.patch(`/api/clients/${client.id}`).send({ billingCycleId: weekly.id, updatedAt: client.updatedAt });

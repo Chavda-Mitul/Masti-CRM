@@ -1,11 +1,13 @@
 import { Prisma, type Client } from "../../../generated/prisma/client";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { istToday, toDbDate } from "../../lib/dates";
 import { cleanEmail, normaliseMobile } from "../../lib/contact";
-import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
-import type { Actor } from "../users/user";
+import { saveSetting } from "../../lib/settings";
+import type { Actor, UserWithDepartments } from "../users/user";
+import { listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
 import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
@@ -55,7 +57,8 @@ type ClientValues = Pick<
   | "clientSince"
 >;
 type ClientChanges = Partial<ClientValues>;
-type ClientFieldsInput = Omit<CreateClientInput, "mobile" | "confirmDuplicates">;
+// The name is required on create and optional on update (the schemas enforce each).
+type ClientFieldsInput = Omit<CreateClientInput, "mobile" | "confirmDuplicates" | "name"> & { name?: string | undefined };
 
 const TEXT_FIELDS = ["name", "contactPerson", "addressLine", "area", "city", "stateCode", "pincode", "pan", "gstin", "accountingCode"] as const;
 
@@ -159,8 +162,8 @@ async function taxIdDuplicates(changes: ClientChanges, exceptClientId?: string):
   return found;
 }
 
-async function defaultBillingCycleId(): Promise<number> {
-  const cycle = await prisma.billingCycle.findFirst({ where: { isDefault: true, isActive: true } });
+async function defaultBillingCycleId(db: Db = prisma): Promise<number> {
+  const cycle = await db.billingCycle.findFirst({ where: { isDefault: true, isActive: true } });
   if (!cycle) throw new HttpError(500, "No default billing cycle is set up. Run the database seed.");
   return cycle.id;
 }
@@ -169,8 +172,11 @@ async function defaultBillingCycleId(): Promise<number> {
 // Reading
 // ---------------------------------------------------------------------------
 
-/** The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers. */
-export async function lookupByMobile(raw: string) {
+/**
+ * The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers.
+ * `openEnquiries` are the unfinished cases of `client`, the one intake attaches to, that the user can view.
+ */
+export async function lookupByMobile(raw: string, user: UserWithDepartments) {
   const mobile = normaliseMobile(raw);
   if (!mobile) throw badRequest("Enter a valid 10-digit Indian mobile number.");
 
@@ -185,7 +191,9 @@ export async function lookupByMobile(raw: string) {
     ...(primary ? [{ ...primary, matchedOn: "PRIMARY" as const }] : []),
     ...secondary.map((p) => ({ ...p.client, matchedOn: "SECONDARY" as const })),
   ];
-  return { mobile, client: matches[0] ?? null, alsoMatches: matches.slice(1) };
+  const client = matches[0] ?? null;
+  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user) : [];
+  return { mobile, client, alsoMatches: matches.slice(1), openEnquiries };
 }
 
 /** Search by name, mobile (main or extra), passport number, PAN, GSTIN or accounting code. */
@@ -307,6 +315,53 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
   return getClient(created.id);
 }
 
+/**
+ * "Saved against the mobile number" for intake (0003): the client whose main number this is, else the earliest client
+ * with it as an extra number (the lookup's first match), else a new client. Staff always give a name (9 Oct 2026):
+ * it's required for a new client, and fills in a matched client that has none; an existing name is never overwritten.
+ * Runs in the caller's transaction, so a failed enquiry leaves no half-made client behind. `mobile` must be normalised.
+ * Two intakes racing on the same new number: the second insert fails on Client.mobile and the caller retries.
+ */
+export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: Actor, name?: string | null, nameField = "name") {
+  const select = { id: true, name: true, mobile: true } as const;
+  const found =
+    (await tx.client.findUnique({ where: { mobile }, select })) ??
+    (await tx.clientPhone.findFirst({ where: { mobile }, orderBy: { createdAt: "asc" }, select: { client: { select } } }))?.client;
+  const given = name?.trim() || null;
+
+  if (found) {
+    if (found.name) return { client: found, created: false }; // an existing name is never overwritten from here
+    if (!given) throw fieldError(nameField, "This client has no name yet. Enter it.");
+    assertCanEditClients(actor.user);
+    const named = await tx.client.update({ where: { id: found.id }, data: { name: given }, select });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "client.update",
+        entityType: "Client",
+        entityId: found.id,
+        clientId: found.id,
+        before: { name: null },
+        after: { name: given },
+        ip: actor.ip,
+      },
+      tx,
+    );
+    return { client: named, created: false };
+  }
+
+  if (!given) throw fieldError(nameField, "Enter the client's name: this is a new number.");
+  assertCanEditClients(actor.user);
+  const client = await tx.client.create({
+    data: { mobile, name: given, billingCycleId: await defaultBillingCycleId(tx), clientSince: toDbDate(istToday()), createdById: actor.user.id },
+  });
+  await audit(
+    { actorId: actor.user.id, action: "client.create", entityType: "Client", entityId: client.id, clientId: client.id, after: client, ip: actor.ip },
+    tx,
+  );
+  return { client: { id: client.id, name: client.name, mobile: client.mobile }, created: true };
+}
+
 /** Partial update. `updatedAt` must be the value the browser read (optimistic locking). */
 export async function updateClient(id: string, input: UpdateClientInput, actor: Actor) {
   assertCanEditClients(actor.user);
@@ -316,6 +371,8 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
   const changes = await resolveChanges(input, before, istToday());
   const keys = Object.keys(changes);
   if (keys.length === 0) return getClient(id);
+  // A client made with only the mobile (intake before 9 Oct, the bot, the import) gets its name before anything else.
+  if (!(changes.name ?? before.name)) throw fieldError("name", "Enter the client's name before saving other changes.");
   assertCanChangeAccountsFields(actor.user, accountsFieldsIn(changes, false));
   await assertAccountingCodeFree(changes.accountingCode, id);
   const confirmed = checkDuplicates(await taxIdDuplicates(changes, id), input.confirmDuplicates);
@@ -493,11 +550,7 @@ export async function updateSettings(input: UpdateClientSettingsInput, actor: Ac
   await prisma.$transaction(async (tx) => {
     for (const { key, value, previous } of updates) {
       if (value === undefined) continue;
-      await tx.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
-      await audit(
-        { actorId: actor.user.id, action: "setting.update", entityType: "Setting", entityId: key, before: previous, after: value, ip: actor.ip },
-        tx,
-      );
+      await saveSetting(tx, { key, before: previous, after: value, actorId: actor.user.id, ip: actor.ip });
     }
   });
 

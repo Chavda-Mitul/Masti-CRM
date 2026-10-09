@@ -10,11 +10,13 @@ import type {
   CreateCountryInput,
   CreateDocumentInput,
   CreateEmbassyInput,
+  CreateEnquirySourceInput,
   CreateOfferingInput,
   CreateVisaTypeInput,
   UpdateCountryInput,
   UpdateDocumentInput,
   UpdateEmbassyInput,
+  UpdateEnquirySourceInput,
   UpdateOfferingInput,
   UpdateVisaTypeInput,
 } from "./visaMasters.schemas";
@@ -202,6 +204,37 @@ export async function updateDocument(id: number, input: UpdateDocumentInput, act
     entityType: "DocumentMaster",
     entityId: id,
     write: (tx) => tx.documentMaster.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Enquiry sources ("Came in through")
+// Shared by every department, but edited like the visa masters (the Head or the Visa HOD) until another
+// department's intake exists (0003, refreshed 9 Oct 2026).
+// ---------------------------------------------------------------------------
+
+export async function listEnquirySources(active?: boolean) {
+  return prisma.enquirySource.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createEnquirySource(input: CreateEnquirySourceInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "enquirySource.create", "EnquirySource", (tx) => tx.enquirySource.create({ data: input }));
+}
+
+export async function updateEnquirySource(id: number, input: UpdateEnquirySourceInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.enquirySource.findUnique({ where: { id } });
+  if (!before) throw notFound("Source not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "enquirySource.update",
+    entityType: "EnquirySource",
+    entityId: id,
+    write: (tx) => tx.enquirySource.update({ where: { id }, data: changes }),
   });
 }
 

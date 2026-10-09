@@ -1,0 +1,341 @@
+/* Enquiries: the All enquiries list (demo screens 02/03) and the New enquiry form (demo screen 05). */
+
+/* ---------- All enquiries ---------- */
+.title-dot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dot-lg {
+  width: 14px;
+  height: 14px;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Department filter: 38px pills; the picked one is sea blue (§15). */
+.dept-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.dept-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-input);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dept-chip:hover {
+  border-color: var(--border-input-hover);
+}
+.dept-chip.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-fill);
+}
+.dept-count {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.75;
+}
+
+.enquiries-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.enquiries-layout > .card-fill {
+  min-height: 100%;
+}
+.enquiries-layout.with-panel {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+/* The panel shows the next step, so the table drops that column to keep its width. */
+.with-panel .col-next {
+  display: none;
+}
+
+.enq-toolbar {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+.enq-toolbar .search {
+  flex: 1 1 320px;
+  max-width: 480px;
+}
+
+.enquiries-table tbody tr {
+  cursor: pointer;
+}
+.enquiries-table tbody tr.row-on {
+  background: var(--row-hover);
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+.enquiries-table td {
+  vertical-align: middle;
+}
+.enquiries-table .client-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.enquiries-table .col-next {
+  min-width: 150px;
+}
+.enq-name {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.enq-name:hover {
+  color: var(--primary);
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The client column takes what the others leave and truncates its summary; the other columns never wrap. */
+.enquiries-table th:first-child,
+.enquiries-table td:first-child {
+  width: 100%;
+  max-width: 0;
+}
+.enquiries-table td:not(:first-child):not(.col-next) {
+  white-space: nowrap;
+}
+.enquiries-table .client-cell > div {
+  min-width: 0;
+}
+.enquiries-table .stage-cell {
+  white-space: nowrap;
+}
+
+.stage-bar {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+  max-width: 140px;
+}
+.stage-bar span {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--fill-track);
+}
+
+.due {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.due-late {
+  color: var(--late);
+}
+.due-today {
+  color: var(--primary);
+}
+.due-later {
+  color: var(--text-muted);
+}
+
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  font-size: 11.5px;
+}
+
+/* The row's side panel */
+.enquiry-panel {
+  position: sticky;
+  top: 20px;
+}
+.panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.step-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.step-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.step-list li.done {
+  color: var(--text-2);
+}
+.step-list li.now {
+  color: var(--ink);
+  font-weight: 800;
+}
+.step-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--fill-track);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------- New enquiry ---------- */
+.new-enquiry {
+  max-width: 860px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.new-enquiry .page-head {
+  margin-bottom: 4px;
+}
+.enquiry-card {
+  display: grid;
+  gap: 18px;
+}
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mobile-input {
+  height: 42px;
+  max-width: 320px;
+  font-size: 16px;
+}
+.enq-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+/* Single- and multi-select pills: ink when picked, white otherwise (demo). */
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid var(--border-input);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+.pill:hover {
+  border-color: var(--border-input-hover);
+}
+.pill.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-fill);
+}
+.pill:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.pill-lg {
+  height: 36px;
+}
+.pill-off,
+.pill-off:hover {
+  color: var(--text-faint);
+  border-color: var(--border-card);
+  cursor: not-allowed;
+}
+.pill .tag {
+  margin-left: 2px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.stepper .btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 18px;
+  justify-content: center;
+}
+.stepper output {
+  min-width: 28px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.enquiry-actions {
+  display: flex;
+  gap: 10px;
+}
+.btn-lg {
+  height: 44px;
+  padding: 0 22px;
+}
+
+/* "Already has an open case" on the New enquiry form. */
+.open-cases ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.open-cases a {
+  color: inherit;
+  font-weight: 700;
+}
+
+/* Mobile and, for a new number, the client's name side by side. */
+.who-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 320px));
+  gap: 16px;
+  align-items: start;
+}
+.who-fields .mobile-input {
+  max-width: none;
+}

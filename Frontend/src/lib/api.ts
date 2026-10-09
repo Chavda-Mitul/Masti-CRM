@@ -19,11 +19,14 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
  * Calls the backend. Sends cookies (the session) and JSON. Every request declares JSON,
  * which the backend requires for state-changing calls (CSRF protection).
  */
-export async function api<T>(path: string, options: { method?: Method; body?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  options: { method?: Method; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: options.method ?? 'GET',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...options.headers, 'Content-Type': 'application/json' },
     body: options.body === undefined ? null : JSON.stringify(options.body),
   })
 

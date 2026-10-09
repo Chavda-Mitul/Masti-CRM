@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { canEditClients } from '../../auth/permissions'
+import { can, canEditClients } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
 import { formatDate, formatMobile, initials } from '../../lib/format'
@@ -22,6 +22,8 @@ export function ClientDetailPage() {
   const options = useClientOptions()
   const [editing, setEditing] = useState(false)
   const canEdit = me ? canEditClients(me) : false
+  // Only Visa intake is built so far; other departments' intakes come in Stage 2.
+  const canAddEnquiry = me ? can(me, 'VISA', 'EDIT') : false
 
   if (client.isPending) return <div className="muted">Loading…</div>
   if (client.isError) {
@@ -69,9 +71,11 @@ export function ClientDetailPage() {
               Edit details
             </button>
           )}
-          <button className="btn btn-primary" disabled title="Comes with the Enquiries module">
-            New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
-          </button>
+          {canAddEnquiry && (
+            <Link className="btn btn-primary" to={`/enquiries/new?mobile=${encodeURIComponent(c.mobile)}`}>
+              New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
+            </Link>
+          )}
         </div>
       </div>
 

@@ -91,9 +91,13 @@ const stateCode = z.string().trim().refine((code) => STATE_CODES.has(code), "Pic
 const pincode = z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a 6-digit PIN code.");
 const lookupId = z.number().int().positive();
 
+/** Staff always give a name (decided 9 Oct 2026, amending 0004). "" and null are refused, never stored as a clear. */
+const NAME_MESSAGE = "Enter the client's name.";
+const requiredName = z.preprocess(blankToNull, z.string({ error: NAME_MESSAGE }).trim().min(1, NAME_MESSAGE).max(150));
+
 const clientFields = {
   kind: z.enum(ClientKind).optional(),
-  name: clearable(text(150)),
+  name: requiredName.optional(),
   contactPerson: clearable(text(150)),
   email: clearable(text(200)),
   addressLine: clearable(text(300)),
@@ -114,6 +118,7 @@ const clientFields = {
 export const createClientSchema = z.object({
   mobile: mobile.min(1, "Enter the mobile number."),
   ...clientFields,
+  name: requiredName,
 });
 
 export const updateClientSchema = z.object({ ...clientFields, updatedAt });

@@ -5,19 +5,21 @@ import { useMe } from '../../../../auth/useAuth'
 import { CountriesTable } from './CountriesTable'
 import { DocumentsTable } from './DocumentsTable'
 import { EmbassiesTable } from './EmbassiesTable'
+import { EnquirySourcesTable } from './EnquirySourcesTable'
 import { VisaTypesTable } from './VisaTypesTable'
 
-type ListTab = 'countries' | 'visa-types' | 'embassies' | 'documents'
+type ListTab = 'countries' | 'visa-types' | 'embassies' | 'documents' | 'enquiry-sources'
 
 const TABS: { value: ListTab; label: string; visa: boolean }[] = [
   { value: 'countries', label: 'Countries', visa: true },
   { value: 'visa-types', label: 'Visa types', visa: true },
   { value: 'embassies', label: 'Embassies & visa centres', visa: false },
   { value: 'documents', label: 'Documents', visa: true },
+  { value: 'enquiry-sources', label: 'Enquiry sources', visa: true },
 ]
 
 /**
- * The small master lists, one tab each (?tab=…). Countries, visa types and documents are the Visa department's
+ * The small master lists, one tab each (?tab=…). Countries, visa types, documents and enquiry sources are the Visa department's
  * (read with Visa access, changed by the Visa HOD or the Head); embassies are shared (changed by any HOD).
  */
 export function MasterListsPage() {
@@ -71,6 +73,7 @@ export function MasterListsPage() {
       {tab === 'visa-types' && <VisaTypesTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'embassies' && <EmbassiesTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'documents' && <DocumentsTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'enquiry-sources' && <EnquirySourcesTable canEdit={canEdit} showInactive={showInactive} />}
     </>
   )
 }

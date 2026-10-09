@@ -14,14 +14,19 @@ datasource db {
 
 /// Rows, not an enum, so Phase-2 departments (Transport, Cruise) can be added without a migration.
 model Department {
-  id        Int              @id @default(autoincrement())
-  code      String           @unique
-  name      String
-  sortOrder Int              @default(0)
-  isActive  Boolean          @default(true)
-  createdAt DateTime         @default(now()) @db.Timestamptz(3)
-  members   UserDepartment[]
-  fieldJobs FieldJob[]
+  id           Int               @id @default(autoincrement())
+  code         String            @unique
+  name         String
+  /// Case numbers are {casePrefix}-{YYYY}-{NNNN} (VISA-2026-0001). Data, not code (§17 #21).
+  casePrefix   String            @unique
+  sortOrder    Int               @default(0)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  members      UserDepartment[]
+  fieldJobs    FieldJob[]
+  stages       DepartmentStage[]
+  caseCounters CaseCounter[]
+  enquiries    Enquiry[]
 }
 
 /// What kind of account this is. It decides which app the user can open.
@@ -46,28 +51,31 @@ enum Access {
 }
 
 model User {
-  id                 String           @id @default(uuid())
+  id                 String             @id @default(uuid())
   name               String
   /// Stored normalised as +91XXXXXXXXXX. A user needs a mobile, an email, or both. FIELD users need a mobile.
-  mobile             String?          @unique
+  mobile             String?            @unique
   /// Stored lowercased.
-  email              String?          @unique
+  email              String?            @unique
   passwordHash       String
-  type               UserType         @default(OFFICE)
-  isActive           Boolean          @default(true)
-  mustChangePassword Boolean          @default(true)
-  lastLoginAt        DateTime?        @db.Timestamptz(3)
-  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+  type               UserType           @default(OFFICE)
+  isActive           Boolean            @default(true)
+  mustChangePassword Boolean            @default(true)
+  lastLoginAt        DateTime?          @db.Timestamptz(3)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
   departments        UserDepartment[]
   sessions           Session[]
   auditEntries       AuditLog[]
-  assignedFieldJobs  FieldJob[]       @relation("FieldJobAssignee")
-  clientsCreated     Client[]         @relation("ClientCreatedBy")
-  clientPhonesAdded  ClientPhone[]    @relation("ClientPhoneCreatedBy")
-  clientMembersAdded ClientMember[]   @relation("ClientMemberCreatedBy")
-  clientNotes        ClientNote[]     @relation("ClientNoteAuthor")
-  holidaysAdded      Holiday[]        @relation("HolidayAddedBy")
+  assignedFieldJobs  FieldJob[]         @relation("FieldJobAssignee")
+  clientsCreated     Client[]           @relation("ClientCreatedBy")
+  clientPhonesAdded  ClientPhone[]      @relation("ClientPhoneCreatedBy")
+  clientMembersAdded ClientMember[]     @relation("ClientMemberCreatedBy")
+  clientNotes        ClientNote[]       @relation("ClientNoteAuthor")
+  holidaysAdded      Holiday[]          @relation("HolidayAddedBy")
+  enquiriesOwned     Enquiry[]          @relation("EnquiryOwner")
+  enquiriesCreated   Enquiry[]          @relation("EnquiryCreatedBy")
+  documentsReceived  VisaCaseDocument[] @relation("DocumentReceivedBy")
 
   @@index([type, isActive])
 }
@@ -240,6 +248,7 @@ model Client {
   phones         ClientPhone[]
   members        ClientMember[]
   notes          ClientNote[]
+  enquiries      Enquiry[]
 
   @@index([name])
   @@index([pan])
@@ -447,6 +456,7 @@ model VisaOffering {
   country    Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
   visaType   VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
   checklist  VisaChecklistItem[]
+  cases      VisaCase[]
 
   @@unique([countryId, visaTypeId])
 }
@@ -465,6 +475,7 @@ model DocumentMaster {
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
   checklistItems VisaChecklistItem[]
+  caseDocuments  VisaCaseDocument[]
 }
 
 /// What we need. Code branches on it (Original/Xerox toggle, "Made" for things we arrange), so an enum.
@@ -499,6 +510,182 @@ model VisaChecklistItem {
 
   @@unique([offeringId, documentId])
   @@index([documentId])
+}
+
+// ---------------------------------------------------------------------------
+// Enquiries (shared by every department). See docs/decisions/0003-visa-intake.md.
+// ---------------------------------------------------------------------------
+
+/// A department's steps, in order. The labels are demo wording ⚠️, so they live here, not in code.
+model DepartmentStage {
+  id            Int        @id @default(autoincrement())
+  departmentId  Int
+  /// Stable key the code uses: "ENQUIRY", "DOCUMENTS"… Never changes.
+  code          String
+  /// "Enquiry"
+  name          String
+  /// 1, 2, 3…: the step number shown as "1/8".
+  sortOrder     Int
+  /// The status chip while a case is at this step: "Documents pending".
+  statusLabel   String
+  /// The next-step button: "Start collecting documents".
+  nextStepLabel String
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  enquiries     Enquiry[]
+
+  @@unique([departmentId, code])
+  @@unique([departmentId, sortOrder])
+}
+
+/// The last case number issued, per department per calendar year (IST). Bumped in the enquiry's own transaction,
+/// so two saves never share a number and a failed save doesn't use one up.
+model CaseCounter {
+  departmentId Int
+  year         Int
+  lastValue    Int        @default(0)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@id([departmentId, year])
+}
+
+/// Code branches on it (lists, Today, reports), so an enum. Postpone/cancel *reasons* will be a master table.
+enum EnquiryStatus {
+  OPEN
+  POSTPONED
+  CANCELLED
+  LOST
+  CLOSED
+}
+
+/// What created the row. Not the same as the source (how the client reached us).
+enum EnquiryOrigin {
+  STAFF
+  WHATSAPP_BOT
+  WEBSITE_FORM
+  CROSS_SELL
+  IMPORT
+}
+
+/// "Came in through". Master data, edited in Settings → Masters.
+model EnquirySource {
+  id              Int       @id @default(autoincrement())
+  /// WHATSAPP, LANDLINE, MOBILE, SOCIAL_MEDIA, EMAIL, WEBSITE_FORM… Never changes.
+  code            String    @unique
+  name            String
+  sortOrder       Int       @default(0)
+  isActive        Boolean   @default(true)
+  /// False for sources only integrations set (Website form, WhatsApp bot); hidden on the staff form.
+  staffSelectable Boolean   @default(true)
+  enquiries       Enquiry[]
+}
+
+model Enquiry {
+  id             String          @id @default(uuid())
+  /// VISA-2026-0001. Never changes once issued.
+  caseNo         String          @unique
+  departmentId   Int
+  clientId       String
+  sourceId       Int
+  origin         EnquiryOrigin   @default(STAFF)
+  /// A repeat request with the same key returns this enquiry instead of creating another.
+  idempotencyKey String?         @unique
+  stageId        Int
+  status         EnquiryStatus   @default(OPEN)
+  /// "Whose job it is now". Null = not assigned yet (e.g. a future bot enquiry).
+  ownerId        String?
+  /// When someone must next act on it: the list order, Today, the follow-up desk and "running late".
+  dueAt          DateTime?       @db.Timestamptz(3)
+  /// Null when an integration created it.
+  createdById    String?
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  client         Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  source         EnquirySource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  stage          DepartmentStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner          User?           @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy      User?           @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  visa           VisaCase?
+
+  @@index([status, dueAt])
+  @@index([departmentId, status, dueAt])
+  @@index([ownerId, status, dueAt])
+  @@index([clientId])
+}
+
+// ---------------------------------------------------------------------------
+// Visa cases: the visa part of an Enquiry (same id)
+// ---------------------------------------------------------------------------
+
+/// Traveller counts come from the VisaCaseTraveller rows.
+/// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month.
+model VisaCase {
+  enquiryId   String              @id
+  offeringId  Int
+  /// The month they plan to travel, stored as the 1st (M9).
+  travelMonth DateTime            @db.Date
+  /// The exact date, if the client knows it at intake.
+  travelDate  DateTime?           @db.Date
+  enquiry     Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  offering    VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  travellers  VisaCaseTraveller[]
+
+  @@index([offeringId])
+}
+
+/// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2,
+/// which also links them to the client's family member.
+model VisaCaseTraveller {
+  id        String             @id @default(uuid())
+  caseId    String
+  /// 1, 2, 3… Adults first, then children.
+  position  Int
+  isChild   Boolean
+  /// Passport name. Filled in Step 2.
+  name      String?
+  visaCase  VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  documents VisaCaseDocument[]
+
+  @@unique([caseId, position])
+}
+
+enum DocumentStatus {
+  PENDING
+  RECEIVED
+  /// For ARRANGED_BY_US items.
+  MADE
+  NOT_NEEDED
+}
+
+enum ReceivedAs {
+  ORIGINAL
+  XEROX
+}
+
+/// A traveller's copy of a checklist line. The name, detail, requirement, quantity and note are copied,
+/// so editing the master never changes an open case.
+model VisaCaseDocument {
+  id           String              @id @default(uuid())
+  travellerId  String
+  /// Kept for reports ("which document is pending most often").
+  documentId   Int
+  name         String
+  detail       String?
+  requirement  DocumentRequirement
+  quantity     Int                 @default(1) @db.SmallInt
+  note         String?
+  sortOrder    Int
+  status       DocumentStatus      @default(PENDING)
+  // Filled in Step 2, when the paper is scanned in the office:
+  receivedAs   ReceivedAs?
+  receivedAt   DateTime?           @db.Timestamptz(3)
+  receivedById String?
+  traveller    VisaCaseTraveller   @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  document     DocumentMaster      @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  receivedBy   User?               @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+
+  @@unique([travellerId, documentId])
+  @@index([documentId, status])
 }
 
 // ---------------------------------------------------------------------------

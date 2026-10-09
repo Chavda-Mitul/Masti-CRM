@@ -65,10 +65,10 @@ export function MemberFormDrawer({
 
           <div className="pad drawer-body">
             <div className="form-grid">
-              <FormField label="Name as in passport" error={errors.name?.message} wide>
+              <FormField label="Name as in passport" required error={errors.name?.message} wide>
                 <input className="input" {...register('name')} placeholder="Priya Rajesh Patel" autoFocus />
               </FormField>
-              <FormField label="Relation" error={errors.relationId?.message}>
+              <FormField label="Relation" required error={errors.relationId?.message}>
                 <select className="select" {...register('relationId')}>
                   <option value="">Pick…</option>
                   {options.relations.map((r) => (

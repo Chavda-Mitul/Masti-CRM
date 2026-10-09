@@ -2,11 +2,13 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { api } from '../../../lib/api'
 import { isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
+import { enquiryKeys } from '../../enquiries/queries'
 import type {
   Checklist,
   ChecklistLineBody,
   Country,
   DocumentMaster,
+  EnquirySource,
   Embassy,
   Holiday,
   HolidayBody,
@@ -120,7 +122,7 @@ export function useRemoveHoliday() {
 }
 
 // ---------------------------------------------------------------------------
-// The four small lists
+// The small lists
 // ---------------------------------------------------------------------------
 
 interface MasterRow {
@@ -128,11 +130,24 @@ interface MasterRow {
   'visa-types': VisaType
   embassies: Embassy
   documents: DocumentMaster
+  'enquiry-sources': EnquirySource
 }
 
 /** The JSON key each list and save comes back under. */
-const LIST_KEY = { countries: 'countries', 'visa-types': 'visaTypes', embassies: 'embassies', documents: 'documents' } as const
-const ITEM_KEY = { countries: 'country', 'visa-types': 'visaType', embassies: 'embassy', documents: 'document' } as const
+const LIST_KEY = {
+  countries: 'countries',
+  'visa-types': 'visaTypes',
+  embassies: 'embassies',
+  documents: 'documents',
+  'enquiry-sources': 'sources',
+} as const
+const ITEM_KEY = {
+  countries: 'country',
+  'visa-types': 'visaType',
+  embassies: 'embassy',
+  documents: 'document',
+  'enquiry-sources': 'source',
+} as const
 
 /** Every row, switched-off ones too: the screens filter. */
 export function useMasterList<R extends MasterResource>(resource: R, enabled = true) {
@@ -158,6 +173,11 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       if (resource === 'countries' || resource === 'embassies') {
         void queryClient.invalidateQueries({ queryKey: holidayKeys.all })
         void queryClient.invalidateQueries({ queryKey: masterKeys.list('embassies') })
+      }
+      if (resource === 'enquiry-sources') {
+        // The New enquiry form's "Came in through" chips.
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })
+        return
       }
       if (resource !== 'embassies') {
         void queryClient.invalidateQueries({ queryKey: masterKeys.offerings })

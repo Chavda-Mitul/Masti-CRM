@@ -6,6 +6,7 @@ import {
   createCountrySchema,
   createDocumentSchema,
   createEmbassySchema,
+  createEnquirySourceSchema,
   createOfferingSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
@@ -14,6 +15,7 @@ import {
   updateCountrySchema,
   updateDocumentSchema,
   updateEmbassySchema,
+  updateEnquirySourceSchema,
   updateOfferingSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
@@ -84,6 +86,20 @@ router.post("/documents", visaEdit, async (req, res) => {
 router.patch("/documents/:id", visaEdit, async (req, res) => {
   const body = updateDocumentSchema.parse(req.body);
   res.json({ document: await mastersService.updateDocument(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Enquiry sources ("Came in through")
+router.get("/enquiry-sources", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ sources: await mastersService.listEnquirySources(active) });
+});
+router.post("/enquiry-sources", visaEdit, async (req, res) => {
+  const body = createEnquirySourceSchema.parse(req.body);
+  res.status(201).json({ source: await mastersService.createEnquirySource(body, actorOf(req)) });
+});
+router.patch("/enquiry-sources/:id", visaEdit, async (req, res) => {
+  const body = updateEnquirySourceSchema.parse(req.body);
+  res.json({ source: await mastersService.updateEnquirySource(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Offerings (country × visa type) and their checklists

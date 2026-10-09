@@ -1,6 +1,6 @@
 /**
  * Seeds the departments, the client lookup tables and settings, the system masters (dummy visa masters, the weekly
- * Sunday off, holiday settings), and the first Head user.
+ * Sunday off, holiday settings), the enquiry sources and visa steps, and the first Head user.
  *   npm run db:seed
  * Head details come from SEED_HEAD_NAME, SEED_HEAD_MOBILE, SEED_HEAD_EMAIL, SEED_HEAD_PASSWORD (Backend/.env).
  * If no password is given, a temporary one is generated and printed once. Safe to run again.
@@ -13,6 +13,8 @@ import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/modules/auth/
 import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
+import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { DEFAULT_FIRST_FOLLOW_UP, FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
 import {
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
@@ -23,12 +25,12 @@ import { prisma } from "../src/config/prisma";
 import { audit } from "../src/lib/audit";
 
 const DEPARTMENTS = [
-  { code: "VISA", name: "Visa", sortOrder: 1 },
-  { code: "HOLIDAYS", name: "Holidays", sortOrder: 2 },
-  { code: "HOTELS", name: "Hotels", sortOrder: 3 },
-  { code: "INSURANCE", name: "Insurance", sortOrder: 4 },
-  { code: "TICKETS", name: "Tickets", sortOrder: 5 },
-  { code: "ACCOUNTS", name: "Accounts", sortOrder: 6 },
+  { code: "VISA", name: "Visa", casePrefix: "VISA", sortOrder: 1 },
+  { code: "HOLIDAYS", name: "Holidays", casePrefix: "HOL", sortOrder: 2 },
+  { code: "HOTELS", name: "Hotels", casePrefix: "HOT", sortOrder: 3 },
+  { code: "INSURANCE", name: "Insurance", casePrefix: "INS", sortOrder: 4 },
+  { code: "TICKETS", name: "Tickets", casePrefix: "TKT", sortOrder: 5 },
+  { code: "ACCOUNTS", name: "Accounts", casePrefix: "ACC", sortOrder: 6 },
 ];
 
 async function main() {
@@ -57,6 +59,15 @@ async function main() {
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
   console.log("Visa masters (France Tourist dummy), the weekly Sunday off and holiday settings ready.");
+
+  // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
+  await seedEnquiryMasters(prisma);
+  await prisma.setting.upsert({
+    where: { key: FIRST_FOLLOW_UP_KEY },
+    update: {},
+    create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
+  });
+  console.log("Enquiry sources, visa steps and visa follow-up timing ready.");
 
   if (await prisma.user.findFirst({ where: { type: "HEAD" } })) {
     console.log("A Head user already exists. Skipping.");

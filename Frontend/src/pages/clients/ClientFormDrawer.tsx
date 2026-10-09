@@ -13,7 +13,7 @@ import type { ClientFieldsBody, ClientOptions, ClientProfile } from './types'
 import { useDuplicateGuard } from './useDuplicateGuard'
 
 /**
- * Add a client (only the mobile is needed) or edit one's details.
+ * Add a client (the mobile and the name are needed) or edit one's details.
  * Editing sends only changed fields with the updatedAt it loaded (optimistic locking).
  * Accounting code, billing cycle and payment habit are read-only unless the user is in Accounts (or Head).
  */
@@ -88,8 +88,10 @@ export function ClientFormDrawer({
             <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name ?? 'client'}`}</h2>
             <p className="muted">
               {isNew
-                ? 'Only the mobile number is needed now. The rest can be completed before invoicing.'
-                : 'Only what you change is saved.'}
+                ? 'The mobile number and name are needed now (marked *). The rest can be completed before invoicing.'
+                : client.name
+                  ? 'Only what you change is saved.'
+                  : 'This client has no name yet. Enter it to save any change.'}
             </p>
           </div>
 
@@ -107,16 +109,22 @@ export function ClientFormDrawer({
 
             <div className="form-grid">
               {isNew ? (
-                <FormField label="Mobile number" error={errors.mobile?.message} hint="The main number: client lookup and WhatsApp.">
-                  <input className="input mono" {...register('mobile')} placeholder="98250 41234" autoFocus inputMode="tel" />
+                <FormField label="Mobile number" required error={errors.mobile?.message} hint="The main number: client lookup and WhatsApp.">
+                  <input className="input mono" {...register('mobile')} placeholder="98250 41234" autoFocus inputMode="tel" aria-required />
                 </FormField>
               ) : (
-                <FormField label="Mobile number" hint="Change it from the Numbers card.">
+                <FormField label="Mobile number" required hint="Change it from the Numbers card.">
                   <input className="input mono" value={form.getValues('mobile')} readOnly disabled />
                 </FormField>
               )}
-              <FormField label={kind === 'CORPORATE' ? 'Company name' : 'Name'} error={errors.name?.message}>
-                <input className="input" {...register('name')} placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'} />
+              <FormField label={kind === 'CORPORATE' ? 'Company name' : 'Name'} required error={errors.name?.message}>
+                <input
+                  className="input"
+                  {...register('name')}
+                  placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'}
+                  autoFocus={!isNew && !client.name}
+                  aria-required
+                />
               </FormField>
               {kind === 'CORPORATE' && (
                 <FormField label="Contact person" error={errors.contactPerson?.message} hint="The person we deal with.">

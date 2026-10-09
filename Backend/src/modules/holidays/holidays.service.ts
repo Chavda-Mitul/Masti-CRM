@@ -4,6 +4,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { saveSetting } from "../../lib/settings";
 import { isHodOfAny } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { blockedDays, type BlockTarget } from "./blockedDays";
@@ -290,12 +291,6 @@ export async function updateSettings(input: UpdateHolidaySettingsInput, actor: A
   const before = await getHolidaySettings();
   const after = { ...before, ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };
   if (JSON.stringify(after) === JSON.stringify(before)) return before;
-  await prisma.$transaction(async (tx) => {
-    await tx.setting.upsert({ where: { key: HOLIDAY_SETTINGS_KEY }, update: { value: after }, create: { key: HOLIDAY_SETTINGS_KEY, value: after } });
-    await audit(
-      { actorId: actor.user.id, action: "setting.update", entityType: "Setting", entityId: HOLIDAY_SETTINGS_KEY, before, after, ip: actor.ip },
-      tx,
-    );
-  });
+  await prisma.$transaction((tx) => saveSetting(tx, { key: HOLIDAY_SETTINGS_KEY, before, after, actorId: actor.user.id, ip: actor.ip }));
   return getHolidaySettings();
 }

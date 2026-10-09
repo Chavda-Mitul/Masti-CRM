@@ -61,7 +61,8 @@ const optionalPassport = z
 
 const clientFields = {
   kind: z.enum(['INDIVIDUAL', 'CORPORATE']),
-  name: text(150),
+  /** Required for every client staff save (decided 9 Oct 2026). */
+  name: text(150).min(1, "Enter the client's name."),
   contactPerson: text(150),
   email: optionalEmail,
   addressLine: text(300),
