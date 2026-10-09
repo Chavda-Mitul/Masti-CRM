@@ -1651,6 +1651,16 @@ Masti CRM/
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
+**Decided 9 Oct 2026 (project lead), before Visa Step 2 (Documents).**
+- **Follow-ups belong to the person assigned to the case**, who sees only their own (as in other CRMs). The department's HOD sees all of the department's cases and follow-ups and can reassign them; the Head sees everything. This settles Q2/M4 for our side (still confirm with Vimal).
+- **At maturity ("Mark documents complete") the case is handed to a processor the HOD picks**, as in the demo. The follow-up person scans; the processor checks.
+- **Step 2 includes:** the per-traveller checklist (naming travellers), the follow-up log (three dropdowns) with "My follow-ups", postpone/cancel with fixed reasons, a consent flag per traveller (the "I agree" link waits for WhatsApp), and booklets received plus how documents arrive (the collection boy's job waits for the field app).
+- **Document storage is open again: an S3 bucket or Drive**, decided later (changes golden rule 4, which assumed Drive/OneDrive links only). Step 2 is built without storing files; don't build anything that assumes links only.
+- **WhatsApp templates:** we draft them in **English** and show the client; they go to Meta after the client approves. Replaces waiting for Vimal's wording (Q8/M1).
+- **Invoice number series:** our choice, kept as a setting (not hard-coded). M7's "continue the current series" is dropped.
+- **Docket and dispatch (Q1):** the project lead takes it to the client. Not built yet.
+- **Payment/advance (S1):** not a blocker.
+
 **Decided 8 Oct 2026 (project lead), for the client master.** Details are in §10.1; the design is `docs/decisions/0004-client-master.md`.
 - The client master is built **before** the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
 - Clients get extra mobile numbers, a GSTIN and a PAN (typed, not verified). "Complete before invoicing" is a setting, not code.

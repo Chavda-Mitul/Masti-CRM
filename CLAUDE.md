@@ -52,7 +52,7 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 1. **The demo is the scope, not the spec.** Values marked ⚠️ (intervals, %, windows, wording) become configurable master data seeded with the demo value. Never hard-code them.
 2. **No free text** for reasons, outcomes or statuses. Use dropdowns backed by admin-editable master tables. Reports read only structured fields.
 3. **Invoices** are generated from the quote breakup and **never edited**. Corrections go only through a credit note or the one additional invoice allowed per visa file. This is not accounting software.
-4. **Documents are Drive/OneDrive links**, not uploads. Clients never upload; scanning happens in the office.
+4. **Document storage is undecided: an S3 bucket or Drive** (reopened 9 Oct 2026; it was Drive/OneDrive links only). Don't build anything that assumes one or the other until it's decided. Clients never upload; scanning happens in the office.
 5. **Audit everything:** who and when (to the minute), plus GPS for field actions.
 6. **Roles are Staff → HOD → Head**, scoped by department. HOD-only: refund override, vendor approval, portal password reset. Disabling a user ends all of their access.
 7. **Client updates go out automatically on WhatsApp** (Business API with approved templates), triggered by state changes.
