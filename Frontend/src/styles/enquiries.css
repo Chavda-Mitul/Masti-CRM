@@ -170,6 +170,26 @@
   position: sticky;
   top: 20px;
 }
+/*
+ * Below about 1280px (a laptop) the table and the 340px panel don't both fit: the client column collapsed to a word
+ * per line and the Who column was cut off. There the panel floats over the right of the list instead, and the
+ * table keeps its full width.
+ */
+@media (max-width: 1279px) {
+  .enquiries-layout.with-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .with-panel .enquiry-panel {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: min(340px, calc(100vw - 32px));
+    overflow-y: auto;
+    z-index: 20;
+    box-shadow: var(--shadow-pop);
+  }
+}
 .panel-top {
   display: flex;
   align-items: center;
