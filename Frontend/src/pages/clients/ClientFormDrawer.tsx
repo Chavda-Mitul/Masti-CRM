@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link } from 'react-router'
 import { canEditAccountsFields } from '../../auth/permissions'
@@ -30,6 +31,9 @@ export function ClientFormDrawer({
   const { data: me } = useMe()
   const canEditAccounts = me ? canEditAccountsFields(me) : false
   const isNew = client === null
+  // The version this form was opened on. `client` refreshes in the background (e.g. on window focus), and sending
+  // its newer updatedAt would let this save silently overwrite someone else's change instead of reporting a conflict.
+  const [openedAt] = useState(client?.updatedAt)
 
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
@@ -58,7 +62,7 @@ export function ClientFormDrawer({
       )
     } else {
       update.mutate(
-        { ...body, updatedAt: client.updatedAt },
+        { ...body, updatedAt: openedAt ?? client.updatedAt },
         { onSuccess: onSaved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
       )
     }

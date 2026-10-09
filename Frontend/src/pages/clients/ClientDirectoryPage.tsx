@@ -19,9 +19,18 @@ export function ClientDirectoryPage() {
   const { data: me } = useMe()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const [search, setSearch] = useState(params.get('q') ?? '')
+  const urlQ = params.get('q') ?? ''
+  const [search, setSearch] = useState(urlQ)
   const [adding, setAdding] = useState(false)
   const q = useDebouncedValue(search.trim(), 300)
+
+  // The URL can change without remounting this page (Back/Forward, the sidebar's Clients link): follow it.
+  // When it changes because of the mirror below, it already equals q and nothing happens.
+  const [seenUrlQ, setSeenUrlQ] = useState(urlQ)
+  if (urlQ !== seenUrlQ) {
+    setSeenUrlQ(urlQ)
+    if (urlQ !== q) setSearch(urlQ)
+  }
 
   const filters: ClientListFilters = {
     q,

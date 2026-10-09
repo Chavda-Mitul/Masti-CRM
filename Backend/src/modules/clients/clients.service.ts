@@ -2,11 +2,13 @@ import { Prisma, type Client } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { istToday, toDbDate } from "../../lib/dates";
+import { cleanEmail, normaliseMobile } from "../../lib/contact";
 import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
-import { normaliseMobile } from "../auth/identifier";
-import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients, type Actor } from "./access";
-import { assertFresh, onlyChanged, pick, staleError } from "./changes";
-import { cleanEmail, clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
+import { rethrowUnique } from "../../lib/prismaErrors";
+import type { Actor } from "../users/user";
+import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
+import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
+import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
 import {
   GST_STATES,
   type AddNoteInput,
@@ -82,12 +84,7 @@ async function getClientRowOr404(id: string) {
 }
 
 /** Fallback if two requests race past the checks. */
-function rethrowUnique(err: unknown): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-    throw conflict("This mobile number or accounting code is already used by another client.");
-  }
-  throw err;
-}
+const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code is already used by another client.");
 
 /**
  * Turns the request into column changes and applies the cross-field rules:
@@ -297,6 +294,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
           action: "client.create",
           entityType: "Client",
           entityId: client.id,
+          clientId: client.id,
           after: { ...client, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
         },
@@ -304,7 +302,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
       );
       return client;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(created.id);
 }
@@ -334,6 +332,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
           action: "client.update",
           entityType: "Client",
           entityId: id,
+          clientId: id,
           before: pick(before, keys),
           after: { ...pick(after, keys), ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
@@ -341,7 +340,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
         tx,
       );
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(id);
 }
@@ -356,6 +355,14 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
   const owner = await prisma.client.findUnique({ where: { mobile }, select: { id: true } });
   if (owner) {
     throw new HttpError(409, "This number is already the main number of another client.", { code: "CLIENT_EXISTS", clientId: owner.id });
+  }
+  if (input.keepOldAsSecondary) {
+    // The new main number leaves the extra list if it was on it; the old main number joins it.
+    const phones = await prisma.clientPhone.findMany({ where: { clientId: id }, select: { mobile: true } });
+    const extrasAfter = phones.filter((p) => p.mobile !== mobile).length + 1;
+    if (extrasAfter > MAX_EXTRA_PHONES) {
+      throw badRequest(`A client can have at most ${MAX_EXTRA_PHONES} extra numbers. Remove one, or don't keep the old main number.`);
+    }
   }
   const confirmed = checkDuplicates([await findMobileDuplicates(mobile, id)], input.confirmDuplicates);
 
@@ -373,6 +380,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
           action: "client.mobile.change",
           entityType: "Client",
           entityId: id,
+          clientId: id,
           before: { mobile: before.mobile },
           after: { mobile, keptOldAsSecondary: input.keepOldAsSecondary, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
@@ -380,7 +388,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
         tx,
       );
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return getClient(id);
 }
@@ -406,6 +414,7 @@ export async function addPhone(clientId: string, input: AddPhoneInput, actor: Ac
           action: "client.phone.add",
           entityType: "ClientPhone",
           entityId: created.id,
+          clientId: clientId,
           after: { ...created, ...confirmedDuplicatesNote(confirmed) },
           ip: actor.ip,
         },
@@ -413,7 +422,7 @@ export async function addPhone(clientId: string, input: AddPhoneInput, actor: Ac
       );
       return created;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueClient);
 
   return toPhoneDto(phone);
 }
@@ -426,7 +435,7 @@ export async function removePhone(clientId: string, phoneId: string, actor: Acto
   await prisma.$transaction(async (tx) => {
     await tx.clientPhone.delete({ where: { id: phone.id } });
     await audit(
-      { actorId: actor.user.id, action: "client.phone.remove", entityType: "ClientPhone", entityId: phone.id, before: phone, ip: actor.ip },
+      { actorId: actor.user.id, action: "client.phone.remove", entityType: "ClientPhone", entityId: phone.id, clientId, before: phone, ip: actor.ip },
       tx,
     );
   });
@@ -454,6 +463,7 @@ export async function addNote(clientId: string, input: AddNoteInput, actor: Acto
         action: "client.note.add",
         entityType: "ClientNote",
         entityId: created.id,
+        clientId: clientId,
         after: { clientId, body: created.body },
         ip: actor.ip,
       },

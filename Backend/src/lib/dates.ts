@@ -42,3 +42,19 @@ export function wholeYearsBetween(from: string, to: string): number {
   const years = ty - fy;
   return tm < fm || (tm === fm && td < fd) ? years - 1 : years;
 }
+
+/** "2026-10-08" plus 3 days → "2026-10-11". Negative days go back. */
+export function addDays(value: string, days: number): string {
+  const [y, m, d] = parts(value);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
+export function daysInclusive(from: string, to: string): number {
+  return Math.round((toDbDate(to).getTime() - toDbDate(from).getTime()) / 86_400_000) + 1;
+}
+
+/** ISO weekday of a date: 1 = Monday … 7 = Sunday. */
+export function isoWeekday(value: string): number {
+  return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;
+}

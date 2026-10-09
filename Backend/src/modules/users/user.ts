@@ -10,7 +10,16 @@ export const withDepartments = {
 
 export type UserWithDepartments = Prisma.UserGetPayload<{ include: typeof withDepartments }>;
 
-/** The shape of a user sent to the browser. Never includes the password hash. */
+/** Who is making a change, for permission rules and the audit log. Routes build it with actorOf(req). */
+export interface Actor {
+  user: UserWithDepartments;
+  ip: string | null;
+}
+
+/**
+ * The shape of a user sent to the browser. Never includes the password hash.
+ * Memberships of switched-off departments are left out: they grant nothing (see can()), so the screens must not offer them.
+ */
 export function toUserDto(user: UserWithDepartments) {
   return {
     id: user.id,
@@ -22,12 +31,14 @@ export function toUserDto(user: UserWithDepartments) {
     mustChangePassword: user.mustChangePassword,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
-    departments: user.departments.map((d) => ({
-      code: d.department.code,
-      name: d.department.name,
-      role: d.role,
-      access: d.access,
-    })),
+    departments: user.departments
+      .filter((d) => d.department.isActive)
+      .map((d) => ({
+        code: d.department.code,
+        name: d.department.name,
+        role: d.role,
+        access: d.access,
+      })),
   };
 }
 

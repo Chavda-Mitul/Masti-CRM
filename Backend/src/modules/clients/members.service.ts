@@ -1,11 +1,13 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { cleanMobile } from "../../lib/contact";
 import { istToday, toDbDate } from "../../lib/dates";
 import { badRequest, notFound } from "../../lib/httpError";
-import { assertCanEditClients, type Actor } from "./access";
-import { assertFresh, onlyChanged, pick, staleError } from "./changes";
-import { cleanMobile, toMemberDto } from "./client";
+import type { Actor } from "../users/user";
+import { assertCanEditClients } from "./access";
+import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
+import { toMemberDto } from "./client";
 import type { CreateMemberInput, UpdateMemberInput } from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";
 import { checkDuplicates, confirmedDuplicatesNote, findPassportDuplicates } from "./duplicates";
@@ -70,6 +72,7 @@ export async function createMember(clientId: string, input: CreateMemberInput, a
         action: "client.member.create",
         entityType: "ClientMember",
         entityId: created.id,
+        clientId: clientId,
         after: { ...created, ...confirmedDuplicatesNote(confirmed) },
         ip: actor.ip,
       },
@@ -119,6 +122,7 @@ export async function updateMember(clientId: string, memberId: string, input: Up
         action: "client.member.update",
         entityType: "ClientMember",
         entityId: memberId,
+        clientId: clientId,
         before: pick(before, keys),
         after: { ...pick(updated, keys), ...confirmedDuplicatesNote(confirmed) },
         ip: actor.ip,
@@ -145,6 +149,7 @@ export async function archiveMember(clientId: string, memberId: string, actor: A
         action: "client.member.archive",
         entityType: "ClientMember",
         entityId: memberId,
+        clientId: clientId,
         before: { archivedAt: null },
         after: { archivedAt: updated.archivedAt },
         ip: actor.ip,

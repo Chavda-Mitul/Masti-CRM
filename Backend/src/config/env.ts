@@ -14,6 +14,9 @@ const envSchema = z.object({
   SESSION_MAX_DAYS: z.coerce.number().positive().default(7),
   // A session opened with a temporary password ends after this many minutes if the password isn't changed.
   TEMP_PASSWORD_SESSION_MINUTES: z.coerce.number().positive().default(15),
+  // Send the session cookie over HTTPS only. "auto" = only in production.
+  // Set "false" only if the CRM is served over plain HTTP (e.g. inside the office network); the browser drops a secure cookie there and login fails.
+  COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -26,6 +29,8 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 export const isProduction = env.NODE_ENV === "production";
+
+export const cookieSecure = env.COOKIE_SECURE === "auto" ? isProduction : env.COOKIE_SECURE === "true";
 
 /** Value for Express's "trust proxy" setting, parsed from TRUST_PROXY. */
 export function trustProxySetting(): boolean | number | string {

@@ -6,11 +6,15 @@ import morgan from "morgan";
 import { env, trustProxySetting } from "./config/env";
 import { apiNotFound, errorHandler } from "./middleware/error";
 import { requireJson } from "./middleware/requireJson";
+import apiClientRoutes from "./modules/apiClients/apiClients.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import clientRoutes from "./modules/clients/clients.routes";
 import departmentRoutes from "./modules/departments/departments.routes";
 import healthRoutes from "./modules/health/health.routes";
+import holidayRoutes from "./modules/holidays/holidays.routes";
+import inboundRoutes from "./modules/inbound/inbound.routes";
 import userRoutes from "./modules/users/users.routes";
+import visaMasterRoutes from "./modules/visaMasters/visaMasters.routes";
 
 const app = express();
 
@@ -28,6 +32,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/clients", clientRoutes);
+app.use("/api/holidays", holidayRoutes);
+app.use("/api/masters", visaMasterRoutes);
+app.use("/api/api-clients", apiClientRoutes);
+// Machine-to-machine (API key, no session): docs/decisions/0005-system-masters.md §5
+app.use("/api/inbound", inboundRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);

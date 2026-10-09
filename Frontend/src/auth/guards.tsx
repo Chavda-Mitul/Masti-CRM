@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
+import { ApiError } from '../lib/api'
 import { useMe } from './useAuth'
 
 function Centered({ children }: { children: ReactNode }) {
@@ -8,14 +9,16 @@ function Centered({ children }: { children: ReactNode }) {
 
 /** Signed-in users only. Sends users with a temporary password to the change-password page first. */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { data: user, isPending, isError } = useMe()
+  const { data: user, isPending, error } = useMe()
   const location = useLocation()
 
   if (isPending) return <Centered><span className="muted">Loading…</span></Centered>
-  if (isError) {
+  if (error) {
+    // An answer from the server (e.g. "only from the office network") is shown as is.
+    const message = error instanceof ApiError ? error.message : "Can't reach the server. Check that the backend is running."
     return (
       <Centered>
-        <div className="alert alert-bad">Can&apos;t reach the server. Check that the backend is running.</div>
+        <div className="alert alert-bad">{message}</div>
       </Centered>
     )
   }

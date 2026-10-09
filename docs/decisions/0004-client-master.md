@@ -41,7 +41,7 @@ The schema is in `Backend/prisma/schema.prisma` (section "Client master"); the m
 
 ### 2. Client fields
 
-`kind` (INDIVIDUAL / CORPORATE, an enum because code branches on it), `name`, `contactPerson` (companies only), `email`, `addressLine`, `area`, `city`, `stateCode` (GST state code: it decides the place of supply on invoices), `pincode`, `pan`, `gstin`, `accountingCode` (unique), `billingCycleId` (defaults to the default cycle), `paymentHabitId`, `clientSince` (the IST date of creation; the import may set an earlier one).
+`kind` (INDIVIDUAL / CORPORATE, an enum because code branches on it), `name`, `contactPerson` (companies only), `email`, `addressLine`, `area`, `city`, `stateCode` (GST state code: it decides the place of supply on invoices), `pincode`, `pan`, `gstin`, `accountingCode` (unique), `billingCycleId` (defaults to the default cycle), `paymentHabitId`, `clientSince` (the IST date of creation, which is also the database default; the import may set an earlier one).
 
 Cross-field rules (service and database):
 - **Only companies have a contact person.** Switching a company to INDIVIDUAL clears it.
@@ -107,7 +107,7 @@ All under `/api/clients`. Errors use the existing shape: `{ message }`, `{ messa
 | Method + path | Who | Purpose |
 |---|---|---|
 | `GET /lookup?mobile=` | View | "Existing client" check. `{ mobile, client: { id, name, kind, mobile, matchedOn: "PRIMARY" \| "SECONDARY" } \| null, alsoMatches }`. 400 for a bad number. |
-| `GET /?q=&kind=&incomplete=&cursor=&limit=` | View | Search by name, contact person, member name, mobile (any part, main or extra), passport number, PAN, GSTIN or accounting code. `incomplete=true/false` filters by the readiness setting. Ordered by name; `{ clients, nextCursor }`. |
+| `GET /?q=&kind=&incomplete=&cursor=&limit=` | View | Search by name, contact person, member name, mobile (any part, main or extra), passport number, PAN, GSTIN or accounting code. `incomplete=true/false` filters by the readiness setting. Ordered by name; `{ clients, nextCursor }`. The "any part of" matches use pg_trgm GIN indexes. |
 | `GET /options` | View | Billing cycles (with `isDefault`), payment habits, relations, GST states, kinds |
 | `GET /settings` · `PUT /settings` | View · Head | `{ settings: { invoiceReadiness, expiryWarnings } }`; `PUT` takes either key |
 | `POST /` | Edit (Accounts fields: Accounts) | Create; only `mobile` is required. 201 `{ client }` (the profile) |
@@ -120,7 +120,7 @@ All under `/api/clients`. Errors use the existing shape: `{ message }`, `{ messa
 | `POST /:id/members/:memberId/archive` | Edit | Take off the family list (safe to repeat). An archived member can't be edited. |
 | `GET /:id/notes` · `POST /:id/notes` | View · Edit | All notes, newest first · add one |
 
-Every write records an audit entry in the same transaction: `client.create`, `client.update`, `client.mobile.change`, `client.phone.add`, `client.phone.remove`, `client.member.create`, `client.member.update`, `client.member.archive`, `client.note.add`, `setting.update`.
+Every write records an audit entry in the same transaction: `client.create`, `client.update`, `client.mobile.change`, `client.phone.add`, `client.phone.remove`, `client.member.create`, `client.member.update`, `client.member.archive`, `client.note.add`, `setting.update`. Client entries carry `AuditLog.clientId` (indexed with `createdAt`), so a client's history is one query.
 
 ## Code
 

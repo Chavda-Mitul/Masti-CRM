@@ -37,7 +37,8 @@ Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDep
 Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod and `generated/prisma/enums`).
 
 Inside the route and its service:
-- Read the user with `currentUser(req)` in the route and pass it to the service.
+- Read the user with `currentUser(req)` (or `actorOf(req)`, the user plus IP for audited changes) in the route and pass it to the service.
+- Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`rethrowUnique`), `dates.ts`, `audit.ts`, `httpError.ts`. Reuse them rather than copying.
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
 - Throw `HttpError` helpers for errors.

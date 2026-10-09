@@ -27,7 +27,11 @@ export function useLogin() {
     mutationKey: ['login'],
     mutationFn: (input: { identifier: string; password: string }) =>
       api<{ user: User }>('/auth/login', { method: 'POST', body: input }),
-    onSuccess: ({ user }) => queryClient.setQueryData(ME_KEY, user),
+    onSuccess: ({ user }) => {
+      // Drop anything cached for the previous user. Logout clears it, but a session that expired did not.
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_KEY[0] })
+      queryClient.setQueryData(ME_KEY, user)
+    },
   })
 }
 

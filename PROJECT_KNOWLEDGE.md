@@ -535,6 +535,12 @@ These are used by every module.
 - **How documents reach us:** the client brings them, or staff **send the collection boy** with the document list, number, address and time slot ✅.
 - **Booklets** (current + old passports) are counted at intake and checked again at handover ✅ ("4 current + 3 old").
 - **Document master (decided 8 Oct 2026, B1/B4):** choosing a country and visa type at intake fills the checklist automatically from the master, copied onto each traveller (so later master edits don't change open cases). Seeded with dummy France Tourist data until Masti sends the real lists.
+- **Document master design (accepted 8 Oct 2026, project lead):** `docs/decisions/0005-system-masters.md`.
+  - `DocumentMaster` (every document any checklist can ask for; no department, so claims reuse it) → `VisaOffering` (country × visa type) → `VisaChecklistItem` (requirement Original / Xerox is fine / Arranged by us; applies to all, adults or children; quantity; a short client note).
+  - A document appears at most once per checklist; a child alternative is a different document marked children-only.
+  - Who counts as a child is set by staff at intake, not by an age rule.
+  - Checklists are saved whole (one `PUT`), with optimistic locking. Only the Head or the Visa HOD edits them.
+  - **Occupation-specific documents** (salary slips for the employed, GST papers for business owners) are not modelled: staff mark them "Not needed" per traveller in Step 2.
 - The same checklist mechanism is reused for **insurance claims**, per claim type ✅.
 
 ### 10.5 Consent and liability form
@@ -1130,6 +1136,12 @@ This is the biggest technical unknown (§16.2).
 - **Holiday calendar, per embassy:**
   - each entry: date (single, range, or recurring, e.g. "Every Sunday · Weekly off · Collections & deliveries"), holiday name, embassy/applies to ("China embassy & visa centres", "All embassies in India · our office", "French embassy, Mumbai"), and added by (+ "from IVS")
   - "Can't be picked as collection dates. New entries show on the dashboard and in the visa team's login popup."
+  - **Design accepted 8 Oct 2026 (project lead):** `docs/decisions/0005-system-masters.md`.
+    - A holiday is a date range or a weekly rule (no yearly repeat: each year is entered), with one or more targets: all embassies, one country, one embassy (new `Embassy` master), or `MASTI_OFFICE` (our office, collections and deliveries; one kind until M15 says otherwise).
+    - "Every Sunday · Weekly off" is seeded data for embassies and our office ⚠️, not code.
+    - Edited by the Head or any HOD. One function (`blockedDays()`) serves the date pickers and the server-side checks.
+    - **Ready for an AI bot** that scrapes embassy holidays: entries record `source` (MANUAL / AI_BOT), the machine account that pushed them and the bot's own key. A Head-managed machine account (API key, scopes, IP allowlist) pushes batches to `/api/inbound/holidays`.
+    - Bot entries arrive **PENDING** (a warning, not a block) until a person confirms them (setting `holidays.botEntriesNeedReview`, seeded on). After review, the bot can no longer change an entry.
 - **Reminder rules** (§10.9).
 - **Vendors:** location, countries covered, Approved / Waiting HOD. "Staff can only pick approved vendors."
 - **Hotels, minimum markup** by star rating, plus the required competitor sites.
@@ -1200,6 +1212,7 @@ This is the biggest technical unknown (§16.2).
 | Enquiry | case no., client, department, source, services, summary, stage, next step, due at, owner, desk, status (open / postponed / cancelled / lost / closed) + reason, origin (direct or cross-sell lead) |
 | FollowUp | enquiry, due at, done at, by, what happened, next step, next date |
 | VisaCase | country, visa type, adults, children, entry type, duration, travel date, hotel stay, vendor, docket, vendor file no., expected collection date, recall |
+| DocumentMaster / VisaOffering / VisaChecklistItem (0005) | document (code, name, detail); country × visa type; line: requirement, adults/children/all, quantity, note, order |
 | ChecklistItem | case or claim, traveller, document type, requirement (Original / Xerox / Arranged by us / Not needed), received as (O/X), received at, by |
 | Docket | number, vendor, courier, docket/AWB no., files, dispatched at, vendor-confirmed at, vendor email sent at |
 | VisaDecision | case, traveller, approved/refused, sticker no., validity, refusal-letter link |
@@ -1219,7 +1232,9 @@ This is the biggest technical unknown (§16.2).
 | WebCheckIn | booking, departure at, status (done / client did it / paid seat offered), boarding-pass link |
 | FareChange | booking, change type, amount, billed via (new invoice / credit note) |
 | Vendor | type, location, countries/services, approval status, approved by |
-| EmbassyHoliday | embassy/applies to, date / range / recurrence, name, source |
+| Embassy (0005) | country, code (`FR-MUM`), name, city: a post where files are submitted |
+| Holiday / HolidayTarget (0005) | name, dates (range or weekly), status (pending / active / removed), source (manual / AI bot), bot key, reference; targets: all embassies / country / embassy / our office |
+| ApiClient (0005) | machine account (e.g. the holiday bot): hashed key, scopes, IP allowlist, active |
 | PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only |
 | PortalUsageLog | user, portal, at, case |
 | Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag |
@@ -1400,7 +1415,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master, is built (API + tests, no screens yet) on `feat/system-masters`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1409,24 +1424,32 @@ Masti CRM/
 ├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
 │   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
 │   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
-│   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation
+│   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation,
+│   │                                Country, VisaType, Embassy, VisaOffering, DocumentMaster, VisaChecklistItem, Holiday, HolidayTarget, ApiClient
 │   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers),
-│   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle)
-│   ├── prisma/seed.ts            ← departments, client lookups + settings, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
+│   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle),
+│   │                                *_system_masters + *_holiday_weekday_check (holiday date/source/target CHECKs, code formats)
+│   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
 │   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,
 │   │   │                            audit), *.schemas.ts (zod, frontend-shareable)
 │   │   ├── auth/                 ← login/logout/me/change-password + session.ts, password.ts (argon2id),
-│   │   │                            identifier.ts (mobile/email), permissions.ts (can, isHodOf), officeNetwork.ts
+│   │   │                            identifier.ts (login identifier), permissions.ts (can, isHodOf), officeNetwork.ts
 │   │   ├── users/                ← user management (Head only) + user.ts (withDepartments, toUserDto)
 │   │   ├── clients/              ← client master: clients, extra numbers, members, notes, lookup/search, settings;
 │   │   │                            access.ts (who may edit), duplicates.ts (confirmDuplicates), readiness.ts (assertInvoiceReady)
+│   │   ├── visaMasters/          ← countries, visa types, embassies, documents, country × type offerings, checklists (0005)
+│   │   ├── holidays/             ← holiday calendar, blockedDays() (the one blocked-date rule), bot pushes (holidaysBot.service.ts)
+│   │   ├── apiClients/           ← machine accounts (Head only): hashed API keys, scopes, IP allowlist
+│   │   ├── inbound/              ← machine-to-machine routes (API key, no session): /api/inbound/holidays
 │   │   ├── departments/          ← active department list
 │   │   └── health/               ← server and database status
-│   ├── src/middleware/           ← auth.ts (requireAuth, requireHead, requireDepartment,
-│   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
-│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers)
+│   ├── src/middleware/           ← auth.ts (requireAuth, actorOf, requireHead, requireDepartment,
+│   │                                requireUserType, requirePasswordChanged), apiClient.ts (requireApiClient), error.ts, requireJson.ts
+│   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers),
+│                                contact.ts (mobile/email clean-up), prismaErrors.ts (rethrowUnique),
+│                                changes.ts (onlyChanged, definedOnly, optimistic locking)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
@@ -1437,9 +1460,9 @@ Masti CRM/
     ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
-    ├── src/components/           ← AppShell (approved sidebar), Toast (ToastProvider), FormField, ConfirmDialog
+    ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog
     ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
-    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors), shell.css, auth.css, clients.css
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list), shell.css, auth.css, clients.css
 ```
 
 **API so far:**
@@ -1455,13 +1478,19 @@ Masti CRM/
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
 | `/api/clients/*` | Head, office staff (edit: any department EDIT; billing fields: Accounts) | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
+| `/api/masters/*` | Visa VIEW to read; Visa HOD (or Head) to write. Embassies: office staff read, any HOD writes | Countries, visa types, embassies, documents, country × type offerings, and their checklists (`PUT …/visa-offerings/:id/checklist` replaces the whole list). Full list in `docs/decisions/0005-system-masters.md`. |
+| `/api/holidays/*` | Head, office staff read; Head or any HOD write; settings: Head | Holiday calendar: list, add, edit (optimistic locking), confirm (bot entries), remove, `GET /blocked` (date pickers), `GET /targets`, settings |
+| `/api/api-clients/*` | Head | Machine accounts: create and rotate (key shown once), edit, deactivate/activate |
+| `/api/inbound/holidays` | Machine account with `HOLIDAYS_PUSH` (Bearer API key) | The AI bot: push holidays in batches (by its own key; PENDING until a person confirms), read its entries back, list target codes |
 
 **Rules every new route must follow:**
 - Protect routes with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment('VISA', 'EDIT')` (or `requireHead`).
 - A route with no department check needs `requireUserType(...)`, e.g. `("HEAD", "OFFICE")` for desktop-only data. Field staff get only `/api/auth/*` and, later, `/api/field/*` (their own jobs).
-- Read the user with `currentUser(req)`.
+- Machine-to-machine routes go under `/api/inbound/*` with `requireApiClient(scope)` (an API key, never a session). Audit them with `apiClientId` instead of `actorId`.
+- Inside an interactive transaction, include at most one relation in a read; load the full DTO after commit. Prisma 7 + adapter-pg runs multi-relation reads in parallel on the transaction's single connection (0005, *Built* #8).
+- Read the user with `currentUser(req)`, or `actorOf(req)` (user + IP) for services that audit.
 - Check finer rules with `can()` / `isHodOf()` from `src/modules/auth/permissions.ts`.
-- Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction.
+- Record every change with `audit({...}, tx)` from `src/lib/audit.ts`, inside the same transaction. Pass `clientId` when the change belongs to a client (a visa file, an invoice…), so it shows in that client's history.
 - Throw `HttpError` / `badRequest()` / `forbidden()` etc.; `errorHandler` turns them (and zod errors) into JSON.
 - State-changing requests must be JSON (`requireJson`, the CSRF guard).
 
@@ -1480,7 +1509,7 @@ Masti CRM/
 | Backend | `npm run db:up` / `db:down` | Start/stop the local Postgres container (`docker compose`) |
 | Backend | `npm run db:migrate` | `prisma migrate dev` |
 | Backend | `npm run db:generate` | `prisma generate` (run after every schema change) |
-| Backend | `npm run db:seed` | Departments, client lookups and settings, first Head user (prints a one-time temporary password). Never overwrites existing rows. |
+| Backend | `npm run db:seed` | Departments, client lookups and settings, dummy visa masters and the weekly Sunday off, holiday settings, first Head user (prints a one-time temporary password). Never overwrites existing rows. |
 | Backend | `npm run db:studio` | Prisma Studio |
 | Backend | `npm run dev` | tsx watch on `src/server.ts` (port 5000) |
 | Backend | `npm test` | vitest: creates and migrates `masti_crm_test`, wipes it before each test |
@@ -1498,6 +1527,7 @@ Masti CRM/
 | `Backend/.env` | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | Local docker-compose DB; must match `DATABASE_URL` |
 | `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
 | `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
+| `Backend/.env` | `COOKIE_SECURE` (`auto`) | Session cookie over HTTPS only; `auto` = production only. `false` only for a plain-HTTP office deployment, or login silently fails |
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
@@ -1524,7 +1554,8 @@ Masti CRM/
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).
 
 **Not there yet:**
-- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, masters screens, any business module beyond the client master.
+- **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
+- **Frontend:** the Settings → Masters screens (holiday calendar, checklists, machine accounts).
 - **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
 - **Project setup:** CI/CD and deploy scripts.
 
@@ -1612,6 +1643,13 @@ Masti CRM/
 - Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings staff confirm, not errors.
 - The client document vault is **not built** (Q37). Aadhaar numbers are not stored.
 
+**Decided 8 Oct 2026 (project lead), for the System Masters (holiday calendar and visa document master).** Details are in §10.4 and §12.20; the design is `docs/decisions/0005-system-masters.md`. Reminder rules, vendors and the dropdown admin screens come later.
+- Holiday entries from a future AI bot wait as PENDING (warn, don't block) until a person confirms them; a setting can switch review off later.
+- "Our office" and "Collections & deliveries" are one target (`MASTI_OFFICE`). The Sunday block is seeded data. Both stay open with the client (M15, inputs B2).
+- A separate `Embassy` master, linked to the country.
+- Holidays: the Head or any HOD edits them. Visa checklists: the Head or the Visa HOD.
+- Occupation-specific documents are not modelled (staff mark them "Not needed"). No yearly-repeat holidays.
+
 | # | Question | Who | Blocks |
 |---|---|---|---|
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? | Y→C | 1 |
@@ -1652,8 +1690,9 @@ Masti CRM/
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
 | 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: Drive/OneDrive links, not uploads. | S | 2 |
+| 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits; bot suggestions wait for review. | C | 1 |
 
-Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) are in `05_Open_Questions.md`.
+Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.
 
 ---
 

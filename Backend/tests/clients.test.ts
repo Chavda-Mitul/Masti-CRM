@@ -134,6 +134,34 @@ describe("database rules (they also guard the Excel import)", () => {
     await expect(prisma.billingCycle.create({ data: { code: "QUARTERLY", name: "Quarterly", isDefault: true } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "AAACS1234K", gstin: gstinFor("AAACS1234K") } })).resolves.toBeTruthy();
   });
+
+  it("defaults clientSince to today's date in India", async () => {
+    const billingCycleId = (await prisma.billingCycle.findUniqueOrThrow({ where: { code: "MONTHLY" } })).id;
+    const client = await prisma.client.create({ data: { billingCycleId, mobile: "+919825041234" } });
+    expect(client.clientSince.toISOString().slice(0, 10)).toBe(istToday());
+  });
+});
+
+describe("client history", () => {
+  it("tags every change to a client and its numbers, members and notes with the client id", async () => {
+    const visa = await visaAgent();
+    const client = await createClient(visa, { mobile: "9825041234" });
+    const other = await createClient(visa, { mobile: "9825041235" });
+    const phone = await visa.post(`/api/clients/${client.id}/phones`).send({ mobile: "9898989898" });
+    await visa.delete(`/api/clients/${client.id}/phones/${phone.body.phone.id}`).send({});
+    await visa.post(`/api/clients/${client.id}/members`).send({ name: "Riya Patel", relationId: await relationId("DAUGHTER") });
+    await visa.post(`/api/clients/${client.id}/notes`).send({ body: "Prefers WhatsApp" });
+
+    const history = await prisma.auditLog.findMany({ where: { clientId: client.id }, orderBy: { id: "asc" } });
+    expect(history.map((h) => h.action)).toEqual([
+      "client.create",
+      "client.phone.add",
+      "client.phone.remove",
+      "client.member.create",
+      "client.note.add",
+    ]);
+    expect(await prisma.auditLog.count({ where: { clientId: other.id } })).toBe(1);
+  });
 });
 
 describe("duplicate warnings (confirmDuplicates)", () => {
@@ -368,6 +396,21 @@ describe("mobile numbers", () => {
     expect(res.status).toBe(200);
     expect(res.body.client.mobile).toBe("+919898989898");
     expect(res.body.client.phones.map((p: { mobile: string }) => p.mobile)).toEqual(["+919825041234"]);
+  });
+
+  it("won't keep the old main number when that goes past the extra-number limit", async () => {
+    const visa = await visaAgent();
+    const client = await createClient(visa, { mobile: "9825041234" });
+    for (const mobile of ["9898989891", "9898989892", "9898989893", "9898989894", "9898989895"]) {
+      expect((await visa.post(`/api/clients/${client.id}/phones`).send({ mobile })).status).toBe(201);
+    }
+    const url = `/api/clients/${client.id}/mobile`;
+
+    expect((await visa.put(url).send({ mobile: "9000000001" })).status).toBe(400);
+    // Promoting an extra number frees its slot, so the old main number fits.
+    expect((await visa.put(url).send({ mobile: "9898989891" })).status).toBe(200);
+    expect((await visa.put(url).send({ mobile: "9000000001", keepOldAsSecondary: false })).status).toBe(200);
+    expect(await prisma.clientPhone.count({ where: { clientId: client.id } })).toBe(5);
   });
 });
 

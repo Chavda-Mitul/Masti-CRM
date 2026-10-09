@@ -1,14 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { formatDateTime } from '../../lib/format'
 import { errorText } from './apiErrors'
-import { useAddNote, useClientNotes } from './queries'
+import { PROFILE_NOTES, useAddNote, useClientNotes } from './queries'
 import { noteFormSchema, type NoteFormValues } from './schemas'
 import type { ClientNote } from './types'
 
 /** Free-text notes, newest first. Append-only: no editing or deleting, and never used in reports. */
 export function NotesCard({ clientId, latest, canEdit }: { clientId: string; latest: ClientNote[]; canEdit: boolean }) {
-  const notes = useClientNotes(clientId)
+  // The profile carries the latest notes; the full log is fetched only if asked for.
+  const [showAll, setShowAll] = useState(false)
+  const notes = useClientNotes(clientId, showAll)
   const add = useAddNote(clientId)
   const { register, handleSubmit, reset, formState } = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
@@ -16,8 +19,8 @@ export function NotesCard({ clientId, latest, canEdit }: { clientId: string; lat
   })
 
   const onSubmit = handleSubmit((values) => add.mutate({ body: values.body }, { onSuccess: () => reset() }))
-  // The profile already carries the latest notes, so they show while the full log loads.
-  const list = notes.data ?? latest
+  const list = (showAll && notes.data) || latest
+  const mayHaveMore = !showAll && latest.length >= PROFILE_NOTES
 
   return (
     <div className="card">
@@ -53,6 +56,15 @@ export function NotesCard({ clientId, latest, canEdit }: { clientId: string; lat
           ))}
         </ol>
       )}
+      {mayHaveMore && (
+        <div className="pad" style={{ paddingTop: 0 }}>
+          <button type="button" className="btn btn-sm" onClick={() => setShowAll(true)}>
+            Show older notes
+          </button>
+        </div>
+      )}
+      {showAll && notes.isFetching && !notes.data && <div className="pad muted small">Loading older notes…</div>}
+      {showAll && errorText(notes.error) && <div className="pad alert alert-bad">{errorText(notes.error)}</div>}
     </div>
   )
 }

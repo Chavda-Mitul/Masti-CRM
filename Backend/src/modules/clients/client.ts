@@ -1,33 +1,16 @@
 import type { Client, ClientMember, ClientNote, ClientPhone, Prisma, Relation } from "../../../generated/prisma/client";
 import { addMonths, fromDbDate, wholeYearsBetween } from "../../lib/dates";
 import { badRequest } from "../../lib/httpError";
-import { normaliseEmail, normaliseMobile } from "../auth/identifier";
+import { cleanMobile } from "../../lib/contact";
 import type { ClientSettings } from "./clients.settings";
 import { readinessOf } from "./readiness";
 
 // Shapes sent to the browser, and the input clean-up shared by the client and member services.
 
-/** "" and null clear the field; undefined means "not sent". */
-export function cleanMobile(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const mobile = normaliseMobile(value);
-  if (!mobile) throw badRequest("Enter a valid 10-digit Indian mobile number.");
-  return mobile;
-}
-
 export function requireMobile(value: string): string {
   const mobile = cleanMobile(value);
   if (!mobile) throw badRequest("Enter a valid 10-digit Indian mobile number.");
   return mobile;
-}
-
-export function cleanEmail(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const email = normaliseEmail(value);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Enter a valid email address.");
-  return email;
 }
 
 /** Everything the profile page shows, except notes (loaded separately). */

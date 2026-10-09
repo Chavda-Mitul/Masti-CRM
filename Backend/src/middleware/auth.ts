@@ -1,9 +1,10 @@
 import type { Request, RequestHandler } from "express";
 import type { Access, UserType } from "../../generated/prisma/client";
 import { officeNetworkAllows } from "../modules/auth/officeNetwork";
-import { can } from "../modules/auth/permissions";
+import { can, type DepartmentCode } from "../modules/auth/permissions";
 import { clearSessionCookie, findSession, SESSION_COOKIE, setSessionCookie, touchSession } from "../modules/auth/session";
 import { forbidden, unauthorized } from "../lib/httpError";
+import type { Actor } from "../modules/users/user";
 
 /** Requires a valid session for an active user. Sets req.auth. */
 export const requireAuth: RequestHandler = async (req, res, next) => {
@@ -33,6 +34,11 @@ export function currentUser(req: Request) {
   return req.auth.user;
 }
 
+/** The current user and IP, passed to services for permission rules and the audit log. Use after requireAuth. */
+export function actorOf(req: Request): Actor {
+  return { user: currentUser(req), ip: req.ip ?? null };
+}
+
 /** Head (owner) only. Use after requireAuth. */
 export const requireHead: RequestHandler = (req, _res, next) => {
   if (currentUser(req).type !== "HEAD") throw forbidden();
@@ -52,7 +58,7 @@ export function requireUserType(...types: UserType[]): RequestHandler {
 }
 
 /** VIEW or EDIT access to a department (Head always passes). Use after requireAuth. */
-export function requireDepartment(departmentCode: string, access: Access): RequestHandler {
+export function requireDepartment(departmentCode: DepartmentCode, access: Access): RequestHandler {
   return (req, _res, next) => {
     if (!can(currentUser(req), departmentCode, access)) throw forbidden();
     next();

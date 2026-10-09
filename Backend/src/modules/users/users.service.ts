@@ -1,34 +1,12 @@
-import { Prisma, type UserType } from "../../../generated/prisma/client";
+import type { UserType } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { cleanEmail, cleanMobile } from "../../lib/contact";
 import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
-import { normaliseEmail, normaliseMobile } from "../auth/identifier";
+import { rethrowUnique } from "../../lib/prismaErrors";
 import { generateTempPassword, hashPassword } from "../auth/password";
-import { toUserDto, withDepartments, type UserWithDepartments } from "./user";
+import { toUserDto, withDepartments, type Actor } from "./user";
 import type { CreateUserInput, Membership, UpdateUserInput } from "./users.schemas";
-
-/** Who is making the change, for permission rules and the audit log. */
-export interface Actor {
-  user: UserWithDepartments;
-  ip: string | null;
-}
-
-/** "" and null clear the field; undefined means "not sent". */
-function cleanMobile(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const mobile = normaliseMobile(value);
-  if (!mobile) throw badRequest("Enter a valid 10-digit Indian mobile number.");
-  return mobile;
-}
-
-function cleanEmail(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const email = normaliseEmail(value);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Enter a valid email address.");
-  return email;
-}
 
 /** Department codes → rows to insert. HODs always get EDIT. */
 async function resolveMemberships(memberships: Membership[]) {
@@ -63,12 +41,7 @@ async function assertUnique(mobile: string | null | undefined, email: string | n
 }
 
 /** Fallback if two requests race past assertUnique. */
-function rethrowUnique(err: unknown): never {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-    throw conflict("This mobile number or email is already used by another user.");
-  }
-  throw err;
-}
+const rethrowUniqueUser = rethrowUnique("This mobile number or email is already used by another user.");
 
 async function getUserOr404(id: string) {
   const user = await prisma.user.findUnique({ where: { id }, include: withDepartments });
@@ -122,7 +95,7 @@ export async function createUser(input: CreateUserInput, actor: Actor) {
       );
       return created;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueUser);
 
   return { user: toUserDto(user), tempPassword };
 }
@@ -179,7 +152,7 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
       );
       return user;
     })
-    .catch(rethrowUnique);
+    .catch(rethrowUniqueUser);
 
   return toUserDto(updated);
 }
