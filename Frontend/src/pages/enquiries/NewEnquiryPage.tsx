@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { Link, useBlocker, useNavigate, useSearchParams } from 'react-router'
 import { can } from '../../auth/permissions'
@@ -62,6 +62,16 @@ export function NewEnquiryPage() {
 
   const lookupMobile = useDebouncedValue(normaliseMobile(mobile), 300)
   const lookup = useClientLookup(lookupMobile)
+
+  // The Client name field appears only once the lookup says the number is new. Tab pressed on a complete number
+  // before that would skip it (focus landed on "WhatsApp"), so focus moves to it when it appears.
+  const nameAfterTab = useRef(false)
+  const lookupAnswered = lookup.data !== undefined && lookupMobile === normaliseMobile(mobile)
+  useEffect(() => {
+    if (!nameAfterTab.current || !lookupAnswered) return
+    nameAfterTab.current = false
+    if (!lookup.data?.client) form.setFocus('clientName')
+  }, [lookupAnswered, lookup.data, form])
 
   const country = offerings.data?.find((c) => String(c.id) === countryId)
   // One visa type for the country: pick it.
@@ -146,7 +156,18 @@ export function NewEnquiryPage() {
 
         <div className="who-fields">
           <FormField label="Mobile number" required error={errors.mobile?.message}>
-            <input className="input mobile-input" inputMode="tel" autoComplete="off" placeholder="98250 41234" autoFocus aria-required {...register('mobile')} />
+            <input
+              className="input mobile-input"
+              inputMode="tel"
+              autoComplete="off"
+              placeholder="98250 41234"
+              autoFocus
+              aria-required
+              {...register('mobile')}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && !e.shiftKey && !lookupAnswered && normaliseMobile(e.currentTarget.value)) nameAfterTab.current = true
+              }}
+            />
           </FormField>
           {needsName && (
             <FormField
