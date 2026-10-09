@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { canEditClients } from '../../auth/permissions'
+import { can, canEditClients } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
+import { departmentStyle } from '../../lib/departments'
 import { formatDate, formatMobile, initials } from '../../lib/format'
 import '../../styles/clients.css'
 import { errorText } from './apiErrors'
@@ -22,6 +23,8 @@ export function ClientDetailPage() {
   const options = useClientOptions()
   const [editing, setEditing] = useState(false)
   const canEdit = me ? canEditClients(me) : false
+  // Only Visa intake is built so far; other departments' intakes come in Stage 2.
+  const canAddEnquiry = me ? can(me, 'VISA', 'EDIT') : false
 
   if (client.isPending) return <div className="muted">Loading…</div>
   if (client.isError) {
@@ -38,7 +41,7 @@ export function ClientDetailPage() {
   }
 
   const c = client.data
-  const name = c.name ?? 'Name not given yet'
+  const name = c.name
   const place = [c.area, c.city].filter(Boolean).join(', ')
 
   return (
@@ -69,15 +72,17 @@ export function ClientDetailPage() {
               Edit details
             </button>
           )}
-          <button className="btn btn-primary" disabled title="Comes with the Enquiries module">
-            New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
-          </button>
+          {canAddEnquiry && (
+            <Link className="btn btn-primary" to={`/enquiries/new?mobile=${encodeURIComponent(c.mobile)}`}>
+              New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
+            </Link>
+          )}
         </div>
       </div>
 
       <div className="tiles">
         <Tile label="Business with us" value="—" note="Comes with Accounts" />
-        <Tile label="Open now" value="—" note="Comes with Enquiries" />
+        <Tile label="Open now" value={String(c.openEnquiries.length)} note={openDepartments(c) || 'No open cases'} />
         <Tile label="Still to pay" value="—" note="Comes with Accounts" />
         <Tile
           label="Pays"
@@ -90,12 +95,7 @@ export function ClientDetailPage() {
         <div className="client-col">
           <MembersCard client={c} options={options.data} canEdit={canEdit} />
           <DetailsCard client={c} options={options.data} canEdit={canEdit} onEdit={() => setEditing(true)} />
-          <div className="card pad">
-            <h2 className="h2">Everything we&apos;ve done for this family</h2>
-            <p className="muted" style={{ margin: '8px 0 0' }}>
-              Visa, holiday, hotel, insurance and ticket cases will be listed here once Enquiries is built.
-            </p>
-          </div>
+          <CasesCard client={c} />
         </div>
         <div className="client-col">
           <PhonesCard client={c} canEdit={canEdit} />
@@ -107,6 +107,45 @@ export function ClientDetailPage() {
         <ClientFormDrawer client={c} options={options.data} onClose={() => setEditing(false)} onSaved={() => setEditing(false)} />
       )}
     </>
+  )
+}
+
+/** "Visa, Holidays": the departments with an open case. */
+function openDepartments(client: ClientProfile) {
+  return [...new Set(client.openEnquiries.map((e) => departmentStyle(e.department).label))].join(', ')
+}
+
+/** Open cases for now. Finished cases join the list once a case can be finished (the case steps come next). */
+function CasesCard({ client }: { client: ClientProfile }) {
+  return (
+    <div className="card pad">
+      <h2 className="h2">Everything we&apos;ve done for this family</h2>
+      {client.openEnquiries.length === 0 ? (
+        <p className="muted" style={{ margin: '8px 0 0' }}>
+          No open cases.
+        </p>
+      ) : (
+        <ul className="case-list">
+          {client.openEnquiries.map((e) => {
+            const style = departmentStyle(e.department)
+            return (
+              <li key={e.caseNo}>
+                <span className="chip chip-sm" style={{ background: style.tint, color: style.text }}>
+                  {style.label}
+                </span>
+                <div className="case-list-main">
+                  <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} className="mono">
+                    {e.caseNo}
+                  </Link>
+                  <div className="muted small">{e.summary}</div>
+                </div>
+                <span className="small">{e.stage}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 

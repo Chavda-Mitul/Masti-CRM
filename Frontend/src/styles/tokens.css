@@ -26,6 +26,8 @@
   --text-sidebar: #3f3a33;
   --text-muted: #7a746b;
   --text-faint: #a39b8e;
+  /* Text on a solid fill (primary, ink, a department colour) */
+  --on-fill: #ffffff;
 
   /* Primary: sea blue */
   --primary: #1e5aa8;

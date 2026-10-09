@@ -1,11 +1,13 @@
 import { Prisma, type Client } from "../../../generated/prisma/client";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { istToday, toDbDate } from "../../lib/dates";
 import { cleanEmail, normaliseMobile } from "../../lib/contact";
-import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
-import type { Actor } from "../users/user";
+import { saveSetting } from "../../lib/settings";
+import type { Actor, UserWithDepartments } from "../users/user";
+import { listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
 import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
@@ -55,13 +57,15 @@ type ClientValues = Pick<
   | "clientSince"
 >;
 type ClientChanges = Partial<ClientValues>;
-type ClientFieldsInput = Omit<CreateClientInput, "mobile" | "confirmDuplicates">;
+// The name is required on create and optional on update (the schemas enforce each).
+type ClientFieldsInput = Omit<CreateClientInput, "mobile" | "confirmDuplicates" | "name"> & { name?: string | undefined };
 
-const TEXT_FIELDS = ["name", "contactPerson", "addressLine", "area", "city", "stateCode", "pincode", "pan", "gstin", "accountingCode"] as const;
+/** Optional text fields: "" or null clears them. The name is required, so it's handled on its own. */
+const TEXT_FIELDS = ["contactPerson", "addressLine", "area", "city", "stateCode", "pincode", "pan", "gstin", "accountingCode"] as const;
 
 const EMPTY_CLIENT: ClientValues = {
   kind: "INDIVIDUAL",
-  name: null,
+  name: "",
   contactPerson: null,
   email: null,
   addressLine: null,
@@ -90,12 +94,13 @@ const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code
  * Turns the request into column changes and applies the cross-field rules:
  * - only companies have a contact person (switching to INDIVIDUAL clears it)
  * - a GSTIN carries its holder's PAN: an empty PAN is filled from it, a different one is refused
- * - an empty state is filled from the GSTIN's state code
+ * - a GSTIN carries its holder's state: an empty state is filled from it, a different one is refused
  * Returns only the fields that differ from `before`.
  */
 async function resolveChanges(input: ClientFieldsInput, before: ClientValues | null, today: string): Promise<ClientChanges> {
   const changes: ClientChanges = {};
   if (input.kind !== undefined) changes.kind = input.kind;
+  if (input.name !== undefined) changes.name = input.name;
   for (const key of TEXT_FIELDS) {
     const value = input[key];
     if (value !== undefined) changes[key] = value;
@@ -121,7 +126,19 @@ async function resolveChanges(input: ClientFieldsInput, before: ClientValues | n
     if (final.pan === null) changes.pan = final.pan = panInGstin;
     else if (final.pan !== panInGstin) throw badRequest(`The PAN inside this GSTIN (${panInGstin}) doesn't match the PAN entered.`);
     const stateInGstin = final.gstin.slice(0, 2);
-    if (final.stateCode === null && GST_STATES.some((s) => s.code === stateInGstin)) changes.stateCode = final.stateCode = stateInGstin;
+    const gstinState = GST_STATES.find((s) => s.code === stateInGstin);
+    if (final.stateCode === null) {
+      if (gstinState) changes.stateCode = final.stateCode = stateInGstin;
+    } else if (final.stateCode !== stateInGstin) {
+      // The state decides the GST type on invoices, and invoices are never edited, so a contradiction is refused.
+      const entered = GST_STATES.find((s) => s.code === final.stateCode)?.name ?? final.stateCode;
+      throw fieldError(
+        "stateCode",
+        gstinState
+          ? `This GSTIN is registered in ${gstinState.name}, not ${entered}. Pick ${gstinState.name}, or leave the state empty to fill it from the GSTIN.`
+          : `This GSTIN's state code (${stateInGstin}) isn't a GST state. Leave the state empty.`,
+      );
+    }
   }
 
   const changed = before ? onlyChanged(changes, before) : changes;
@@ -159,8 +176,8 @@ async function taxIdDuplicates(changes: ClientChanges, exceptClientId?: string):
   return found;
 }
 
-async function defaultBillingCycleId(): Promise<number> {
-  const cycle = await prisma.billingCycle.findFirst({ where: { isDefault: true, isActive: true } });
+async function defaultBillingCycleId(db: Db = prisma): Promise<number> {
+  const cycle = await db.billingCycle.findFirst({ where: { isDefault: true, isActive: true } });
   if (!cycle) throw new HttpError(500, "No default billing cycle is set up. Run the database seed.");
   return cycle.id;
 }
@@ -169,8 +186,11 @@ async function defaultBillingCycleId(): Promise<number> {
 // Reading
 // ---------------------------------------------------------------------------
 
-/** The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers. */
-export async function lookupByMobile(raw: string) {
+/**
+ * The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers.
+ * `openEnquiries` are the unfinished cases of `client`, the one intake attaches to, that the user can view.
+ */
+export async function lookupByMobile(raw: string, user: UserWithDepartments) {
   const mobile = normaliseMobile(raw);
   if (!mobile) throw badRequest("Enter a valid 10-digit Indian mobile number.");
 
@@ -185,7 +205,9 @@ export async function lookupByMobile(raw: string) {
     ...(primary ? [{ ...primary, matchedOn: "PRIMARY" as const }] : []),
     ...secondary.map((p) => ({ ...p.client, matchedOn: "SECONDARY" as const })),
   ];
-  return { mobile, client: matches[0] ?? null, alsoMatches: matches.slice(1) };
+  const client = matches[0] ?? null;
+  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user) : [];
+  return { mobile, client, alsoMatches: matches.slice(1), openEnquiries };
 }
 
 /** Search by name, mobile (main or extra), passport number, PAN, GSTIN or accounting code. */
@@ -221,7 +243,9 @@ export async function listClients(query: ListClientsQuery) {
 
   const rows = await prisma.client.findMany({
     where: { AND: and },
-    orderBy: [{ name: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+    // Name is never null, so Prisma's cursor becomes a plain keyset query with a LIMIT (with a nullable sort key it
+    // reads every remaining row and pages in memory: 20261009130000_client_name_required).
+    orderBy: [{ name: "asc" }, { id: "asc" }],
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
   });
@@ -232,14 +256,16 @@ export async function listClients(query: ListClientsQuery) {
   };
 }
 
-export async function getClient(id: string) {
+/** The client's profile, with their open cases in the departments this user can see. */
+export async function getClient(id: string, user: UserWithDepartments) {
   const client = await prisma.client.findUnique({ where: { id }, include: clientProfileInclude });
   if (!client) throw notFound("Client not found.");
-  const [notes, settings] = await Promise.all([
+  const [notes, settings, openEnquiries] = await Promise.all([
     prisma.clientNote.findMany({ where: { clientId: id }, include: noteInclude, orderBy: { createdAt: "desc" }, take: PROFILE_NOTES }),
     getClientSettings(),
+    listOpenEnquiriesOfClient(id, user),
   ]);
-  return toClientProfile(client, notes, istToday(), settings);
+  return { ...toClientProfile(client, notes, istToday(), settings), openEnquiries };
 }
 
 export async function getReadiness(id: string) {
@@ -286,7 +312,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
   const created = await prisma
     .$transaction(async (tx) => {
       const client = await tx.client.create({
-        data: { ...changes, mobile, billingCycleId, clientSince: changes.clientSince ?? toDbDate(today), createdById: actor.user.id },
+        data: { ...changes, name: input.name, mobile, billingCycleId, clientSince: changes.clientSince ?? toDbDate(today), createdById: actor.user.id },
       });
       await audit(
         {
@@ -304,7 +330,34 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(created.id);
+  return getClient(created.id, actor.user);
+}
+
+/**
+ * "Saved against the mobile number" for intake (0003): the client whose main number this is, else the earliest client
+ * with it as an extra number (the lookup's first match), else a new client. A new client needs a name (9 Oct 2026);
+ * a matched client's name is never overwritten from here.
+ * Runs in the caller's transaction, so a failed enquiry leaves no half-made client behind. `mobile` must be normalised.
+ * Two intakes racing on the same new number: the second insert fails on Client.mobile and the caller retries.
+ */
+export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: Actor, name?: string | null, nameField = "name") {
+  const select = { id: true, name: true, mobile: true } as const;
+  const found =
+    (await tx.client.findUnique({ where: { mobile }, select })) ??
+    (await tx.clientPhone.findFirst({ where: { mobile }, orderBy: { createdAt: "asc" }, select: { client: { select } } }))?.client;
+  if (found) return { client: found, created: false };
+
+  const given = name?.trim();
+  if (!given) throw fieldError(nameField, "Enter the client's name: this is a new number.");
+  assertCanEditClients(actor.user);
+  const client = await tx.client.create({
+    data: { mobile, name: given, billingCycleId: await defaultBillingCycleId(tx), clientSince: toDbDate(istToday()), createdById: actor.user.id },
+  });
+  await audit(
+    { actorId: actor.user.id, action: "client.create", entityType: "Client", entityId: client.id, clientId: client.id, after: client, ip: actor.ip },
+    tx,
+  );
+  return { client: { id: client.id, name: client.name, mobile: client.mobile }, created: true };
 }
 
 /** Partial update. `updatedAt` must be the value the browser read (optimistic locking). */
@@ -315,7 +368,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
 
   const changes = await resolveChanges(input, before, istToday());
   const keys = Object.keys(changes);
-  if (keys.length === 0) return getClient(id);
+  if (keys.length === 0) return getClient(id, actor.user);
   assertCanChangeAccountsFields(actor.user, accountsFieldsIn(changes, false));
   await assertAccountingCodeFree(changes.accountingCode, id);
   const confirmed = checkDuplicates(await taxIdDuplicates(changes, id), input.confirmDuplicates);
@@ -342,7 +395,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(id);
+  return getClient(id, actor.user);
 }
 
 /** Makes another number the main one (lookup key and WhatsApp number). The old one can stay as an extra number. */
@@ -350,7 +403,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
   assertCanEditClients(actor.user);
   const before = await getClientRowOr404(id);
   const mobile = requireMobile(input.mobile);
-  if (mobile === before.mobile) return getClient(id);
+  if (mobile === before.mobile) return getClient(id, actor.user);
 
   const owner = await prisma.client.findUnique({ where: { mobile }, select: { id: true } });
   if (owner) {
@@ -390,7 +443,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
     })
     .catch(rethrowUniqueClient);
 
-  return getClient(id);
+  return getClient(id, actor.user);
 }
 
 export async function addPhone(clientId: string, input: AddPhoneInput, actor: Actor) {
@@ -493,11 +546,7 @@ export async function updateSettings(input: UpdateClientSettingsInput, actor: Ac
   await prisma.$transaction(async (tx) => {
     for (const { key, value, previous } of updates) {
       if (value === undefined) continue;
-      await tx.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
-      await audit(
-        { actorId: actor.user.id, action: "setting.update", entityType: "Setting", entityId: key, before: previous, after: value, ip: actor.ip },
-        tx,
-      );
+      await saveSetting(tx, { key, before: previous, after: value, actorId: actor.user.id, ip: actor.ip });
     }
   });
 

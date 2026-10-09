@@ -88,6 +88,18 @@ export const visaTypeFormSchema = z.object({
 })
 export type VisaTypeFormValues = z.infer<typeof visaTypeFormSchema>
 
+export const enquirySourceFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. JUSTDIAL.'),
+  name: required(60, 'Enter the source.'),
+  sortOrder,
+  staffSelectable: z.boolean(),
+})
+export type EnquirySourceFormValues = z.infer<typeof enquirySourceFormSchema>
+
 export const embassyFormSchema = z.object({
   code: z
     .string()

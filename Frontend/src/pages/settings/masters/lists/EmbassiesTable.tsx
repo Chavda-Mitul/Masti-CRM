@@ -119,6 +119,7 @@ function EmbassyDrawer({ embassy, onClose }: { embassy: Embassy | null; onClose:
       submitLabel={embassy ? 'Save changes' : 'Add embassy'}
       pending={save.isPending}
       error={save.error}
+      dirty={formState.isDirty}
       onClose={onClose}
       onSubmit={onSubmit}
     >

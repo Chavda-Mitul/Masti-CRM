@@ -71,6 +71,22 @@ export async function blockedDays(from: string, to: string, target: BlockTarget,
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/** How far nextOpenDay looks. A target closed for longer than this is a calendar mistake, not a real closure. */
+const OPEN_DAY_SEARCH_DAYS = 60;
+
+/**
+ * The first day on or after `from` that isn't blocked for this target: where office work due on a closed day goes
+ * (the first follow-up now; field jobs later). If every day in the next 60 is blocked, `from` itself.
+ */
+export async function nextOpenDay(from: string, target: BlockTarget, db: Db = prisma): Promise<string> {
+  const blocked = new Set((await blockedDays(from, addDays(from, OPEN_DAY_SEARCH_DAYS), target, db)).map((d) => d.date));
+  for (let i = 0; i <= OPEN_DAY_SEARCH_DAYS; i++) {
+    const day = addDays(from, i);
+    if (!blocked.has(day)) return day;
+  }
+  return from;
+}
+
 /** True if a holiday blocks this date for this target. For server-side checks (e.g. Visa Step 5). */
 export async function isDateBlocked(date: string, target: BlockTarget, db: Db = prisma): Promise<boolean> {
   return (await blockedDays(date, date, target, db)).length > 0;

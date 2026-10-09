@@ -202,3 +202,27 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* The family's cases on the profile */
+.case-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.case-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.case-list li:last-child {
+  border-bottom: 0;
+}
+.case-list-main {
+  flex: 1;
+  min-width: 0;
+}
+.case-list-main a {
+  font-weight: 700;
+}

@@ -4,6 +4,8 @@ import { AppShell } from './components/AppShell'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ClientDetailPage } from './pages/clients/ClientDetailPage'
 import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
+import { EnquiriesPage } from './pages/enquiries/EnquiriesPage'
+import { NewEnquiryPage } from './pages/enquiries/NewEnquiryPage'
 import { LoginPage } from './pages/LoginPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
@@ -57,6 +59,8 @@ export default function App() {
         }
       >
         <Route index element={<TodayPage />} />
+        <Route path="enquiries" element={<EnquiriesPage />} />
+        <Route path="enquiries/new" element={<NewEnquiryPage />} />
         <Route path="clients" element={<ClientDirectoryPage />} />
         <Route path="clients/:id" element={<ClientDetailPage />} />
         {/* Settings (demo screen 29). Masters are readable by the Head and office staff; the rest is the Head's. */}

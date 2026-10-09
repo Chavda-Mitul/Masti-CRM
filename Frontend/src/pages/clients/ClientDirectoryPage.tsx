@@ -144,7 +144,7 @@ export function ClientDirectoryPage() {
                       <span className="avatar">{c.name ? initials(c.name) : '?'}</span>
                       <div>
                         <Link to={`/clients/${c.id}`} className="client-name" onClick={(e) => e.stopPropagation()}>
-                          {c.name ?? 'Name not given yet'}
+                          {c.name}
                         </Link>
                         <div className="muted small">
                           {c.kind === 'CORPORATE' ? `Company${c.contactPerson ? ` · ${c.contactPerson}` : ''}` : 'Person / family'}

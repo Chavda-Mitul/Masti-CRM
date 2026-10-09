@@ -91,6 +91,7 @@ function VisaTypeDrawer({ visaType, onClose }: { visaType: VisaType | null; onCl
       submitLabel={visaType ? 'Save changes' : 'Add visa type'}
       pending={save.isPending}
       error={save.error}
+      dirty={formState.isDirty}
       onClose={onClose}
       onSubmit={onSubmit}
     >

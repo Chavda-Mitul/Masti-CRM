@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { canEditAccountsFields } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { FormField } from '../../components/FormField'
+import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { applyServerIssues, errorText, existingClientId, isStale } from './apiErrors'
 import { changedIn, clientBody, clientFormDefaults, filledIn } from './forms'
 import { useCreateClient, useUpdateClient } from './queries'
@@ -13,7 +14,7 @@ import type { ClientFieldsBody, ClientOptions, ClientProfile } from './types'
 import { useDuplicateGuard } from './useDuplicateGuard'
 
 /**
- * Add a client (only the mobile is needed) or edit one's details.
+ * Add a client (the mobile and the name are needed) or edit one's details.
  * Editing sends only changed fields with the updatedAt it loaded (optimistic locking).
  * Accounting code, billing cycle and payment habit are read-only unless the user is in Accounts (or Head).
  */
@@ -36,7 +37,7 @@ export function ClientFormDrawer({
   const [openedAt] = useState(client?.updatedAt)
 
   const form = useForm<ClientFormValues>({
-    resolver: zodResolver(clientFormSchema),
+    resolver: zodResolver(clientFormSchema(options.states)),
     defaultValues: clientFormDefaults(client, options),
   })
   const { register, handleSubmit, control, setError, formState } = form
@@ -47,6 +48,12 @@ export function ClientFormDrawer({
   const update = useUpdateClient(client?.id ?? '')
   const save = isNew ? create : update
   const guard = useDuplicateGuard()
+  const drawer = useDrawerGuard(formState.isDirty, onClose)
+  // Saved: stop guarding first, since onSaved may go to the new client's page.
+  const saved = (result: ClientProfile) => {
+    drawer.release()
+    onSaved(result)
+  }
 
   const onError = (error: unknown, retry: () => void) => {
     if (guard.intercept(error, retry)) return
@@ -58,12 +65,12 @@ export function ClientFormDrawer({
     if (isNew) {
       create.mutate(
         { ...body, mobile },
-        { onSuccess: onSaved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
+        { onSuccess: saved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
       )
     } else {
       update.mutate(
         { ...body, updatedAt: openedAt ?? client.updatedAt },
-        { onSuccess: onSaved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
+        { onSuccess: saved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
       )
     }
   }
@@ -82,13 +89,13 @@ export function ClientFormDrawer({
 
   return (
     <>
-      <div className="overlay" onClick={onClose}>
-        <form className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer drawer-wide" onSubmit={onSubmit} noValidate>
           <div className="pad drawer-head">
-            <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name ?? 'client'}`}</h2>
+            <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name}`}</h2>
             <p className="muted">
               {isNew
-                ? 'Only the mobile number is needed now. The rest can be completed before invoicing.'
+                ? 'The mobile number and name are needed now (marked *). The rest can be completed before invoicing.'
                 : 'Only what you change is saved.'}
             </p>
           </div>
@@ -107,16 +114,21 @@ export function ClientFormDrawer({
 
             <div className="form-grid">
               {isNew ? (
-                <FormField label="Mobile number" error={errors.mobile?.message} hint="The main number: client lookup and WhatsApp.">
-                  <input className="input mono" {...register('mobile')} placeholder="98250 41234" autoFocus inputMode="tel" />
+                <FormField label="Mobile number" required error={errors.mobile?.message} hint="The main number: client lookup and WhatsApp.">
+                  <input className="input mono" {...register('mobile')} placeholder="98250 41234" autoFocus inputMode="tel" aria-required />
                 </FormField>
               ) : (
-                <FormField label="Mobile number" hint="Change it from the Numbers card.">
+                <FormField label="Mobile number" required hint="Change it from the Numbers card.">
                   <input className="input mono" value={form.getValues('mobile')} readOnly disabled />
                 </FormField>
               )}
-              <FormField label={kind === 'CORPORATE' ? 'Company name' : 'Name'} error={errors.name?.message}>
-                <input className="input" {...register('name')} placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'} />
+              <FormField label={kind === 'CORPORATE' ? 'Company name' : 'Name'} required error={errors.name?.message}>
+                <input
+                  className="input"
+                  {...register('name')}
+                  placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'}
+                  aria-required
+                />
               </FormField>
               {kind === 'CORPORATE' && (
                 <FormField label="Contact person" error={errors.contactPerson?.message} hint="The person we deal with.">
@@ -139,7 +151,7 @@ export function ClientFormDrawer({
               <FormField label="City" error={errors.city?.message}>
                 <input className="input" {...register('city')} placeholder="Surat" />
               </FormField>
-              <FormField label="State" error={errors.stateCode?.message} hint="Sets GST on invoices. Filled from the GSTIN if empty.">
+              <FormField label="State" error={errors.stateCode?.message} hint="Sets GST on invoices. Filled from the GSTIN if empty, and must match it.">
                 <select className="select" {...register('stateCode')}>
                   <option value="">Not set</option>
                   {options.states.map((s) => (
@@ -160,7 +172,7 @@ export function ClientFormDrawer({
                 <input className="input mono upper" {...register('pan')} placeholder="ABCDE1234F" maxLength={12} />
               </FormField>
               <FormField label="GSTIN" error={errors.gstin?.message} hint="Companies, or anyone registered for GST.">
-                <input className="input mono upper" {...register('gstin')} placeholder="24ABCDE1234F1Z5" maxLength={17} />
+                <input className="input mono upper" {...register('gstin')} placeholder="24ABCDE1234F1Z6" maxLength={17} />
               </FormField>
             </div>
 
@@ -226,8 +238,9 @@ export function ClientFormDrawer({
           </div>
         </form>
       </div>
-      {/* Outside the overlay, so clicks in the warning don't reach the drawer's close-on-click. */}
+      {/* Outside the overlay, so clicks in them never count as a click outside the drawer. */}
       {guard.modal}
+      {drawer.dialog}
     </>
   )
 }

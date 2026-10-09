@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { FormField } from '../../components/FormField'
+import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { istToday } from '../../lib/format'
 import { applyServerIssues, errorText, isStale } from './apiErrors'
 import { changedIn, filledIn, memberBody, memberFormDefaults } from './forms'
@@ -31,12 +32,16 @@ export function MemberFormDrawer({
 
   const save = useSaveMember(clientId)
   const guard = useDuplicateGuard()
+  const drawer = useDrawerGuard(formState.isDirty, onClose)
 
   const send = (body: MemberBody) => {
     save.mutate(
       { ...(member ? { memberId: member.id } : {}), body: member ? { ...body, updatedAt: member.updatedAt } : body },
       {
-        onSuccess: onClose,
+        onSuccess: () => {
+          drawer.release()
+          onClose()
+        },
         onError: (error) => {
           if (guard.intercept(error, () => send({ ...body, confirmDuplicates: true }))) return
           if (isStale(error)) return onClose()
@@ -56,8 +61,8 @@ export function MemberFormDrawer({
 
   return (
     <>
-      <div className="overlay" onClick={onClose}>
-        <form className="drawer" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer" onSubmit={onSubmit} noValidate>
           <div className="pad drawer-head">
             <h2 className="h2">{isNew ? 'Add a person' : `Edit ${member.name}`}</h2>
             <p className="muted">Family members who travel, or a company&apos;s employees. Use the name exactly as in the passport.</p>
@@ -65,10 +70,10 @@ export function MemberFormDrawer({
 
           <div className="pad drawer-body">
             <div className="form-grid">
-              <FormField label="Name as in passport" error={errors.name?.message} wide>
+              <FormField label="Name as in passport" required error={errors.name?.message} wide>
                 <input className="input" {...register('name')} placeholder="Priya Rajesh Patel" autoFocus />
               </FormField>
-              <FormField label="Relation" error={errors.relationId?.message}>
+              <FormField label="Relation" required error={errors.relationId?.message}>
                 <select className="select" {...register('relationId')}>
                   <option value="">Pick…</option>
                   {options.relations.map((r) => (
@@ -115,6 +120,7 @@ export function MemberFormDrawer({
         </form>
       </div>
       {guard.modal}
+      {drawer.dialog}
     </>
   )
 }

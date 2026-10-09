@@ -6,6 +6,7 @@ import { api, ApiError } from '../lib/api'
 import { departmentStyle } from '../lib/departments'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SecretOnceDialog } from '../components/SecretOnceDialog'
+import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
 
 type AccessChoice = '' | 'STAFF_VIEW' | 'STAFF_EDIT' | 'HOD'
@@ -277,6 +278,10 @@ function UserDrawer({
   const [access, setAccess] = useState<Record<string, AccessChoice>>(() =>
     Object.fromEntries(departments.map((d) => [d.code, toChoice(user?.departments.find((x) => x.code === d.code))])),
   )
+  // What the drawer opened with, to tell whether anything was changed.
+  const [opened] = useState(() => JSON.stringify({ name, mobile, email, type, access }))
+  const dirty = JSON.stringify({ name, mobile, email, type, access }) !== opened
+  const drawer = useDrawerGuard(dirty, onClose)
 
   const save = useMutation({
     mutationFn: () => {
@@ -293,7 +298,10 @@ function UserDrawer({
         ? api<{ user: User }>(`/users/${user.id}`, { method: 'PATCH', body })
         : api<{ user: User; tempPassword?: string }>('/users', { method: 'POST', body })
     },
-    onSuccess: onSaved,
+    onSuccess: (result) => {
+      drawer.release()
+      onSaved(result)
+    },
   })
 
   const onSubmit = (e: FormEvent) => {
@@ -304,96 +312,99 @@ function UserDrawer({
   const editingSelf = user?.id === me?.id
 
   return (
-    <div className="overlay" onClick={onClose}>
-      <form className="drawer" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
-        <div className="pad" style={{ borderBottom: '1px solid var(--border-card)' }}>
-          <h2 className="h2">{user ? `Edit ${user.name}` : 'Add a user'}</h2>
-          <p className="muted" style={{ margin: '4px 0 0', fontSize: 13.5 }}>
-            {user
-              ? 'Changes to access apply on their next click.'
-              : 'They log in with their mobile number or email and a temporary password you’ll see after saving.'}
-          </p>
-        </div>
-
-        <div className="pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
-          <label className="field">
-            Full name
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <label className="field">
-              Mobile number
-              <input className="input mono" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="98250 41234" />
-            </label>
-            <label className="field">
-              Email
-              <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optional" />
-            </label>
+    <>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer" onSubmit={onSubmit}>
+          <div className="pad" style={{ borderBottom: '1px solid var(--border-card)' }}>
+            <h2 className="h2">{user ? `Edit ${user.name}` : 'Add a user'}</h2>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: 13.5 }}>
+              {user
+                ? 'Changes to access apply on their next click.'
+                : 'They log in with their mobile number or email and a temporary password you’ll see after saving.'}
+            </p>
           </div>
-          <span className="hint">
-            {type === 'FIELD'
-              ? 'Field staff need a mobile number: their jobs and handover codes come on WhatsApp.'
-              : 'A mobile number or an email is needed (or both). Either can be used to log in.'}
-          </span>
 
-          <label className="field" style={{ marginTop: 4 }}>
-            Account type
-            <select className="select" value={type} onChange={(e) => setType(e.target.value as UserType)} disabled={editingSelf}>
-              {(['OFFICE', 'FIELD', 'HEAD'] as const).map((t) => (
-                <option key={t} value={t}>
-                  {TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {type === 'OFFICE' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-              <span className="lbl">Department access</span>
-              {departments.map((d) => {
-                const s = departmentStyle(d.code)
-                return (
-                  <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '1fr 190px', alignItems: 'center', gap: 12 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 700 }}>
-                      <span className="dot" style={{ background: s.solid, width: 10, height: 10 }} />
-                      {d.name}
-                    </span>
-                    <select
-                      className="select"
-                      value={access[d.code] ?? ''}
-                      onChange={(e) => setAccess({ ...access, [d.code]: e.target.value as AccessChoice })}
-                      aria-label={`${d.name} access`}
-                    >
-                      <option value="">No access</option>
-                      {(Object.keys(ACCESS_LABEL) as Exclude<AccessChoice, ''>[]).map((k) => (
-                        <option key={k} value={k}>
-                          {ACCESS_LABEL[k]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
-              <span className="hint">HODs can always edit in their department, and get HOD-only powers like refund overrides.</span>
+          <div className="pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }}>
+            <label className="field">
+              Full name
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <label className="field">
+                Mobile number
+                <input className="input mono" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="98250 41234" />
+              </label>
+              <label className="field">
+                Email
+                <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optional" />
+              </label>
             </div>
-          )}
+            <span className="hint">
+              {type === 'FIELD'
+                ? 'Field staff need a mobile number: their jobs and handover codes come on WhatsApp.'
+                : 'A mobile number or an email is needed (or both). Either can be used to log in.'}
+            </span>
 
-          {save.error && (
-            <div className="alert alert-bad" role="alert">
-              {errorText(save.error)}
-            </div>
-          )}
-        </div>
+            <label className="field" style={{ marginTop: 4 }}>
+              Account type
+              <select className="select" value={type} onChange={(e) => setType(e.target.value as UserType)} disabled={editingSelf}>
+                {(['OFFICE', 'FIELD', 'HEAD'] as const).map((t) => (
+                  <option key={t} value={t}>
+                    {TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <div className="pad" style={{ borderTop: '1px solid var(--border-card)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={save.isPending || !name.trim()}>
-            {save.isPending ? 'Saving…' : user ? 'Save changes' : 'Add user'}
-          </button>
-        </div>
-      </form>
-    </div>
+            {type === 'OFFICE' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                <span className="lbl">Department access</span>
+                {departments.map((d) => {
+                  const s = departmentStyle(d.code)
+                  return (
+                    <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '1fr 190px', alignItems: 'center', gap: 12 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 700 }}>
+                        <span className="dot" style={{ background: s.solid, width: 10, height: 10 }} />
+                        {d.name}
+                      </span>
+                      <select
+                        className="select"
+                        value={access[d.code] ?? ''}
+                        onChange={(e) => setAccess({ ...access, [d.code]: e.target.value as AccessChoice })}
+                        aria-label={`${d.name} access`}
+                      >
+                        <option value="">No access</option>
+                        {(Object.keys(ACCESS_LABEL) as Exclude<AccessChoice, ''>[]).map((k) => (
+                          <option key={k} value={k}>
+                            {ACCESS_LABEL[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
+                <span className="hint">HODs can always edit in their department, and get HOD-only powers like refund overrides.</span>
+              </div>
+            )}
+
+            {save.error && (
+              <div className="alert alert-bad" role="alert">
+                {errorText(save.error)}
+              </div>
+            )}
+          </div>
+
+          <div className="pad" style={{ borderTop: '1px solid var(--border-card)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={save.isPending || !name.trim()}>
+              {save.isPending ? 'Saving…' : user ? 'Save changes' : 'Add user'}
+            </button>
+          </div>
+        </form>
+      </div>
+      {drawer.dialog}
+    </>
   )
 }

@@ -1,5 +1,7 @@
 // Shapes returned by /api/clients (Backend/src/modules/clients/client.ts). Dates without a time are "YYYY-MM-DD".
 
+import type { OpenEnquiry } from '../enquiries/types'
+
 export type ClientKind = 'INDIVIDUAL' | 'CORPORATE'
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
 
@@ -31,7 +33,7 @@ export interface Lookup {
 export interface ClientSummary {
   id: string
   kind: ClientKind
-  name: string | null
+  name: string
   contactPerson: string | null
   mobile: string
   area: string | null
@@ -73,7 +75,7 @@ export interface ClientProfile {
   id: string
   kind: ClientKind
   mobile: string
-  name: string | null
+  name: string
   contactPerson: string | null
   email: string | null
   addressLine: string | null
@@ -93,6 +95,8 @@ export interface ClientProfile {
   phones: ClientPhone[]
   members: ClientMember[]
   notes: ClientNote[]
+  /** Unfinished cases, newest first, in the departments this user can see. */
+  openEnquiries: OpenEnquiry[]
 }
 
 export interface ClientOptions {
@@ -121,7 +125,7 @@ export interface Duplicate {
   value: string
   matches: {
     clientId: string
-    clientName: string | null
+    clientName: string
     clientMobile: string
     memberId?: string
     memberName?: string

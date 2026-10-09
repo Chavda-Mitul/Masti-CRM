@@ -8,6 +8,9 @@ export const DEPARTMENT_STYLE: Record<string, { label: string; solid: string; ti
   ACCOUNTS: { label: 'Accounts', solid: '#e0a030', tint: '#fbf0dc', text: '#9a6200' },
 }
 
+/** The departments that take enquiries, in menu order. Accounts doesn't sell. */
+export const SELLING_DEPARTMENTS = ['VISA', 'HOLIDAYS', 'HOTELS', 'INSURANCE', 'TICKETS'] as const
+
 export function departmentStyle(code: string) {
   return DEPARTMENT_STYLE[code] ?? { label: code, solid: '#7a746b', tint: '#f3eee5', text: '#5e584f' }
 }

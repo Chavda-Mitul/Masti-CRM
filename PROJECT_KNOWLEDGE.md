@@ -2,7 +2,7 @@
 
 > **What this is:** the single context file for anyone, human or AI, working on this project. It distils everything in `Masti-CRM-Handover/` (handover pack, the Project Initiation Document, the client's written requirements, the meeting summary and the approved clickable demo) plus the current state of `Backend/` and `Frontend/`.
 >
-> **Last updated:** 8 Oct 2026: answers for Visa Step 1 (intake) recorded; the intake design is proposed in `docs/decisions/0003-visa-intake.md`. **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
+> **Last updated:** 9 Oct 2026: Visa Step 1 (intake) refreshed and built (`docs/decisions/0003-visa-intake.md`, *Refresh*); messaging deferred. **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
 
 ## Contents
 
@@ -451,7 +451,7 @@ These are used by every module.
 
 ### 10.1 Client (customer master) and travellers
 
-- **Saved against the mobile number** ✅. An enquiry needs only the mobile number; an existing client is recognised by it.
+- **Saved against the mobile number** ✅. An existing client is recognised by it. **Amended 9 Oct 2026 (project lead):** staff also give the client's **name** (required for a new client, and for one saved earlier without a name); see `docs/decisions/0004-client-master.md` *Amendment*. ⚠️ Confirm with Vimal, who said "only the mobile number".
 - **Fixed format: minimal at enquiry, complete before invoicing** ✅.
 - **Fields seen:**
   - name, mobile, email, area/address, "client since"
@@ -465,7 +465,7 @@ These are used by every module.
 - **Built 8 Oct 2026 (project lead): the client master, before the System Masters.** Design: `docs/decisions/0004-client-master.md`.
   - **Tables:** `Client`, `ClientPhone` (extra numbers), `ClientMember` (family & travellers, or a company's employees), `ClientNote`, plus the seeded lookups `BillingCycle`, `PaymentHabit`, `Relation`.
   - **Client fields:** kind (individual / company), name, contact person (companies only), email, address line, area, city, GST state, PIN code, PAN, GSTIN, accounting code (unique), billing cycle, payment habit, client since.
-    - A GSTIN must contain the PAN; an empty PAN and state are filled from it.
+    - A GSTIN must contain the PAN and match the state; an empty PAN and state are filled from it, a different one is refused.
     - PAN is a typed field only: **PAN verification is not built** (Q23).
   - **Extra mobile numbers:** lookup matches them too. WhatsApp always goes to the main number. The main number can be swapped for another.
   - **Members:** passport name, relation, DOB (age is worked out), own mobile, current passport number and expiry. Passport status is VALID / RENEW_SOON / EXPIRED; the window is a setting (12 months ⚠️, Q35). Members are archived, never deleted. Consent comes with Visa Step 2, keyed to the member.
@@ -1411,9 +1411,9 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 10. Testing approach, especially for the money and rule logic.
 11. Data migration plan, if Masti's existing clients are imported.
 
-### 16.4 Current codebase (as of 8 Oct 2026)
+### 16.4 Current codebase (as of 9 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master: API + tests merged into `master` on 9 Oct 2026 (PR #2); the Settings → Masters screens are built on `feat/masters-screens`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md`, `0005-system-masters.md` (the holiday calendar and visa document master: API + tests merged on 9 Oct 2026 in PR #2, the Settings → Masters screens in PR #3), and `0003-visa-intake.md` (refreshed 9 Oct 2026). Visa Step 1 is built on `feat/visa-intake`: the New enquiry form, the All enquiries list and the Enquiry sources master. Messaging is deferred, so nothing is sent to clients yet. The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1421,13 +1421,17 @@ Masti CRM/
 ├── docs/decisions/               ← decision records (0001-auth-sessions.md)
 ├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
 │   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
-│   ├── prisma/schema.prisma      ← Department, User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
+│   ├── prisma/schema.prisma      ← Department (+ casePrefix), User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
 │   │                                Client, ClientPhone, ClientMember, ClientNote, BillingCycle, PaymentHabit, Relation,
-│   │                                Country, VisaType, Embassy, VisaOffering, DocumentMaster, VisaChecklistItem, Holiday, HolidayTarget
+│   │                                Country, VisaType, Embassy, VisaOffering, DocumentMaster, VisaChecklistItem, Holiday, HolidayTarget,
+│   │                                DepartmentStage, CaseCounter, EnquirySource, Enquiry, VisaCase, VisaCaseTraveller, VisaCaseDocument
 │   ├── prisma/migrations/        ← *_auth (AuditLog append-only trigger), *_add_user_types (field-mobile CHECK, office-only department triggers),
 │   │                                *_client_master (mobile/PAN/GSTIN/passport CHECKs, one default billing cycle),
 │   │                                *_system_masters + *_holiday_weekday_check (holiday date/target CHECKs, code formats),
-│   │                                *_remove_machine_accounts_and_bot (drops ApiClient, bot columns, PENDING)
+│   │                                *_remove_machine_accounts_and_bot (drops ApiClient, bot columns, PENDING),
+│   │                                *_visa_intake (casePrefix backfill, travel month/date CHECKs),
+│   │                                *_client_name_required (Client.name NOT NULL + not-blank CHECK),
+│   │                                *_department_stage_flow (steps per department + flow, e.g. Insurance policy vs claim)
 │   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
@@ -1440,32 +1444,36 @@ Masti CRM/
 │   │   │                            access.ts (who may edit), duplicates.ts (confirmDuplicates), readiness.ts (assertInvoiceReady)
 │   │   ├── visaMasters/          ← countries, visa types, embassies, documents, country × type offerings, checklists (0005)
 │   │   ├── holidays/             ← holiday calendar, blockedDays() (the one blocked-date rule)
+│   │   ├── enquiries/            ← All enquiries list (every department), staff sources, seed of sources + visa steps (0003)
+│   │   ├── visa/                 ← visa intake: createVisaEnquiry (client, case number, checklist copy), case DTO, visa.firstFollowUp
 │   │   ├── departments/          ← active department list
 │   │   └── health/               ← server and database status
 │   ├── src/middleware/           ← auth.ts (requireAuth, actorOf, requireHead, requireDepartment,
 │   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
 │   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers),
-│                                contact.ts (mobile/email clean-up), prismaErrors.ts (rethrowUnique),
-│                                changes.ts (onlyChanged, definedOnly, optimistic locking)
+│                                contact.ts (mobile/email clean-up), prismaErrors.ts (isUniqueViolation, rethrowUnique),
+│                                changes.ts (onlyChanged, definedOnly, optimistic locking), settings.ts (saveSetting: upsert + audit)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
     ├── src/main.tsx, App.tsx     ← React Query + React Router 8 data router (createBrowserRouter + RouterProvider, one catch-all route
-    │                                rendering App's <Routes>, so useBlocker works) + ToastProvider; routes /login, /change-password, /, /clients,
-    │                                /clients/:id, /settings/* (masters, checklists, lists, users), /tasks (field staff)
+    │                                rendering App's <Routes>, so useBlocker works) + ToastProvider; routes /login, /change-password, /, /enquiries,
+    │                                /enquiries/new, /clients, /clients/:id, /settings/* (masters, checklists, lists, users), /tasks (field staff)
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
     │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
     ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
+    │   └── enquiries/            ← EnquiriesPage (All enquiries: department chips, Only mine, search, steps side panel),
+    │                                NewEnquiryPage (Visa intake by hand; Idempotency-Key per form), due.ts (late/today/later), queries.ts
     │   └── settings/             ← SettingsLayout (tabs: Portal logins "Soon" · Masters & holiday calendar · Staff & roles);
     │                                masters/ (MastersPage overview, holidays/ calendar card + drawer + review, checklists/ list + editor,
-    │                                lists/ countries · visa types · embassies · documents, queries.ts, schemas.ts)
+    │                                lists/ countries · visa types · embassies · documents · enquiry sources, queries.ts, schemas.ts)
     ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog,
     │                                SecretOnceDialog (passwords, API keys), TabStrip
     ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), apiErrors.ts (isStale, errorText, applyServerIssues), useRetryGuard.tsx
-    │                                (409 warning → "save anyway"), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
-    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list, .kind-toggle), shell.css, auth.css, clients.css,
+    │                                (409 warning → "save anyway"), departments.ts (colours, SELLING_DEPARTMENTS), format.ts, toast.ts (useToast), useDebouncedValue.ts
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list, .kind-toggle), shell.css, auth.css, clients.css, enquiries.css,
                                      pages/settings/settings.css
 ```
 
@@ -1483,6 +1491,8 @@ Masti CRM/
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
 | `/api/clients/*` | Head, office staff (edit: any department EDIT; billing fields: Accounts) | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
 | `/api/masters/*` | Visa VIEW to read; Visa HOD (or Head) to write. Embassies: office staff read, any HOD writes | Countries, visa types, embassies, documents, country × type offerings, and their checklists (`PUT …/visa-offerings/:id/checklist` replaces the whole list). Full list in `docs/decisions/0005-system-masters.md`. |
+| `GET /api/enquiries` · `GET /api/enquiries/sources` | Head + office staff; rows only from departments they can VIEW | All enquiries (late first, then by due time; department, Only mine, search, cursor) and the staff "Came in through" sources. `/api/masters/enquiry-sources` edits the sources (Visa HOD or Head). |
+| `/api/visa/*` | Visa VIEW to read; Visa EDIT to save; Visa HOD (or Head) for settings | Intake dropdowns (`GET /offerings`), **Save enquiry** (`POST /cases`, Idempotency-Key), `GET /cases/:caseNo`, `GET/PUT /settings` (`visa.firstFollowUp`). See `docs/decisions/0003-visa-intake.md` *Refresh*. |
 | `/api/holidays/*` | Head, office staff read; Head or any HOD write; settings: Head | Holiday calendar: list, add, edit (optimistic locking), remove, `GET /blocked` (date pickers), `GET /targets`, settings |
 
 **Rules every new route must follow:**
@@ -1527,7 +1537,7 @@ Masti CRM/
 | `Backend/.env` | `DATABASE_URL` | Required |
 | `Backend/.env` | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | Local docker-compose DB; must match `DATABASE_URL` |
 | `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
-| `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
+| `Backend/.env` | `TRUST_PROXY` | `false` by default (no proxy). Behind nginx set the hop count (`1`) or the proxy IPs/subnets so `req.ip` is real; production warns at start when it's `false`. `true` and malformed entries stop the server at start (`src/config/trustProxy.ts`) |
 | `Backend/.env` | `COOKIE_SECURE` (`auto`) | Session cookie over HTTPS only; `auto` = production only. `false` only for a plain-HTTP office deployment, or login silently fails |
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
@@ -1552,6 +1562,7 @@ Masti CRM/
 - **Frontend:**
   - Call the API only through `api()` in `src/lib/api.ts`. A 401 anywhere marks the user signed out (see `main.tsx`).
   - A screen holding unsaved work (e.g. the checklist editor) guards it with `useBlocker` (every in-app navigation: links, `navigate()`, Back/Forward) plus `beforeunload` (tab close, reload). Let navigation to `/login` through.
+  - Drawers use `useDrawerGuard(dirty, onClose)` (`src/components/useDrawerGuard.tsx`): a click outside closes only if the press also started outside; Escape closes; with unsaved changes both ask "Discard your changes?", and so does leaving the page. Cancel closes without asking. Call `release()` on a successful save before closing or navigating.
   - Forms and drawers use react-hook-form + zod, with the schemas next to the page (`schemas.ts`).
   - Use the CSS tokens in `src/styles/tokens.css`, never raw hex.
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).

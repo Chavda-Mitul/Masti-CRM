@@ -49,16 +49,32 @@ export async function login(input: LoginInput, client: ClientInfo) {
     throw forbidden("The CRM can only be used from the office network.");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const { token, session } = await createSession(user.id, client, tx);
-    const updated = await tx.user.update({
-      where: { id: user.id },
+  const opened = await prisma.$transaction(async (tx) => {
+    // Re-check under the user's row lock. A password reset, password change or deactivation may have committed while
+    // argon2 was checking the old password. Each of those updates this row before deleting sessions, so either it waits
+    // for this login and then deletes the new session, or this update sees its change and matches nothing.
+    const { count } = await tx.user.updateMany({
+      where: { id: user.id, passwordHash: user.passwordHash, isActive: true },
       data: { lastLoginAt: new Date() },
-      include: withDepartments,
     });
+    if (count === 0) return null;
+    const { token, session } = await createSession(user.id, client, tx);
+    const updated = await tx.user.findUniqueOrThrow({ where: { id: user.id }, include: withDepartments });
     await audit({ actorId: user.id, action: "auth.login.success", entityType: "User", entityId: user.id, ip: client.ip }, tx);
     return { user: toUserDto(updated), token, expiresAt: session.expiresAt };
   });
+
+  if (!opened) {
+    await audit({
+      action: "auth.login.failed",
+      entityType: "User",
+      entityId: user.id,
+      after: { identifier: input.identifier.slice(0, 100), reason: "changed_during_login" },
+      ip: client.ip,
+    });
+    throw new HttpError(401, LOGIN_FAILED);
+  }
+  return opened;
 }
 
 /** Ends the session for this cookie token, if it is still valid. */

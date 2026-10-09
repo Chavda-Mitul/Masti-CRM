@@ -3,22 +3,31 @@ import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { currentUser, requireAuth } from "../../middleware/auth";
 import { toUserDto } from "../users/user";
 import { changePasswordSchema, loginSchema } from "./auth.schemas";
+import { parseIdentifier } from "./identifier";
 import * as authService from "./auth.service";
 import { clearSessionCookie, SESSION_COOKIE, setSessionCookie } from "./session";
 
 const router = Router();
 
-/** 10 failed attempts per 15 minutes for the same IP + identifier. Successful logins don't count. */
+/**
+ * The account a login is for, as the limiter's key: "98250 41234", "+91 98250 41234" and "09825041234" are one account,
+ * so writing the number differently doesn't buy more tries. Text that isn't a mobile or email is keyed as typed.
+ */
+function loginKey(input: unknown): string {
+  if (typeof input !== "string") return "";
+  const parsed = parseIdentifier(input);
+  if (!parsed) return input.trim().toLowerCase();
+  return parsed.kind === "email" ? parsed.email : parsed.mobile;
+}
+
+/** 10 failed attempts per 15 minutes for the same IP + account. Successful logins don't count. */
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   skipSuccessfulRequests: true,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim().toLowerCase() : "";
-    return `${ipKeyGenerator(req.ip ?? "unknown")}|${identifier}`;
-  },
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? "unknown")}|${loginKey(req.body?.identifier)}`,
   handler: (_req, res) => {
     res.status(429).json({ message: "Too many login attempts. Please wait 15 minutes and try again." });
   },

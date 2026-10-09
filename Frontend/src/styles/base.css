@@ -119,6 +119,16 @@ a:hover {
 .btn-danger {
   color: var(--bad);
 }
+/* Links styled as buttons (router <Link className="btn">): no underline, and keep the button's text colour on hover. */
+a.btn,
+a.btn:hover {
+  text-decoration: none;
+  color: var(--ink);
+}
+a.btn-primary,
+a.btn-primary:hover {
+  color: var(--on-fill);
+}
 .btn-sm {
   height: 34px;
   padding: 0 13px;
@@ -132,6 +142,21 @@ a:hover {
   color: var(--primary);
   font-weight: 700;
   cursor: pointer;
+}
+/* A round, borderless button for a single icon (✕ close). */
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.btn-icon:hover {
+  color: var(--ink);
 }
 
 /* Inputs */
@@ -359,6 +384,10 @@ a:hover {
 .alert-warn {
   background: var(--warn-bg);
   color: var(--warn);
+}
+.req {
+  color: var(--bad);
+  font-weight: 800;
 }
 .field-error {
   font-size: 12.5px;

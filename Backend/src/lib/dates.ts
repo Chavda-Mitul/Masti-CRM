@@ -58,3 +58,8 @@ export function daysInclusive(from: string, to: string): number {
 export function isoWeekday(value: string): number {
   return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;
 }
+
+/** A date and an "HH:mm" wall-clock time in India → the instant (UTC Date). IST has no daylight saving. */
+export function istDateTimeToUtc(date: string, time: string): Date {
+  return new Date(`${date}T${time}:00.000+05:30`);
+}

@@ -81,6 +81,21 @@ export const updateDocumentSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
+export const createEnquirySourceSchema = z.object({
+  code: keyCode,
+  name: text(60),
+  sortOrder: sortOrder.default(0),
+  isActive: z.boolean().default(true),
+  staffSelectable: z.boolean().default(true),
+});
+export const updateEnquirySourceSchema = z.object({
+  name: text(60).optional(),
+  sortOrder: sortOrder.optional(),
+  isActive: z.boolean().optional(),
+  staffSelectable: z.boolean().optional(),
+});
+
 export const createOfferingSchema = z.object({ countryId: id, visaTypeId: id });
 export const updateOfferingSchema = z.object({ isActive: z.boolean() });
 
@@ -113,6 +128,8 @@ export type CreateEmbassyInput = z.infer<typeof createEmbassySchema>;
 export type UpdateEmbassyInput = z.infer<typeof updateEmbassySchema>;
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
+export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
+export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;
 export type UpdateOfferingInput = z.infer<typeof updateOfferingSchema>;
 export type ReplaceChecklistInput = z.infer<typeof replaceChecklistSchema>;

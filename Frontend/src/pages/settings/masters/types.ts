@@ -169,5 +169,15 @@ export interface ChecklistLineBody {
   note: string | null
 }
 
-/** The four small lists, by their API path. */
-export type MasterResource = 'countries' | 'visa-types' | 'embassies' | 'documents'
+/** "Came in through" on the New enquiry form. Sources staff can't pick are set only by integrations. */
+export interface EnquirySource {
+  id: number
+  code: string
+  name: string
+  sortOrder: number
+  isActive: boolean
+  staffSelectable: boolean
+}
+
+/** The small lists, by their API path. */
+export type MasterResource = 'countries' | 'visa-types' | 'embassies' | 'documents' | 'enquiry-sources'

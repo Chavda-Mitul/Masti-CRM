@@ -52,6 +52,17 @@ describe("login", () => {
     expect(blocked.status).toBe(429);
   });
 
+  it("counts every way of writing a mobile number as one account", async () => {
+    await createUser({ mobile: "+919825077001", departments: [{ code: "VISA" }] });
+    const formats = ["9825077001", "09825077001", "+91 98250 77001", "98250-77001", "+919825077001"];
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app).post("/api/auth/login").send({ identifier: formats[i % formats.length], password: "wrong-pass" });
+      expect(res.status).toBe(401);
+    }
+    const blocked = await request(app).post("/api/auth/login").send({ identifier: "98250 77001", password: PASSWORD });
+    expect(blocked.status).toBe(429);
+  });
+
   it("rejects a missing or invalid body", async () => {
     const res = await request(app).post("/api/auth/login").send({ identifier: "" });
     expect(res.status).toBe(400);

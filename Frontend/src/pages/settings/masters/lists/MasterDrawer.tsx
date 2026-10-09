@@ -1,16 +1,21 @@
 import type { FormEventHandler, ReactNode } from 'react'
+import { useDrawerGuard } from '../../../../components/useDrawerGuard'
 import { errorText } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useSaveMaster } from '../queries'
 import type { MasterResource } from '../types'
 
-/** The drawer every small master list uses to add or change a row. The fields come from the caller. */
+/**
+ * The drawer every small master list uses to add or change a row. The fields come from the caller, and so does `dirty`
+ * (the form's isDirty): with unsaved changes, a click outside, Escape or leaving the page asks first.
+ */
 export function MasterDrawer({
   title,
   intro,
   submitLabel,
   pending,
   error,
+  dirty,
   onClose,
   onSubmit,
   children,
@@ -20,36 +25,41 @@ export function MasterDrawer({
   submitLabel: string
   pending: boolean
   error: unknown
+  dirty: boolean
   onClose: () => void
   onSubmit: FormEventHandler<HTMLFormElement>
   children: ReactNode
 }) {
   const message = errorText(error)
+  const drawer = useDrawerGuard(dirty, onClose)
   return (
-    <div className="overlay" onClick={onClose}>
-      <form className="drawer" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
-        <div className="pad drawer-head">
-          <h2 className="h2">{title}</h2>
-          <p className="muted">{intro}</p>
-        </div>
-        <div className="pad drawer-body">
-          <div className="form-grid">{children}</div>
-          {message && (
-            <div className="alert alert-bad" role="alert">
-              {message}
-            </div>
-          )}
-        </div>
-        <div className="pad drawer-foot">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending ? 'Saving…' : submitLabel}
-          </button>
-        </div>
-      </form>
-    </div>
+    <>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer" onSubmit={onSubmit} noValidate>
+          <div className="pad drawer-head">
+            <h2 className="h2">{title}</h2>
+            <p className="muted">{intro}</p>
+          </div>
+          <div className="pad drawer-body">
+            <div className="form-grid">{children}</div>
+            {message && (
+              <div className="alert alert-bad" role="alert">
+                {message}
+              </div>
+            )}
+          </div>
+          <div className="pad drawer-foot">
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={pending}>
+              {pending ? 'Saving…' : submitLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+      {drawer.dialog}
+    </>
   )
 }
 

@@ -20,6 +20,7 @@ export function MastersPage() {
   const countries = useMasterList('countries', visa)
   const visaTypes = useMasterList('visa-types', visa)
   const documents = useMasterList('documents', visa)
+  const sources = useMasterList('enquiry-sources', visa)
   const embassies = useMasterList('embassies')
 
   const active = (rows: { isActive: boolean }[] | undefined) => (rows ? String(rows.filter((r) => r.isActive).length) : '…')
@@ -52,7 +53,7 @@ export function MastersPage() {
 
         <section className="card pad master-card">
           <h2 className="h2">Lists</h2>
-          <p className="muted small">The building blocks the checklists and the holiday calendar use.</p>
+          <p className="muted small">The building blocks the checklists, the holiday calendar and the New enquiry form use.</p>
           {visa && (
             <>
               <Link className="kv-line" to="/settings/masters/lists?tab=countries">
@@ -66,6 +67,10 @@ export function MastersPage() {
               <Link className="kv-line" to="/settings/masters/lists?tab=documents">
                 <span>Documents</span>
                 <strong>{active(documents.data)}</strong>
+              </Link>
+              <Link className="kv-line" to="/settings/masters/lists?tab=enquiry-sources">
+                <span>Enquiry sources</span>
+                <strong>{active(sources.data)}</strong>
               </Link>
             </>
           )}

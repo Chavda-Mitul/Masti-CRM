@@ -97,6 +97,7 @@ function CountryDrawer({ country, onClose }: { country: Country | null; onClose:
       submitLabel={country ? 'Save changes' : 'Add country'}
       pending={save.isPending}
       error={save.error}
+      dirty={formState.isDirty}
       onClose={onClose}
       onSubmit={onSubmit}
     >

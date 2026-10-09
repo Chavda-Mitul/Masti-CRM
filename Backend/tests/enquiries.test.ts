@@ -1,0 +1,208 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { addMonths, istToday } from "../src/lib/dates";
+import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
+import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
+
+beforeEach(async () => {
+  await resetDb();
+  await seedVisaMasters(prisma);
+  await seedEnquiryMasters(prisma);
+});
+
+type Agent = Awaited<ReturnType<typeof loginAs>>;
+
+async function saveVisa(agent: Agent, mobile: string, extra: Record<string, unknown> = {}) {
+  const offering = await prisma.visaOffering.findFirstOrThrow();
+  const res = await agent.post("/api/visa/cases").send({
+    mobile,
+    clientName: "Test Client",
+    sourceCode: "WHATSAPP",
+    offeringId: offering.id,
+    adults: 2,
+    children: 1,
+    travelMonth: addMonths(istToday(), 2).slice(0, 7),
+    ...extra,
+  });
+  expect(res.status).toBe(201);
+  return res.body.case as { id: string; caseNo: string };
+}
+
+/** A Hotels enquiry made directly: Hotels intake isn't built yet. */
+async function hotelsEnquiry(clientMobile: string) {
+  const hotels = await prisma.department.findUniqueOrThrow({ where: { code: "HOTELS" } });
+  const stage = await prisma.departmentStage.create({
+    data: { departmentId: hotels.id, flow: "HOTELS", code: "ENQUIRY", name: "Enquiry", sortOrder: 1, statusLabel: "New", nextStepLabel: "Check rates" },
+  });
+  const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+  const client = await prisma.client.create({ data: { mobile: clientMobile, name: "Hotel Guest", billingCycleId: cycle.id } });
+  const source = await prisma.enquirySource.findUniqueOrThrow({ where: { code: "LANDLINE" } });
+  return prisma.enquiry.create({
+    data: { caseNo: "HOT-2026-0001", departmentId: hotels.id, clientId: client.id, sourceId: source.id, stageId: stage.id },
+  });
+}
+
+async function setDue(id: string, dueAt: Date | null) {
+  await prisma.enquiry.update({ where: { id }, data: { dueAt } });
+}
+
+describe("GET /api/enquiries", () => {
+  it("lists late first, then by time due, with stage, summary and owner", async () => {
+    await createUser({ name: "Aarti Patel", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const a = await saveVisa(aarti, "9825000001");
+    const b = await saveVisa(aarti, "9825000002");
+    const c = await saveVisa(aarti, "9825000003");
+    const hour = 3_600_000;
+    await setDue(a.id, new Date(Date.now() + 5 * hour));
+    await setDue(b.id, new Date(Date.now() - 48 * hour));
+    await setDue(c.id, null);
+
+    const res = await aarti.get("/api/enquiries");
+    expect(res.status).toBe(200);
+    expect(res.body.enquiries.map((e: { caseNo: string }) => e.caseNo)).toEqual([b.caseNo, a.caseNo, c.caseNo]);
+    expect(res.body.lateCount).toBe(1);
+    expect(res.body.enquiries[0]).toMatchObject({
+      department: { code: "VISA", name: "Visa" },
+      summary: "France (Schengen) · Tourist · 2 adults, 1 child",
+      stage: { flow: "VISA", code: "ENQUIRY", step: 1, of: 8, nextStepLabel: "Start collecting documents" },
+      source: { code: "WHATSAPP" },
+      owner: { name: "Aarti Patel" },
+      client: { mobile: "+919825000002" },
+    });
+    // Only the departments Aarti can see, with counts and steps for the side panel.
+    expect(res.body.departments).toEqual([expect.objectContaining({ code: "VISA", count: 3 })]);
+    expect(res.body.departments[0].flows).toEqual([{ code: "VISA", stages: expect.any(Array) }]);
+    expect(res.body.departments[0].flows[0].stages).toHaveLength(8);
+  });
+
+  it("shows each user only the departments they can view", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    await saveVisa(aarti, "9825000001");
+    await hotelsEnquiry("+919825000099");
+
+    await createUser({ name: "Harsh", email: "hotels@masti.test", departments: [{ code: "HOTELS", access: "VIEW" }] });
+    const hotels = await loginAs("hotels@masti.test");
+    const mine = await hotels.get("/api/enquiries");
+    expect(mine.body.enquiries.map((e: { caseNo: string }) => e.caseNo)).toEqual(["HOT-2026-0001"]);
+    expect(mine.body.enquiries[0].summary).toBe("Hotels");
+    expect((await hotels.get("/api/enquiries?department=VISA")).status).toBe(403);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const all = await head.get("/api/enquiries");
+    expect(all.body.enquiries).toHaveLength(2);
+    expect(all.body.departments.map((d: { code: string; count: number }) => [d.code, d.count])).toEqual([
+      ["VISA", 1],
+      ["HOLIDAYS", 0],
+      ["HOTELS", 1],
+      ["INSURANCE", 0],
+      ["TICKETS", 0],
+      ["ACCOUNTS", 0],
+    ]);
+    const visaOnly = await head.get("/api/enquiries?department=visa");
+    expect(visaOnly.body.enquiries).toHaveLength(1);
+    // The chips keep counting every department while one is picked.
+    expect(visaOnly.body.departments.find((d: { code: string }) => d.code === "HOTELS").count).toBe(1);
+
+    await createUser({ name: "Ravi", mobile: "+919876500001", type: "FIELD" });
+    const field = await loginAs("9876500001");
+    expect((await field.get("/api/enquiries")).status).toBe(403);
+    expect((await request(app).get("/api/enquiries")).status).toBe(401);
+  });
+
+  it("filters by Only mine, search and status, and pages with a cursor", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const neha = await loginAs("neha@masti.test");
+    const a1 = await saveVisa(aarti, "9825041234");
+    const a2 = await saveVisa(aarti, "9825000002");
+    const n1 = await saveVisa(neha, "9825000003");
+    await prisma.client.update({ where: { mobile: "+919825000002" }, data: { name: "Rakesh Mehta" } });
+
+    const mine = await aarti.get("/api/enquiries?mine=true");
+    expect(mine.body.enquiries.map((e: { id: string }) => e.id).sort()).toEqual([a1.id, a2.id].sort());
+
+    const codes = async (q: string) => (await aarti.get(`/api/enquiries?q=${encodeURIComponent(q)}`)).body.enquiries.map((e: { caseNo: string }) => e.caseNo);
+    expect(await codes(n1.caseNo.toLowerCase())).toEqual([n1.caseNo]);
+    expect(await codes("rakesh")).toEqual([a2.caseNo]);
+    expect(await codes("98250 41")).toEqual([a1.caseNo]);
+
+    await prisma.enquiry.update({ where: { id: n1.id }, data: { status: "CANCELLED" } });
+    expect((await aarti.get("/api/enquiries")).body.enquiries).toHaveLength(2);
+    expect((await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([n1.id]);
+
+    const page1 = await aarti.get("/api/enquiries?limit=1");
+    expect(page1.body.enquiries).toHaveLength(1);
+    const page2 = await aarti.get(`/api/enquiries?limit=1&cursor=${page1.body.nextCursor}`);
+    expect(page2.body.enquiries).toHaveLength(1);
+    expect(page2.body.nextCursor).toBeNull();
+    expect(page2.body.enquiries[0].id).not.toBe(page1.body.enquiries[0].id);
+  });
+
+  it("counts steps within each flow, so one department can run two (Insurance: policies and claims)", async () => {
+    const insurance = await prisma.department.findUniqueOrThrow({ where: { code: "INSURANCE" } });
+    const steps = (flow: string, names: string[]) =>
+      Promise.all(
+        names.map((name, i) =>
+          prisma.departmentStage.create({
+            data: { departmentId: insurance.id, flow, code: name.toUpperCase(), name, sortOrder: i + 1, statusLabel: name, nextStepLabel: "Next" },
+          }),
+        ),
+      );
+    const policy = await steps("INSURANCE_POLICY", ["Lead", "Options", "Chosen", "Issued"]);
+    const claim = await steps("INSURANCE_CLAIM", ["Registered", "Documents", "Insurer", "Approved", "Payment", "Confirms", "Closed"]);
+
+    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+    const client = await prisma.client.create({ data: { mobile: "+919825000099", name: "Insured", billingCycleId: cycle.id } });
+    const source = await prisma.enquirySource.findUniqueOrThrow({ where: { code: "LANDLINE" } });
+    const base = { departmentId: insurance.id, clientId: client.id, sourceId: source.id };
+    await prisma.enquiry.create({ data: { ...base, caseNo: "INS-2026-0001", stageId: policy[1]!.id } });
+    await prisma.enquiry.create({ data: { ...base, caseNo: "INS-2026-0002", stageId: claim[1]!.id } });
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const res = await head.get("/api/enquiries?department=INSURANCE");
+    const byCase = Object.fromEntries(res.body.enquiries.map((e: { caseNo: string; stage: unknown }) => [e.caseNo, e.stage]));
+    expect(byCase["INS-2026-0001"]).toMatchObject({ flow: "INSURANCE_POLICY", step: 2, of: 4 });
+    expect(byCase["INS-2026-0002"]).toMatchObject({ flow: "INSURANCE_CLAIM", step: 2, of: 7 });
+    const flows = res.body.departments.find((d: { code: string }) => d.code === "INSURANCE").flows;
+    expect(flows.map((f: { code: string; stages: unknown[] }) => [f.code, f.stages.length])).toEqual([
+      ["INSURANCE_CLAIM", 7],
+      ["INSURANCE_POLICY", 4],
+    ]);
+  });
+
+  it("walks every page once, in order, past enquiries with no due time and equal due times", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const saved = [];
+    for (let i = 0; i < 7; i++) saved.push(await saveVisa(aarti, `982500000${i}`));
+    const soon = new Date(Date.now() + 3_600_000);
+    // Two share a due time, three have none (a future bot enquiry, or a closed step).
+    await setDue(saved[0]!.id, null);
+    await setDue(saved[1]!.id, soon);
+    await setDue(saved[2]!.id, null);
+    await setDue(saved[3]!.id, soon);
+    await setDue(saved[4]!.id, new Date(Date.now() - 3_600_000));
+    await setDue(saved[6]!.id, null);
+    const expected = (await aarti.get("/api/enquiries?limit=100")).body.enquiries.map((e: { id: string }) => e.id);
+    expect(expected).toHaveLength(7);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let pages = 0; pages < 10; pages++) {
+      const res = await aarti.get(`/api/enquiries?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+      expect(res.status).toBe(200);
+      seen.push(...res.body.enquiries.map((e: { id: string }) => e.id));
+      cursor = res.body.nextCursor;
+      if (!cursor) break;
+    }
+    expect(cursor).toBeNull();
+    expect(seen).toEqual(expected);
+
+    expect((await aarti.get("/api/enquiries?cursor=not-a-cursor")).status).toBe(400);
+  });
+});

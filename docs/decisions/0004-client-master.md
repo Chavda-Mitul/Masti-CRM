@@ -1,9 +1,21 @@
 # 0004 · Client master: clients, numbers, family members, notes
 
-- **Status:** accepted and built (8 Oct 2026)
+- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*).
 - **Date:** 8 Oct 2026
 - **Changes:** replaces the `Client` model proposed in [0003](0003-visa-intake.md). It is a superset: `mobile @unique` and `createdById` are unchanged, so 0003's `GET /api/clients/lookup` contract still holds (extended below). 0003 adds the `enquiries` and `messages` relations when Visa Step 1 is built.
 - **Order of work:** the client master is built before the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
+
+## Amendment (9 Oct 2026, project lead): the name is required
+
+Staff must give a **mobile number and a name** to save a client. For a company, the name is the company name. The fields are marked * on the forms.
+
+**How it works:**
+- **Create:** `POST /api/clients` refuses a missing or blank `name` (400, `issues.name`).
+- **Update:** `PATCH` can't clear it.
+- **Intake:** the New enquiry form asks for the name when the number is new (0003, *Refresh*). It never overwrites an existing client's name.
+- **Database (later on 9 Oct 2026):** `Client.name` is `NOT NULL` with a not-blank check (migration `20261009130000_client_name_required`). Clients saved with only the mobile before this were given the placeholder "Client +91…" (none in production). Integrations and the Excel import must supply a name too: the WhatsApp profile name, or the spreadsheet's. It also keeps the directory's paging cheap: it sorts by name, and with a nullable sort key Prisma 7's cursor reads every remaining row and pages in memory.
+
+This differs from Vimal's "only the mobile number" (6:5x PM, quoted below), so **confirm it with him**. It is logged as open question #41.
 
 ## Context
 
@@ -47,7 +59,7 @@ The schema is in `Backend/prisma/schema.prisma` (section "Client master"); the m
 Cross-field rules (service and database):
 
 - **Only companies have a contact person.** Switching a company to INDIVIDUAL clears it.
-- **A GSTIN carries its holder's PAN** in characters 3–12. An empty PAN is filled from the GSTIN; a different PAN is refused. An empty state is filled from the GSTIN's first two digits.
+- **A GSTIN carries its holder's PAN** in characters 3–12. An empty PAN is filled from the GSTIN; a different PAN is refused. An empty state is filled from the GSTIN's first two digits; a different state is refused (amended 9 Oct 2026: the state decides the GST type on invoices, which are never edited). The database checks both (`Client_gstin_matches_pan`, `Client_gstin_matches_state`).
 - PAN `AAAAA9999A`; GSTIN pattern + check character; passport 6–12 letters/digits (not just the Indian format, for NRI/OCI travellers). All stored uppercase without spaces.
 
 PAN is a typed field only. **PAN verification (Q23) is not built.**
@@ -112,7 +124,7 @@ All under `/api/clients`. Errors use the existing shape: `{ message }`, `{ messa
 | `GET /?q=&kind=&incomplete=&cursor=&limit=` | View | Search by name, contact person, member name, mobile (any part, main or extra), passport number, PAN, GSTIN or accounting code. `incomplete=true/false` filters by the readiness setting. Ordered by name; `{ clients, nextCursor }`. The "any part of" matches use pg_trgm GIN indexes. |
 | `GET /options` | View | Billing cycles (with `isDefault`), payment habits, relations, GST states (by name, "Other Territory" last), kinds |
 | `GET /settings` · `PUT /settings` | View · Head | `{ settings: { invoiceReadiness, expiryWarnings } }`; `PUT` takes either key |
-| `POST /` | Edit (Accounts fields: Accounts) | Create; only `mobile` is required. 201 `{ client }` (the profile) |
+| `POST /` | Edit (Accounts fields: Accounts) | Create; `mobile` and `name` are required (amended 9 Oct 2026). 201 `{ client }` (the profile) |
 | `GET /:id` | View | Profile: client fields, `billingCycle`, `paymentHabit`, `readiness`, `phones`, active `members` (with `age`, `passportStatus` VALID / RENEW_SOON / EXPIRED), latest 20 `notes` |
 | `PATCH /:id` | Edit (Accounts fields: Accounts) | Partial update with `updatedAt`. `""` or `null` clears a field. |
 | `PUT /:id/mobile` | Edit | `{ mobile, keepOldAsSecondary = true }`: makes another number the main one. If it was an extra number of this client, it moves up. |

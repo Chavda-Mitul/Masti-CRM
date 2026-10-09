@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { actorOf, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
+import { actorOf, currentUser, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
   addNoteSchema,
   addPhoneSchema,
@@ -29,7 +29,7 @@ router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"
 
 router.get("/lookup", async (req, res) => {
   const { mobile } = lookupQuerySchema.parse(req.query);
-  res.json(await clientsService.lookupByMobile(mobile));
+  res.json(await clientsService.lookupByMobile(mobile, currentUser(req)));
 });
 
 router.get("/options", async (_req, res) => {
@@ -55,7 +55,7 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  res.json({ client: await clientsService.getClient(req.params.id) });
+  res.json({ client: await clientsService.getClient(req.params.id, currentUser(req)) });
 });
 
 router.patch("/:id", async (req, res) => {

@@ -1,8 +1,49 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** proposed (for review; nothing is implemented yet). The `Client` model below is superseded by [0004](0004-client-master.md), which is built; this design keeps working with it.
-- **Date:** 8 Oct 2026
-- **Scope:** the New enquiry form for Visa (demo screen 05) and the Step 1 view of a case (demo screen 06)
+- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record.
+- **Date:** 8 Oct 2026 (proposed), 9 Oct 2026 (refreshed and built)
+- **Scope:** the New enquiry form for Visa (demo screen 05), the All enquiries list (demo screens 02/03) and the Step 1 data of a case. The Step 1 case page (demo screen 06) comes next.
+
+## Refresh (9 Oct 2026)
+
+Since this record was proposed, the client master ([0004](0004-client-master.md)) and the visa masters ([0005](0005-system-masters.md)) were built, and the project lead decided on 9 Oct to **build the form by hand, without messaging, for now**.
+
+| As proposed below | Refreshed and built |
+| --- | --- |
+| Proposes `Client`, `Country`, `VisaType`, `VisaOffering`, `DocumentMaster`, `VisaChecklistItem` | Uses the built models (0004, 0005). |
+| `FeeHead`, `VisaFee` seeded with intake | **Dropped.** Price breakups are designed with the quote/invoice model (as 0005 §7 says). |
+| `MessageTemplate`, `OutboundMessage`, the preview endpoint, "Save and send document list" | **Deferred** to the WhatsApp provider work (M2). Saving writes the case only; the button says **"Save enquiry"** and the toast "Enquiry VISA-2026-0001 saved for …", so staff aren't told something was sent when it wasn't. For the same reason step 1's status label is seeded as **"Enquiry saved"**, not "Document list sent". All three go back to the demo wording when the outbox is built. |
+| `visa.documentReminders`, `VisaCase.remindersOn` / `nextReminderAt` | **Deferred** with messaging. Only `visa.firstFollowUp` is built, because `Enquiry.dueAt` drives the list. |
+| Follow-up due "tomorrow 11:00" | Today + `afterDays`, then moved to the next day the office is open (`nextOpenDay()` with the `MASTI_OFFICE` holidays, so the seeded Sunday off counts; embassy-only holidays don't). Otherwise Monday would open with Saturday's enquiries already late. |
+| `VisaCaseDocument` copies the name and requirement | Also copies `detail`, `quantity` and `note` (0005 added the last two to checklist lines). |
+| Owner picker, `GET /api/visa/assignees` | Not built. The owner is the person saving; reassigning comes with the enquiry actions. |
+| The enquiries list "not in Step 1" | **Built:** `GET /api/enquiries` and the All enquiries screen. |
+| `EnquirySource` seeded only | Also an admin list: `GET/POST/PATCH /api/masters/enquiry-sources`, Settings → Masters → Lists → Enquiry sources. The Head or the Visa HOD edits it until another department's intake exists. |
+| Client lookup with `openEnquiries` | Uses the built `lookupByMobile` (main and extra numbers). Intake attaches to the client whose main number it is, else the earliest client with it as an extra number, else creates one. `openEnquiries` are that client's `OPEN` and `POSTPONED` cases in the departments the user can view; the form warns but doesn't block. **Since 9 Oct 2026 the form also asks for the client's name** (`clientName`) when the number is new or the matched client has none, and refuses to save without it; it never overwrites an existing name (0004 *Amendment*). |
+| Offerings for intake | Only active offerings **that have a checklist**: intake copies the checklist, so an empty one would make a case with nothing to collect. Saving one without a checklist is refused (400). |
+| Travel month required, date optional (review point 2) | Confirmed. The exact date also can't be in the past. |
+| "What do they want?" | Only Visa can be picked; the other departments are shown with "Soon". **How one enquiry for several services splits across departments is still open** (§10.2). |
+
+**Built (9 Oct 2026):**
+- **Code:** `Backend/src/modules/enquiries/` (the list, staff sources, the seed of sources and visa steps), `Backend/src/modules/visa/` (intake offerings, `createVisaEnquiry`, the case DTO, `visa.firstFollowUp`), `findOrCreateClientByMobile` in `clients.service.ts`, and the sources CRUD in `visaMasters`.
+- **Migration:** `20261009120000_visa_intake`. It backfills `Department.casePrefix` (VISA, HOL, HOT, INS, TKT, ACC) and adds checks: travel month is the 1st, the travel date falls in that month, and code and prefix formats.
+- **Tests:** `tests/visaIntake.test.ts` and `tests/enquiries.test.ts`. They cover case numbers under concurrent saves and across the year boundary, idempotency, client matching, the checklist copy surviving master edits, follow-up timing, validation, and permissions and department scoping on the list.
+- **Screens:** `Frontend/src/pages/enquiries/` (`NewEnquiryPage`, `EnquiriesPage`), the sidebar's Enquiries links and "+ New enquiry", and "New enquiry for {name}" on a client's profile.
+- **A concurrent-save detail:** two saves for the same *new* mobile race to create the client. The loser's transaction fails on `Client.mobile`, and the service retries once, by which time the client exists. A failed save rolls back its case-number bump too.
+
+**API as built** (all under `requireAuth → requirePasswordChanged → requireUserType("HEAD","OFFICE")`):
+
+| Method + path | Guard | Purpose |
+| --- | --- | --- |
+| `GET /api/enquiries?department=&mine=&q=&status=&cursor=&limit=` | departments the caller can VIEW (403 for one they can't) | `{ enquiries, nextCursor, departments: [{ code, name, count, flows: [{ code, stages }] }], lateCount }` (each row's `stage.flow` picks its flow; `step`/`of` count within it). Ordered by `dueAt` (nulls last), then `createdAt`, then id. `cursor` is opaque (the last row's sort values, base64url): Prisma's own cursor can't page a nullable sort key with a LIMIT, so the keyset condition is hand-written. `q` matches the case number, the client's name, or any part of the client's main or extra mobile. `status` defaults to OPEN. |
+| `GET /api/enquiries/sources` | — | Active, staff-selectable sources |
+| `GET /api/visa/offerings` | Visa VIEW | `{ countries: [{ id, code, name, zone, label, visaTypes: [{ offeringId, id, code, name }] }] }` |
+| `POST /api/visa/cases` | Visa EDIT | Body `{ mobile, sourceCode, offeringId, adults, children, travelMonth, travelDate }`, optional `Idempotency-Key`. Returns `201 { case, clientCreated }`, or `200` for a repeated key. |
+| `GET /api/visa/cases/:caseNo` | Visa VIEW | `{ case }`: the DTO below without `messages` and `reminders` (and without `client.isNew`; the POST returns `clientCreated` instead) |
+| `GET /api/visa/settings` · `PUT` | Visa VIEW · Visa HOD or Head | `{ settings: { firstFollowUp: { afterDays, at } } }`, audited as `setting.update` |
+| `GET/POST/PATCH /api/masters/enquiry-sources` | Visa VIEW · Visa HOD or Head | The sources master; codes never change |
+
+**Still open:** M4 (who owns a visa query before it matures, review point 3), the multi-service split, the WhatsApp wording (M1/Q8) and provider (M2), and the consent flag ("Anyone without a consent form on file is flagged"), which comes with Step 2's consent model.
 
 ## Context
 
@@ -38,7 +79,8 @@ So each case has one `Enquiry` row, and visa-only fields live in `VisaCase` (1:1
 
 ### 2. Stages are data, statuses are an enum
 
-- `DepartmentStage` holds the 8 visa steps and their labels ("Document list sent", "Start collecting documents"). The labels are demo wording ⚠️, so they are editable.
+- `DepartmentStage` holds the steps per department **and flow** (added 9 Oct 2026, migration `20261009140000_department_stage_flow`): Visa has one flow, `VISA`; Insurance will run `INSURANCE_POLICY` (4 steps) and `INSURANCE_CLAIM` (7), §10.2. Steps are unique per department + flow, and "step 2 of 7" counts the flow only.
+- For Visa it holds the 8 visa steps and their labels ("Enquiry saved" until messaging is built, then the demo's "Document list sent"; "Start collecting documents"). The labels are demo wording ⚠️, so they are editable.
 - `EnquiryStatus` (open / postponed / cancelled / lost / closed) is an enum. Code branches on it, the same reasoning as `UserType`.
 - The *reasons* for postponing or cancelling will be a master table when that feature is built.
 
@@ -593,7 +635,7 @@ Optional header `Idempotency-Key: <uuid>`. The frontend sends a new one each tim
   "caseNo": "VISA-2026-0001",
   "status": "OPEN",
   "stage": { "code": "ENQUIRY", "step": 1, "of": 8, "name": "Enquiry",
-             "statusLabel": "Document list sent", "nextStepLabel": "Start collecting documents" },
+             "statusLabel": "Enquiry saved", "nextStepLabel": "Start collecting documents" },
   "client": { "id": "…", "name": null, "mobile": "+919825041234", "isNew": true },
   "source": { "code": "WHATSAPP", "name": "WhatsApp" },
   "origin": "STAFF",

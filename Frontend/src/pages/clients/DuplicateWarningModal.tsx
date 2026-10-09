@@ -44,7 +44,7 @@ export function DuplicateWarningModal({
                   {m.memberName && <strong>{m.memberName}</strong>}
                   {m.memberName && <span className="muted"> in </span>}
                   <Link to={`/clients/${m.clientId}`} target="_blank" rel="noreferrer">
-                    {m.clientName ?? 'Unnamed client'}
+                    {m.clientName}
                   </Link>
                   <span className="muted mono" style={{ fontSize: 12.5 }}>
                     {' '}

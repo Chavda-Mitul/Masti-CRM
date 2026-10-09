@@ -9,9 +9,11 @@ import { requireJson } from "./middleware/requireJson";
 import authRoutes from "./modules/auth/auth.routes";
 import clientRoutes from "./modules/clients/clients.routes";
 import departmentRoutes from "./modules/departments/departments.routes";
+import enquiryRoutes from "./modules/enquiries/enquiries.routes";
 import healthRoutes from "./modules/health/health.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import userRoutes from "./modules/users/users.routes";
+import visaRoutes from "./modules/visa/visa.routes";
 import visaMasterRoutes from "./modules/visaMasters/visaMasters.routes";
 
 const app = express();
@@ -32,6 +34,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/masters", visaMasterRoutes);
+app.use("/api/enquiries", enquiryRoutes);
+app.use("/api/visa", visaRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);
