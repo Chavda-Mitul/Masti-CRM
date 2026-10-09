@@ -60,7 +60,7 @@ function useStaleRecovery(queryKey: QueryKey, what: string) {
 // Holiday calendar
 // ---------------------------------------------------------------------------
 
-const FILTER_QUERY: Record<HolidayFilter, string> = { upcoming: '', pending: '?status=PENDING', removed: '?status=REMOVED' }
+const FILTER_QUERY: Record<HolidayFilter, string> = { upcoming: '', removed: '?status=REMOVED' }
 
 export function useHolidays(filter: HolidayFilter) {
   return useQuery({
@@ -110,12 +110,11 @@ export function useSaveHoliday() {
   })
 }
 
-/** Confirm (a bot entry starts blocking dates) or remove. */
-export function useHolidayAction() {
+/** Takes a holiday off the calendar: its dates can be picked again. It stays under "Removed". */
+export function useRemoveHoliday() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: 'confirm' | 'remove' }) =>
-      (await api<{ holiday: Holiday }>(`/holidays/${id}/${action}`, { method: 'POST' })).holiday,
+    mutationFn: async (id: string) => (await api<{ holiday: Holiday }>(`/holidays/${id}/remove`, { method: 'POST' })).holiday,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: holidayKeys.all }),
   })
 }

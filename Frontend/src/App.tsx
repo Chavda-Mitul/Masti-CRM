@@ -5,7 +5,6 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ClientDetailPage } from './pages/clients/ClientDetailPage'
 import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
 import { LoginPage } from './pages/LoginPage'
-import { MachineAccountsPage } from './pages/settings/machineAccounts/MachineAccountsPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
@@ -72,14 +71,6 @@ export default function App() {
             element={
               <RequireHead>
                 <UsersPage />
-              </RequireHead>
-            }
-          />
-          <Route
-            path="machine-accounts"
-            element={
-              <RequireHead>
-                <MachineAccountsPage />
               </RequireHead>
             }
           />

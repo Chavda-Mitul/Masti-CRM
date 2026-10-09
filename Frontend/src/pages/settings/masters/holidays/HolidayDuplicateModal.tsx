@@ -27,7 +27,6 @@ export function HolidayDuplicateModal({
             {matches.map((m) => (
               <li key={m.id}>
                 <strong>{m.name}</strong> · {m.label} · {m.targets.join(', ')}
-                {m.status === 'PENDING' && <span className="chip chip-warn chip-sm" style={{ marginLeft: 6 }}>Waiting for review</span>}
               </li>
             ))}
           </ul>

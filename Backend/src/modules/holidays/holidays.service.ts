@@ -1,9 +1,9 @@
-import type { HolidayStatus, Prisma } from "../../../generated/prisma/client";
+import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
-import { badRequest, conflict, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { isHodOfAny } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { blockedDays, type BlockTarget } from "./blockedDays";
@@ -23,7 +23,6 @@ import { getHolidaySettings, HOLIDAY_SETTINGS_KEY } from "./holidays.settings";
 
 // The holiday calendar, for staff (docs/decisions/0005-system-masters.md §1–4, §8).
 // Everyone in the office can read it; the Head or any HOD changes it. Removing keeps the row (status REMOVED).
-// Bot pushes are in holidaysBot.service.ts.
 
 const MAX_LIST = 500;
 
@@ -185,7 +184,7 @@ export async function createHoliday(input: CreateHolidayInput, actor: Actor) {
   const created = await prisma.$transaction(async (tx) => {
     // One relation only inside the transaction (see holidayInclude); the full row is loaded after commit.
     const created = await tx.holiday.create({
-      data: { ...columnsOf(input), status: "ACTIVE", source: "MANUAL", addedById: actor.user.id, targets: { create: targetRows(input.targets) } },
+      data: { ...columnsOf(input), status: "ACTIVE", addedById: actor.user.id, targets: { create: targetRows(input.targets) } },
       include: { targets: true },
     });
     await audit(
@@ -204,7 +203,7 @@ export async function createHoliday(input: CreateHolidayInput, actor: Actor) {
   return toDto(await getRowOr404(created.id));
 }
 
-/** Only the fields sent change. On a bot entry this also counts as a review: the bot can't change it any more. */
+/** Only the fields sent change. */
 export async function updateHoliday(id: string, input: UpdateHolidayInput, actor: Actor) {
   assertCanEditHolidays(actor.user);
   const before = await getRowOr404(id);
@@ -232,7 +231,7 @@ export async function updateHoliday(id: string, input: UpdateHolidayInput, actor
     // The updatedAt condition makes a save that raced past assertFresh fail instead of overwriting.
     const { count } = await tx.holiday.updateMany({
       where: { id, updatedAt: before.updatedAt },
-      data: { ...newColumns, reviewedById: actor.user.id, reviewedAt: new Date() },
+      data: newColumns,
     });
     if (count === 0) throw staleError("holiday");
     if (targetsChanged) {
@@ -255,36 +254,28 @@ export async function updateHoliday(id: string, input: UpdateHolidayInput, actor
   return toDto(await getRowOr404(id));
 }
 
-async function changeStatus(id: string, from: HolidayStatus[], to: HolidayStatus, action: string, actor: Actor) {
+/** → REMOVED: those dates can be picked again. The row stays for the record. Removing twice changes nothing. */
+export async function removeHoliday(id: string, actor: Actor) {
+  assertCanEditHolidays(actor.user);
   const before = await getRowOr404(id);
-  const changed = await prisma.$transaction(async (tx) => {
-    const { count } = await tx.holiday.updateMany({
-      where: { id, status: { in: from } },
-      data: { status: to, reviewedById: actor.user.id, reviewedAt: new Date() },
-    });
+  const removed = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.holiday.updateMany({ where: { id, status: "ACTIVE" }, data: { status: "REMOVED" } });
     if (count === 0) return false;
     await audit(
-      { actorId: actor.user.id, action, entityType: "Holiday", entityId: id, before: { status: before.status }, after: { status: to }, ip: actor.ip },
+      {
+        actorId: actor.user.id,
+        action: "holiday.remove",
+        entityType: "Holiday",
+        entityId: id,
+        before: { status: before.status },
+        after: { status: "REMOVED" },
+        ip: actor.ip,
+      },
       tx,
     );
     return true;
   });
-  return { before, row: changed ? await getRowOr404(id) : null };
-}
-
-/** PENDING → ACTIVE: a person confirms a bot entry, and it starts blocking dates. */
-export async function confirmHoliday(id: string, actor: Actor) {
-  assertCanEditHolidays(actor.user);
-  const { row } = await changeStatus(id, ["PENDING"], "ACTIVE", "holiday.confirm", actor);
-  if (!row) throw conflict("Only a holiday waiting for review can be confirmed.");
-  return toDto(row);
-}
-
-/** → REMOVED. Also how a bot entry is rejected. Removing twice changes nothing. */
-export async function removeHoliday(id: string, actor: Actor) {
-  assertCanEditHolidays(actor.user);
-  const { before, row } = await changeStatus(id, ["PENDING", "ACTIVE"], "REMOVED", "holiday.remove", actor);
-  return toDto(row ?? before);
+  return toDto(removed ? await getRowOr404(id) : before);
 }
 
 // ---------------------------------------------------------------------------

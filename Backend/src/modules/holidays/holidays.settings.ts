@@ -5,11 +5,8 @@ import { holidaySettingsSchema, type HolidaySettings } from "./holidays.schemas"
 
 export const HOLIDAY_SETTINGS_KEY = "holidays";
 
-/**
- * newForDays ⚠️ our guess for the demo's "new" chip.
- * botEntriesNeedReview: AI assists, staff confirm (rule 12; confirmed by the project lead, 8 Oct 2026).
- */
-export const DEFAULT_HOLIDAY_SETTINGS: HolidaySettings = { newForDays: 7, botEntriesNeedReview: true };
+/** newForDays ⚠️ our guess for the demo's "new" chip. */
+export const DEFAULT_HOLIDAY_SETTINGS: HolidaySettings = { newForDays: 7 };
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getHolidaySettings(db: Db = prisma): Promise<HolidaySettings> {

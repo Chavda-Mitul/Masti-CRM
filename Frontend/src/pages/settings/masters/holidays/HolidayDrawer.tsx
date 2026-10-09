@@ -61,8 +61,8 @@ function readHolidayDuplicates(error: unknown): { message: string; matches: Holi
 }
 
 /**
- * Add a holiday, or edit one. Editing a holiday the bot sent counts as reviewing it: the bot can't change it after.
- * A probable duplicate is a warning (save anyway); a save over someone else's change is refused (optimistic locking).
+ * Add a holiday, or edit one. A probable duplicate is a warning (save anyway); a save over someone else's change is
+ * refused (optimistic locking).
  */
 export function HolidayDrawer({
   holiday,
@@ -123,11 +123,7 @@ export function HolidayDrawer({
           <div className="pad drawer-head">
             <h2 className="h2">{isNew ? 'Add a holiday' : `Edit ${holiday.name}`}</h2>
             <p className="muted">
-              {isNew
-                ? 'It blocks those dates straight away: they can’t be picked as collection dates.'
-                : holiday.source === 'AI_BOT'
-                  ? 'This came from the holiday bot. Once you save a change, the bot can no longer change it.'
-                  : 'Changes apply straight away.'}
+              {isNew ? 'It blocks those dates straight away: they can’t be picked as collection dates.' : 'Changes apply straight away.'}
             </p>
           </div>
 

@@ -18,7 +18,6 @@ export async function seedHolidays(db: Db) {
       weekday: 7,
       startDate: toDbDate(istToday()),
       status: "ACTIVE",
-      source: "MANUAL",
       targets: { create: [{ kind: "ALL_EMBASSIES" }, { kind: "MASTI_OFFICE" }] },
     },
   });

@@ -5,36 +5,34 @@ import { useMe } from '../../../../auth/useAuth'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { errorText } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
-import { useHolidayAction, useHolidays, useHolidayTargets } from '../queries'
+import { useHolidays, useHolidayTargets, useRemoveHoliday } from '../queries'
 import type { Holiday, HolidayFilter } from '../types'
 import { HolidayDrawer } from './HolidayDrawer'
 
 const FILTERS: { value: HolidayFilter; label: string }[] = [
   { value: 'upcoming', label: 'Upcoming' },
-  { value: 'pending', label: 'Waiting for review' },
   { value: 'removed', label: 'Removed' },
 ]
 
-/** "Vimal", "Holiday bot · from IVS · checked by Vimal". */
+const isLink = (reference: string) => /^https?:\/\//i.test(reference)
+
+/** "Vimal", "Vimal · from IVS". */
 function addedText(h: Holiday): string {
-  const who = h.addedBy?.name ?? h.apiClient?.name ?? 'Set up with the system'
-  const parts = [who]
-  if (h.reference) parts.push(/^https?:\/\//i.test(h.reference) ? 'from a notice' : `from ${h.reference}`)
-  if (h.source === 'AI_BOT' && h.reviewedBy) parts.push(`checked by ${h.reviewedBy.name}`)
+  const parts = [h.addedBy?.name ?? 'Set up with the system']
+  if (h.reference) parts.push(isLink(h.reference) ? 'from a notice' : `from ${h.reference}`)
   return parts.join(' · ')
 }
 
 /**
  * The holiday calendar (demo screen 29): the dates that can't be picked as collection dates, per embassy, plus our
- * office's closures. Entries from the holiday bot wait under "Waiting for review" until a person confirms them;
- * until then they only warn. Editing is for the Head and HODs.
+ * office's closures. Staff-entered; the Head and HODs change it.
  */
 export function HolidayCalendarCard() {
   const { data: me } = useMe()
   const canEdit = me ? canEditHolidays(me) : false
   const toast = useToast()
   const [params, setParams] = useSearchParams()
-  const filter: HolidayFilter = FILTERS.some((f) => f.value === params.get('holidays')) ? (params.get('holidays') as HolidayFilter) : 'upcoming'
+  const filter: HolidayFilter = params.get('holidays') === 'removed' ? 'removed' : 'upcoming'
   const setFilter = (value: HolidayFilter) =>
     setParams(
       (p) => {
@@ -46,24 +44,14 @@ export function HolidayCalendarCard() {
     )
 
   const holidays = useHolidays(filter)
-  const pending = useHolidays('pending')
   const targets = useHolidayTargets()
-  const action = useHolidayAction()
+  const remove = useRemoveHoliday()
 
   const [editing, setEditing] = useState<Holiday | 'new' | null>(null)
   const [removing, setRemoving] = useState<Holiday | null>(null)
 
-  const pendingCount = pending.data?.length ?? 0
   const list = holidays.data ?? []
-
-  const confirm = (h: Holiday) =>
-    action.mutate(
-      { id: h.id, action: 'confirm' },
-      {
-        onSuccess: () => toast({ tone: 'ok', message: `${h.name} confirmed. Those dates are now blocked.` }),
-        onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Could not confirm it.' }),
-      },
-    )
+  const showActions = canEdit && filter === 'upcoming'
 
   return (
     <section className="card holiday-card" aria-labelledby="holiday-title">
@@ -73,7 +61,7 @@ export function HolidayCalendarCard() {
             Holiday calendar — per embassy
           </h2>
           <p className="muted small" style={{ margin: '4px 0 0' }}>
-            These dates can’t be picked as collection dates. Entries from the holiday bot wait here until someone confirms them.
+            These dates can’t be picked as collection dates.
           </p>
         </div>
         {canEdit && (
@@ -95,19 +83,9 @@ export function HolidayCalendarCard() {
               onClick={() => setFilter(f.value)}
             >
               {f.label}
-              {f.value === 'pending' && pendingCount > 0 && <span className="count-badge">{pendingCount}</span>}
             </button>
           ))}
         </div>
-        {pendingCount > 0 && filter !== 'pending' && (
-          <div className="alert alert-warn holiday-review">
-            {pendingCount === 1 ? '1 holiday from the bot waits' : `${pendingCount} holidays from the bot wait`} for review. Until
-            someone confirms them, they only warn.
-            <button type="button" className="btn-link" onClick={() => setFilter('pending')}>
-              Review now
-            </button>
-          </div>
-        )}
       </div>
 
       {holidays.isPending ? (
@@ -117,13 +95,7 @@ export function HolidayCalendarCard() {
           <div className="alert alert-bad">{errorText(holidays.error)}</div>
         </div>
       ) : list.length === 0 ? (
-        <div className="pad muted">
-          {filter === 'pending'
-            ? 'Nothing waiting for review.'
-            : filter === 'removed'
-              ? 'No removed holidays from today on.'
-              : 'No holidays from today on.'}
-        </div>
+        <div className="pad muted">{filter === 'removed' ? 'No removed holidays from today on.' : 'No holidays from today on.'}</div>
       ) : (
         <table className="table">
           <thead>
@@ -132,20 +104,15 @@ export function HolidayCalendarCard() {
               <th>Holiday</th>
               <th>Embassy / applies to</th>
               <th>Added</th>
-              {canEdit && filter !== 'removed' && <th aria-label="Actions" />}
+              {showActions && <th aria-label="Actions" />}
             </tr>
           </thead>
           <tbody>
             {list.map((h) => (
-              <tr key={h.id} className={h.status === 'PENDING' ? 'row-pending' : undefined}>
+              <tr key={h.id}>
                 <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{h.label}</td>
                 <td>
-                  {h.name}{' '}
-                  {h.status === 'PENDING' ? (
-                    <span className="chip chip-warn chip-sm">Waiting for review</span>
-                  ) : (
-                    h.isNew && h.status === 'ACTIVE' && <span className="chip chip-warn chip-sm">new</span>
-                  )}
+                  {h.name} {h.isNew && h.status === 'ACTIVE' && <span className="chip chip-warn chip-sm">new</span>}
                 </td>
                 <td>
                   <div className="chip-row">
@@ -157,7 +124,7 @@ export function HolidayCalendarCard() {
                   </div>
                 </td>
                 <td className="muted">
-                  {h.reference && /^https?:\/\//i.test(h.reference) ? (
+                  {h.reference && isLink(h.reference) ? (
                     <a href={h.reference} target="_blank" rel="noreferrer">
                       {addedText(h)}
                     </a>
@@ -165,14 +132,9 @@ export function HolidayCalendarCard() {
                     addedText(h)
                   )}
                 </td>
-                {canEdit && filter !== 'removed' && (
+                {showActions && (
                   <td>
                     <div className="row-actions">
-                      {h.status === 'PENDING' && (
-                        <button type="button" className="btn btn-sm btn-primary" onClick={() => confirm(h)} disabled={action.isPending}>
-                          Confirm
-                        </button>
-                      )}
                       <button type="button" className="btn btn-sm" onClick={() => setEditing(h)} disabled={!targets.data}>
                         Edit
                       </button>
@@ -195,29 +157,22 @@ export function HolidayCalendarCard() {
       {removing && (
         <ConfirmDialog
           title={`Remove ${removing.name}?`}
-          body={
-            removing.status === 'PENDING'
-              ? 'The bot’s entry is turned down: it won’t block any dates, and the bot can’t send it again.'
-              : `${removing.label} can be picked as collection dates again. It stays under “Removed” for the record.`
-          }
+          body={`${removing.label} can be picked as collection dates again. It stays under “Removed” for the record.`}
           confirmLabel="Remove"
           danger
-          pending={action.isPending}
-          error={errorText(action.error)}
+          pending={remove.isPending}
+          error={errorText(remove.error)}
           onCancel={() => {
             setRemoving(null)
-            action.reset()
+            remove.reset()
           }}
           onConfirm={() =>
-            action.mutate(
-              { id: removing.id, action: 'remove' },
-              {
-                onSuccess: () => {
-                  toast({ tone: 'ok', message: `${removing.name} removed.` })
-                  setRemoving(null)
-                },
+            remove.mutate(removing.id, {
+              onSuccess: () => {
+                toast({ tone: 'ok', message: `${removing.name} removed.` })
+                setRemoving(null)
               },
-            )
+            })
           }
         />
       )}

@@ -59,7 +59,6 @@ export type HolidayFormValues = z.infer<typeof holidayFormSchema>
 
 export const holidaySettingsFormSchema = z.object({
   newForDays: z.number({ error: 'Enter a number of days.' }).int('Whole days only.').min(1, 'At least 1 day.').max(90, 'At most 90 days.'),
-  botEntriesNeedReview: z.boolean(),
 })
 
 export type HolidaySettingsFormValues = z.infer<typeof holidaySettingsFormSchema>

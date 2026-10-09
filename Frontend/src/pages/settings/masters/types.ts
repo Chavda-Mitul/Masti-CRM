@@ -6,8 +6,7 @@
 // ---------------------------------------------------------------------------
 
 export type HolidayRepeat = 'NONE' | 'WEEKLY'
-export type HolidayStatus = 'PENDING' | 'ACTIVE' | 'REMOVED'
-export type HolidaySource = 'MANUAL' | 'AI_BOT'
+export type HolidayStatus = 'ACTIVE' | 'REMOVED'
 export type HolidayTargetKind = 'ALL_EMBASSIES' | 'COUNTRY' | 'EMBASSY' | 'MASTI_OFFICE'
 
 export interface HolidayTarget {
@@ -30,13 +29,10 @@ export interface Holiday {
   label: string
   targets: HolidayTarget[]
   status: HolidayStatus
-  source: HolidaySource
   reference: string | null
   isNew: boolean
+  /** Null for entries set up with the system (the seed). */
   addedBy: { id: string; name: string } | null
-  apiClient: { id: string; name: string } | null
-  reviewedBy: { id: string; name: string } | null
-  reviewedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -72,7 +68,6 @@ export interface HolidayTargetOptions {
 
 export interface HolidaySettings {
   newForDays: number
-  botEntriesNeedReview: boolean
 }
 
 /** 409 DUPLICATE from the holidays API. */
@@ -85,7 +80,7 @@ export interface HolidayDuplicate {
 }
 
 /** Which holidays the calendar card lists. */
-export type HolidayFilter = 'upcoming' | 'pending' | 'removed'
+export type HolidayFilter = 'upcoming' | 'removed'
 
 // ---------------------------------------------------------------------------
 // Visa masters

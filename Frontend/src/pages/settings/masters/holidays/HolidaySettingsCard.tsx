@@ -8,7 +8,7 @@ import { useHolidaySettings, useUpdateHolidaySettings } from '../queries'
 import { holidaySettingsFormSchema, type HolidaySettingsFormValues } from '../schemas'
 import type { HolidaySettings } from '../types'
 
-/** The holiday calendar's two settings (Setting row "holidays"). Everyone sees them; only the Head changes them. */
+/** The holiday calendar's setting (Setting row "holidays"). Everyone sees it; only the Head changes it. */
 export function HolidaySettingsCard() {
   const { data: me } = useMe()
   const settings = useHolidaySettings()
@@ -28,10 +28,6 @@ export function HolidaySettingsCard() {
           <div>
             <dt>“New” chip shows for</dt>
             <dd>{settings.data.newForDays} days</dd>
-          </div>
-          <div>
-            <dt>Bot entries wait for a person</dt>
-            <dd>{settings.data.botEntriesNeedReview ? 'Yes' : 'No, they block straight away'}</dd>
           </div>
         </dl>
       )}
@@ -58,18 +54,9 @@ function SettingsForm({ settings }: { settings: HolidaySettings }) {
 
   return (
     <form onSubmit={onSubmit} noValidate className="settings-form">
-      <FormField label="“New” chip shows for (days)" error={formState.errors.newForDays?.message}>
+      <FormField label="“New” chip shows for (days)" error={formState.errors.newForDays?.message} hint="How long a newly added holiday is marked new.">
         <input className="input" type="number" min={1} max={90} {...register('newForDays', { valueAsNumber: true })} style={{ maxWidth: 120 }} />
       </FormField>
-      <label className="check">
-        <input type="checkbox" {...register('botEntriesNeedReview')} />
-        <span>
-          Holidays from the bot wait for a person to confirm them
-          <span className="hint" style={{ display: 'block' }}>
-            Off: they block dates as soon as they arrive.
-          </span>
-        </span>
-      </label>
       {update.error && <div className="alert alert-bad">{errorText(update.error)}</div>}
       <div>
         <button type="submit" className="btn btn-sm btn-primary" disabled={!formState.isDirty || update.isPending}>
