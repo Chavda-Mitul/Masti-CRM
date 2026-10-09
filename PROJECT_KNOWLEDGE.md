@@ -1415,7 +1415,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master, is built (API + tests, no screens yet) on `feat/system-masters`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master: API + tests merged into `master` on 9 Oct 2026 (PR #2); the Settings → Masters screens are being built on `feat/masters-screens`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
