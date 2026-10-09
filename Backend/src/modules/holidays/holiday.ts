@@ -18,8 +18,6 @@ export const holidayInclude = {
     orderBy: { id: "asc" },
   },
   addedBy: { select: { id: true, name: true } },
-  reviewedBy: { select: { id: true, name: true } },
-  apiClient: { select: { id: true, name: true } },
 } satisfies Prisma.HolidayInclude;
 
 export type HolidayRow = Prisma.HolidayGetPayload<{ include: typeof holidayInclude }>;
@@ -89,13 +87,9 @@ export function toHolidayDto(h: HolidayRow, newForDays: number, now = new Date()
     label: dateLabel(h),
     targets: h.targets.map(toTargetDto),
     status: h.status,
-    source: h.source,
     reference: h.reference,
     isNew: now.getTime() - h.createdAt.getTime() < newForDays * 86_400_000,
     addedBy: h.addedBy,
-    apiClient: h.apiClient,
-    reviewedBy: h.reviewedBy,
-    reviewedAt: h.reviewedAt,
     createdAt: h.createdAt,
     updatedAt: h.updatedAt,
   };

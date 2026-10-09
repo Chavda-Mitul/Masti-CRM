@@ -3,12 +3,15 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { normaliseMobile } from "../src/lib/contact";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN, PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
+import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
+import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
 // (Frontend/src/pages/clients/schemas.ts). This keeps the two copies from drifting apart.
 // The path is a variable so the backend typecheck doesn't pull in Frontend sources; Vitest loads it at runtime.
 
 const frontendSchemas = resolve(__dirname, "../../Frontend/src/pages/clients/schemas.ts");
+const frontendMasterSchemas = resolve(__dirname, "../../Frontend/src/pages/settings/masters/schemas.ts");
 const frontendInstalled = existsSync(resolve(__dirname, "../../Frontend/node_modules/zod"));
 
 interface FrontendRules {
@@ -34,5 +37,12 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     expect(frontend.PASSPORT_PATTERN.source).toBe(PASSPORT_PATTERN.source);
     for (const p of PANS) expect(frontend.PAN_PATTERN.test(p), p).toBe(PAN_PATTERN.test(p));
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
+  });
+
+  it("limits holidays and checklists the same way (Settings → Masters)", async () => {
+    const frontend = (await import(frontendMasterSchemas)) as { MAX_RANGE_DAYS: number; MAX_TARGETS: number; MAX_CHECKLIST_ITEMS: number };
+    expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
+    expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
+    expect(frontend.MAX_CHECKLIST_ITEMS).toBe(MAX_CHECKLIST_ITEMS);
   });
 });

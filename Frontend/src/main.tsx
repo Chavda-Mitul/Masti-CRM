@@ -14,7 +14,7 @@ import './styles/shell.css'
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router'
+import { createBrowserRouter, RouterProvider } from 'react-router'
 import App from './App'
 import { ME_KEY } from './auth/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -40,15 +40,24 @@ const queryClient = new QueryClient({
   },
 })
 
+// A data router, so screens holding unsaved work can stop every navigation away (useBlocker: links, navigate(), Back).
+// App keeps its <Routes> tree under one catch-all route.
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: (
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    ),
+  },
+])
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <BrowserRouter>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,

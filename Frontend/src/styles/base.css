@@ -484,3 +484,75 @@ a:hover {
 .toast-info {
   border-left: 4px solid var(--primary);
 }
+
+/* Shared by several screens: back links, the segmented control (.kind-toggle, with labels or buttons), duplicate warnings */
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.kind-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  background: var(--fill-track);
+  border-radius: 14px;
+  align-self: flex-start;
+}
+.kind-toggle label,
+.kind-toggle button {
+  padding: 8px 16px;
+  border-radius: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text-3);
+}
+.kind-toggle label.on,
+.kind-toggle button.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+.kind-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+}
+.kind-toggle label:focus-within,
+.kind-toggle button:focus-visible {
+  outline: 2px solid var(--primary);
+}
+
+/* Duplicate warning */
+.dup-block {
+  background: var(--fill-tile);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.dup-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.dup-list li {
+  padding: 2px 0;
+}
+
+/* A secret shown once (SecretOnceDialog): temporary passwords, API keys */
+.secret {
+  font-size: 22px;
+  text-align: center;
+  padding: 14px 10px;
+  background: var(--fill-tile);
+  border-radius: 12px;
+  letter-spacing: 0.04em;
+}
+.secret-long {
+  font-size: 14px;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

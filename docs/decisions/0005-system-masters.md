@@ -1,9 +1,32 @@
 # 0005 · System masters: holiday calendar and visa document master
 
-- **Status:** accepted (8 Oct 2026, project lead; all seven review points confirmed below) and built (8 Oct 2026). What changed while building is listed under *Built*, at the end.
+- **Status:** accepted (8 Oct 2026, project lead; all seven review points confirmed below), built (8 Oct 2026), and **amended 9 Oct 2026**: machine accounts and all AI-bot support were removed (see *Amendment* below). What changed while building is listed under *Built*, at the end.
 - **Date:** 8 Oct 2026
 - **Scope:** two of the System Masters on Settings → *Masters & holiday calendar* (demo screen 29): the **holiday calendar** and the **visa document master** (documents and country × visa type checklists). Reminder rules, vendors, dropdown reasons and the other masters come in later records.
 - **Changes:** takes over the visa master tables proposed in [0003](0003-visa-intake.md) (`Country`, `VisaType`, `VisaOffering`, `DocumentMaster`, `VisaChecklistItem`), which aren't built. The changes are listed in Decision 7. 0003's intake contract (`GET /api/visa/offerings`, the checklist copy at intake) still holds.
+
+## Amendment (9 Oct 2026, project lead)
+
+Machine accounts and **all AI-bot support were removed**, in the backend and the screens. The holiday calendar is **staff-entered only**. A future bot needs its own design and a new decision record.
+
+**Removed:**
+- **Machine accounts:** `ApiClient`, `ApiScope`, `/api/api-clients`, `requireApiClient` and `AuditLog.apiClientId`.
+- **The bot endpoint:** `/api/inbound/holidays`.
+- **Bot fields on `Holiday`:** `source` (`HolidaySource`), `externalKey`, `apiClientId`, `reviewedById` and `reviewedAt`.
+- **The review flow:** the `PENDING` status, Confirm (`POST /api/holidays/:id/confirm`) and the `holidays.botEntriesNeedReview` setting (the setting is now `{ newForDays }`).
+- **The screens:** the Machine accounts settings tab.
+
+**Also changed:**
+- **`HolidayStatus`** is now `ACTIVE | REMOVED`.
+- **`GET /api/holidays/blocked`** lists only blocked days: `{ date, holidays: [{ id, name }] }`, with no `blocked` flag and no status.
+- **`addedById` stays nullable,** for seeded rows.
+
+**Migration `20261009090000_remove_machine_accounts_and_bot`:**
+- It deletes the unreviewed (`PENDING`) bot entries.
+- Bot entries that a person had confirmed stay as ordinary holidays.
+- Then it drops the tables, columns and enums above.
+
+§4 and §5, the bot and machine-account parts of the schema and the API, and review outcome #1 below are **superseded**. They are kept for the record.
 
 ## Context
 
@@ -83,7 +106,7 @@ An `ACTIVE` holiday hits an embassy if any of its targets is `ALL_EMBASSIES`, `C
 
 The same function serves the date picker, the Step 5 save and, later, field-job scheduling, so the screen and the rule can't drift apart. This is one of the rules CLAUDE.md asks us to test ("holiday-blocked dates").
 
-### 4. Ready for the AI bot
+### 4. Ready for the AI bot (superseded 9 Oct 2026: removed)
 
 The bot doesn't exist yet. These hooks let it slot in without a schema change:
 
@@ -94,7 +117,7 @@ The bot doesn't exist yet. These hooks let it slot in without a schema change:
 - **Humans win.** The bot may change its own entries only until a person has reviewed them. Once a person has confirmed, edited or removed an entry, pushes for that key are reported back as `skipped` and change nothing. If an embassy changes an announced closure, the bot sends it under a new key; the reviewer confirms the new entry and removes the old one.
 - **Removed means removed.** Removing sets `status = REMOVED` instead of deleting the row, so a rejected bot entry isn't recreated on the next scrape, and the history stays.
 
-### 5. Machine accounts (`ApiClient`)
+### 5. Machine accounts (`ApiClient`) (superseded 9 Oct 2026: removed)
 
 Machine endpoints don't use sessions. An `ApiClient` row is a named machine account ("Holiday bot") with:
 - a key shown **once** at creation or rotation, stored as a SHA-256 hash (like `Session.tokenHash`; the key is 32 random bytes, so a slow hash isn't needed), with a short prefix kept in clear for lookup and display
@@ -569,7 +592,7 @@ Reads: `requireDepartment("VISA","VIEW")`. Writes: `requireDepartment("VISA","ED
 - In one transaction: check `updatedAt` (else `409 { code: "STALE" }`), delete the old lines, insert the new ones, bump the offering's `updatedAt`, and audit `visaChecklist.replace` with the old and new lists.
 - An unchanged list writes nothing. Returns the same shape as the GET.
 
-### Machine accounts (Head)
+### Machine accounts (Head) (superseded 9 Oct 2026: removed)
 
 | Method + path | Purpose |
 | --- | --- |
@@ -581,7 +604,7 @@ Reads: `requireDepartment("VISA","VIEW")`. Writes: `requireDepartment("VISA","ED
 
 Guard: `requireAuth` → `requirePasswordChanged` → `requireHead`. Each action is audited; the key never reaches the audit log (`key` joins `SECRET_KEYS`).
 
-### Inbound holidays (the AI bot, machine-to-machine)
+### Inbound holidays (the AI bot, machine-to-machine) (superseded 9 Oct 2026: removed)
 
 Guard: `requireApiClient("HOLIDAYS_PUSH")` and a rate limit. No cookies, no session.
 
@@ -689,5 +712,7 @@ What differs from the proposal above, and why:
    - `audit()` takes `apiClientId`, and `key` / `keyHash` never reach the audit log.
    - Date helpers `addDays`, `daysInclusive` and `isoWeekday` are in `src/lib/dates.ts`.
 
-**Not built yet:** the Settings → Masters screens (frontend), and wiring `blockedDays()` into Visa Step 5 and field jobs (built with those features).
+**Screens** (`Frontend/src/pages/settings/`, built 9 Oct 2026): Settings → Masters & holiday calendar (the holiday calendar with its review list, holiday settings), the checklist list and editor, and the four small lists. (A Machine accounts tab was built too, then removed on 9 Oct 2026.)
+
+**Not built yet:** wiring `blockedDays()` into Visa Step 5 and field jobs (built with those features).
 

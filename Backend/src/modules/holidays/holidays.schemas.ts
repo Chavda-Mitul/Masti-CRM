@@ -9,8 +9,6 @@ export const MAX_RANGE_DAYS = 60;
 export const MAX_TARGETS = 10;
 /** The blocked-dates API answers at most this many days at once. */
 export const MAX_BLOCKED_RANGE_DAYS = 366;
-/** The bot sends at most this many holidays per push. */
-export const MAX_PUSH_ITEMS = 200;
 
 const isoDate = z.iso.date("Use a date like 2026-10-08.");
 const id = z.number().int().positive();
@@ -98,7 +96,7 @@ const optionalId = z.coerce.number().int().positive().optional();
 export const listHolidaysQuerySchema = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),
-  /** Omitted: everything except REMOVED. */
+  /** Omitted: the active ones. */
   status: z.enum(HolidayStatus).optional(),
   kind: z.enum(HolidayTargetKind).optional(),
   countryId: optionalId,
@@ -126,55 +124,9 @@ export const blockedQuerySchema = z
 export const holidaySettingsSchema = z.object({
   /** How long a new entry shows the "new" chip. */
   newForDays: z.number().int().min(1).max(90),
-  /** Bot entries wait as PENDING for a person to confirm them. */
-  botEntriesNeedReview: z.boolean(),
 });
 
 export const updateHolidaySettingsSchema = holidaySettingsSchema.partial();
-
-// ---------------------------------------------------------------------------
-// The AI bot (machine-to-machine)
-// ---------------------------------------------------------------------------
-
-/** The bot names countries and embassies by code. It pushes embassy holidays only (no MASTI_OFFICE). */
-export const botTargetSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal(HolidayTargetKind.ALL_EMBASSIES) }),
-  z.object({ kind: z.literal(HolidayTargetKind.COUNTRY), countryCode: z.string().trim().toUpperCase().max(2) }),
-  z.object({ kind: z.literal(HolidayTargetKind.EMBASSY), embassyCode: z.string().trim().toUpperCase().max(20) }),
-]);
-
-export const botHolidaySchema = z
-  .object({
-    /** The bot's own stable id for this announcement. Pushing it again updates the same entry. */
-    externalKey: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .regex(/^[A-Za-z0-9._:-]+$/, "Use letters, digits and . _ : - only."),
-    name: holidayFields.name,
-    startDate: isoDate,
-    endDate: isoDate,
-    targets: z.array(botTargetSchema).min(1).max(MAX_TARGETS),
-    reference,
-  })
-  .superRefine((h, ctx) => {
-    const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
-    if (h.endDate < h.startDate) issue("endDate", "The last day can't be before the first.");
-    else if (daysInclusive(h.startDate, h.endDate) > MAX_RANGE_DAYS) issue("endDate", `A holiday can cover at most ${MAX_RANGE_DAYS} days.`);
-    const keys = h.targets.map((t) => `${t.kind}:${"countryCode" in t ? t.countryCode : ""}:${"embassyCode" in t ? t.embassyCode : ""}`);
-    if (new Set(keys).size !== keys.length) issue("targets", "Each target can be sent only once.");
-  });
-
-/** Items are checked one by one in the service, so one bad item doesn't refuse the batch. */
-export const pushHolidaysSchema = z.object({
-  dryRun: z.boolean().default(false),
-  holidays: z.array(z.unknown()),
-});
-
-export const botListQuerySchema = z.object({
-  updatedSince: z.iso.datetime("Use an ISO date-time, e.g. 2026-10-08T00:00:00Z.").optional(),
-});
 
 export type CreateHolidayInput = z.infer<typeof createHolidaySchema>;
 export type UpdateHolidayInput = z.infer<typeof updateHolidaySchema>;
@@ -183,5 +135,3 @@ export type ListHolidaysQuery = z.infer<typeof listHolidaysQuerySchema>;
 export type BlockedQuery = z.infer<typeof blockedQuerySchema>;
 export type HolidaySettings = z.infer<typeof holidaySettingsSchema>;
 export type UpdateHolidaySettingsInput = z.infer<typeof updateHolidaySettingsSchema>;
-export type BotHolidayInput = z.infer<typeof botHolidaySchema>;
-export type BotTargetInput = z.infer<typeof botTargetSchema>;

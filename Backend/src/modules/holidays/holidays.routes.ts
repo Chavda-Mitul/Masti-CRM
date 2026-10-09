@@ -12,7 +12,7 @@ import * as holidaysService from "./holidays.service";
 /**
  * The holiday calendar (docs/decisions/0005-system-masters.md). Every department may need it, so there is no
  * department check: the Head and office staff read it; the service lets the Head or any HOD change it.
- * Field staff get nothing here. The bot uses /api/inbound/holidays instead.
+ * Field staff get nothing here.
  */
 const router = Router();
 router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"));
@@ -48,10 +48,6 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   const body = updateHolidaySchema.parse(req.body);
   res.json({ holiday: await holidaysService.updateHoliday(req.params.id, body, actorOf(req)) });
-});
-
-router.post("/:id/confirm", async (req, res) => {
-  res.json({ holiday: await holidaysService.confirmHoliday(req.params.id, actorOf(req)) });
 });
 
 router.post("/:id/remove", async (req, res) => {

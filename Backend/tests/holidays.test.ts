@@ -34,14 +34,14 @@ async function addHoliday(agent: Agent, body: Record<string, unknown>) {
   return res.body.holiday;
 }
 
-/** A holiday row written directly, e.g. a PENDING bot entry, without going through the bot API. */
+/** A holiday row written directly (e.g. a removed one), without going through the API. */
 async function insertHoliday(data: {
   name: string;
   startDate: string;
   endDate?: string | null;
   repeat?: "NONE" | "WEEKLY";
   weekday?: number | null;
-  status?: "PENDING" | "ACTIVE" | "REMOVED";
+  status?: "ACTIVE" | "REMOVED";
   targets: { kind: "ALL_EMBASSIES" | "COUNTRY" | "EMBASSY" | "MASTI_OFFICE"; countryId?: number; embassyId?: number }[];
 }) {
   return prisma.holiday.create({
@@ -126,14 +126,14 @@ describe("blocked dates", () => {
     expect(both?.holidays.map((h) => h.name).sort()).toEqual(["Gandhi Jayanti", "National Day week"]);
   });
 
-  it("warns about a PENDING holiday without blocking, and ignores a REMOVED one", async () => {
+  it("ignores a REMOVED holiday", async () => {
     const t = await ids();
-    await insertHoliday({ name: "Possible closure", startDate: "2026-10-23", status: "PENDING", targets: [{ kind: "ALL_EMBASSIES" }] });
+    await insertHoliday({ name: "Dussehra", startDate: "2026-10-20", targets: [{ kind: "ALL_EMBASSIES" }] });
     await insertHoliday({ name: "Withdrawn", startDate: "2026-10-26", status: "REMOVED", targets: [{ kind: "ALL_EMBASSIES" }] });
 
     const days = await blockedDays("2026-10-01", "2026-10-31", { embassyId: t.frMum });
-    expect(days).toEqual([{ date: "2026-10-23", blocked: false, holidays: [expect.objectContaining({ name: "Possible closure", status: "PENDING" })] }]);
-    expect(await isDateBlocked("2026-10-23", { embassyId: t.frMum })).toBe(false);
+    expect(days).toEqual([{ date: "2026-10-20", holidays: [expect.objectContaining({ name: "Dussehra" })] }]);
+    expect(await isDateBlocked("2026-10-20", { embassyId: t.frMum })).toBe(true);
     expect(await isDateBlocked("2026-10-26", { embassyId: t.frMum })).toBe(false);
   });
 
@@ -160,7 +160,7 @@ describe("blocked dates", () => {
     expect(res.body).toEqual({
       from: "2026-10-01",
       to: "2026-10-31",
-      days: [{ date: "2026-10-20", blocked: true, holidays: [expect.objectContaining({ name: "Dussehra", status: "ACTIVE" })] }],
+      days: [{ date: "2026-10-20", holidays: [expect.objectContaining({ name: "Dussehra" })] }],
     });
 
     expect((await head.get("/api/holidays/blocked?from=2026-10-01&to=2026-10-31")).status).toBe(400);
@@ -202,11 +202,9 @@ describe("adding and editing holidays", () => {
     expect(holiday).toMatchObject({
       repeat: "NONE",
       status: "ACTIVE",
-      source: "MANUAL",
       reference: "IVS",
       isNew: true,
       addedBy: { name: "Vimal" },
-      apiClient: null,
       targets: [{ kind: "COUNTRY", country: { code: "CN" }, label: "China embassy & visa centres" }],
     });
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "holiday.create" } });
@@ -260,7 +258,7 @@ describe("adding and editing holidays", () => {
 
     const res = await head.patch(`/api/holidays/${holiday.id}`).send({ updatedAt: holiday.updatedAt, endDate: day(13), targets: [{ kind: "ALL_EMBASSIES" }] });
     expect(res.status).toBe(200);
-    expect(res.body.holiday).toMatchObject({ name: "Dussehra", startDate: day(12), endDate: day(13), reviewedBy: { name: "Vimal" } });
+    expect(res.body.holiday).toMatchObject({ name: "Dussehra", startDate: day(12), endDate: day(13) });
     expect(res.body.holiday.targets.map((x: { kind: string }) => x.kind)).toEqual(["ALL_EMBASSIES"]);
 
     const stale = await head.patch(`/api/holidays/${holiday.id}`).send({ updatedAt: holiday.updatedAt, name: "Dasara" });
@@ -284,24 +282,18 @@ describe("adding and editing holidays", () => {
     expect(weekly.body.holiday.label).toBe("Every Saturday");
   });
 
-  it("confirms only pending entries, removes once, and keeps removed ones out of the list", async () => {
+  it("removes once, unblocks the dates, and keeps removed ones out of the list", async () => {
     const t = await ids();
     const head = await headAgent();
-    const pending = await insertHoliday({ name: "Possible closure", startDate: day(3), status: "PENDING", targets: [{ kind: "COUNTRY", countryId: t.cn }] });
-
-    expect(await isDateBlocked(day(3), { embassyId: t.cnDel })).toBe(false);
-    const confirmed = await head.post(`/api/holidays/${pending.id}/confirm`).send({});
-    expect(confirmed.status).toBe(200);
-    expect(confirmed.body.holiday).toMatchObject({ status: "ACTIVE", reviewedBy: { name: "Vimal" } });
+    const closure = await insertHoliday({ name: "Closure", startDate: day(3), targets: [{ kind: "COUNTRY", countryId: t.cn }] });
     expect(await isDateBlocked(day(3), { embassyId: t.cnDel })).toBe(true);
-    expect((await head.post(`/api/holidays/${pending.id}/confirm`).send({})).status).toBe(409);
 
-    const removed = await head.post(`/api/holidays/${pending.id}/remove`).send({});
+    const removed = await head.post(`/api/holidays/${closure.id}/remove`).send({});
     expect(removed.body.holiday.status).toBe("REMOVED");
     expect(await isDateBlocked(day(3), { embassyId: t.cnDel })).toBe(false);
-    expect((await head.post(`/api/holidays/${pending.id}/remove`).send({})).status).toBe(200);
+    expect((await head.post(`/api/holidays/${closure.id}/remove`).send({})).status).toBe(200);
     expect(await prisma.auditLog.count({ where: { action: "holiday.remove" } })).toBe(1);
-    expect((await head.patch(`/api/holidays/${pending.id}`).send({ updatedAt: removed.body.holiday.updatedAt, name: "X" })).status).toBe(400);
+    expect((await head.patch(`/api/holidays/${closure.id}`).send({ updatedAt: removed.body.holiday.updatedAt, name: "X" })).status).toBe(400);
 
     expect((await head.get("/api/holidays")).body.holidays).toHaveLength(0);
     expect((await head.get("/api/holidays?status=REMOVED")).body.holidays).toHaveLength(1);
@@ -341,14 +333,14 @@ describe("holiday settings", () => {
     await createUser({ email: "hod@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     const hod = await loginAs("hod@masti.test");
 
-    expect((await hod.get("/api/holidays/settings")).body.settings).toEqual({ newForDays: 7, botEntriesNeedReview: true });
-    expect((await hod.put("/api/holidays/settings").send({ botEntriesNeedReview: false })).status).toBe(403);
+    expect((await hod.get("/api/holidays/settings")).body.settings).toEqual({ newForDays: 7 });
+    expect((await hod.put("/api/holidays/settings").send({ newForDays: 3 })).status).toBe(403);
 
     const res = await head.put("/api/holidays/settings").send({ newForDays: 3 });
-    expect(res.body.settings).toEqual({ newForDays: 3, botEntriesNeedReview: true });
+    expect(res.body.settings).toEqual({ newForDays: 3 });
     expect((await head.put("/api/holidays/settings").send({ newForDays: 0 })).status).toBe(400);
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "setting.update", entityId: "holidays" } });
-    expect(entry.after).toEqual({ newForDays: 3, botEntriesNeedReview: true });
+    expect(entry.after).toEqual({ newForDays: 3 });
   });
 });
 
@@ -361,10 +353,6 @@ describe("the database", () => {
     await expect(insertHoliday({ name: "Mixed", startDate: "2026-10-05", targets: [{ kind: "ALL_EMBASSIES", countryId: t.cn }] })).rejects.toThrow();
     await expect(
       insertHoliday({ name: "Twice", startDate: "2026-10-05", targets: [{ kind: "MASTI_OFFICE" }, { kind: "MASTI_OFFICE" }] }),
-    ).rejects.toThrow();
-    // A bot entry needs its machine account and key.
-    await expect(
-      prisma.holiday.create({ data: { name: "Bot", startDate: toDbDate("2026-10-05"), endDate: toDbDate("2026-10-05"), source: "AI_BOT" } }),
     ).rejects.toThrow();
   });
 });

@@ -4,6 +4,8 @@ import type { Department, User, UserDepartment, UserType } from '../auth/types'
 import { ME_KEY, useMe } from '../auth/useAuth'
 import { api, ApiError } from '../lib/api'
 import { departmentStyle } from '../lib/departments'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
 
 type AccessChoice = '' | 'STAFF_VIEW' | 'STAFF_EDIT' | 'HOD'
@@ -85,7 +87,7 @@ export function UsersPage() {
     <>
       <div className="page-head">
         <div>
-          <h1 className="h1">Users</h1>
+          <h1 className="h1">Staff &amp; roles</h1>
           <p>
             Who can log in, and what each person can see or change in each department. Deactivating someone ends their
             access immediately, on every device.
@@ -98,7 +100,7 @@ export function UsersPage() {
 
       <div className="card card-fill" style={{ overflow: 'hidden' }}>
         <div className="pad" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14 }}>
-          <h2 className="h2">Staff &amp; roles</h2>
+          <h2 className="h2">Everyone who can log in</h2>
           <span className="chip chip-muted">
             {activeCount} active{list.length > activeCount ? ` · ${list.length - activeCount} inactive` : ''}
           </span>
@@ -240,7 +242,16 @@ export function UsersPage() {
         />
       )}
 
-      {secret && <TempPasswordDialog {...secret} onClose={() => setSecret(null)} />}
+      {secret && (
+        <SecretOnceDialog
+          title={secret.reason === 'created' ? `${secret.name} has been added` : `New password for ${secret.name}`}
+          secret={secret.password}
+          onClose={() => setSecret(null)}
+        >
+          Give {secret.name} this temporary password directly. It is shown <strong>only once</strong>; they&apos;ll choose their own
+          when they log in.
+        </SecretOnceDialog>
+      )}
     </>
   )
 }
@@ -383,76 +394,6 @@ function UserDrawer({
           </button>
         </div>
       </form>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-function ConfirmDialog(props: {
-  title: string
-  body: string
-  confirmLabel: string
-  danger?: boolean
-  pending: boolean
-  error: string | null
-  onCancel: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <div className="overlay overlay-center" onClick={props.onCancel}>
-      <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <h2 className="h2">{props.title}</h2>
-        <p style={{ margin: 0 }}>{props.body}</p>
-        {props.error && <div className="alert alert-bad">{props.error}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button className={props.danger ? 'btn btn-dark' : 'btn btn-primary'} onClick={props.onConfirm} disabled={props.pending}>
-            {props.pending ? 'Working…' : props.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TempPasswordDialog({ name, password, reason, onClose }: { name: string; password: string; reason: 'created' | 'reset'; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    void navigator.clipboard.writeText(password).then(() => setCopied(true))
-  }
-  return (
-    <div className="overlay overlay-center">
-      <div className="dialog" role="dialog" aria-modal="true">
-        <h2 className="h2">{reason === 'created' ? `${name} has been added` : `New password for ${name}`}</h2>
-        <p style={{ margin: 0 }}>
-          Give {name} this temporary password directly. It is shown <strong>only once</strong>; they&apos;ll choose their own when
-          they log in.
-        </p>
-        <div
-          className="mono"
-          style={{
-            fontSize: 22,
-            textAlign: 'center',
-            padding: '14px 10px',
-            background: 'var(--fill-tile)',
-            borderRadius: 12,
-            letterSpacing: '0.04em',
-          }}
-        >
-          {password}
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-          <button className="btn btn-primary" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

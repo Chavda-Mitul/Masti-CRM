@@ -68,8 +68,6 @@ model User {
   clientMembersAdded ClientMember[]   @relation("ClientMemberCreatedBy")
   clientNotes        ClientNote[]     @relation("ClientNoteAuthor")
   holidaysAdded      Holiday[]        @relation("HolidayAddedBy")
-  holidaysReviewed   Holiday[]        @relation("HolidayReviewedBy")
-  apiClientsCreated  ApiClient[]      @relation("ApiClientCreatedBy")
 
   @@index([type, isActive])
 }
@@ -132,27 +130,23 @@ model Session {
 // ---------------------------------------------------------------------------
 
 model AuditLog {
-  id          BigInt     @id @default(autoincrement())
-  actorId     String?
-  action      String
-  entityType  String
-  entityId    String?
+  id         BigInt   @id @default(autoincrement())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
   /// The client the change belongs to (the client, its numbers, members, notes, later its files), so a client's
   /// history is one indexed query. No foreign key: audit rows must never block or follow changes to other tables.
-  clientId    String?
-  /// Set instead of actorId when a machine account (e.g. the holiday bot) made the change.
-  apiClientId String?
-  before      Json?
-  after       Json?
-  ip          String?
-  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
-  actor       User?      @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  apiClient   ApiClient? @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
+  clientId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([entityType, entityId])
   @@index([clientId, createdAt])
   @@index([actorId])
-  @@index([apiClientId])
   @@index([createdAt])
 }
 
@@ -320,40 +314,6 @@ model ClientNote {
 }
 
 // ---------------------------------------------------------------------------
-// Machine accounts: server-to-server callers such as the holiday bot.
-// See docs/decisions/0005-system-masters.md.
-// ---------------------------------------------------------------------------
-
-/// What a machine account may call. Routes check these in code, so an enum.
-enum ApiScope {
-  /// Push embassy holidays to /api/inbound/holidays.
-  HOLIDAYS_PUSH
-}
-
-/// Never deleted (the audit log points here); switched off instead.
-model ApiClient {
-  id          String     @id @default(uuid())
-  /// "Holiday bot"
-  name        String     @unique
-  /// The random part after "mcrm_", kept in clear to show "mcrm_3fa9c2d1_…". Not secret.
-  keyPrefix   String     @unique
-  /// SHA-256 of the full key. The key itself is shown once and never stored.
-  keyHash     String     @unique
-  scopes      ApiScope[]
-  /// Single IPs or CIDR ranges. Empty = any address.
-  allowedIps  String[]
-  isActive    Boolean    @default(true)
-  lastUsedAt  DateTime?  @db.Timestamptz(3)
-  lastUsedIp  String?
-  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
-  createdById String
-  createdBy   User       @relation("ApiClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  holidays    Holiday[]
-  auditLogs   AuditLog[]
-}
-
-// ---------------------------------------------------------------------------
 // System masters: countries, visa types, embassies (admin-edited in Settings → Masters).
 // See docs/decisions/0005-system-masters.md.
 // ---------------------------------------------------------------------------
@@ -402,19 +362,10 @@ model Embassy {
 // Holiday calendar
 // ---------------------------------------------------------------------------
 
-/// Who created the entry. Code branches on it (review flow, bot update rules), so an enum.
-enum HolidaySource {
-  /// Staff, or the seed (then addedById is null).
-  MANUAL
-  AI_BOT
-}
-
 enum HolidayStatus {
-  /// From the bot, waiting for a person. Warns but doesn't block.
-  PENDING
   /// Blocks dates.
   ACTIVE
-  /// Taken off the calendar (or a rejected bot entry). Kept so the bot can't recreate it.
+  /// Taken off the calendar. Kept for the record.
   REMOVED
 }
 
@@ -438,40 +389,28 @@ enum HolidayTargetKind {
 /// Checks in the migration:
 /// - repeat = NONE   ⇒ endDate set, endDate >= startDate, weekday null
 /// - repeat = WEEKLY ⇒ weekday 1–7, endDate null or >= startDate
-/// - source = MANUAL ⇒ apiClientId and externalKey null
-/// - source = AI_BOT ⇒ apiClientId and externalKey set, addedById null
+/// Staff-entered only (the AI-bot path was removed on 9 Oct 2026; see 0005's amendment).
 model Holiday {
-  id           String          @id @default(uuid())
+  id        String          @id @default(uuid())
   /// "Dussehra", "National Day week". A label, not a reported value.
-  name         String
-  repeat       HolidayRepeat   @default(NONE)
-  startDate    DateTime        @db.Date
-  endDate      DateTime?       @db.Date
+  name      String
+  repeat    HolidayRepeat   @default(NONE)
+  startDate DateTime        @db.Date
+  endDate   DateTime?       @db.Date
   /// ISO weekday, 1 = Monday … 7 = Sunday. WEEKLY only.
-  weekday      Int?            @db.SmallInt
-  status       HolidayStatus   @default(ACTIVE)
-  source       HolidaySource   @default(MANUAL)
-  /// The bot's own id for this announcement. A push with the same key updates this row.
-  externalKey  String?         @unique
+  weekday   Int?            @db.SmallInt
+  status    HolidayStatus   @default(ACTIVE)
   /// Where it was announced: "IVS", or the embassy notice URL. Display only.
-  reference    String?
-  /// The staff member who added it. Null for bot entries and seeded ones.
-  addedById    String?
-  /// The machine account that pushed it. Bot entries only.
-  apiClientId  String?
-  /// Who confirmed, edited or removed it last. Once set on a bot entry, the bot can no longer change it.
-  reviewedById String?
-  reviewedAt   DateTime?       @db.Timestamptz(3)
-  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  reference String?
+  /// The staff member who added it. Null for seeded rows (the seed runs before any user exists).
+  addedById String?
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token for PATCH.
-  updatedAt    DateTime        @updatedAt @db.Timestamptz(3)
-  addedBy      User?           @relation("HolidayAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
-  reviewedBy   User?           @relation("HolidayReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
-  apiClient    ApiClient?      @relation(fields: [apiClientId], references: [id], onDelete: Restrict)
-  targets      HolidayTarget[]
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+  addedBy   User?           @relation("HolidayAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  targets   HolidayTarget[]
 
   @@index([status, startDate])
-  @@index([apiClientId, updatedAt])
 }
 
 /// What a holiday applies to. At least one per holiday (checked in the service).
