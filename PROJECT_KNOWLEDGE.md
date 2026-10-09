@@ -1535,7 +1535,7 @@ Masti CRM/
 | `Backend/.env` | `DATABASE_URL` | Required |
 | `Backend/.env` | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | Local docker-compose DB; must match `DATABASE_URL` |
 | `Backend/.env` | `PORT` (5000), `CLIENT_URL` (CORS list), `NODE_ENV` | |
-| `Backend/.env` | `TRUST_PROXY` | `false` by default; set it behind nginx so `req.ip` is real |
+| `Backend/.env` | `TRUST_PROXY` | `false` by default (no proxy). Behind nginx set the hop count (`1`) or the proxy IPs/subnets so `req.ip` is real; production warns at start when it's `false`. `true` and malformed entries stop the server at start (`src/config/trustProxy.ts`) |
 | `Backend/.env` | `COOKIE_SECURE` (`auto`) | Session cookie over HTTPS only; `auto` = production only. `false` only for a plain-HTTP office deployment, or login silently fails |
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
