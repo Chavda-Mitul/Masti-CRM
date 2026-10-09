@@ -4,7 +4,7 @@
  *   npm run db:seed
  * Head details come from SEED_HEAD_NAME, SEED_HEAD_MOBILE, SEED_HEAD_EMAIL, SEED_HEAD_PASSWORD (Backend/.env).
  * If no password is given, a temporary one is generated and printed once. Safe to run again.
- * If there is no Head but a user with the SEED_HEAD mobile/email exists, that user is made Head instead.
+ * If there is no active Head but a user with the SEED_HEAD mobile/email exists, that user is made (and reactivated as) Head instead.
  */
 import "dotenv/config";
 import { normaliseEmail, normaliseMobile } from "../src/lib/contact";
@@ -69,8 +69,9 @@ async function main() {
   });
   console.log("Enquiry sources, visa steps and visa follow-up timing ready.");
 
-  if (await prisma.user.findFirst({ where: { type: "HEAD" } })) {
-    console.log("A Head user already exists. Skipping.");
+  // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
+  if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {
+    console.log("An active Head user already exists. Skipping.");
     return;
   }
 
@@ -97,7 +98,7 @@ async function main() {
         tx,
       );
     });
-    console.log(`No Head user found. ${existing.name} (${[mobile, email].filter(Boolean).join(" / ")}) is now Head.`);
+    console.log(`No active Head user found. ${existing.name} (${[mobile, email].filter(Boolean).join(" / ")}) is now Head.`);
     return;
   }
 
