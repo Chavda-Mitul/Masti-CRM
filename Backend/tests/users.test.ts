@@ -84,6 +84,27 @@ describe("updating users", () => {
     expect((entry.before as { name: string }).name).toBe("Test User");
   });
 
+  it("keeps roles in switched-off departments when the departments are edited", async () => {
+    const head = await headAgent();
+    const user = await createUser({
+      email: "ravi@masti.test",
+      departments: [
+        { code: "VISA", access: "VIEW" },
+        { code: "HOTELS", role: "HOD", access: "EDIT" },
+      ],
+    });
+    await prisma.department.update({ where: { code: "HOTELS" }, data: { isActive: false } });
+
+    const res = await head.patch(`/api/users/${user.id}`).send({ departments: [{ departmentCode: "VISA", role: "STAFF", access: "EDIT" }] });
+    expect(res.status).toBe(200);
+    expect(res.body.user.departments).toEqual([{ code: "VISA", name: "Visa", role: "STAFF", access: "EDIT" }]);
+
+    // Hotels comes back on: Ravi is still its HOD.
+    await prisma.department.update({ where: { code: "HOTELS" }, data: { isActive: true } });
+    const after = await head.get(`/api/users/${user.id}`);
+    expect(after.body.user.departments).toContainEqual({ code: "HOTELS", name: "Hotels", role: "HOD", access: "EDIT" });
+  });
+
   it("won't remove the last active Head", async () => {
     const head = await headAgent();
     const me = await prisma.user.findFirstOrThrow({ where: { type: "HEAD" } });

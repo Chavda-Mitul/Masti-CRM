@@ -146,7 +146,9 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
         },
       });
       if (finalType === "OFFICE" && memberships) {
-        await tx.userDepartment.deleteMany({ where: { userId: before.id } });
+        // Only switched-on departments are replaced. Roles in switched-off ones grant nothing and the screens can't
+        // show them, so they are kept for when the department is switched on again.
+        await tx.userDepartment.deleteMany({ where: { userId: before.id, department: { isActive: true } } });
         await tx.userDepartment.createMany({ data: memberships.map((m) => ({ ...m, userId: before.id })) });
       }
       const user = await tx.user.findUniqueOrThrow({ where: { id: before.id }, include: withDepartments });
