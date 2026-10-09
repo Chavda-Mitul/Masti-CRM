@@ -465,7 +465,7 @@ These are used by every module.
 - **Built 8 Oct 2026 (project lead): the client master, before the System Masters.** Design: `docs/decisions/0004-client-master.md`.
   - **Tables:** `Client`, `ClientPhone` (extra numbers), `ClientMember` (family & travellers, or a company's employees), `ClientNote`, plus the seeded lookups `BillingCycle`, `PaymentHabit`, `Relation`.
   - **Client fields:** kind (individual / company), name, contact person (companies only), email, address line, area, city, GST state, PIN code, PAN, GSTIN, accounting code (unique), billing cycle, payment habit, client since.
-    - A GSTIN must contain the PAN; an empty PAN and state are filled from it.
+    - A GSTIN must contain the PAN and match the state; an empty PAN and state are filled from it, a different one is refused.
     - PAN is a typed field only: **PAN verification is not built** (Q23).
   - **Extra mobile numbers:** lookup matches them too. WhatsApp always goes to the main number. The main number can be swapped for another.
   - **Members:** passport name, relation, DOB (age is worked out), own mobile, current passport number and expiry. Passport status is VALID / RENEW_SOON / EXPIRED; the window is a setting (12 months ⚠️, Q35). Members are archived, never deleted. Consent comes with Visa Step 2, keyed to the member.

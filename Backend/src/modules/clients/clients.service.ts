@@ -94,7 +94,7 @@ const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code
  * Turns the request into column changes and applies the cross-field rules:
  * - only companies have a contact person (switching to INDIVIDUAL clears it)
  * - a GSTIN carries its holder's PAN: an empty PAN is filled from it, a different one is refused
- * - an empty state is filled from the GSTIN's state code
+ * - a GSTIN carries its holder's state: an empty state is filled from it, a different one is refused
  * Returns only the fields that differ from `before`.
  */
 async function resolveChanges(input: ClientFieldsInput, before: ClientValues | null, today: string): Promise<ClientChanges> {
@@ -126,7 +126,19 @@ async function resolveChanges(input: ClientFieldsInput, before: ClientValues | n
     if (final.pan === null) changes.pan = final.pan = panInGstin;
     else if (final.pan !== panInGstin) throw badRequest(`The PAN inside this GSTIN (${panInGstin}) doesn't match the PAN entered.`);
     const stateInGstin = final.gstin.slice(0, 2);
-    if (final.stateCode === null && GST_STATES.some((s) => s.code === stateInGstin)) changes.stateCode = final.stateCode = stateInGstin;
+    const gstinState = GST_STATES.find((s) => s.code === stateInGstin);
+    if (final.stateCode === null) {
+      if (gstinState) changes.stateCode = final.stateCode = stateInGstin;
+    } else if (final.stateCode !== stateInGstin) {
+      // The state decides the GST type on invoices, and invoices are never edited, so a contradiction is refused.
+      const entered = GST_STATES.find((s) => s.code === final.stateCode)?.name ?? final.stateCode;
+      throw fieldError(
+        "stateCode",
+        gstinState
+          ? `This GSTIN is registered in ${gstinState.name}, not ${entered}. Pick ${gstinState.name}, or leave the state empty to fill it from the GSTIN.`
+          : `This GSTIN's state code (${stateInGstin}) isn't a GST state. Leave the state empty.`,
+      );
+    }
   }
 
   const changed = before ? onlyChanged(changes, before) : changes;

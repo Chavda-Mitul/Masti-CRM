@@ -37,7 +37,7 @@ export function ClientFormDrawer({
   const [openedAt] = useState(client?.updatedAt)
 
   const form = useForm<ClientFormValues>({
-    resolver: zodResolver(clientFormSchema),
+    resolver: zodResolver(clientFormSchema(options.states)),
     defaultValues: clientFormDefaults(client, options),
   })
   const { register, handleSubmit, control, setError, formState } = form
@@ -151,7 +151,7 @@ export function ClientFormDrawer({
               <FormField label="City" error={errors.city?.message}>
                 <input className="input" {...register('city')} placeholder="Surat" />
               </FormField>
-              <FormField label="State" error={errors.stateCode?.message} hint="Sets GST on invoices. Filled from the GSTIN if empty.">
+              <FormField label="State" error={errors.stateCode?.message} hint="Sets GST on invoices. Filled from the GSTIN if empty, and must match it.">
                 <select className="select" {...register('stateCode')}>
                   <option value="">Not set</option>
                   {options.states.map((s) => (
@@ -172,7 +172,7 @@ export function ClientFormDrawer({
                 <input className="input mono upper" {...register('pan')} placeholder="ABCDE1234F" maxLength={12} />
               </FormField>
               <FormField label="GSTIN" error={errors.gstin?.message} hint="Companies, or anyone registered for GST.">
-                <input className="input mono upper" {...register('gstin')} placeholder="24ABCDE1234F1Z5" maxLength={17} />
+                <input className="input mono upper" {...register('gstin')} placeholder="24ABCDE1234F1Z6" maxLength={17} />
               </FormField>
             </div>
 

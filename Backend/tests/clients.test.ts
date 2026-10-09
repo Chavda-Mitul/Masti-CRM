@@ -122,6 +122,35 @@ describe("creating clients", () => {
     expect(res.body.message).toMatch(/doesn't match/);
   });
 
+  it("refuses a state that contradicts the GSTIN, on create and on edit", async () => {
+    const visa = await visaAgent();
+    const gujarat = gstinFor("AAACS1234K");
+
+    const mismatch = await visa.post("/api/clients").send({ name: "Sunrise Textiles", mobile: "9825041234", stateCode: "27", gstin: gujarat });
+    expect(mismatch.status).toBe(400);
+    expect(mismatch.body.issues.stateCode).toEqual([expect.stringMatching(/registered in Gujarat, not Maharashtra/)]);
+
+    const client = await createClient(visa, { mobile: "9825041234", kind: "CORPORATE", name: "Sunrise Textiles", stateCode: "24", gstin: gujarat });
+    expect(client.stateCode).toBe("24");
+
+    // Changing only the state, or only the GSTIN, is checked against the other one as saved.
+    const stateOnly = await visa.patch(`/api/clients/${client.id}`).send({ stateCode: "27", updatedAt: client.updatedAt });
+    expect(stateOnly.status).toBe(400);
+    expect(stateOnly.body.issues.stateCode).toBeDefined();
+    const gstinOnly = await visa.patch(`/api/clients/${client.id}`).send({ gstin: gstinFor("AAACS1234K", "27"), updatedAt: client.updatedAt });
+    expect(gstinOnly.status).toBe(400);
+
+    // Both together is a move to Maharashtra.
+    const moved = await visa.patch(`/api/clients/${client.id}`).send({ stateCode: "27", gstin: gstinFor("AAACS1234K", "27"), updatedAt: client.updatedAt });
+    expect(moved.status).toBe(200);
+    expect(moved.body.client.stateCode).toBe("27");
+
+    // A GSTIN whose code isn't a GST state leaves the state empty; picking one is refused.
+    const unknown = await visa.post("/api/clients").send({ name: "Odd Code", mobile: "9825041235", stateCode: "24", gstin: gstinFor("AAACO1234K", "99") });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.issues.stateCode).toEqual([expect.stringMatching(/isn't a GST state/)]);
+  });
+
   it("only lets companies have a contact person", async () => {
     const visa = await visaAgent();
     expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", contactPerson: "Mr Shah" })).status).toBe(400);
@@ -142,6 +171,7 @@ describe("database rules (they also guard the Excel import)", () => {
     await expect(prisma.client.create({ data: { ...base, contactPerson: "Mr Shah" } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "abcde1234f" } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "AAACS1234K", gstin: gstinFor("AAACG9999Q") } })).rejects.toThrow();
+    await expect(prisma.client.create({ data: { ...base, stateCode: "27", gstin: gstinFor("AAACS1234K") } })).rejects.toThrow();
     await expect(prisma.billingCycle.create({ data: { code: "QUARTERLY", name: "Quarterly", isDefault: true } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "AAACS1234K", gstin: gstinFor("AAACS1234K") } })).resolves.toBeTruthy();
   });

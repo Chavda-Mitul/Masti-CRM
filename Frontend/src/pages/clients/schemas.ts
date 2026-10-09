@@ -88,10 +88,36 @@ function panMatchesGstin(values: { pan: string; gstin: string }, ctx: z.Refineme
   }
 }
 
-/** One schema for adding and editing. When editing, the main number is shown read-only and changed from the Numbers card. */
-export const clientFormSchema = z.object({ ...clientFields, mobile }).superRefine(panMatchesGstin)
+type GstState = { code: string; name: string }
 
-export type ClientFormValues = z.infer<typeof clientFormSchema>
+/**
+ * A GSTIN carries its holder's GST state in its first two digits (the backend refuses a different state).
+ * The state decides the GST type on invoices, which are never edited.
+ */
+function stateMatchesGstin(values: { stateCode: string; gstin: string }, ctx: z.RefinementCtx, states: GstState[]) {
+  const gstin = compact(values.gstin)
+  if (!values.stateCode || !GSTIN_PATTERN.test(gstin) || gstin.slice(0, 2) === values.stateCode) return
+  const gstinState = states.find((s) => s.code === gstin.slice(0, 2))
+  const message = gstinState
+    ? `This GSTIN is registered in ${gstinState.name}. Pick ${gstinState.name}, or "Not set" to fill it from the GSTIN.`
+    : `This GSTIN's state code (${gstin.slice(0, 2)}) isn't a GST state. Leave the state as "Not set".`
+  ctx.addIssue({ code: 'custom', path: ['stateCode'], message })
+}
+
+const clientFormObject = z.object({ ...clientFields, mobile })
+
+/**
+ * One schema for adding and editing. When editing, the main number is shown read-only and changed from the Numbers card.
+ * Takes the GST state list (from the client options) so a state/GSTIN mismatch can name the right state.
+ */
+export function clientFormSchema(states: GstState[]) {
+  return clientFormObject.superRefine((values, ctx) => {
+    panMatchesGstin(values, ctx)
+    stateMatchesGstin(values, ctx, states)
+  })
+}
+
+export type ClientFormValues = z.infer<typeof clientFormObject>
 
 // ---------------------------------------------------------------------------
 // Family members
