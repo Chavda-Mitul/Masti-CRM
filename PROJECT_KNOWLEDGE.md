@@ -1415,7 +1415,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 
 ### 16.4 Current codebase (as of 8 Oct 2026)
 
-Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master: API + tests merged into `master` on 9 Oct 2026 (PR #2); the Settings → Masters screens are being built on `feat/masters-screens`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
+Built so far: **authentication, users, department roles and the audit log**, end to end, with tests, and the **client master** (API + tests, and the Clients screens), merged into `master` on 8 Oct 2026 (PR #1). Decision records: `docs/decisions/0001-auth-sessions.md`, `0002-user-types.md`, `0004-client-master.md` (`0003-visa-intake.md` is proposed, not built; `0005-system-masters.md`, the holiday calendar and visa document master: API + tests merged into `master` on 9 Oct 2026 (PR #2); the Settings → Masters screens are built on `feat/masters-screens`). The git repo has a GitHub remote (`origin`). `Masti-CRM-Handover/` is gitignored and kept local.
 
 ```
 Masti CRM/
@@ -1454,15 +1454,21 @@ Masti CRM/
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
     ├── src/main.tsx, App.tsx     ← React Query + React Router 8 + ToastProvider; routes /login, /change-password, /, /clients,
-    │                                /clients/:id, /settings/users, /tasks (field staff)
+    │                                /clients/:id, /settings/* (masters, checklists, lists, users, machine-accounts), /tasks (field staff)
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
-    │                                permissions.ts (can, canEditClients, canEditAccountsFields: mirrors the backend)
+    │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
     ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage, TasksPage (field placeholder)
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
-    ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog
-    ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
-    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list), shell.css, auth.css, clients.css
+    │   └── settings/             ← SettingsLayout (tabs: Portal logins "Soon" · Masters & holiday calendar · Staff & roles · Machine accounts);
+    │                                masters/ (MastersPage overview, holidays/ calendar card + drawer + review, checklists/ list + editor,
+    │                                lists/ countries · visa types · embassies · documents, queries.ts, schemas.ts), machineAccounts/
+    ├── src/components/           ← AppShell (approved sidebar), ErrorBoundary (per page and app-wide), Toast (ToastProvider), FormField, ConfirmDialog,
+    │                                SecretOnceDialog (passwords, API keys), TabStrip
+    ├── src/lib/                  ← api.ts (fetch wrapper, ApiError), apiErrors.ts (isStale, errorText, applyServerIssues), useRetryGuard.tsx
+    │                                (409 warning → "save anyway"), departments.ts (colours), format.ts, toast.ts (useToast), useDebouncedValue.ts
+    └── src/styles/               ← tokens.css (demo colours/fonts), base.css (incl. toasts, form errors, the custom select chevron and option list, .kind-toggle), shell.css, auth.css, clients.css,
+                                     pages/settings/settings.css
 ```
 
 **API so far:**
@@ -1555,7 +1561,6 @@ Masti CRM/
 
 **Not there yet:**
 - **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
-- **Frontend:** the Settings → Masters screens (holiday calendar, checklists, machine accounts).
 - **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
 - **Project setup:** CI/CD and deploy scripts.
 

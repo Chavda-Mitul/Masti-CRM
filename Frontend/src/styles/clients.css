@@ -33,12 +33,6 @@
   text-decoration: underline;
 }
 /* Profile header */
-.back-link {
-  display: inline-block;
-  margin-bottom: 12px;
-  font-weight: 700;
-  text-decoration: none;
-}
 .client-head {
   display: flex;
   align-items: center;
@@ -207,43 +201,4 @@
   margin: 0 0 3px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-/* Forms */
-.kind-toggle {
-  display: inline-flex;
-  padding: 4px;
-  gap: 4px;
-  background: var(--fill-track);
-  border-radius: 14px;
-  align-self: flex-start;
-}
-.kind-toggle label {
-  padding: 8px 16px;
-  border-radius: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  color: var(--text-3);
-}
-.kind-toggle label.on {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow-card);
-}
-.kind-toggle label:focus-within {
-  outline: 2px solid var(--primary);
-}
-
-/* Duplicate warning */
-.dup-block {
-  background: var(--fill-tile);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-.dup-list {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-.dup-list li {
-  padding: 2px 0;
 }

@@ -689,5 +689,7 @@ What differs from the proposal above, and why:
    - `audit()` takes `apiClientId`, and `key` / `keyHash` never reach the audit log.
    - Date helpers `addDays`, `daysInclusive` and `isoWeekday` are in `src/lib/dates.ts`.
 
-**Not built yet:** the Settings → Masters screens (frontend), and wiring `blockedDays()` into Visa Step 5 and field jobs (built with those features).
+**Screens** (`Frontend/src/pages/settings/`, built 9 Oct 2026): Settings → Masters & holiday calendar (the holiday calendar with its review list, holiday settings), the checklist list and editor, the four small lists, and Machine accounts (Head).
+
+**Not built yet:** wiring `blockedDays()` into Visa Step 5 and field jobs (built with those features).
 

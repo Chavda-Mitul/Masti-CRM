@@ -57,11 +57,10 @@ export function AppShell() {
 
         <div className="sidebar-spacer" />
 
-        {user.type === 'HEAD' && (
-          <NavLink to="/settings/users" className="nav">
-            Settings · Users
-          </NavLink>
-        )}
+        {/* Field staff never reach the shell (RequireDesktop), so everyone here may open Settings → Masters. */}
+        <NavLink to="/settings" className="nav">
+          Settings
+        </NavLink>
 
         <div className="user-card">
           <span className="avatar">{initials(user.name)}</span>
