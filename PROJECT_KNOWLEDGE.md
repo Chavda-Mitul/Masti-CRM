@@ -466,6 +466,7 @@ These are used by every module.
   - **Tables:** `Client`, `ClientPhone` (extra numbers), `ClientMember` (family & travellers, or a company's employees), `ClientNote`, plus the seeded lookups `BillingCycle`, `PaymentHabit`, `Relation`.
   - **Client fields:** kind (individual / company), name, contact person (companies only), email, address line, area, city, GST state, PIN code, PAN, GSTIN, accounting code (unique), billing cycle, payment habit, client since.
     - A GSTIN must contain the PAN and match the state; an empty PAN and state are filled from it, a different one is refused.
+    - **Names (decided 9 Oct 2026, project lead):** a person's name (an individual client, contact person, member, intake client name) is letters in any script plus spaces and `. ' -`; a company's name needs at least one letter (digits and `&` are fine). Mobile numbers with letters are refused, not cleaned. The forms drop impossible characters as they are typed (mobile, PIN, PAN, GSTIN, passport).
     - PAN is a typed field only: **PAN verification is not built** (Q23).
   - **Extra mobile numbers:** lookup matches them too. WhatsApp always goes to the main number. The main number can be swapped for another.
   - **Members:** passport name, relation, DOB (age is worked out), own mobile, current passport number and expiry. Passport status is VALID / RENEW_SOON / EXPIRED; the window is a setting (12 months ⚠️, Q35). Members are archived, never deleted. Consent comes with Visa Step 2, keyed to the member.

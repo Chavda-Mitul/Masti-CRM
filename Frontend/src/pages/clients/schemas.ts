@@ -10,14 +10,28 @@ export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
 export const PASSPORT_PATTERN = /^[A-Z0-9]{6,12}$/
 const PINCODE_PATTERN = /^[1-9][0-9]{5}$/
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/** A person's name: letters in any script (with vowel signs), and spaces, ".", "'" and "-" between them. */
+const PERSON_NAME_PATTERN = /^\p{L}[\p{L}\p{M} .'-]*$/u
+export const PERSON_NAME_MESSAGE = "Use letters only (spaces and . ' - are fine)."
+/** A company's name needs a letter; digits and symbols are fine ("3M India", "Shah & Sons"). */
+const COMPANY_NAME_PATTERN = /\p{L}/u
+const COMPANY_NAME_MESSAGE = 'The company name needs at least one letter.'
+
+export function isPersonName(value: string): boolean {
+  return PERSON_NAME_PATTERN.test(value.trim())
+}
 
 /** "abcde 1234f" → "ABCDE1234F": how PAN, GSTIN and passport numbers are stored. */
 export function compact(value: string): string {
   return value.replace(/\s+/g, '').toUpperCase()
 }
 
-/** Indian mobile → "+91XXXXXXXXXX", or null. Accepts "98250 41234", "098250-41234", "+91 98250 41234". */
+/**
+ * Indian mobile → "+91XXXXXXXXXX", or null. Accepts "98250 41234", "098250-41234", "+91 98250 41234".
+ * Anything besides digits, spaces, "+" and "-" makes it invalid rather than being dropped.
+ */
 export function normaliseMobile(input: string): string | null {
+  if (/[^\d\s+-]/.test(input)) return null
   let digits = input.replace(/\D/g, '')
   if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2)
   else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1)
@@ -40,6 +54,7 @@ const MOBILE_MESSAGE = 'Enter a valid 10-digit Indian mobile number.'
 const blank = (value: string) => value.trim() === ''
 
 const text = (max: number) => z.string().trim().max(max, `Keep it under ${max} characters.`)
+const optionalPersonName = (max: number) => text(max).refine((v) => v === '' || isPersonName(v), PERSON_NAME_MESSAGE)
 const mobile = z.string().refine((v) => normaliseMobile(v) !== null, MOBILE_MESSAGE)
 const optionalMobile = z.string().refine((v) => blank(v) || normaliseMobile(v) !== null, MOBILE_MESSAGE)
 const optionalEmail = z.string().refine((v) => blank(v) || EMAIL_PATTERN.test(v.trim()), 'Enter a valid email address.')
@@ -63,7 +78,7 @@ const clientFields = {
   kind: z.enum(['INDIVIDUAL', 'CORPORATE']),
   /** Required for every client staff save (decided 9 Oct 2026). */
   name: text(150).min(1, "Enter the client's name."),
-  contactPerson: text(150),
+  contactPerson: optionalPersonName(150),
   email: optionalEmail,
   addressLine: text(300),
   area: text(100),
@@ -77,6 +92,17 @@ const clientFields = {
   /** Select values: an id as a string; "" = not set. */
   billingCycleId: z.string(),
   paymentHabitId: z.string(),
+}
+
+/** A person's name is letters only; a company's needs a letter. Which rule applies follows the kind picked. */
+function nameFitsKind(values: { kind: 'INDIVIDUAL' | 'CORPORATE'; name: string }, ctx: z.RefinementCtx) {
+  const name = values.name.trim()
+  if (!name) return
+  if (values.kind === 'CORPORATE') {
+    if (!COMPANY_NAME_PATTERN.test(name)) ctx.addIssue({ code: 'custom', path: ['name'], message: COMPANY_NAME_MESSAGE })
+  } else if (!isPersonName(name)) {
+    ctx.addIssue({ code: 'custom', path: ['name'], message: PERSON_NAME_MESSAGE })
+  }
 }
 
 /** A GSTIN carries its holder's PAN in characters 3–12 (the backend refuses a mismatch). */
@@ -112,6 +138,7 @@ const clientFormObject = z.object({ ...clientFields, mobile })
  */
 export function clientFormSchema(states: GstState[]) {
   return clientFormObject.superRefine((values, ctx) => {
+    nameFitsKind(values, ctx)
     panMatchesGstin(values, ctx)
     stateMatchesGstin(values, ctx, states)
   })
@@ -124,7 +151,12 @@ export type ClientFormValues = z.infer<typeof clientFormObject>
 // ---------------------------------------------------------------------------
 
 export const memberFormSchema = z.object({
-  name: z.string().trim().min(1, 'Enter the name as printed in the passport.').max(150, 'Keep it under 150 characters.'),
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Enter the name as printed in the passport.')
+    .max(150, 'Keep it under 150 characters.')
+    .refine((v) => v === '' || isPersonName(v), PERSON_NAME_MESSAGE),
   relationId: z.string().min(1, 'Pick a relation.'),
   dateOfBirth: z.string().refine((v) => !v || v <= istToday(), "Date of birth can't be in the future."),
   mobile: optionalMobile,

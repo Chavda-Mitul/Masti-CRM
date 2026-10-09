@@ -61,6 +61,8 @@ Cross-field rules (service and database):
 - **Only companies have a contact person.** Switching a company to INDIVIDUAL clears it.
 - **A GSTIN carries its holder's PAN** in characters 3–12. An empty PAN is filled from the GSTIN; a different PAN is refused. An empty state is filled from the GSTIN's first two digits; a different state is refused (amended 9 Oct 2026: the state decides the GST type on invoices, which are never edited). The database checks both (`Client_gstin_matches_pan`, `Client_gstin_matches_state`).
 - PAN `AAAAA9999A`; GSTIN pattern + check character; passport 6–12 letters/digits (not just the Indian format, for NRI/OCI travellers). All stored uppercase without spaces.
+- **Names (added 9 Oct 2026, service only).** A person's name (an INDIVIDUAL client, a contact person, a member, a client made at intake) is letters in any script, with vowel signs, plus spaces and `. ' -`. A company's name needs at least one letter ("3M India", "Shah & Sons"). It is checked when the name or the kind changes, so switching a company to INDIVIDUAL can be refused. There is no database check: the Excel import must decide what to do with old names that break the rule.
+- **Mobile numbers** with anything besides digits, spaces, `+` and `-` are refused (`normaliseMobile` in `src/lib/contact.ts`), never cleaned: `98250abc41234` is a typo, not a number.
 
 PAN is a typed field only. **PAN verification (Q23) is not built.**
 
