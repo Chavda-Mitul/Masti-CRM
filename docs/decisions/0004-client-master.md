@@ -10,7 +10,7 @@
 Every department works for the same clients, so the client record comes first. What the sources say (PROJECT_KNOWLEDGE.md §10.1, §12.14, and the 30 Sep transcript):
 
 | Source | What it says |
-|---|---|
+| --- | --- |
 | Vimal, 6:5x PM | "We'll save the query against the mobile number, only the mobile number." |
 | Demo + PID | Fixed format: **minimal at enquiry, complete before invoicing** ✅. Accounting client code ✅, billing cycle weekly / half-monthly / monthly, **default monthly** ✅. |
 | Demo, Clients screen | Family & travellers: name · relation · passport valid till ("renew soon") · consent. The search bar searches "client, mobile, case **or passport number**". Notes: free text with author and date. |
@@ -23,7 +23,7 @@ Every department works for the same clients, so the client record comes first. W
 ### 1. Seven tables, no document vault
 
 | Model | Purpose |
-|---|---|
+| --- | --- |
 | `Client` | The client (a person or a company). `mobile` is unique: the lookup key, the WhatsApp number and the Excel-import match key. Everything else is optional until invoicing. |
 | `ClientPhone` | Extra numbers. Lookup matches them too; WhatsApp always goes to `Client.mobile`. Not unique across clients. |
 | `ClientMember` | Family & travellers (or a corporate's employees): passport name, relation, DOB, own mobile, **current** passport number and expiry. Archived, never deleted. |
@@ -35,6 +35,7 @@ The schema is in `Backend/prisma/schema.prisma` (section "Client master"); the m
 **The document vault is excluded** (reusable passport/PAN scans per client). It isn't in the demo, so it may be a change request (§7 rule 16), and Q37 asks Shivanshu. If it is built later, it stores **Drive/OneDrive links**, not S3 uploads: uploads go against what Vimal said three times and against rule 4.
 
 **Not stored:**
+
 - **Aadhaar numbers.** Aadhaar rules restrict storing full numbers, and S11 (DPDP) is open. A masked copy can be a Drive link if a checklist ever needs it.
 - **Consent.** That is its own model, one per person for life, keyed to `ClientMember` (not to the passport, since consent survives a passport change). It is built with Visa Step 2.
 - **Passport history.** Old numbers stay in the audit log (`client.member.update` before/after).
@@ -44,6 +45,7 @@ The schema is in `Backend/prisma/schema.prisma` (section "Client master"); the m
 `kind` (INDIVIDUAL / CORPORATE, an enum because code branches on it), `name`, `contactPerson` (companies only), `email`, `addressLine`, `area`, `city`, `stateCode` (GST state code: it decides the place of supply on invoices), `pincode`, `pan`, `gstin`, `accountingCode` (unique), `billingCycleId` (defaults to the default cycle), `paymentHabitId`, `clientSince` (the IST date of creation, which is also the database default; the import may set an earlier one).
 
 Cross-field rules (service and database):
+
 - **Only companies have a contact person.** Switching a company to INDIVIDUAL clears it.
 - **A GSTIN carries its holder's PAN** in characters 3–12. An empty PAN is filled from the GSTIN; a different PAN is refused. An empty state is filled from the GSTIN's first two digits.
 - PAN `AAAAA9999A`; GSTIN pattern + check character; passport 6–12 letters/digits (not just the Indian format, for NRI/OCI travellers). All stored uppercase without spaces.
@@ -55,7 +57,7 @@ PAN is a typed field only. **PAN verification (Q23) is not built.**
 Rows in the `Setting` table, validated with zod, seeded by `db:seed`. The Head changes them with `PUT /api/clients/settings`, which is audited as `setting.update`.
 
 | Key | Seeded value | Status |
-|---|---|---|
+| --- | --- | --- |
 | `clients.invoiceReadiness` | `{ "INDIVIDUAL": ["name","addressLine","city","stateCode"], "CORPORATE": ["name","contactPerson","addressLine","city","stateCode","gstin"] }` | ⚠️ our proposal (Q33) |
 | `clients.expiryWarnings` | `{ "passportRenewSoonMonths": 12 }` | ⚠️ matches the demo (Q35) |
 
@@ -68,7 +70,7 @@ The allowed readiness fields are a fixed list: name, contactPerson, email, addre
 Clients are shared by every department, so the routes use `requireAuth → requirePasswordChanged → requireUserType("HEAD", "OFFICE")` and the service decides the rest:
 
 | Action | Who |
-|---|---|
+| --- | --- |
 | View, search, look up | The Head and every office user. Field staff get 403. |
 | Create and change clients, numbers, members, notes | The Head, or an office user with EDIT (or HOD) in **any** department |
 | Set, change or clear `accountingCode`, `billingCycleId`, `paymentHabitId` | `can(user, "ACCOUNTS", "EDIT")`: Accounts or the Head (Q34). Sending an unchanged value is fine. |
@@ -83,7 +85,7 @@ A passport number, PAN, GSTIN or extra mobile already on file elsewhere is usual
 3. The audit entry records `confirmedDuplicates`.
 
 | Field | Compared with |
-|---|---|
+| --- | --- |
 | `passportNumber` (members) | Other people not taken off a family list |
 | `pan`, `gstin` (clients) | Other clients |
 | `mobile` (new client, new main number, extra number) | Other clients' main and extra numbers |
@@ -105,10 +107,10 @@ Hand-written in the migration, because the Excel import (Q29) and later writers 
 All under `/api/clients`. Errors use the existing shape: `{ message }`, `{ message, details }` for HttpError, `{ message, issues }` for zod.
 
 | Method + path | Who | Purpose |
-|---|---|---|
-| `GET /lookup?mobile=` | View | "Existing client" check. `{ mobile, client: { id, name, kind, mobile, matchedOn: "PRIMARY" \| "SECONDARY" } \| null, alsoMatches }`. 400 for a bad number. |
+| --- | --- | --- |
+| `GET /lookup?mobile=` | View | "Existing client" check. \`{ mobile, client: { id, name, kind, mobile, matchedOn: "PRIMARY" |
 | `GET /?q=&kind=&incomplete=&cursor=&limit=` | View | Search by name, contact person, member name, mobile (any part, main or extra), passport number, PAN, GSTIN or accounting code. `incomplete=true/false` filters by the readiness setting. Ordered by name; `{ clients, nextCursor }`. The "any part of" matches use pg_trgm GIN indexes. |
-| `GET /options` | View | Billing cycles (with `isDefault`), payment habits, relations, GST states, kinds |
+| `GET /options` | View | Billing cycles (with `isDefault`), payment habits, relations, GST states (by name, "Other Territory" last), kinds |
 | `GET /settings` · `PUT /settings` | View · Head | `{ settings: { invoiceReadiness, expiryWarnings } }`; `PUT` takes either key |
 | `POST /` | Edit (Accounts fields: Accounts) | Create; only `mobile` is required. 201 `{ client }` (the profile) |
 | `GET /:id` | View | Profile: client fields, `billingCycle`, `paymentHabit`, `readiness`, `phones`, active `members` (with `age`, `passportStatus` VALID / RENEW_SOON / EXPIRED), latest 20 `notes` |

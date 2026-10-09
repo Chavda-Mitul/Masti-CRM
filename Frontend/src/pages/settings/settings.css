@@ -78,6 +78,72 @@
   padding-left: 26px;
 }
 
+/* Searchable multi-select (countries & embassies): chips + search in the field, ticks in the pop-over */
+.multi-select {
+  position: relative;
+}
+.multi-select-field {
+  height: auto;
+  min-height: 42px;
+  padding: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  cursor: text;
+}
+.multi-select-field:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.multi-select-chip {
+  max-width: 100%;
+  padding-right: 4px;
+}
+.multi-select-chip button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.multi-select-chip button:hover {
+  background: var(--primary-tint-2);
+}
+.multi-select-search {
+  flex: 1;
+  min-width: 140px;
+  height: 28px;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  background: transparent;
+  color: var(--ink);
+}
+.multi-select-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-input);
+  box-shadow: var(--shadow-pop);
+}
+
 /* Masters overview grid */
 .masters-grid {
   display: grid;
