@@ -1,5 +1,5 @@
 import type { UserType } from "../../../generated/prisma/client";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { cleanEmail, cleanMobile } from "../../lib/contact";
 import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
@@ -50,8 +50,20 @@ async function getUserOr404(id: string) {
 }
 
 /** True if someone other than this user is an active Head. */
-async function anotherActiveHeadExists(userId: string) {
-  return (await prisma.user.count({ where: { type: "HEAD", isActive: true, id: { not: userId } } })) > 0;
+async function anotherActiveHeadExists(userId: string, db: Db = prisma) {
+  return (await db.user.count({ where: { type: "HEAD", isActive: true, id: { not: userId } } })) > 0;
+}
+
+const LAST_HEAD = "There must always be at least one active Head.";
+
+/**
+ * Inside the transaction that deactivates or demotes a Head: locks the active Head rows, then checks another one is left.
+ * Without the lock, two Heads deactivating each other at the same moment could both pass the check and leave none.
+ * A second request waits for the first to commit, and then no longer sees the first Head as active.
+ */
+async function lockAndAssertAnotherActiveHead(tx: Db, userId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "User" WHERE "type" = 'HEAD' AND "isActive" ORDER BY "id" FOR UPDATE`;
+  if (!(await anotherActiveHeadExists(userId, tx))) throw new HttpError(409, LAST_HEAD);
 }
 
 export async function listUsers() {
@@ -110,9 +122,8 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
   if (!finalMobile && !finalEmail) throw badRequest("A user needs a mobile number or an email (or both).");
 
   const finalType = input.type ?? before.type;
-  if (before.type === "HEAD" && finalType !== "HEAD" && before.isActive && !(await anotherActiveHeadExists(before.id))) {
-    throw new HttpError(409, "There must always be at least one active Head.");
-  }
+  const leavesHead = before.type === "HEAD" && finalType !== "HEAD" && before.isActive;
+  if (leavesHead && !(await anotherActiveHeadExists(before.id))) throw new HttpError(409, LAST_HEAD);
   const memberships = input.departments ? await resolveMemberships(input.departments) : undefined;
   // Becoming Head or field staff drops any department access the user had.
   const finalDepartmentCount = memberships ? memberships.length : finalType === "OFFICE" ? before.departments.length : 0;
@@ -121,6 +132,7 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
 
   const updated = await prisma
     .$transaction(async (tx) => {
+      if (leavesHead) await lockAndAssertAnotherActiveHead(tx, before.id);
       // Order matters to the database triggers: department rows go before the type leaves OFFICE,
       // and new ones are added after it becomes OFFICE.
       if (finalType !== "OFFICE") await tx.userDepartment.deleteMany({ where: { userId: before.id } });
@@ -160,11 +172,11 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
 export async function deactivateUser(id: string, actor: Actor) {
   const before = await getUserOr404(id);
   if (before.id === actor.user.id) throw badRequest("You can't deactivate yourself.");
-  if (before.type === "HEAD" && before.isActive && !(await anotherActiveHeadExists(before.id))) {
-    throw new HttpError(409, "There must always be at least one active Head.");
-  }
+  const leavesHead = before.type === "HEAD" && before.isActive;
+  if (leavesHead && !(await anotherActiveHeadExists(before.id))) throw new HttpError(409, LAST_HEAD);
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (leavesHead) await lockAndAssertAnotherActiveHead(tx, before.id);
     const user = await tx.user.update({ where: { id: before.id }, data: { isActive: false }, include: withDepartments });
     // Ends access immediately: every open session for this user is deleted.
     await tx.session.deleteMany({ where: { userId: before.id } });

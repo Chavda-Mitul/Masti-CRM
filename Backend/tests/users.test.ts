@@ -116,6 +116,37 @@ describe("deactivating users", () => {
     expect((await head.post(`/api/users/${me.id}/deactivate`).set("Content-Type", "application/json")).status).toBe(400);
   });
 
+  it("leaves an active Head when two Heads deactivate each other at the same moment", async () => {
+    await headAgent();
+    await createUser({ name: "Nikita", email: "nikita@masti.test", type: "HEAD" });
+    const nikita = await loginAs("nikita@masti.test");
+    const [vimalRow, nikitaRow] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { email: "vimal@masti.test" } }),
+      prisma.user.findUniqueOrThrow({ where: { email: "nikita@masti.test" } }),
+    ]);
+
+    // Vimal's deactivation of Nikita is mid-transaction: it has locked the Head rows and switched Nikita off, not yet committed.
+    let commit!: () => void;
+    const held = new Promise<void>((resolve) => (commit = resolve));
+    const first = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "User" WHERE "type" = 'HEAD' AND "isActive" ORDER BY "id" FOR UPDATE`;
+        await tx.user.update({ where: { id: nikitaRow.id }, data: { isActive: false } });
+        await held;
+      },
+      { timeout: 10_000 },
+    );
+
+    // Meanwhile Nikita deactivates Vimal. Her check must wait for the first one, then see she is no longer active.
+    const second = nikita.post(`/api/users/${vimalRow.id}/deactivate`).set("Content-Type", "application/json").then((r) => r);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    commit();
+    await first;
+
+    expect((await second).status).toBe(409);
+    expect(await prisma.user.count({ where: { type: "HEAD", isActive: true } })).toBe(1);
+  });
+
   it("returns 404 for an unknown user", async () => {
     const head = await headAgent();
     const res = await head.post("/api/users/00000000-0000-0000-0000-000000000000/deactivate").set("Content-Type", "application/json");
