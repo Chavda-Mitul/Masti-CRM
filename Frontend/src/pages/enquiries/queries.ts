@@ -53,12 +53,17 @@ export function useEnquirySources() {
   })
 }
 
-/** Countries with the visa types we process for them (only ones with a checklist). */
+/**
+ * Countries with the visa types we process for them (only ones with a checklist).
+ * Refetched each time the form opens: a visa the Visa HOD just switched off (maybe on another computer) must not be
+ * offered. The cached list shows meanwhile, so the form doesn't wait.
+ */
 export function useVisaIntakeOfferings() {
   return useQuery({
     queryKey: enquiryKeys.visaOfferings,
     queryFn: async () => (await api<{ countries: IntakeCountry[] }>('/visa/offerings')).countries,
     staleTime: OPTIONS_STALE,
+    refetchOnMount: 'always',
   })
 }
 
@@ -87,5 +92,7 @@ export function useCreateVisaCase(idempotencyKey: string) {
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lookups })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
     },
+    // E.g. "We don't process this country and visa type any more": show the current list.
+    onError: () => void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings }),
   })
 }

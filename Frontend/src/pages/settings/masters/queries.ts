@@ -182,6 +182,8 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       if (resource !== 'embassies') {
         void queryClient.invalidateQueries({ queryKey: masterKeys.offerings })
         void queryClient.invalidateQueries({ queryKey: ['masters', 'checklist'] })
+        // The New enquiry form's Country and Visa type lists.
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings })
       }
     },
   })
@@ -211,6 +213,7 @@ export function useSaveOffering() {
     onSuccess: (offering) => {
       void queryClient.invalidateQueries({ queryKey: masterKeys.offerings })
       void queryClient.invalidateQueries({ queryKey: masterKeys.checklist(offering.id) })
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings })
     },
   })
 }
@@ -234,6 +237,8 @@ export function useReplaceChecklist(offeringId: number) {
     onSuccess: (checklist) => {
       queryClient.setQueryData(masterKeys.checklist(offeringId), checklist)
       void queryClient.invalidateQueries({ queryKey: masterKeys.offerings })
+      // A visa is offered at intake only once it has a checklist.
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings })
     },
   })
 }
