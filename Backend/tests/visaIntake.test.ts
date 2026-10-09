@@ -97,7 +97,7 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(await prisma.client.count()).toBe(1);
   });
 
-  it("needs the client's name for a new number or a nameless client, and never overwrites a name", async () => {
+  it("needs the client's name for a new number, and never overwrites a name", async () => {
     const staff = await visaStaff();
     for (const clientName of [undefined, "", "  "]) {
       const res = await staff.post("/api/visa/cases").send(await body({ clientName }));
@@ -108,17 +108,11 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(await prisma.client.count()).toBe(0);
     expect(await prisma.caseCounter.count()).toBe(0);
 
-    // A client made with only the mobile (before 9 Oct, or later by the bot or the import) gets its name here.
-    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
-    const bare = await prisma.client.create({ data: { mobile: "+919825041234", billingCycleId: cycle.id } });
-    const noName = await staff.post("/api/visa/cases").send(await body({ clientName: null }));
-    expect(noName.body.issues.clientName).toEqual(["This client has no name yet. Enter it."]);
     const named = await staff.post("/api/visa/cases").send(await body({ clientName: "Rakesh Mehta" }));
     expect(named.status).toBe(201);
-    expect(named.body.case.client).toMatchObject({ id: bare.id, name: "Rakesh Mehta" });
-    expect(await prisma.auditLog.count({ where: { action: "client.update", clientId: bare.id } })).toBe(1);
+    expect(named.body.case.client).toMatchObject({ name: "Rakesh Mehta" });
 
-    // Named now: another name from intake is ignored, and none is needed.
+    // An existing client: another name from intake is ignored, and none is needed.
     const other = await staff.post("/api/visa/cases").send(await body({ clientName: "Someone Else" }));
     expect(other.body.case.client.name).toBe("Rakesh Mehta");
     expect((await staff.post("/api/visa/cases").send(await body({ clientName: undefined }))).status).toBe(201);

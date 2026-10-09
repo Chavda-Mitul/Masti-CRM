@@ -21,7 +21,7 @@ export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 export const createVisaCaseSchema = z
   .object({
     mobile: z.string().trim().min(1, "Enter the client's mobile number.").max(20),
-    /** Needed when the number is new or its client has no name yet; never overwrites an existing name. */
+    /** Needed when the number is new; never overwrites an existing client's name. */
     clientName: z.string().trim().max(150).nullish(),
     sourceCode: z.string().trim().min(1, "Pick where the enquiry came in.").max(40),
     offeringId: z.number().int().positive("Pick a country and visa type."),

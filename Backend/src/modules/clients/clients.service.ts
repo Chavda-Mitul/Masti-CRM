@@ -60,11 +60,12 @@ type ClientChanges = Partial<ClientValues>;
 // The name is required on create and optional on update (the schemas enforce each).
 type ClientFieldsInput = Omit<CreateClientInput, "mobile" | "confirmDuplicates" | "name"> & { name?: string | undefined };
 
-const TEXT_FIELDS = ["name", "contactPerson", "addressLine", "area", "city", "stateCode", "pincode", "pan", "gstin", "accountingCode"] as const;
+/** Optional text fields: "" or null clears them. The name is required, so it's handled on its own. */
+const TEXT_FIELDS = ["contactPerson", "addressLine", "area", "city", "stateCode", "pincode", "pan", "gstin", "accountingCode"] as const;
 
 const EMPTY_CLIENT: ClientValues = {
   kind: "INDIVIDUAL",
-  name: null,
+  name: "",
   contactPerson: null,
   email: null,
   addressLine: null,
@@ -99,6 +100,7 @@ const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code
 async function resolveChanges(input: ClientFieldsInput, before: ClientValues | null, today: string): Promise<ClientChanges> {
   const changes: ClientChanges = {};
   if (input.kind !== undefined) changes.kind = input.kind;
+  if (input.name !== undefined) changes.name = input.name;
   for (const key of TEXT_FIELDS) {
     const value = input[key];
     if (value !== undefined) changes[key] = value;
@@ -229,7 +231,9 @@ export async function listClients(query: ListClientsQuery) {
 
   const rows = await prisma.client.findMany({
     where: { AND: and },
-    orderBy: [{ name: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+    // Name is never null, so Prisma's cursor becomes a plain keyset query with a LIMIT (with a nullable sort key it
+    // reads every remaining row and pages in memory: 20261009130000_client_name_required).
+    orderBy: [{ name: "asc" }, { id: "asc" }],
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
   });
@@ -294,7 +298,7 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
   const created = await prisma
     .$transaction(async (tx) => {
       const client = await tx.client.create({
-        data: { ...changes, mobile, billingCycleId, clientSince: changes.clientSince ?? toDbDate(today), createdById: actor.user.id },
+        data: { ...changes, name: input.name, mobile, billingCycleId, clientSince: changes.clientSince ?? toDbDate(today), createdById: actor.user.id },
       });
       await audit(
         {
@@ -317,8 +321,8 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
 
 /**
  * "Saved against the mobile number" for intake (0003): the client whose main number this is, else the earliest client
- * with it as an extra number (the lookup's first match), else a new client. Staff always give a name (9 Oct 2026):
- * it's required for a new client, and fills in a matched client that has none; an existing name is never overwritten.
+ * with it as an extra number (the lookup's first match), else a new client. A new client needs a name (9 Oct 2026);
+ * a matched client's name is never overwritten from here.
  * Runs in the caller's transaction, so a failed enquiry leaves no half-made client behind. `mobile` must be normalised.
  * Two intakes racing on the same new number: the second insert fails on Client.mobile and the caller retries.
  */
@@ -327,29 +331,9 @@ export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: 
   const found =
     (await tx.client.findUnique({ where: { mobile }, select })) ??
     (await tx.clientPhone.findFirst({ where: { mobile }, orderBy: { createdAt: "asc" }, select: { client: { select } } }))?.client;
-  const given = name?.trim() || null;
+  if (found) return { client: found, created: false };
 
-  if (found) {
-    if (found.name) return { client: found, created: false }; // an existing name is never overwritten from here
-    if (!given) throw fieldError(nameField, "This client has no name yet. Enter it.");
-    assertCanEditClients(actor.user);
-    const named = await tx.client.update({ where: { id: found.id }, data: { name: given }, select });
-    await audit(
-      {
-        actorId: actor.user.id,
-        action: "client.update",
-        entityType: "Client",
-        entityId: found.id,
-        clientId: found.id,
-        before: { name: null },
-        after: { name: given },
-        ip: actor.ip,
-      },
-      tx,
-    );
-    return { client: named, created: false };
-  }
-
+  const given = name?.trim();
   if (!given) throw fieldError(nameField, "Enter the client's name: this is a new number.");
   assertCanEditClients(actor.user);
   const client = await tx.client.create({
@@ -371,8 +355,6 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
   const changes = await resolveChanges(input, before, istToday());
   const keys = Object.keys(changes);
   if (keys.length === 0) return getClient(id);
-  // A client made with only the mobile (intake before 9 Oct, the bot, the import) gets its name before anything else.
-  if (!(changes.name ?? before.name)) throw fieldError("name", "Enter the client's name before saving other changes.");
   assertCanChangeAccountsFields(actor.user, accountsFieldsIn(changes, false));
   await assertAccountingCodeFree(changes.accountingCode, id);
   const confirmed = checkDuplicates(await taxIdDuplicates(changes, id), input.confirmDuplicates);

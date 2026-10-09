@@ -8,7 +8,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FormField, RequiredMark } from '../../components/FormField'
 import { applyServerIssues, errorText } from '../../lib/apiErrors'
 import { DEPARTMENT_STYLE, departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
-import { formatMobile, istToday } from '../../lib/format'
+import { istToday } from '../../lib/format'
 import { useToast } from '../../lib/toast'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/enquiries.css'
@@ -99,8 +99,8 @@ export function NewEnquiryPage() {
 
   const found = lookup.data?.client
   const openEnquiries = lookup.data?.openEnquiries ?? []
-  // A new number, or a client saved earlier with only the mobile: the name is required (9 Oct 2026).
-  const needsName = lookup.data !== undefined && !found?.name
+  // A new number: the name is required (9 Oct 2026).
+  const needsName = lookup.data !== undefined && !found
 
   const onSubmit = handleSubmit((values) => {
     if (needsName && !values.clientName.trim()) {
@@ -109,7 +109,7 @@ export function NewEnquiryPage() {
     }
     save.mutate(toCreateVisaCaseBody(values), {
       onSuccess: ({ case: c }) => {
-        toast({ tone: 'ok', message: `Enquiry ${c.caseNo} saved for ${c.client.name ?? formatMobile(c.client.mobile)}.` })
+        toast({ tone: 'ok', message: `Enquiry ${c.caseNo} saved for ${c.client.name}.` })
       },
       onError: (err) => applyServerIssues(err, setError, FIELDS),
     })
@@ -136,7 +136,7 @@ export function NewEnquiryPage() {
           <h2 className="h2">Who is asking</h2>
           {found ? (
             <span className="chip chip-ok">
-              Existing client · {found.name ?? formatMobile(found.mobile)}
+              Existing client · {found.name}
               {found.matchedOn === 'SECONDARY' && ' (extra number)'}
             </span>
           ) : lookup.data ? (
@@ -164,7 +164,7 @@ export function NewEnquiryPage() {
         {found && openEnquiries.length > 0 && (
           <div className="alert alert-warn open-cases" role="status">
             <strong>
-              {found.name ?? formatMobile(found.mobile)} already has {openEnquiries.length === 1 ? 'an open case' : `${openEnquiries.length} open cases`}.
+              {found.name} already has {openEnquiries.length === 1 ? 'an open case' : `${openEnquiries.length} open cases`}.
             </strong>{' '}
             Check it isn't the same trip before saving a new one.
             <ul>

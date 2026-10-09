@@ -204,7 +204,7 @@ export function EnquiriesPage() {
 function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; onClick: () => void }) {
   const style = departmentStyle(row.department.code)
   const due = dueOf(row.dueAt)
-  const name = row.client.name ?? formatMobile(row.client.mobile)
+  const name = row.client.name
   return (
     <tr className={on ? 'row-on' : undefined} onClick={onClick}>
       <td>
@@ -276,11 +276,11 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
         </button>
       </div>
       <h2 className="h2" style={{ marginTop: 10 }}>
-        {row.client.name ?? formatMobile(row.client.mobile)}
+        {row.client.name}
       </h2>
       <p className="muted small" style={{ margin: '4px 0 0' }}>
         {row.summary}
-        {row.client.name && ` · ${formatMobile(row.client.mobile)}`}
+        {` · ${formatMobile(row.client.mobile)}`}
       </p>
       <p className="muted small" style={{ margin: '2px 0 0' }}>
         Came in through {row.source.name}

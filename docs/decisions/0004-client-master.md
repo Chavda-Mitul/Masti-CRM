@@ -12,9 +12,8 @@ Staff must give a **mobile number and a name** to save a client. For a company, 
 **How it works:**
 - **Create:** `POST /api/clients` refuses a missing or blank `name` (400, `issues.name`).
 - **Update:** `PATCH` can't clear it.
-- **Nameless clients:** editing a client that has no name (made before this change, or later by the WhatsApp bot or the Excel import) is refused until the name is given: "Enter the client's name before saving other changes."
-- **Intake:** the New enquiry form asks for the name when the number is new, or when the matched client has none (0003, *Refresh*). It never overwrites an existing name.
-- **Database:** `Client.name` stays nullable. Integrations and the import may still create a client with only the mobile; the rule is enforced in the service for staff saves (`fieldError` in `src/lib/httpError.ts`).
+- **Intake:** the New enquiry form asks for the name when the number is new (0003, *Refresh*). It never overwrites an existing client's name.
+- **Database (later on 9 Oct 2026):** `Client.name` is `NOT NULL` with a not-blank check (migration `20261009130000_client_name_required`). Clients saved with only the mobile before this were given the placeholder "Client +91…" (none in production). Integrations and the Excel import must supply a name too: the WhatsApp profile name, or the spreadsheet's. It also keeps the directory's paging cheap: it sorts by name, and with a nullable sort key Prisma 7's cursor reads every remaining row and pages in memory.
 
 This differs from Vimal's "only the mobile number" (6:5x PM, quoted below), so **confirm it with him**. It is logged as open question #41.
 

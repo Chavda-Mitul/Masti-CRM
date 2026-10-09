@@ -140,4 +140,35 @@ describe("GET /api/enquiries", () => {
     expect(page2.body.nextCursor).toBeNull();
     expect(page2.body.enquiries[0].id).not.toBe(page1.body.enquiries[0].id);
   });
+
+  it("walks every page once, in order, past enquiries with no due time and equal due times", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const saved = [];
+    for (let i = 0; i < 7; i++) saved.push(await saveVisa(aarti, `982500000${i}`));
+    const soon = new Date(Date.now() + 3_600_000);
+    // Two share a due time, three have none (a future bot enquiry, or a closed step).
+    await setDue(saved[0]!.id, null);
+    await setDue(saved[1]!.id, soon);
+    await setDue(saved[2]!.id, null);
+    await setDue(saved[3]!.id, soon);
+    await setDue(saved[4]!.id, new Date(Date.now() - 3_600_000));
+    await setDue(saved[6]!.id, null);
+    const expected = (await aarti.get("/api/enquiries?limit=100")).body.enquiries.map((e: { id: string }) => e.id);
+    expect(expected).toHaveLength(7);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let pages = 0; pages < 10; pages++) {
+      const res = await aarti.get(`/api/enquiries?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+      expect(res.status).toBe(200);
+      seen.push(...res.body.enquiries.map((e: { id: string }) => e.id));
+      cursor = res.body.nextCursor;
+      if (!cursor) break;
+    }
+    expect(cursor).toBeNull();
+    expect(seen).toEqual(expected);
+
+    expect((await aarti.get("/api/enquiries?cursor=not-a-cursor")).status).toBe(400);
+  });
 });

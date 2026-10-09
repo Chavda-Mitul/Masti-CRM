@@ -10,7 +10,7 @@ export type DuplicateField = "mobile" | "pan" | "gstin" | "passportNumber";
 
 export interface DuplicateMatch {
   clientId: string;
-  clientName: string | null;
+  clientName: string;
   clientMobile: string;
   /** Set for passport matches. */
   memberId?: string;
@@ -50,7 +50,7 @@ export function confirmedDuplicatesNote(confirmed: Duplicate[]) {
 
 const clientSummary = { id: true, name: true, mobile: true } as const;
 
-const toMatch = (client: { id: string; name: string | null; mobile: string }): DuplicateMatch => ({
+const toMatch = (client: { id: string; name: string; mobile: string }): DuplicateMatch => ({
   clientId: client.id,
   clientName: client.name,
   clientMobile: client.mobile,

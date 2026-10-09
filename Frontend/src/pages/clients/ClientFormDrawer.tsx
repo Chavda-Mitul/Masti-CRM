@@ -85,13 +85,11 @@ export function ClientFormDrawer({
       <div className="overlay" onClick={onClose}>
         <form className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
           <div className="pad drawer-head">
-            <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name ?? 'client'}`}</h2>
+            <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name}`}</h2>
             <p className="muted">
               {isNew
                 ? 'The mobile number and name are needed now (marked *). The rest can be completed before invoicing.'
-                : client.name
-                  ? 'Only what you change is saved.'
-                  : 'This client has no name yet. Enter it to save any change.'}
+                : 'Only what you change is saved.'}
             </p>
           </div>
 

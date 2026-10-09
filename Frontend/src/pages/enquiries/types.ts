@@ -22,7 +22,7 @@ export interface EnquiryRow {
   id: string
   caseNo: string
   department: { code: string; name: string }
-  client: { id: string; name: string | null; mobile: string }
+  client: { id: string; name: string; mobile: string }
   /** "France (Schengen) · Tourist · 2 adults, 2 children" */
   summary: string
   status: EnquiryStatus
@@ -72,7 +72,7 @@ export interface IntakeCountry {
 
 export interface LookupClient {
   id: string
-  name: string | null
+  name: string
   kind: string
   mobile: string
   matchedOn: 'PRIMARY' | 'SECONDARY'
@@ -98,7 +98,7 @@ export interface ClientLookup {
 
 export interface CreateVisaCaseBody {
   mobile: string
-  /** Needed for a new number or a client with no name yet; never overwrites an existing name. */
+  /** Needed for a new number; never overwrites an existing client's name. */
   clientName: string | null
   sourceCode: string
   offeringId: number
@@ -115,7 +115,7 @@ export interface VisaCase {
   caseNo: string
   status: EnquiryStatus
   stage: StageRef
-  client: { id: string; name: string | null; mobile: string }
+  client: { id: string; name: string; mobile: string }
   source: { code: string; name: string }
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }

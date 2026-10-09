@@ -13,7 +13,7 @@ export const MAX_CHILDREN = 30
 export const visaEnquiryFormSchema = z
   .object({
     mobile: z.string().refine((v) => normaliseMobile(v) !== null, 'Enter a valid 10-digit Indian mobile number.'),
-    /** Asked only for a new number, or a client with no name yet; the page checks it then (the backend does too). */
+    /** Asked only for a new number; the page checks it then (the backend does too). */
     clientName: z.string().trim().max(150, 'Keep it under 150 characters.'),
     sourceCode: z.string().min(1, 'Pick where the enquiry came in.'),
     countryId: z.string().min(1, 'Choose a country.'),

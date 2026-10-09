@@ -32,10 +32,15 @@ export function readinessOf(client: ReadinessView, rules: InvoiceReadiness): Rea
   return { ready: missing.length === 0, missing };
 }
 
+/** Required in the database, so never missing (and `{ name: null }` isn't a valid filter). */
+const ALWAYS_SET: ReadonlySet<ReadinessField> = new Set(["name"]);
+
 /** Prisma filter for clients missing at least one required field. Wrap in NOT for complete clients. */
 export function incompleteWhere(rules: InvoiceReadiness): Prisma.ClientWhereInput {
-  const kinds = (Object.keys(rules) as ClientKind[]).filter((kind) => rules[kind].length > 0);
-  return { OR: kinds.map((kind) => ({ kind, OR: rules[kind].map((field) => ({ [field]: null })) })) };
+  const checks = (Object.keys(rules) as ClientKind[])
+    .map((kind) => ({ kind, fields: rules[kind].filter((field) => !ALWAYS_SET.has(field)) }))
+    .filter(({ fields }) => fields.length > 0);
+  return { OR: checks.map(({ kind, fields }) => ({ kind, OR: fields.map((field) => ({ [field]: null })) })) };
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
-import { forbidden } from "../../lib/httpError";
+import { z } from "zod";
+import { badRequest, forbidden } from "../../lib/httpError";
 import { can, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 import { countTravellers, travellersLabel } from "../visa/visaCase";
@@ -51,6 +52,35 @@ function searchWhere(q: string): Prisma.EnquiryWhereInput {
   return { OR: or };
 }
 
+// Paging. The list is ordered by dueAt (nulls last), then createdAt, then id. With a nullable sort key, Prisma 7's own
+// `cursor` can't express "after this row" in SQL: it drops the LIMIT, reads every remaining row and slices the page in
+// memory. So the cursor carries the last row's sort values and the "after it" condition is written out here.
+
+const cursorSchema = z.object({ dueAt: z.iso.datetime().nullable(), createdAt: z.iso.datetime(), id: z.string().min(1).max(64) });
+type ListCursor = z.infer<typeof cursorSchema>;
+
+function encodeCursor(row: { dueAt: Date | null; createdAt: Date; id: string }): string {
+  const cursor: ListCursor = { dueAt: row.dueAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), id: row.id };
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+function decodeCursor(raw: string): ListCursor {
+  try {
+    return cursorSchema.parse(JSON.parse(Buffer.from(raw, "base64url").toString("utf8")));
+  } catch {
+    throw badRequest("This list has changed. Reload it.");
+  }
+}
+
+/** Rows that come after the cursor in the list order. */
+function afterCursor(cursor: ListCursor): Prisma.EnquiryWhereInput {
+  const createdAt = new Date(cursor.createdAt);
+  const sameDueAtAfter: Prisma.EnquiryWhereInput = { OR: [{ createdAt: { gt: createdAt } }, { createdAt, id: { gt: cursor.id } }] };
+  if (cursor.dueAt === null) return { AND: [{ dueAt: null }, sameDueAtAfter] };
+  const dueAt = new Date(cursor.dueAt);
+  return { OR: [{ dueAt: { gt: dueAt } }, { dueAt: null }, { AND: [{ dueAt }, sameDueAtAfter] }] };
+}
+
 export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDepartments) {
   const departments = await viewableDepartments(user);
   let shown = departments;
@@ -67,14 +97,14 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     ...(query.q ? [searchWhere(query.q)] : []),
   ];
   const where: Prisma.EnquiryWhereInput = { AND: [...base, { departmentId: { in: shown.map((d) => d.id) } }] };
+  const after = query.cursor ? afterCursor(decodeCursor(query.cursor)) : undefined;
 
   const [rows, perDepartment, late, stages] = await Promise.all([
     prisma.enquiry.findMany({
-      where,
+      where: after ? { AND: [where, after] } : where,
       include: rowInclude,
       orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
       take: query.limit + 1,
-      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     }),
     prisma.enquiry.groupBy({ by: ["departmentId"], where: { AND: base }, _count: { _all: true } }),
     prisma.enquiry.count({ where: { AND: [where, { dueAt: { lt: new Date() } }] } }),
@@ -87,6 +117,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
 
   const stagesOf = (departmentId: number) => stages.filter((s) => s.departmentId === departmentId).map(({ code, name }) => ({ code, name }));
   const page = rows.slice(0, query.limit);
+  const last = page[page.length - 1];
   return {
     enquiries: page.map((row) => ({
       id: row.id,
@@ -102,7 +133,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       dueAt: row.dueAt,
       createdAt: row.createdAt,
     })),
-    nextCursor: rows.length > query.limit ? (page[page.length - 1]?.id ?? null) : null,
+    nextCursor: rows.length > query.limit && last ? encodeCursor(last) : null,
     departments: departments.map((d) => ({
       code: d.code,
       name: d.name,

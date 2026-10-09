@@ -31,7 +31,7 @@ export interface Lookup {
 export interface ClientSummary {
   id: string
   kind: ClientKind
-  name: string | null
+  name: string
   contactPerson: string | null
   mobile: string
   area: string | null
@@ -73,7 +73,7 @@ export interface ClientProfile {
   id: string
   kind: ClientKind
   mobile: string
-  name: string | null
+  name: string
   contactPerson: string | null
   email: string | null
   addressLine: string | null
@@ -121,7 +121,7 @@ export interface Duplicate {
   value: string
   matches: {
     clientId: string
-    clientName: string | null
+    clientName: string
     clientMobile: string
     memberId?: string
     memberName?: string

@@ -214,8 +214,9 @@ model Client {
   kind           ClientKind     @default(INDIVIDUAL)
   /// +91XXXXXXXXXX. The lookup key, the WhatsApp number, and the match key for the Excel import.
   mobile         String         @unique
-  /// The person's name, or the company's. Null until known (intake, bot and import may create with the mobile only).
-  name           String?
+  /// The person's name, or the company's. Required (0004 Amendment); a database check also refuses a blank one.
+  /// Integrations and the Excel import must supply one too (e.g. the WhatsApp profile name).
+  name           String
   /// CORPORATE only (database check): the person we deal with.
   contactPerson  String?
   /// Stored lowercased.

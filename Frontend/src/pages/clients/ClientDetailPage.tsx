@@ -40,7 +40,7 @@ export function ClientDetailPage() {
   }
 
   const c = client.data
-  const name = c.name ?? 'Name not given yet'
+  const name = c.name
   const place = [c.area, c.city].filter(Boolean).join(', ')
 
   return (

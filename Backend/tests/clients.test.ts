@@ -136,8 +136,9 @@ describe("creating clients", () => {
 describe("database rules (they also guard the Excel import)", () => {
   it("refuses bad rows written directly", async () => {
     const billingCycleId = (await prisma.billingCycle.findUniqueOrThrow({ where: { code: "MONTHLY" } })).id;
-    const base = { billingCycleId, mobile: "+919825041234" };
+    const base = { billingCycleId, mobile: "+919825041234", name: "Rakesh Mehta" };
     await expect(prisma.client.create({ data: { ...base, mobile: "9825041234" } })).rejects.toThrow();
+    await expect(prisma.client.create({ data: { ...base, name: "   " } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, contactPerson: "Mr Shah" } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "abcde1234f" } })).rejects.toThrow();
     await expect(prisma.client.create({ data: { ...base, pan: "AAACS1234K", gstin: gstinFor("AAACG9999Q") } })).rejects.toThrow();
@@ -147,7 +148,7 @@ describe("database rules (they also guard the Excel import)", () => {
 
   it("defaults clientSince to today's date in India", async () => {
     const billingCycleId = (await prisma.billingCycle.findUniqueOrThrow({ where: { code: "MONTHLY" } })).id;
-    const client = await prisma.client.create({ data: { billingCycleId, mobile: "+919825041234" } });
+    const client = await prisma.client.create({ data: { billingCycleId, mobile: "+919825041234", name: "Rakesh Mehta" } });
     expect(client.clientSince.toISOString().slice(0, 10)).toBe(istToday());
   });
 });
@@ -205,7 +206,7 @@ describe("duplicate warnings (confirmDuplicates)", () => {
 });
 
 describe("updating clients", () => {
-  it("never clears the name, and asks a nameless client for one before other changes", async () => {
+  it("never clears the name", async () => {
     const visa = await visaAgent();
     const named = await createClient(visa, { mobile: "9825041234" });
     for (const name of ["", null]) {
@@ -213,16 +214,6 @@ describe("updating clients", () => {
       expect(res.status, JSON.stringify(name)).toBe(400);
       expect(res.body.issues.name).toEqual(["Enter the client's name."]);
     }
-
-    // Made with only the mobile (intake before 9 Oct, the bot, the import).
-    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
-    const bare = await prisma.client.create({ data: { mobile: "+919825041235", billingCycleId: cycle.id } });
-    const cityOnly = await visa.patch(`/api/clients/${bare.id}`).send({ updatedAt: bare.updatedAt.toISOString(), city: "Surat" });
-    expect(cityOnly.status).toBe(400);
-    expect(cityOnly.body.issues.name).toEqual(["Enter the client's name before saving other changes."]);
-    const withName = await visa.patch(`/api/clients/${bare.id}`).send({ updatedAt: bare.updatedAt.toISOString(), name: "Rakesh Mehta", city: "Surat" });
-    expect(withName.status).toBe(200);
-    expect(withName.body.client).toMatchObject({ name: "Rakesh Mehta", city: "Surat" });
   });
 
   it("uses updatedAt for optimistic locking", async () => {
@@ -469,6 +460,24 @@ describe("searching clients", () => {
     const second = await visa.get(`/api/clients?limit=2&cursor=${first.body.nextCursor}`);
     expect(second.body.clients.map((c: { name: string }) => c.name)).toEqual(["Chirag"]);
     expect(second.body.nextCursor).toBeNull();
+  });
+
+  it("walks every page once, in order, when names repeat", async () => {
+    const visa = await visaAgent();
+    const names = ["Mehta", "Asha", "Mehta", "Zaveri", "Mehta", "Bhavin", "Asha"];
+    for (const [i, name] of names.entries()) await createClient(visa, { mobile: `982504123${i}`, name });
+
+    const seen: { id: string; name: string }[] = [];
+    let cursor: string | null = null;
+    for (let pages = 0; pages < 10; pages++) {
+      const res = await visa.get(`/api/clients?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
+      seen.push(...res.body.clients);
+      cursor = res.body.nextCursor;
+      if (!cursor) break;
+    }
+    expect(cursor).toBeNull();
+    expect(new Set(seen.map((c) => c.id)).size).toBe(names.length);
+    expect(seen.map((c) => c.name)).toEqual([...names].sort());
   });
 });
 

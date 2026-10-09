@@ -34,7 +34,7 @@ Since this record was proposed, the client master ([0004](0004-client-master.md)
 
 | Method + path | Guard | Purpose |
 | --- | --- | --- |
-| `GET /api/enquiries?department=&mine=&q=&status=&cursor=&limit=` | departments the caller can VIEW (403 for one they can't) | `{ enquiries, nextCursor, departments: [{ code, name, count, stages }], lateCount }`. Ordered by `dueAt` (nulls last), then `createdAt`. `q` matches the case number, the client's name, or any part of the client's main or extra mobile. `status` defaults to OPEN. |
+| `GET /api/enquiries?department=&mine=&q=&status=&cursor=&limit=` | departments the caller can VIEW (403 for one they can't) | `{ enquiries, nextCursor, departments: [{ code, name, count, stages }], lateCount }`. Ordered by `dueAt` (nulls last), then `createdAt`, then id. `cursor` is opaque (the last row's sort values, base64url): Prisma's own cursor can't page a nullable sort key with a LIMIT, so the keyset condition is hand-written. `q` matches the case number, the client's name, or any part of the client's main or extra mobile. `status` defaults to OPEN. |
 | `GET /api/enquiries/sources` | — | Active, staff-selectable sources |
 | `GET /api/visa/offerings` | Visa VIEW | `{ countries: [{ id, code, name, zone, label, visaTypes: [{ offeringId, id, code, name }] }] }` |
 | `POST /api/visa/cases` | Visa EDIT | Body `{ mobile, sourceCode, offeringId, adults, children, travelMonth, travelDate }`, optional `Idempotency-Key`. Returns `201 { case, clientCreated }`, or `200` for a repeated key. |
