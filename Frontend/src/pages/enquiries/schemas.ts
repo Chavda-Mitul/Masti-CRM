@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { istToday } from '../../lib/format'
-import { normaliseMobile } from '../clients/schemas'
+import { isPersonName, normaliseMobile, PERSON_NAME_MESSAGE } from '../clients/schemas'
 import type { CreateVisaCaseBody } from './types'
 
 // The New enquiry form. Mirrors Backend/src/modules/visa/visa.schemas.ts so mistakes show before saving;
@@ -14,7 +14,11 @@ export const visaEnquiryFormSchema = z
   .object({
     mobile: z.string().refine((v) => normaliseMobile(v) !== null, 'Enter a valid 10-digit Indian mobile number.'),
     /** Asked only for a new number; the page checks it then (the backend does too). */
-    clientName: z.string().trim().max(150, 'Keep it under 150 characters.'),
+    clientName: z
+      .string()
+      .trim()
+      .max(150, 'Keep it under 150 characters.')
+      .refine((v) => v === '' || isPersonName(v), PERSON_NAME_MESSAGE),
     sourceCode: z.string().min(1, 'Pick where the enquiry came in.'),
     countryId: z.string().min(1, 'Choose a country.'),
     offeringId: z.string().min(1, 'Choose a visa type.'),

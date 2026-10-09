@@ -52,6 +52,16 @@ export const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 export const PASSPORT_PATTERN = /^[A-Z0-9]{6,12}$/;
 
+/**
+ * A person's name: letters in any script (with its vowel signs, so Gujarati works), and spaces, ".", "'" and "-"
+ * between them. Digits and other symbols are almost always typos (decided 9 Oct 2026).
+ */
+export const PERSON_NAME_PATTERN = /^\p{L}[\p{L}\p{M} .'-]*$/u;
+export const PERSON_NAME_MESSAGE = "Use letters only (spaces and . ' - are fine).";
+/** A company's name needs a letter; digits and symbols are fine ("3M India", "Shah & Sons"). */
+export const COMPANY_NAME_PATTERN = /\p{L}/u;
+export const COMPANY_NAME_MESSAGE = "The company name needs at least one letter.";
+
 const GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /** The 15th character of a GSTIN is a check character over the first 14 (base-36, alternating weights 1 and 2). */
@@ -69,6 +79,7 @@ const blankToNull = (value: unknown) => (typeof value === "string" && value.trim
 const clearable = <T extends z.ZodType>(schema: T) => z.preprocess(blankToNull, schema.nullable()).optional();
 
 const text = (max: number) => z.string().trim().max(max);
+const personName = (max: number) => text(max).regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE);
 const mobile = z.string().trim().max(30);
 const isoDate = z.iso.date("Use a date like 2026-10-08.");
 const confirmDuplicates = z.boolean().default(false);
@@ -98,7 +109,7 @@ const requiredName = z.preprocess(blankToNull, z.string({ error: NAME_MESSAGE })
 const clientFields = {
   kind: z.enum(ClientKind).optional(),
   name: requiredName.optional(),
-  contactPerson: clearable(text(150)),
+  contactPerson: clearable(personName(150)),
   email: clearable(text(200)),
   addressLine: clearable(text(300)),
   area: clearable(text(100)),
@@ -137,7 +148,7 @@ export const addPhoneSchema = z.object({
 });
 
 export const createMemberSchema = z.object({
-  name: text(150).min(1, "Enter the name as printed in the passport."),
+  name: text(150).min(1, "Enter the name as printed in the passport.").regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE),
   relationId: lookupId,
   dateOfBirth: clearable(isoDate),
   mobile: clearable(mobile),
@@ -147,7 +158,7 @@ export const createMemberSchema = z.object({
 });
 
 export const updateMemberSchema = z.object({
-  name: text(150).min(1, "Enter the name as printed in the passport.").optional(),
+  name: text(150).min(1, "Enter the name as printed in the passport.").regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE).optional(),
   relationId: lookupId.optional(),
   dateOfBirth: clearable(isoDate),
   mobile: clearable(mobile),

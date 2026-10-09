@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { FormField } from '../../components/FormField'
 import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { istToday } from '../../lib/format'
+import { codeChars, filtered, mobileChars } from '../../lib/inputFilters'
 import { applyServerIssues, errorText, isStale } from './apiErrors'
 import { changedIn, filledIn, memberBody, memberFormDefaults } from './forms'
 import { useSaveMember } from './queries'
@@ -87,14 +88,14 @@ export function MemberFormDrawer({
                 <input className="input" type="date" max={istToday()} {...register('dateOfBirth')} />
               </FormField>
               <FormField label="Own mobile" error={errors.mobile?.message} hint="Optional.">
-                <input className="input mono" {...register('mobile')} placeholder="98250 41234" inputMode="tel" />
+                <input className="input mono" {...filtered(register('mobile'), mobileChars)} placeholder="98250 41234" inputMode="tel" />
               </FormField>
             </div>
 
             <span className="lbl section-lbl">Current passport</span>
             <div className="form-grid">
               <FormField label="Passport number" error={errors.passportNumber?.message}>
-                <input className="input mono upper" {...register('passportNumber')} placeholder="Z1234567" maxLength={14} />
+                <input className="input mono upper" {...filtered(register('passportNumber'), codeChars)} placeholder="Z1234567" maxLength={12} />
               </FormField>
               <FormField label="Valid till" error={errors.passportExpiry?.message}>
                 <input className="input" type="date" {...register('passportExpiry')} />

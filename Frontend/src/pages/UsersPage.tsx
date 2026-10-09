@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
+import { mobileChars } from '../lib/inputFilters'
 
 type AccessChoice = '' | 'STAFF_VIEW' | 'STAFF_EDIT' | 'HOD'
 
@@ -332,7 +333,7 @@ function UserDrawer({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <label className="field">
                 Mobile number
-                <input className="input mono" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="98250 41234" />
+                <input className="input mono" value={mobile} onChange={(e) => setMobile(mobileChars(e.target.value))} placeholder="98250 41234" inputMode="tel" />
               </label>
               <label className="field">
                 Email

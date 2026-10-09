@@ -9,6 +9,7 @@ import { FormField, RequiredMark } from '../../components/FormField'
 import { applyServerIssues, errorText } from '../../lib/apiErrors'
 import { DEPARTMENT_STYLE, departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
 import { istToday } from '../../lib/format'
+import { filtered, mobileChars } from '../../lib/inputFilters'
 import { useToast } from '../../lib/toast'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/enquiries.css'
@@ -163,7 +164,7 @@ export function NewEnquiryPage() {
               placeholder="98250 41234"
               autoFocus
               aria-required
-              {...register('mobile')}
+              {...filtered(register('mobile'), mobileChars)}
               onKeyDown={(e) => {
                 if (e.key === 'Tab' && !e.shiftKey && !lookupAnswered && normaliseMobile(e.currentTarget.value)) nameAfterTab.current = true
               }}

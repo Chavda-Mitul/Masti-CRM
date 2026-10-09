@@ -6,6 +6,7 @@ import { canEditAccountsFields } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { FormField } from '../../components/FormField'
 import { useDrawerGuard } from '../../components/useDrawerGuard'
+import { codeChars, digitsOnly, filtered, mobileChars } from '../../lib/inputFilters'
 import { applyServerIssues, errorText, existingClientId, isStale } from './apiErrors'
 import { changedIn, clientBody, clientFormDefaults, filledIn } from './forms'
 import { useCreateClient, useUpdateClient } from './queries'
@@ -115,7 +116,7 @@ export function ClientFormDrawer({
             <div className="form-grid">
               {isNew ? (
                 <FormField label="Mobile number" required error={errors.mobile?.message} hint="The main number: client lookup and WhatsApp.">
-                  <input className="input mono" {...register('mobile')} placeholder="98250 41234" autoFocus inputMode="tel" aria-required />
+                  <input className="input mono" {...filtered(register('mobile'), mobileChars)} placeholder="98250 41234" autoFocus inputMode="tel" aria-required />
                 </FormField>
               ) : (
                 <FormField label="Mobile number" required hint="Change it from the Numbers card.">
@@ -162,17 +163,17 @@ export function ClientFormDrawer({
                 </select>
               </FormField>
               <FormField label="PIN code" error={errors.pincode?.message}>
-                <input className="input mono" {...register('pincode')} placeholder="395007" inputMode="numeric" maxLength={6} />
+                <input className="input mono" {...filtered(register('pincode'), digitsOnly)} placeholder="395007" inputMode="numeric" maxLength={6} />
               </FormField>
             </div>
 
             <span className="lbl section-lbl">Tax</span>
             <div className="form-grid">
               <FormField label="PAN" error={errors.pan?.message} hint="Filled from the GSTIN if empty.">
-                <input className="input mono upper" {...register('pan')} placeholder="ABCDE1234F" maxLength={12} />
+                <input className="input mono upper" {...filtered(register('pan'), codeChars)} placeholder="ABCDE1234F" maxLength={10} />
               </FormField>
               <FormField label="GSTIN" error={errors.gstin?.message} hint="Companies, or anyone registered for GST.">
-                <input className="input mono upper" {...register('gstin')} placeholder="24ABCDE1234F1Z6" maxLength={17} />
+                <input className="input mono upper" {...filtered(register('gstin'), codeChars)} placeholder="24ABCDE1234F1Z6" maxLength={15} />
               </FormField>
             </div>
 

@@ -12,7 +12,11 @@ import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } 
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
 import {
+  COMPANY_NAME_MESSAGE,
+  COMPANY_NAME_PATTERN,
   GST_STATES,
+  PERSON_NAME_MESSAGE,
+  PERSON_NAME_PATTERN,
   type AddNoteInput,
   type AddPhoneInput,
   type ChangeMobileInput,
@@ -92,11 +96,21 @@ const rethrowUniqueClient = rethrowUnique("This mobile number or accounting code
 
 /**
  * Turns the request into column changes and applies the cross-field rules:
+ * - a person's name is letters only, a company's needs a letter (checked when the name or the kind changes)
  * - only companies have a contact person (switching to INDIVIDUAL clears it)
  * - a GSTIN carries its holder's PAN: an empty PAN is filled from it, a different one is refused
  * - a GSTIN carries its holder's state: an empty state is filled from it, a different one is refused
  * Returns only the fields that differ from `before`.
  */
+/** See PERSON_NAME_PATTERN and COMPANY_NAME_PATTERN. */
+function assertNameFitsKind(name: string, kind: Client["kind"], field = "name") {
+  if (kind === "CORPORATE") {
+    if (!COMPANY_NAME_PATTERN.test(name)) throw fieldError(field, COMPANY_NAME_MESSAGE);
+  } else if (!PERSON_NAME_PATTERN.test(name)) {
+    throw fieldError(field, PERSON_NAME_MESSAGE);
+  }
+}
+
 async function resolveChanges(input: ClientFieldsInput, before: ClientValues | null, today: string): Promise<ClientChanges> {
   const changes: ClientChanges = {};
   if (input.kind !== undefined) changes.kind = input.kind;
@@ -115,6 +129,8 @@ async function resolveChanges(input: ClientFieldsInput, before: ClientValues | n
   }
 
   const final: ClientValues = { ...(before ?? EMPTY_CLIENT), ...changes };
+
+  if (changes.name !== undefined || changes.kind !== undefined) assertNameFitsKind(final.name, final.kind);
 
   if (final.kind === "INDIVIDUAL" && final.contactPerson !== null) {
     if (changes.contactPerson) throw badRequest("Only companies have a contact person.");
@@ -349,6 +365,8 @@ export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: 
 
   const given = name?.trim();
   if (!given) throw fieldError(nameField, "Enter the client's name: this is a new number.");
+  // A client made at intake is a person (the default kind); it can be switched to a company from the client screen.
+  assertNameFitsKind(given, "INDIVIDUAL", nameField);
   assertCanEditClients(actor.user);
   const client = await tx.client.create({
     data: { mobile, name: given, billingCycleId: await defaultBillingCycleId(tx), clientSince: toDbDate(istToday()), createdById: actor.user.id },

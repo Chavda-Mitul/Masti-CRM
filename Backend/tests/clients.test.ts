@@ -109,6 +109,49 @@ describe("creating clients", () => {
     expect((await visa.post("/api/clients").send({ name: "Test Client", mobile: "9825041234", stateCode: "99" })).status).toBe(400);
   });
 
+  it("refuses letters in a mobile number instead of dropping them", async () => {
+    const visa = await visaAgent();
+    for (const mobile of ["98250abc41234", "9825041234x", "98250.41234"]) {
+      const res = await visa.post("/api/clients").send({ name: "Test Client", mobile });
+      expect(res.status, mobile).toBe(400);
+      expect(res.body.message).toMatch(/valid 10-digit/);
+    }
+    expect(await prisma.client.count()).toBe(0);
+
+    const client = await createClient(visa, { mobile: "+91 98250-41234" });
+    expect(client.mobile).toBe("+919825041234");
+    expect((await visa.post(`/api/clients/${client.id}/phones`).send({ mobile: "98989abc89898" })).status).toBe(400);
+  });
+
+  it("only takes letters in a person's name, and needs a letter in a company's", async () => {
+    const visa = await visaAgent();
+    const PERSON = "Use letters only (spaces and . ' - are fine).";
+    const COMPANY = "The company name needs at least one letter.";
+
+    for (const name of ["Rakesh 2", "@@@", "Rakesh_Mehta"]) {
+      const res = await visa.post("/api/clients").send({ name, mobile: "9825041234" });
+      expect(res.status, name).toBe(400);
+      expect(res.body.issues.name).toEqual([PERSON]);
+    }
+    expect((await createClient(visa, { name: "Mary D'Souza-Mehta Jr.", mobile: "9825041234" })).name).toBe("Mary D'Souza-Mehta Jr.");
+    // Any script, with its vowel signs.
+    expect((await createClient(visa, { name: "રાકેશ મહેતા", mobile: "9825041235" })).name).toBe("રાકેશ મહેતા");
+
+    const numbers = await visa.post("/api/clients").send({ kind: "CORPORATE", name: "12345", mobile: "9825041236" });
+    expect(numbers.body.issues.name).toEqual([COMPANY]);
+    const company = await createClient(visa, { kind: "CORPORATE", name: "3M India & Sons", mobile: "9825041236" });
+
+    // Becoming a person brings the person rule in, though the name itself wasn't sent.
+    const toPerson = await visa.patch(`/api/clients/${company.id}`).send({ kind: "INDIVIDUAL", updatedAt: company.updatedAt });
+    expect(toPerson.status).toBe(400);
+    expect(toPerson.body.issues.name).toEqual([PERSON]);
+
+    const contact = await visa.patch(`/api/clients/${company.id}`).send({ contactPerson: "Mr 2", updatedAt: company.updatedAt });
+    expect(contact.body.issues.contactPerson).toEqual([PERSON]);
+    const member = await visa.post(`/api/clients/${company.id}/members`).send({ name: "Priya 2", relationId: await relationId("SELF") });
+    expect(member.body.issues.name).toEqual([PERSON]);
+  });
+
   it("fills PAN and state from the GSTIN, and refuses a PAN that doesn't match it", async () => {
     const visa = await visaAgent();
     const gstin = gstinFor("AAACS1234K");

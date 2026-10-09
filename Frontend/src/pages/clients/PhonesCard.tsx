@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FormField } from '../../components/FormField'
 import { formatMobile } from '../../lib/format'
+import { filtered, mobileChars } from '../../lib/inputFilters'
 import { applyServerIssues, errorText, existingClientId } from './apiErrors'
 import { useAddPhone, useChangeMainNumber, useRemovePhone } from './queries'
 import {
@@ -112,7 +113,7 @@ function AddPhoneForm({ clientId }: { clientId: string }) {
         <span className="lbl">Add another number</span>
         <div className="add-phone-row">
           <FormField label="Mobile" error={formState.errors.mobile?.message}>
-            <input className="input mono" {...register('mobile')} placeholder="98250 41234" inputMode="tel" />
+            <input className="input mono" {...filtered(register('mobile'), mobileChars)} placeholder="98250 41234" inputMode="tel" />
           </FormField>
           <FormField label="Whose / which" error={formState.errors.label?.message}>
             <input className="input" {...register('label')} placeholder="Whose number is this?" />
@@ -160,7 +161,7 @@ function MainNumberDialog({ client, prefill, onClose }: { client: ClientProfile;
             <span className="mono">{formatMobile(client.mobile)}</span>.
           </p>
           <FormField label="New main number" error={formState.errors.mobile?.message}>
-            <input className="input mono" {...register('mobile')} placeholder="98250 41234" inputMode="tel" autoFocus />
+            <input className="input mono" {...filtered(register('mobile'), mobileChars)} placeholder="98250 41234" inputMode="tel" autoFocus />
           </FormField>
           <label className="check">
             <input type="checkbox" {...register('keepOldAsSecondary')} />

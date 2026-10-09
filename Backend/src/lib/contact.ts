@@ -16,8 +16,10 @@ export function isEmail(input: string): boolean {
 /**
  * Indian mobile numbers normalised to +91XXXXXXXXXX.
  * Accepts "98250 41234", "098250-41234", "+91 98250 41234", "919825041234". Returns null if it isn't a valid number.
+ * Anything besides digits, spaces, "+" and "-" is refused, not dropped: "98250abc41234" is a typo, not a number.
  */
 export function normaliseMobile(input: string): string | null {
+  if (/[^\d\s+-]/.test(input)) return null;
   let digits = input.replace(/\D/g, "");
   if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
   else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);

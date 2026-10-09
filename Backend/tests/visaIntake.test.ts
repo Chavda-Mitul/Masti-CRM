@@ -104,6 +104,8 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
       expect(res.status, JSON.stringify(clientName)).toBe(400);
       expect(res.body.issues.clientName).toEqual(["Enter the client's name: this is a new number."]);
     }
+    const digits = await staff.post("/api/visa/cases").send(await body({ clientName: "Rakesh 2" }));
+    expect(digits.body.issues.clientName).toEqual(["Use letters only (spaces and . ' - are fine)."]);
     expect(await prisma.enquiry.count()).toBe(0);
     expect(await prisma.client.count()).toBe(0);
     expect(await prisma.caseCounter.count()).toBe(0);
