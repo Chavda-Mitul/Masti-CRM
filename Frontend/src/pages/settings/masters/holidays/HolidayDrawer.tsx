@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { FormField } from '../../../../components/FormField'
+import { useDrawerGuard } from '../../../../components/useDrawerGuard'
 import { ApiError } from '../../../../lib/api'
 import { applyServerIssues, errorBody, errorText, isDuplicateWarning, isStale } from '../../../../lib/apiErrors'
 import { istToday } from '../../../../lib/format'
@@ -87,6 +88,7 @@ export function HolidayDrawer({
   const guard = useRetryGuard(readHolidayDuplicates, (found, { cancel, confirm }) => (
     <HolidayDuplicateModal message={found.message} matches={found.matches} onCancel={cancel} onConfirm={confirm} />
   ))
+  const drawer = useDrawerGuard(formState.isDirty, onClose)
 
   // Targets on this holiday that the picker no longer offers (switched off since), so they stay visible.
   const offered = new Set([
@@ -102,6 +104,7 @@ export function HolidayDrawer({
       {
         onSuccess: (saved) => {
           toast({ tone: 'ok', message: isNew ? `${saved.name} added to the calendar.` : `${saved.name} saved.` })
+          drawer.release()
           onClose()
         },
         onError: (error) => {
@@ -118,8 +121,8 @@ export function HolidayDrawer({
 
   return (
     <>
-      <div className="overlay" onClick={onClose}>
-        <form className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer drawer-wide" onSubmit={onSubmit} noValidate>
           <div className="pad drawer-head">
             <h2 className="h2">{isNew ? 'Add a holiday' : `Edit ${holiday.name}`}</h2>
             <p className="muted">
@@ -212,6 +215,7 @@ export function HolidayDrawer({
         </form>
       </div>
       {guard.modal}
+      {drawer.dialog}
     </>
   )
 }

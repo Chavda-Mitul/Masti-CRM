@@ -98,6 +98,7 @@ function EnquirySourceDrawer({ source, onClose }: { source: EnquirySource | null
       submitLabel={source ? 'Save changes' : 'Add source'}
       pending={save.isPending}
       error={save.error}
+      dirty={formState.isDirty}
       onClose={onClose}
       onSubmit={onSubmit}
     >

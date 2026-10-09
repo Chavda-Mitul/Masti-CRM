@@ -1562,6 +1562,7 @@ Masti CRM/
 - **Frontend:**
   - Call the API only through `api()` in `src/lib/api.ts`. A 401 anywhere marks the user signed out (see `main.tsx`).
   - A screen holding unsaved work (e.g. the checklist editor) guards it with `useBlocker` (every in-app navigation: links, `navigate()`, Back/Forward) plus `beforeunload` (tab close, reload). Let navigation to `/login` through.
+  - Drawers use `useDrawerGuard(dirty, onClose)` (`src/components/useDrawerGuard.tsx`): a click outside closes only if the press also started outside; Escape closes; with unsaved changes both ask "Discard your changes?", and so does leaving the page. Cancel closes without asking. Call `release()` on a successful save before closing or navigating.
   - Forms and drawers use react-hook-form + zod, with the schemas next to the page (`schemas.ts`).
   - Use the CSS tokens in `src/styles/tokens.css`, never raw hex.
 - **Dates:** stored as `timestamptz`; displayed in IST (`formatDateTime`).

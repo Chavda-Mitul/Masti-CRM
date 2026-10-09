@@ -100,6 +100,7 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       submitLabel={document ? 'Save changes' : 'Add document'}
       pending={save.isPending}
       error={save.error}
+      dirty={formState.isDirty}
       onClose={onClose}
       onSubmit={onSubmit}
     >

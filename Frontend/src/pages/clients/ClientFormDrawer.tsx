@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { canEditAccountsFields } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { FormField } from '../../components/FormField'
+import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { applyServerIssues, errorText, existingClientId, isStale } from './apiErrors'
 import { changedIn, clientBody, clientFormDefaults, filledIn } from './forms'
 import { useCreateClient, useUpdateClient } from './queries'
@@ -47,6 +48,12 @@ export function ClientFormDrawer({
   const update = useUpdateClient(client?.id ?? '')
   const save = isNew ? create : update
   const guard = useDuplicateGuard()
+  const drawer = useDrawerGuard(formState.isDirty, onClose)
+  // Saved: stop guarding first, since onSaved may go to the new client's page.
+  const saved = (result: ClientProfile) => {
+    drawer.release()
+    onSaved(result)
+  }
 
   const onError = (error: unknown, retry: () => void) => {
     if (guard.intercept(error, retry)) return
@@ -58,12 +65,12 @@ export function ClientFormDrawer({
     if (isNew) {
       create.mutate(
         { ...body, mobile },
-        { onSuccess: onSaved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
+        { onSuccess: saved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
       )
     } else {
       update.mutate(
         { ...body, updatedAt: openedAt ?? client.updatedAt },
-        { onSuccess: onSaved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
+        { onSuccess: saved, onError: (err) => onError(err, () => send({ ...body, confirmDuplicates: true }, mobile)) },
       )
     }
   }
@@ -82,8 +89,8 @@ export function ClientFormDrawer({
 
   return (
     <>
-      <div className="overlay" onClick={onClose}>
-        <form className="drawer drawer-wide" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit} noValidate>
+      <div className="overlay" {...drawer.overlayProps}>
+        <form className="drawer drawer-wide" onSubmit={onSubmit} noValidate>
           <div className="pad drawer-head">
             <h2 className="h2">{isNew ? 'Add a client' : `Edit ${client.name}`}</h2>
             <p className="muted">
@@ -120,7 +127,6 @@ export function ClientFormDrawer({
                   className="input"
                   {...register('name')}
                   placeholder={kind === 'CORPORATE' ? 'Shree Textiles Pvt Ltd' : 'Rajesh Patel'}
-                  autoFocus={!isNew && !client.name}
                   aria-required
                 />
               </FormField>
@@ -232,8 +238,9 @@ export function ClientFormDrawer({
           </div>
         </form>
       </div>
-      {/* Outside the overlay, so clicks in the warning don't reach the drawer's close-on-click. */}
+      {/* Outside the overlay, so clicks in them never count as a click outside the drawer. */}
       {guard.modal}
+      {drawer.dialog}
     </>
   )
 }
