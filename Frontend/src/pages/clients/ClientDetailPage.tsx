@@ -74,7 +74,7 @@ export function ClientDetailPage() {
           )}
           {canAddEnquiry && (
             <Link className="btn btn-primary" to={`/enquiries/new?mobile=${encodeURIComponent(c.mobile)}`}>
-              New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
+              New enquiry
             </Link>
           )}
         </div>
