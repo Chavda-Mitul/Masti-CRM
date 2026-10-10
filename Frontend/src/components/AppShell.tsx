@@ -1,9 +1,9 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { can } from '../auth/permissions'
+import { can, isHodOfAny } from '../auth/permissions'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
-import { useFollowUpBadge } from '../pages/enquiries/queries'
+import { useFollowUpBadge, useToAssignCount } from '../pages/enquiries/queries'
 import { ErrorBoundary } from './ErrorBoundary'
 
 /** Sidebar layout from the approved demo. Modules not built yet are shown greyed out. */
@@ -13,6 +13,8 @@ export function AppShell() {
   const logout = useLogout()
   const navigate = useNavigate()
   const badge = useFollowUpBadge()
+  const assigns = !!user && isHodOfAny(user)
+  const toAssign = useToAssignCount(assigns)
 
   if (!user) return null
 
@@ -23,7 +25,11 @@ export function AppShell() {
   // The department sub-items are the list filtered by ?department=; the New enquiry form and visa case pages count as Visa.
   const onEnquiries = location.pathname === '/enquiries' || location.pathname.startsWith('/enquiries/')
   const onVisaPage = location.pathname === '/enquiries/new' || location.pathname.toUpperCase().startsWith('/ENQUIRIES/VISA-')
-  const department = onVisaPage ? 'VISA' : new URLSearchParams(location.search).get('department')?.toUpperCase()
+  const search = new URLSearchParams(location.search)
+  const department = onVisaPage ? 'VISA' : search.get('department')?.toUpperCase()
+  // "To assign" is the list on its To assign tab; it, not "Enquiries", is highlighted then.
+  const onToAssign = location.pathname === '/enquiries' && search.get('status')?.toLowerCase() === 'to_assign'
+  const waiting = toAssign.data ?? 0
 
   const onLogout = () => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
 
@@ -42,7 +48,7 @@ export function AppShell() {
           Today
         </NavLink>
 
-        <Link to="/enquiries" className={`nav${onEnquiries && !department ? ' active' : ''}`}>
+        <Link to="/enquiries" className={`nav${onEnquiries && !department && !onToAssign ? ' active' : ''}`}>
           Enquiries
         </Link>
         {SELLING_DEPARTMENTS.map((code) => {
@@ -75,6 +81,17 @@ export function AppShell() {
             </span>
           )}
         </NavLink>
+        {/* HODs and the Head only: matured cases waiting for a processor. Cases should never sit idle. */}
+        {assigns && (
+          <Link to="/enquiries?status=to_assign" className={`nav${onToAssign ? ' active' : ''}`}>
+            To assign
+            {waiting > 0 && (
+              <span className="nav-badge" title={`${waiting} waiting for a processor`} aria-label={`${waiting} waiting for a processor`}>
+                {waiting > 99 ? '99+' : waiting}
+              </span>
+            )}
+          </Link>
+        )}
         <NavLink to="/clients" className="nav">
           Clients
         </NavLink>

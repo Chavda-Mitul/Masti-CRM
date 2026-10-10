@@ -7,6 +7,7 @@ import { useToast } from '../../../lib/toast'
 import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
 import { dayMonth } from './labels'
+import { MatureDialog } from './MatureDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
 
 /** "2 adults, 1 child" */
@@ -31,13 +32,14 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
 }
 
 /**
- * The step's own button. "Start collecting documents" works now; the later ones show as "Soon" until their part of
- * Step 2 is built (0006).
+ * The step's own button: "Start collecting documents", then "Mark documents complete" (0006 Decision 8). The later
+ * steps show as "Soon" until Step 3 onwards is built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const toast = useToast()
   const start = useStartDocuments(c.caseNo)
+  const [maturing, setMaturing] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -57,8 +59,18 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </button>
     )
   }
+  if (c.stage.code === 'DOCUMENTS' && c.status === 'OPEN' && canAct) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setMaturing(true)}>
+          {c.stage.nextStepLabel} →
+        </button>
+        {maturing && <MatureDialog visaCase={c} onClose={() => setMaturing(false)} />}
+      </>
+    )
+  }
   return (
-    <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with the next part of Step 2' : 'Only the case’s owner, its HOD and the Head can do this'}>
+    <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with a later step' : 'Only the case’s owner, its HOD and the Head can do this'}>
       {c.stage.nextStepLabel} → {canAct && <span className="tag">Soon</span>}
     </button>
   )

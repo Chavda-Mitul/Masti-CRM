@@ -16,6 +16,11 @@ export const listEnquiriesQuerySchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => v === "true"),
+  /** "To assign": nobody's yet, e.g. matured and waiting for the HOD to pick a processor. */
+  unassigned: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   q: z.string().trim().max(100).optional(),
   /** Opaque: the nextCursor of the previous page. */
   cursor: z.string().max(400).optional(),

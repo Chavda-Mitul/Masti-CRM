@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { can } from '../../auth/permissions'
+import { can, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { errorText } from '../../lib/apiErrors'
 import { departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
@@ -15,15 +15,19 @@ import type { DepartmentChip, EnquiryListFilters, EnquiryRow, ListStatus } from 
 /** The selling departments get a chip; any other department (Accounts…) only when it has open enquiries. */
 const SELLING = new Set<string>(SELLING_DEPARTMENTS)
 
-/** Open cases by default; postponed and cancelled ones are found here too (?status=postponed). */
-const STATUSES: { value: ListStatus; label: string }[] = [
+/**
+ * Open cases by default; postponed and cancelled ones are found here too (?status=postponed). "To assign" (open, nobody's
+ * yet: matured and waiting for a processor) is for the HOD and the Head, who pick the processor (?status=to_assign).
+ */
+const STATUSES: { value: ListStatus; label: string; assignersOnly?: boolean }[] = [
   { value: 'OPEN', label: 'Open' },
   { value: 'POSTPONED', label: 'Postponed' },
   { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'TO_ASSIGN', label: 'To assign', assignersOnly: true },
 ]
 
-function statusOf(param: string | null): ListStatus {
-  return STATUSES.find((s) => s.value === param?.toUpperCase())?.value ?? 'OPEN'
+function statusOf(param: string | null, assigns: boolean): ListStatus {
+  return STATUSES.find((s) => s.value === param?.toUpperCase() && (assigns || !s.assignersOnly))?.value ?? 'OPEN'
 }
 
 /**
@@ -49,10 +53,13 @@ export function EnquiriesPage() {
     if (urlQ !== q) setSearch(urlQ)
   }
 
+  const assigns = !!me && isHodOfAny(me)
+  const status = statusOf(params.get('status'), assigns)
   const filters: EnquiryListFilters = {
-    status: statusOf(params.get('status')),
+    status,
     department: params.get('department')?.toUpperCase() ?? '',
-    mine: params.get('mine') === 'true',
+    // Cases to assign are nobody's, so "Only mine" doesn't apply there.
+    mine: status !== 'TO_ASSIGN' && params.get('mine') === 'true',
     q,
   }
   const list = useEnquiryList(filters)
@@ -102,10 +109,12 @@ export function EnquiriesPage() {
           <p>{summaryLine(filters.status, total, firstPage?.lateCount)}</p>
         </div>
         <div className="head-actions">
-          <label className="check">
-            <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
-            Only mine
-          </label>
+          {filters.status !== 'TO_ASSIGN' && (
+            <label className="check">
+              <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
+              Only mine
+            </label>
+          )}
           {canAdd && (
             <Link to="/enquiries/new" className="btn btn-primary">
               + New enquiry
@@ -152,7 +161,7 @@ export function EnquiriesPage() {
               aria-label="Search enquiries"
             />
             <div className="kind-toggle" role="tablist" aria-label="Which enquiries">
-              {STATUSES.map((s) => (
+              {STATUSES.filter((s) => assigns || !s.assignersOnly).map((s) => (
                 <button
                   key={s.value}
                   type="button"
@@ -178,7 +187,11 @@ export function EnquiriesPage() {
             </div>
           ) : rows.length === 0 ? (
             <div className="pad muted card-fill-empty">
-              {filters.q || filters.mine ? 'No enquiries match.' : `No ${filters.status.toLowerCase()} enquiries.`}
+              {filters.q || filters.mine
+                ? 'No enquiries match.'
+                : filters.status === 'TO_ASSIGN'
+                  ? 'No cases waiting for a processor.'
+                  : `No ${filters.status.toLowerCase()} enquiries.`}
               {canAdd && filters.status === 'OPEN' && !filters.q && !filters.mine && (
                 <div style={{ marginTop: 12 }}>
                   <Link to="/enquiries/new" className="btn btn-primary">
@@ -233,6 +246,7 @@ function summaryLine(status: ListStatus, total: number, late: number | undefined
   if (late === undefined) return 'Every open enquiry, late first, then by time due.'
   if (status === 'POSTPONED') return `${total} postponed · ${late} past their date · soonest back first · click a row to see its steps`
   if (status === 'CANCELLED') return `${total} cancelled · click a row to see its steps`
+  if (status === 'TO_ASSIGN') return `${total} waiting for a processor · click a row to see its steps`
   return `${total} open · ${late} running late · late first, then by time due · click a row to see its steps`
 }
 

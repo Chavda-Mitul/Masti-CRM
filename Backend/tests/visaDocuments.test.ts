@@ -508,5 +508,33 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       const processor = await loginAs("neha@masti.test");
       expect(await load(processor, c.caseNo)).toMatchObject({ stage: { code: "FILE_PREPARATION" }, owner: { name: "Neha" }, maturedBy: { name: "Aarti Patel" } });
     });
+
+    it("waits under To assign for the HOD and the Head until a processor is picked", async () => {
+      const staff = await visaStaff();
+      await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+      await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+      await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+      const hod = await loginAs("riya@masti.test");
+      const head = await loginAs("vimal@masti.test");
+      const toAssign = async (agent: Agent) => ((await agent.get("/api/enquiries?unassigned=true")).body.enquiries as { caseNo: string }[]).map((r) => r.caseNo);
+      const count = async (agent: Agent) => (await agent.get("/api/enquiries/to-assign")).body.count as number;
+
+      const c = await freshCase(staff);
+      await freshCase(staff); // still collecting: not to assign
+      expect(await count(hod)).toBe(0);
+      const matured: FullCase = (await mature(staff, c, (await completeCase(staff, c)).updatedAt)).body.case;
+
+      expect(await toAssign(hod)).toEqual([c.caseNo]);
+      expect(await toAssign(head)).toEqual([c.caseNo]);
+      expect(await toAssign(staff)).toEqual([]);
+      expect(await count(hod)).toBe(1);
+      expect(await count(head)).toBe(1);
+      expect((await staff.get("/api/enquiries/to-assign")).status).toBe(403);
+
+      const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+      expect((await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: neha.id, updatedAt: matured.updatedAt })).status).toBe(200);
+      expect(await count(hod)).toBe(0);
+      expect(await toAssign(hod)).toEqual([]);
+    });
   });
 });

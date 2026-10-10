@@ -30,6 +30,8 @@ export const enquiryKeys = {
   all: ['enquiries'] as const,
   lists: () => ['enquiries', 'list'] as const,
   list: (filters: EnquiryListFilters) => ['enquiries', 'list', filters] as const,
+  /** Under lists(), so maturing and reassigning (which refresh the lists) refresh the sidebar's count too. */
+  toAssign: ['enquiries', 'list', 'to-assign'] as const,
   desks: () => ['enquiries', 'follow-ups'] as const,
   desk: (bucket: FollowUpBucket, scope: FollowUpScope) => ['enquiries', 'follow-ups', bucket, scope] as const,
   /** Under desks(), so every case action that refreshes the desk refreshes the badge too. */
@@ -52,10 +54,12 @@ export function useVisaCase(caseNo: string) {
 
 /**
  * A case action returns the whole case: it replaces the page's copy. The list (its stage), the follow-up desk (documents
- * pending) and the client's open cases may have changed with it.
+ * pending) and the client's open cases may have changed with it. One that sends updatedAt ("Mark documents complete")
+ * can meet a change by someone else (409 STALE): the case is reloaded, with a warning.
  */
 function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const base = `/visa/cases/${encodeURIComponent(caseNo)}`
   return useMutation({
     mutationFn: async (vars: Vars) => (await request(base, vars)).case,
@@ -64,6 +68,11 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+    onError: (error) => {
+      if (!isStale(error)) return
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(caseNo) })
+      toast({ tone: 'warn', message: 'Someone else changed this case after you opened it. The latest version is now loaded. Please try again.' })
     },
   })
 }
@@ -140,6 +149,14 @@ export function useStartDocuments(caseNo: string) {
   return useCaseAction<void>(caseNo, (base) => api(`${base}/start`, { method: 'POST' }))
 }
 
+/**
+ * "Mark documents complete": the case moves to File preparation with no owner, for the HOD to pick a processor. A change
+ * by someone else in between (409 STALE) reloads the case, with a warning.
+ */
+export function useMatureCase(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/mature`, { method: 'POST', body }))
+}
+
 /** Ticks one paper: Original/Xerox, Made, Not needed, or back to Pending. */
 export function useUpdateCaseDocument(caseNo: string) {
   return useCaseAction<{ documentId: string; status: DocumentStatus; receivedAs?: ReceivedAs | null }>(
@@ -161,7 +178,9 @@ export function useEnquiryList(filters: EnquiryListFilters) {
     queryKey: enquiryKeys.list(filters),
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
-      if (filters.status !== 'OPEN') params.set('status', filters.status)
+      // "To assign" is the open cases nobody owns yet.
+      if (filters.status === 'TO_ASSIGN') params.set('unassigned', 'true')
+      else if (filters.status !== 'OPEN') params.set('status', filters.status)
       if (filters.department) params.set('department', filters.department)
       if (filters.mine) params.set('mine', 'true')
       if (filters.q) params.set('q', filters.q)
@@ -188,6 +207,16 @@ export function useFollowUpBadge() {
   return useQuery({
     queryKey: enquiryKeys.badge,
     queryFn: () => api<FollowUpBadge>('/enquiries/follow-ups/badge'),
+    refetchInterval: 60_000,
+  })
+}
+
+/** The sidebar's "To assign" count: open cases nobody owns yet, for an HOD or the Head. */
+export function useToAssignCount(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: enquiryKeys.toAssign,
+    queryFn: async () => (await api<{ count: number }>('/enquiries/to-assign')).count,
     refetchInterval: 60_000,
   })
 }

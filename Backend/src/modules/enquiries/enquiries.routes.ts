@@ -42,6 +42,11 @@ router.get("/follow-ups/badge", async (req, res) => {
   res.json(await followUpBadge(currentUser(req)));
 });
 
+/** The sidebar's "To assign" count, for an HOD or the Head: open cases nobody owns yet. */
+router.get("/to-assign", async (req, res) => {
+  res.json(await enquiriesService.toAssignCount(currentUser(req)));
+});
+
 // Case actions (docs/decisions/0006-visa-documents.md Decision 6). The service checks who may act on the case.
 router.post("/:caseNo/follow-ups", async (req, res) => {
   const body = logFollowUpSchema.parse(req.body);

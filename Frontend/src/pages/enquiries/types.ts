@@ -55,8 +55,8 @@ export interface EnquiryListPage {
   lateCount: number
 }
 
-/** The list's Open / Postponed / Cancelled switch. */
-export type ListStatus = Extract<EnquiryStatus, 'OPEN' | 'POSTPONED' | 'CANCELLED'>
+/** The list's Open / Postponed / Cancelled switch, plus "To assign" (open, nobody's yet) for the HOD and the Head. */
+export type ListStatus = Extract<EnquiryStatus, 'OPEN' | 'POSTPONED' | 'CANCELLED'> | 'TO_ASSIGN'
 
 export interface EnquiryListFilters {
   status: ListStatus
@@ -250,6 +250,14 @@ export interface FollowUpDesk {
 }
 
 /** GET /api/enquiries/follow-ups/badge: the sidebar's red number. ALL for an HOD (their departments) and the Head (everyone). */
+/** What still stands between a case and maturity (409 NOT_READY from "Mark documents complete"). */
+export interface MaturityMissing {
+  /** Travellers not yet linked to a family member: "Child 1" */
+  unnamed: string[]
+  /** Papers still pending, by traveller */
+  pending: { traveller: string; documents: string[] }[]
+}
+
 export interface FollowUpBadge {
   overdue: number
   scope: FollowUpScope

@@ -3,7 +3,7 @@ import { prisma } from "../../config/prisma";
 import { z } from "zod";
 import { fromDbDate } from "../../lib/dates";
 import { badRequest, forbidden } from "../../lib/httpError";
-import { can, type DepartmentCode } from "../auth/permissions";
+import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 import { countTravellers, travellersLabel } from "../visa/visaCase";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
@@ -98,6 +98,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     visibleEnquiryWhere(user, departments),
     { status: query.status },
     ...(query.mine ? [{ ownerId: user.id }] : []),
+    ...(query.unassigned ? [{ ownerId: null }] : []),
     ...(query.q ? [searchWhere(query.q)] : []),
   ];
   const where: Prisma.EnquiryWhereInput = { AND: [...base, { departmentId: { in: shown.map((d) => d.id) } }] };
@@ -156,6 +157,19 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     })),
     lateCount: late,
   };
+}
+
+/**
+ * The sidebar's "To assign" count: open cases with no owner (matured, waiting for a processor) in the departments this
+ * user is HOD of; the Head counts every department. Cases should never sit idle without a processor (10 Oct 2026).
+ */
+export async function toAssignCount(user: UserWithDepartments) {
+  const departments = (await viewableDepartments(user)).filter((d) => isHodOf(user, d.code as DepartmentCode));
+  if (departments.length === 0) throw forbidden("Only an HOD or the Head assigns cases.");
+  const count = await prisma.enquiry.count({
+    where: { status: "OPEN", ownerId: null, departmentId: { in: departments.map((d) => d.id) } },
+  });
+  return { count };
 }
 
 /** Not finished yet: a postponed case is still the client's case if they come back. */

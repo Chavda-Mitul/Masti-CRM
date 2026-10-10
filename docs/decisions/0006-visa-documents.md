@@ -33,6 +33,8 @@ Decided with the go for part 7 (10 Oct 2026, project lead):
 7. **The desk's Postponed tab shows every postponed case**, soonest back first. A postponed case whose date has come also shows under Overdue / Today, like any due case.
 8. **"When" in Log call starts empty.** Staff pick the day and the time. A past time, a day more than a year ahead, or a day the office is closed is refused.
 9. **Desk buckets (IST):** Overdue = due before now. Today = due before midnight tonight (late ones included, as in the demo). This week = due within the next 7 days (late ones included). A matured visa case leaves the desk (processing takes over). The desk shows at most 200 rows per tab.
+10. **"To assign" (with the go for part 8):** cases should never sit idle without a processor. HODs and the Head get a **To assign** item in the sidebar with a count of open, unowned cases in the departments they head (the Head: all). It opens the enquiries list on its **To assign** tab (`?status=to_assign`, sent to the API as `unassigned=true`), which only they see. "Only mine" is hidden there. Rows show "Matured · assign a processor".
+11. **"Mark documents complete" asks first.** The dialog lists what is missing (unnamed travellers, pending papers by traveller) and stays disabled until nothing is. Staff are taken back to their list afterwards, as the case is no longer theirs; the HOD or Head stays on it to assign a processor.
 
 ## Context
 
@@ -251,6 +253,8 @@ All routes are under `requireAuth → requirePasswordChanged → requireUserType
 | `POST /api/enquiries/:caseNo/postpone` · `/cancel` · `/resume` | `{ reasonId?, resumeOn?, updatedAt }` |
 | `PUT /api/enquiries/:caseNo/owner` | `{ ownerId, updatedAt }`, HOD or Head |
 | `GET /api/enquiries/follow-ups?bucket=&scope=` | The desk: rows and the four counts |
+| `GET /api/enquiries?unassigned=true` | The list's To assign tab: open cases with no owner (amendment 10) |
+| `GET /api/enquiries/to-assign` | `{ count }` for the sidebar; an HOD (their departments) or the Head (all), 403 otherwise |
 | `GET/POST/PATCH /api/masters/follow-up-outcomes` · `/follow-up-next-steps` · `/enquiry-reasons` | The masters. Anyone signed in reads; the Head or any HOD writes. |
 
 ## Tests (rule logic)
