@@ -1,9 +1,9 @@
-# Local development database.
-# Credentials come from Backend/.env (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_PORT)
-# and must match DATABASE_URL. Production runs on Masti's own server, not this file.
+# Local development services: the database and S3-compatible document storage.
+# Credentials come from Backend/.env and must match DATABASE_URL and the S3_* settings. Production runs on Masti's own
+# server with AWS S3 or Cloudflare R2, not this file.
 #
 #   docker compose up -d      start
-#   docker compose down       stop (data is kept in the named volume)
+#   docker compose down       stop (data is kept in the named volumes)
 
 name: masti-crm
 
@@ -26,5 +26,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # S3-compatible storage for scanned documents (CLAUDE.md rule 4). MinIO no longer publishes free images on Docker Hub
+  # or quay.io, so this is Bitnami's frozen build, pinned: fine for local development. It creates the bucket on start;
+  # buckets are private, and files are shared only through short-lived pre-signed URLs.
+  # This build has no web console (MinIO dropped it from the free version). To look inside:
+  #   docker exec masti-crm-minio-1 sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc ls -r local'
+  minio:
+    image: bitnamilegacy/minio:2025.7.23
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-masti-crm-documents}
+      MINIO_API_PORT_NUMBER: "9000"
+      TZ: UTC
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+    volumes:
+      - masti_crm_minio:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   masti_crm_pgdata:
+  masti_crm_minio:
