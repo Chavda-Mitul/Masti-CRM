@@ -143,7 +143,12 @@ describe("GET /api/enquiries", () => {
     const tripCancelled = await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } });
     await prisma.enquiry.update({ where: { id: a2.id }, data: { status: "CANCELLED", reasonId: tripCancelled.id } });
     expect((await aarti.get("/api/enquiries")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([a1.id]);
-    expect((await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([a2.id]);
+    const cancelled = (await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries;
+    expect(cancelled.map((e: { id: string }) => e.id)).toEqual([a2.id]);
+    expect(cancelled[0]).toMatchObject({ status: "CANCELLED", reason: { name: tripCancelled.name }, resumeOn: null });
+    // Search works inside the picked status too: a cancelled case is found by its number.
+    expect((await aarti.get(`/api/enquiries?status=CANCELLED&q=${a2.caseNo}`)).body.enquiries).toHaveLength(1);
+    expect((await aarti.get(`/api/enquiries?q=${a2.caseNo}`)).body.enquiries).toHaveLength(0);
   });
 
   it("shows staff only their own enquiries, the HOD the whole department, and the Head everything", async () => {

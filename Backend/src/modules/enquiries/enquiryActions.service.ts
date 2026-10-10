@@ -1,17 +1,17 @@
 import type { Prisma } from "../../../generated/prisma/client";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { addMonths, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, forbidden, notFound } from "../../lib/httpError";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
-import { nextOpenDay } from "../holidays/blockedDays";
+import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
 import { getVisaSettings } from "../visa/visa.settings";
-import type { CancelInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
+import type { CancelInput, LogFollowUpInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "./visibility";
 
-// Postpone, cancel, resume and reassign (docs/decisions/0006-visa-documents.md Decision 6). They live on the shared
+// Follow-ups, postpone, cancel, resume and reassign (docs/decisions/0006-visa-documents.md Decision 6). They live on the shared
 // Enquiry, so every department's cases use them. Each one sends the updatedAt the page loaded: a change by someone else
 // in between is a 409 STALE. The page reloads the case afterwards, so these return only the enquiry's new state.
 
@@ -42,12 +42,23 @@ const state = (e: { status: string; reasonId: number | null; resumeOn: Date | nu
   ownerId: e.ownerId,
 });
 
-/** Writes `data` only if nobody changed the enquiry since the page loaded it, and audits it in the same transaction. */
-async function save(enquiry: LoadedEnquiry, sentUpdatedAt: string, data: Prisma.EnquiryUncheckedUpdateManyInput, action: string, actor: Actor) {
+/**
+ * Writes `data` only if nobody changed the enquiry since the page loaded it, and audits it in the same transaction.
+ * `also` writes anything else that goes with it (the follow-up row); what it returns is added to the audit's "after".
+ */
+async function save(
+  enquiry: LoadedEnquiry,
+  sentUpdatedAt: string,
+  data: Prisma.EnquiryUncheckedUpdateManyInput,
+  action: string,
+  actor: Actor,
+  also?: (tx: Db) => Promise<Record<string, unknown>>,
+) {
   assertFresh(enquiry.updatedAt, sentUpdatedAt, "case");
   const after = await prisma.$transaction(async (tx) => {
     const written = await tx.enquiry.updateMany({ where: { id: enquiry.id, updatedAt: enquiry.updatedAt }, data });
     if (written.count === 0) throw staleError("case");
+    const extra = also ? await also(tx) : {};
     const row = await tx.enquiry.findUniqueOrThrow({ where: { id: enquiry.id } });
     await audit(
       {
@@ -57,7 +68,7 @@ async function save(enquiry: LoadedEnquiry, sentUpdatedAt: string, data: Prisma.
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: state(enquiry),
-        after: state(row),
+        after: { ...state(row), ...extra },
         ip: actor.ip,
       },
       tx,
@@ -73,6 +84,48 @@ async function activeReason(reasonId: number, kind: "POSTPONE" | "CANCEL") {
     throw fieldError("reasonId", kind === "POSTPONE" ? "Pick a reason for postponing." : "Pick a reason for cancelling.");
   }
   return reason;
+}
+
+/**
+ * "Log call": What happened → Next step → When. "When" becomes the case's due time, which drives the desk and
+ * "running late". Logging a call on a postponed case resumes it (decided 10 Oct 2026). Outcomes trigger nothing else:
+ * "Wants to cancel" doesn't cancel the case (Decision 7).
+ */
+export async function logFollowUp(caseNo: string, input: LogFollowUpInput, actor: Actor) {
+  const enquiry = await load(caseNo, actor.user);
+  assertCanActOnEnquiry(actor.user, enquiry);
+  if (enquiry.status !== "OPEN" && enquiry.status !== "POSTPONED") throw conflict("This case is closed.");
+
+  const [outcome, nextStep] = await Promise.all([
+    prisma.followUpOutcome.findUnique({ where: { id: input.outcomeId } }),
+    prisma.followUpNextStep.findUnique({ where: { id: input.nextStepId } }),
+  ]);
+  if (!outcome?.isActive) throw fieldError("outcomeId", "Pick what happened.");
+  if (!nextStep?.isActive) throw fieldError("nextStepId", "Pick the next step.");
+
+  const today = istToday();
+  if (input.nextOn < today) throw fieldError("nextOn", "Pick today or a later day.");
+  if (input.nextOn > addMonths(today, 12)) throw fieldError("nextOn", "Pick a day within a year.");
+  const nextAt = istDateTimeToUtc(input.nextOn, input.at);
+  if (nextAt.getTime() <= Date.now()) throw fieldError("at", "Pick a time later than now.");
+  const [closed] = await blockedDays(input.nextOn, input.nextOn, { office: true });
+  if (closed) {
+    throw fieldError("nextOn", `The office is closed that day (${closed.holidays.map((h) => h.name).join(", ")}). Pick another day.`);
+  }
+
+  return save(
+    enquiry,
+    input.updatedAt,
+    { status: "OPEN", reasonId: null, resumeOn: null, dueAt: nextAt },
+    "enquiry.followUp",
+    actor,
+    async (tx) => {
+      const followUp = await tx.followUp.create({
+        data: { enquiryId: enquiry.id, outcomeId: outcome.id, nextStepId: nextStep.id, nextAt, byId: actor.user.id },
+      });
+      return { followUp: { id: followUp.id, outcome: outcome.code, nextStep: nextStep.code, nextAt } };
+    },
+  );
 }
 
 /** The client asked to wait: it comes back on the desk on the resume date (the office's next open day). */

@@ -28,6 +28,10 @@ export interface EnquiryRow {
   /** "France (Schengen) · Tourist · 2 adults, 2 children" */
   summary: string
   status: EnquiryStatus
+  /** Why it was postponed or cancelled. */
+  reason: { name: string } | null
+  /** When a postponed case comes back, YYYY-MM-DD. */
+  resumeOn: string | null
   stage: StageRef
   source: { code: string; name: string }
   origin: EnquiryOrigin
@@ -51,7 +55,11 @@ export interface EnquiryListPage {
   lateCount: number
 }
 
+/** The list's Open / Postponed / Cancelled switch. */
+export type ListStatus = Extract<EnquiryStatus, 'OPEN' | 'POSTPONED' | 'CANCELLED'>
+
 export interface EnquiryListFilters {
+  status: ListStatus
   department: string
   mine: boolean
   q: string
@@ -210,4 +218,42 @@ export interface VisaCase {
   followUps: CaseFollowUp[]
   createdBy: PersonRef | null
   createdAt: string
+}
+
+/** The follow-up desk's tabs and its Mine / Whole department switch (0006 Decision 9). */
+export type FollowUpBucket = 'OVERDUE' | 'TODAY' | 'WEEK' | 'POSTPONED'
+export type FollowUpScope = 'MINE' | 'ALL'
+
+/** GET /api/enquiries/follow-ups (Backend/src/modules/enquiries/followUpDesk.service.ts). */
+export interface FollowUpDeskRow {
+  id: string
+  caseNo: string
+  department: { code: string; name: string }
+  client: { id: string; name: string; mobile: string }
+  summary: string
+  status: EnquiryStatus
+  reason: { name: string } | null
+  resumeOn: string | null
+  /** "8 of 11 documents pending", or the stage's next step. */
+  whatFor: string
+  lastContact: { outcome: string; at: string } | null
+  owner: PersonRef | null
+  dueAt: string | null
+  updatedAt: string
+}
+
+export interface FollowUpDesk {
+  rows: FollowUpDeskRow[]
+  /** More rows than the desk shows at once. */
+  more: boolean
+  counts: { overdue: number; today: number; week: number; postponed: number }
+}
+
+/** POST /api/enquiries/:caseNo/follow-ups. "When" is a day and a time in India. */
+export interface LogFollowUpBody {
+  outcomeId: number
+  nextStepId: number
+  nextOn: string
+  at: string
+  updatedAt: string
 }

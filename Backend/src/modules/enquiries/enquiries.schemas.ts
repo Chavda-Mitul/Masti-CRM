@@ -48,7 +48,31 @@ export const reassignSchema = z.object({
   updatedAt,
 });
 
+/** "Log call": What happened → Next step → When (a day and a time, IST). Both lists are masters (§7 rule 2). */
+export const logFollowUpSchema = z.object({
+  outcomeId: z.number().int().positive("Pick what happened."),
+  nextStepId: z.number().int().positive("Pick the next step."),
+  nextOn: z.iso.date("Pick the day."),
+  at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick the time."),
+  updatedAt,
+});
+
+// ---------------------------------------------------------------------------
+// The follow-up desk (0006 Decision 9): Overdue · Today · This week · Postponed, mine or the whole department.
+// ---------------------------------------------------------------------------
+
+export const FOLLOW_UP_BUCKETS = ["OVERDUE", "TODAY", "WEEK", "POSTPONED"] as const;
+
+export const followUpDeskQuerySchema = z.object({
+  bucket: z.enum(FOLLOW_UP_BUCKETS).default("TODAY"),
+  /** MINE: cases I own. ALL: every case I may see (the HOD's department, the Head's everything). */
+  scope: z.enum(["MINE", "ALL"]).default("MINE"),
+});
+
 export type PostponeInput = z.infer<typeof postponeSchema>;
 export type CancelInput = z.infer<typeof cancelSchema>;
 export type ResumeInput = z.infer<typeof resumeSchema>;
 export type ReassignInput = z.infer<typeof reassignSchema>;
+export type LogFollowUpInput = z.infer<typeof logFollowUpSchema>;
+export type FollowUpBucket = (typeof FOLLOW_UP_BUCKETS)[number];
+export type FollowUpDeskQuery = z.infer<typeof followUpDeskQuerySchema>;

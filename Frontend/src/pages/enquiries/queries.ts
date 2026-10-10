@@ -10,7 +10,11 @@ import type {
   EnquiryListFilters,
   EnquiryListPage,
   EnquirySourceOption,
+  FollowUpBucket,
+  FollowUpDesk,
+  FollowUpScope,
   IntakeCountry,
+  LogFollowUpBody,
   ReceivedAs,
   VisaCase,
 } from './types'
@@ -25,6 +29,8 @@ export const enquiryKeys = {
   all: ['enquiries'] as const,
   lists: () => ['enquiries', 'list'] as const,
   list: (filters: EnquiryListFilters) => ['enquiries', 'list', filters] as const,
+  desks: () => ['enquiries', 'follow-ups'] as const,
+  desk: (bucket: FollowUpBucket, scope: FollowUpScope) => ['enquiries', 'follow-ups', bucket, scope] as const,
   sources: ['enquiries', 'sources'] as const,
   visaOfferings: ['enquiries', 'visa-offerings'] as const,
   lookups: ['enquiries', 'client-lookup'] as const,
@@ -42,8 +48,8 @@ export function useVisaCase(caseNo: string) {
 }
 
 /**
- * A case action returns the whole case: it replaces the page's copy. The list (its stage) and the client's open cases
- * may have changed with it.
+ * A case action returns the whole case: it replaces the page's copy. The list (its stage), the follow-up desk (documents
+ * pending) and the client's open cases may have changed with it.
  */
 function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>) {
   const queryClient = useQueryClient()
@@ -53,6 +59,7 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
     onSuccess: (updated) => {
       queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
     },
   })
@@ -67,7 +74,7 @@ export function useUpdateVisaCase(caseNo: string) {
 }
 
 /**
- * Postpone, cancel, resume, reassign: actions on the shared enquiry. They return only its new state, so the case is
+ * Log call, postpone, cancel, resume, reassign: actions on the shared enquiry. They return only its new state, so the case is
  * reloaded. A change by someone else in between (409 STALE) reloads it too, with a warning.
  */
 function useEnquiryAction<Vars>(caseNo: string, request: (base: string, vars: Vars) => Promise<unknown>) {
@@ -77,6 +84,7 @@ function useEnquiryAction<Vars>(caseNo: string, request: (base: string, vars: Va
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(caseNo) })
     void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
+    void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
     void queryClient.invalidateQueries({ queryKey: ['clients'] })
   }
   return useMutation({
@@ -88,6 +96,11 @@ function useEnquiryAction<Vars>(caseNo: string, request: (base: string, vars: Va
       toast({ tone: 'warn', message: 'Someone else changed this case after you opened it. The latest version is now loaded. Please try again.' })
     },
   })
+}
+
+/** "Log call": What happened → Next step → When. On a postponed case it also resumes it. */
+export function useLogFollowUp(caseNo: string) {
+  return useEnquiryAction<LogFollowUpBody>(caseNo, (base, body) => api(`${base}/follow-ups`, { method: 'POST', body }))
 }
 
 export function usePostponeCase(caseNo: string) {
@@ -139,12 +152,13 @@ export function useLinkTraveller(caseNo: string) {
   )
 }
 
-/** All enquiries: late first, then by time due. Paged with the API's cursor ("Show more"). */
+/** All enquiries (open, postponed or cancelled): late first, then by time due. Paged with the API's cursor ("Show more"). */
 export function useEnquiryList(filters: EnquiryListFilters) {
   return useInfiniteQuery({
     queryKey: enquiryKeys.list(filters),
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      if (filters.status !== 'OPEN') params.set('status', filters.status)
       if (filters.department) params.set('department', filters.department)
       if (filters.mine) params.set('mine', 'true')
       if (filters.q) params.set('q', filters.q)
@@ -153,6 +167,15 @@ export function useEnquiryList(filters: EnquiryListFilters) {
     },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** The follow-up desk: one tab's rows and the four counts. */
+export function useFollowUpDesk(bucket: FollowUpBucket, scope: FollowUpScope) {
+  return useQuery({
+    queryKey: enquiryKeys.desk(bucket, scope),
+    queryFn: () => api<FollowUpDesk>(`/enquiries/follow-ups?bucket=${bucket}&scope=${scope}`),
     placeholderData: keepPreviousData,
   })
 }

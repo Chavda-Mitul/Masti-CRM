@@ -72,6 +72,10 @@ describe("postpone, resume and cancel", () => {
 
     const page = (await staff.get(`/api/visa/cases/${c.caseNo}`)).body.case;
     expect(page).toMatchObject({ status: "POSTPONED", resumeOn: sunday, reason: { code: "TRAVEL_DATES_MOVED", kind: "POSTPONE" } });
+    // It leaves the open list and shows under the Postponed filter, with its reason and resume date.
+    expect((await staff.get("/api/enquiries")).body.enquiries).toHaveLength(0);
+    const postponed = (await staff.get("/api/enquiries?status=POSTPONED")).body.enquiries;
+    expect(postponed).toMatchObject([{ caseNo: c.caseNo, resumeOn: sunday, reason: { name: "Travel dates moved" } }]);
     // Postponed: nothing to tick until it is resumed.
     expect((await staff.post(`/api/visa/cases/${c.caseNo}/start`).set("Content-Type", "application/json")).status).toBe(409);
 
@@ -192,5 +196,137 @@ describe("reassigning", () => {
     expect(refused.status).toBe(400);
     expect(refused.body.issues.ownerId[0]).toMatch(/collected the documents/);
     expect(((await hod.get(`/api/enquiries/${c.caseNo}/assignees`)).body.assignees as { name: string }[]).map((a) => a.name)).toEqual(["Riya"]);
+  });
+});
+
+describe("logging a call", () => {
+  const outcome = async (code: string) => (await prisma.followUpOutcome.findUniqueOrThrow({ where: { code } })).id;
+  const nextStep = async (code: string) => (await prisma.followUpNextStep.findUniqueOrThrow({ where: { code } })).id;
+
+  it("records What happened → Next step → When, and When becomes the case's due time", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const url = `/api/enquiries/${c.caseNo}/follow-ups`;
+    const tomorrow = addDays(istToday(), 1);
+    const body = async (extra: Record<string, unknown> = {}) => ({
+      outcomeId: await outcome("NO_ANSWER"),
+      nextStepId: await nextStep("CALL_AGAIN"),
+      nextOn: tomorrow,
+      at: "16:00",
+      updatedAt: await updatedAtOf(c.id),
+      ...extra,
+    });
+
+    expect((await staff.post(url).send(await body({ nextOn: addDays(istToday(), -1) }))).body.issues.nextOn).toBeDefined();
+    // Earlier today has already gone.
+    expect((await staff.post(url).send(await body({ nextOn: istToday(), at: "00:00" }))).body.issues.at).toBeDefined();
+    expect((await staff.post(url).send(await body({ nextOn: addMonths(istToday(), 13) }))).body.issues.nextOn).toBeDefined();
+    await prisma.followUpOutcome.update({ where: { code: "CALL_LATER" }, data: { isActive: false } });
+    expect((await staff.post(url).send(await body({ outcomeId: await outcome("CALL_LATER") }))).body.issues.outcomeId).toBeDefined();
+    expect((await staff.post(url).send(await body({ updatedAt: "2026-01-01T00:00:00.000Z" }))).status).toBe(409);
+    expect(await prisma.followUp.count()).toBe(0);
+
+    const res = await staff.post(url).send(await body());
+    expect(res.status).toBe(200);
+    const row = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } });
+    expect(row).toMatchObject({ status: "OPEN", dueAt: istDateTimeToUtc(tomorrow, "16:00") });
+
+    const page = (await staff.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+    expect(page.followUps).toMatchObject([{ outcome: "No answer", nextStep: "Call again", by: { name: "Aarti Patel" } }]);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "enquiry.followUp" } });
+    expect(entry).toMatchObject({ clientId: c.client.id, after: { followUp: { outcome: "NO_ANSWER", nextStep: "CALL_AGAIN" } } });
+  });
+
+  it("refuses a day the office is closed", async () => {
+    await seedHolidays(prisma); // the weekly Sunday off
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const res = await staff.post(`/api/enquiries/${c.caseNo}/follow-ups`).send({
+      outcomeId: await outcome("NO_ANSWER"),
+      nextStepId: await nextStep("CALL_AGAIN"),
+      nextOn: nextSunday(),
+      at: "11:00",
+      updatedAt: await updatedAtOf(c.id),
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.issues.nextOn[0]).toContain("Weekly off");
+  });
+
+  it("resumes a postponed case; a cancelled one takes no calls; only the owner, HOD and Head log", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const body = async () => ({
+      outcomeId: await outcome("SPOKE_DOCS_COMING"),
+      nextStepId: await nextStep("SEND_COLLECTION_BOY"),
+      nextOn: addDays(istToday(), 2),
+      at: "11:30",
+      updatedAt: await updatedAtOf(c.id),
+    });
+    const url = `/api/enquiries/${c.caseNo}/follow-ups`;
+
+    const neha = await visaStaff("Neha", "neha@masti.test");
+    expect((await neha.post(url).send(await body())).status).toBe(403);
+
+    await prisma.enquiry.update({
+      where: { id: c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: new Date(`${addDays(istToday(), 20)}T00:00:00Z`) },
+    });
+    expect((await staff.post(url).send(await body())).status).toBe(200);
+    expect(await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ status: "OPEN", reasonId: null, resumeOn: null });
+
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED"), dueAt: null } });
+    expect((await staff.post(url).send(await body())).status).toBe(409);
+  });
+});
+
+describe("the follow-up desk", () => {
+  it("sorts cases into Overdue, Today, This week and Postponed; matured and closed cases stay off it", async () => {
+    const staff = await visaStaff();
+    const today = istToday();
+    const now = Date.now();
+    const lastMinuteToday = new Date(istDateTimeToUtc(addDays(today, 1), "00:00").getTime() - 60_000);
+    const due = async (mobile: string, dueAt: Date | null, extra: Record<string, unknown> = {}) => {
+      const c = await saveCase(staff, mobile);
+      await prisma.enquiry.update({ where: { id: c.id }, data: { dueAt, ...extra } });
+      return c.caseNo;
+    };
+    const postponed = async (resumeOn: string) => ({
+      status: "POSTPONED" as const,
+      reasonId: await reason("TRAVEL_DATES_MOVED"),
+      resumeOn: new Date(`${resumeOn}T00:00:00Z`),
+    });
+
+    const late = await due("9825000001", new Date(now - 3_600_000));
+    const laterToday = await due("9825000002", lastMinuteToday);
+    const inThreeDays = await due("9825000003", istDateTimeToUtc(addDays(today, 3), "11:00"));
+    await due("9825000004", istDateTimeToUtc(addDays(today, 10), "11:00"));
+    // Its date has come: it is due like any other case, and still counts as postponed.
+    const backToday = await due("9825000005", new Date(now - 60_000), await postponed(addDays(today, 1)));
+    const awayForAWhile = await due("9825000006", istDateTimeToUtc(addDays(today, 20), "11:00"), await postponed(addDays(today, 20)));
+    const matured = await due("9825000007", new Date(now - 3_600_000));
+    await prisma.visaCase.updateMany({ where: { enquiry: { caseNo: matured } }, data: { maturedAt: new Date(), maturedById: (await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } })).id } });
+    await due("9825000008", null, { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED") });
+
+    const desk = async (bucket: string, agent = staff, scope = "MINE") => (await agent.get(`/api/enquiries/follow-ups?bucket=${bucket}&scope=${scope}`)).body;
+    const cases = (body: { rows: { caseNo: string }[] }) => body.rows.map((r) => r.caseNo);
+
+    const overdue = await desk("OVERDUE");
+    expect(cases(overdue)).toEqual([late, backToday]);
+    expect(overdue.counts).toEqual({ overdue: 2, today: 3, week: 4, postponed: 2 });
+    expect(cases(await desk("TODAY"))).toEqual([late, backToday, laterToday]);
+    expect(cases(await desk("WEEK"))).toEqual([late, backToday, laterToday, inThreeDays]);
+    expect(cases(await desk("POSTPONED"))).toEqual([backToday, awayForAWhile]);
+
+    // A fresh case still collecting papers says how many are pending; the last call shows as "last contact".
+    const row = (await desk("TODAY")).rows.find((r: { caseNo: string }) => r.caseNo === late);
+    expect(row).toMatchObject({ whatFor: "Start collecting documents", lastContact: null, status: "OPEN" });
+
+    // Staff see only their own; the HOD sees the department with "ALL", and only their own with "MINE".
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    expect((await desk("OVERDUE", hod)).rows).toEqual([]);
+    expect(cases(await desk("OVERDUE", hod, "ALL"))).toEqual([late, backToday]);
+    const neha = await visaStaff("Neha", "neha@masti.test");
+    expect((await desk("WEEK", neha, "ALL")).rows).toEqual([]);
   });
 });

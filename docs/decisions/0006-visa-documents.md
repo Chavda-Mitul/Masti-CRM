@@ -26,6 +26,14 @@ Decided with the go for part 6. Where this differs from the decisions below, thi
 3. **M4 decided:** the person who takes the enquiry at intake owns it and does every follow-up and the document collection until maturity. *(Already how it works.)*
 4. **Document storage is S3-compatible** (AWS S3 or Cloudflare R2; MinIO locally, in `Backend/docker-compose.yml`). Files are private; they are shared through short-lived pre-signed URLs. Uploading scans is built after Step 2.
 
+Decided with the go for part 7 (10 Oct 2026, project lead):
+
+5. **The enquiries list has an Open / Postponed / Cancelled switch** (`?status=`). Search works inside the picked status. Postponed rows show "Postponed to <date> · reason"; cancelled rows show "Cancelled · reason".
+6. **Logging a call on a postponed case resumes it.** It becomes `OPEN`, and its reason and resume date are cleared, in the same save as the follow-up.
+7. **The desk's Postponed tab shows every postponed case**, soonest back first. A postponed case whose date has come also shows under Overdue / Today, like any due case.
+8. **"When" in Log call starts empty.** Staff pick the day and the time. A past time, a day more than a year ahead, or a day the office is closed is refused.
+9. **Desk buckets (IST):** Overdue = due before now. Today = due before midnight tonight (late ones included, as in the demo). This week = due within the next 7 days (late ones included). A matured visa case leaves the desk (processing takes over). The desk shows at most 200 rows per tab.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):

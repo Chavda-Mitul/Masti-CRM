@@ -1,6 +1,7 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { z } from "zod";
+import { fromDbDate } from "../../lib/dates";
 import { badRequest, forbidden } from "../../lib/httpError";
 import { can, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
@@ -13,19 +14,20 @@ import { visibleEnquiryWhere } from "./visibility";
 // The All enquiries list (§12.2): every department in one list, late first, then by time due (§9).
 // Each department adds its own part (VisaCase now; holidays, hotels… in Stage 2) and its own one-line summary.
 
-const rowInclude = {
+export const rowInclude = {
   department: { select: { id: true, code: true, name: true } },
   client: { select: { id: true, name: true, mobile: true } },
   source: { select: { code: true, name: true } },
   stage: true,
   owner: { select: { id: true, name: true } },
+  reason: { select: { name: true } },
   visa: { include: { offering: { include: offeringInclude }, travellers: { select: { isChild: true } } } },
 } satisfies Prisma.EnquiryInclude;
 
 type EnquiryRow = Prisma.EnquiryGetPayload<{ include: typeof rowInclude }>;
 
 /** "France (Schengen) · Tourist · 2 adults, 2 children". Stage 2 departments add their own line here. */
-function summaryOf(row: EnquiryRow): string {
+export function summaryOf(row: EnquiryRow): string {
   if (row.visa) {
     const { adults, children } = countTravellers(row.visa.travellers);
     return `${offeringLabel(row.visa.offering)} · ${travellersLabel(adults, children)}`;
@@ -34,7 +36,7 @@ function summaryOf(row: EnquiryRow): string {
 }
 
 /** Active departments the user may see, in menu order. */
-async function viewableDepartments(user: UserWithDepartments) {
+export async function viewableDepartments(user: UserWithDepartments) {
   const departments = await prisma.department.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
   return departments.filter((d) => can(user, d.code as DepartmentCode, "VIEW"));
 }
@@ -135,6 +137,9 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       client: row.client,
       summary: summaryOf(row),
       status: row.status,
+      /** Why it was postponed or cancelled, and when a postponed one comes back (the Postponed / Cancelled filters). */
+      reason: row.reason,
+      resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       source: row.source,
       origin: row.origin,

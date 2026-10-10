@@ -1030,6 +1030,7 @@ This is part of Stage 1 ✅.
 - **Table:** Due · Client & case · Desk (department) · What for · Last contact ("WhatsApp reminder · 11:00", "Call · 28 Sep", "List sent · 3 Oct").
 - **Log call** opens inline: What happened / Next step / When → Save.
 - It holds the day's calls across departments. The team split is ❓ (Q2).
+- **Built (10 Oct 2026, project lead):** "When" starts empty. Logging a call on a postponed case resumes it. The Postponed tab lists every postponed case. Today and This week include late cases. A matured visa case leaves the desk. Details: `docs/decisions/0006-visa-documents.md`, *Amendment* items 5–9.
 
 ### 12.13 Cross-sell leads ✅
 
