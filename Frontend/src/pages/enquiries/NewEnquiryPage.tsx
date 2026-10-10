@@ -194,7 +194,7 @@ export function NewEnquiryPage() {
                 <li key={e.caseNo}>
                   {/* A colleague's case is listed so nobody opens a duplicate, but only its owner, the HOD and the Head open it. */}
                   {canSeeEnquiry(me, e) ? (
-                    <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
+                    <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
                       {e.caseNo}
                     </Link>
                   ) : (

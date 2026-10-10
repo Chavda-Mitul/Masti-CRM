@@ -313,9 +313,9 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
         {row.owner && ` · ${row.owner.name}`}
       </div>
 
-      <button type="button" className="btn" style={{ marginTop: 18, width: '100%' }} disabled title="The case page comes with the next step">
-        Open full case › <span className="tag">Soon</span>
-      </button>
+      <Link to={`/enquiries/${encodeURIComponent(row.caseNo)}`} className="btn" style={{ marginTop: 18, width: '100%' }}>
+        Open full case ›
+      </Link>
     </aside>
   )
 }

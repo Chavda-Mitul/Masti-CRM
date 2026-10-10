@@ -115,13 +115,84 @@ export interface CreateVisaCaseBody {
   travelDate: string | null
 }
 
+export type DocumentRequirement = 'ORIGINAL' | 'XEROX_OK' | 'ARRANGED_BY_US'
+export type DocumentStatus = 'PENDING' | 'RECEIVED' | 'MADE' | 'NOT_NEEDED'
+export type ReceivedAs = 'ORIGINAL' | 'XEROX'
+export type DocumentArrival = 'CLIENT_BRINGS' | 'COLLECTION_BOY'
+export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
+
+/** A traveller's copy of a checklist line (copied at intake, so master edits never change an open case). */
+export interface CaseDocument {
+  id: string
+  name: string
+  detail: string | null
+  requirement: DocumentRequirement
+  quantity: number
+  /** A per-visa instruction for the client, e.g. "signed by both parents". */
+  note: string | null
+  status: DocumentStatus
+  receivedAs: ReceivedAs | null
+  receivedAt: string | null
+  receivedBy: PersonRef | null
+}
+
+/** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
+export type CaseConsent = { state: 'UNLINKED' } | { state: 'NONE' } | { state: 'ON_FILE'; agreedAt: string }
+
+export interface CaseTraveller {
+  id: string
+  position: number
+  /** "Adult 1", "Child 1" */
+  label: string
+  isChild: boolean
+  /** The linked family member's name; null until named. */
+  name: string | null
+  member: {
+    id: string
+    name: string
+    relation: { id: number; code: string; name: string } | null
+    age: number | null
+    passportNumber: string | null
+    passportExpiry: string | null
+    passportStatus: PassportStatus | null
+  } | null
+  consent: CaseConsent
+  documents: CaseDocument[]
+  /** In or made */
+  done: number
+  /** Everything not marked "Not needed" */
+  need: number
+  pendingCount: number
+}
+
+export interface CaseFollowUp {
+  id: string
+  /** "What happened" */
+  outcome: string
+  nextStep: string
+  /** "When" */
+  nextAt: string
+  by: PersonRef
+  createdAt: string
+}
+
+/** GET /api/visa/cases/:caseNo (Backend/src/modules/visa/visaCase.ts). */
 export interface VisaCase {
   id: string
   caseNo: string
+  department: { code: string; name: string }
   status: EnquiryStatus
   stage: StageRef
+  /** The case's flow, in order: the step chips. */
+  steps: { code: string; name: string }[]
+  /** Sent back with every case action; a change by someone else in between is a 409 STALE. */
+  updatedAt: string
+  reason: { id: number; code: string; name: string; kind: 'POSTPONE' | 'CANCEL' } | null
+  /** YYYY-MM-DD, while postponed */
+  resumeOn: string | null
   client: { id: string; name: string; mobile: string }
   source: { code: string; name: string }
+  origin: EnquiryOrigin
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }
   adults: number
@@ -130,5 +201,13 @@ export interface VisaCase {
   travelDate: string | null
   owner: PersonRef | null
   dueAt: string | null
+  arrival: DocumentArrival | null
+  booklets: { current: number | null; old: number | null }
+  maturedAt: string | null
+  maturedBy: PersonRef | null
+  travellers: CaseTraveller[]
+  /** The latest 20, newest first */
+  followUps: CaseFollowUp[]
+  createdBy: PersonRef | null
   createdAt: string
 }

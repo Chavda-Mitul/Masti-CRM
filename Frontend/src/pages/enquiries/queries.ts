@@ -24,6 +24,16 @@ export const enquiryKeys = {
   visaOfferings: ['enquiries', 'visa-offerings'] as const,
   lookups: ['enquiries', 'client-lookup'] as const,
   lookup: (mobile: string) => ['enquiries', 'client-lookup', mobile] as const,
+  cases: ['enquiries', 'case'] as const,
+  case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
+}
+
+/** One visa case: the case page (Step 2 onwards). */
+export function useVisaCase(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.case(caseNo),
+    queryFn: async () => (await api<{ case: VisaCase }>(`/visa/cases/${encodeURIComponent(caseNo)}`)).case,
+  })
 }
 
 /** All enquiries: late first, then by time due. Paged with the API's cursor ("Show more"). */

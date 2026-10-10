@@ -134,7 +134,7 @@ function CasesCard({ client }: { client: ClientProfile }) {
                   {style.label}
                 </span>
                 <div className="case-list-main">
-                  <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} className="mono">
+                  <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} className="mono">
                     {e.caseNo}
                   </Link>
                   <div className="muted small">{e.summary}</div>

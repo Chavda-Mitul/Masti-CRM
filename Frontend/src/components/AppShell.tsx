@@ -14,9 +14,10 @@ export function AppShell() {
 
   if (!user) return null
 
-  // The department sub-items are the list filtered by ?department=; the New enquiry form counts as Visa (demo).
+  // The department sub-items are the list filtered by ?department=; the New enquiry form and visa case pages count as Visa.
   const onEnquiries = location.pathname === '/enquiries' || location.pathname.startsWith('/enquiries/')
-  const department = location.pathname === '/enquiries/new' ? 'VISA' : new URLSearchParams(location.search).get('department')?.toUpperCase()
+  const onVisaPage = location.pathname === '/enquiries/new' || location.pathname.toUpperCase().startsWith('/ENQUIRIES/VISA-')
+  const department = onVisaPage ? 'VISA' : new URLSearchParams(location.search).get('department')?.toUpperCase()
 
   const onLogout = () => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
 
