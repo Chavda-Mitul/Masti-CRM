@@ -249,6 +249,12 @@ export interface FollowUpDesk {
   counts: { overdue: number; today: number; week: number; postponed: number }
 }
 
+/** GET /api/enquiries/follow-ups/badge: the sidebar's red number. ALL for an HOD (their departments) and the Head (everyone). */
+export interface FollowUpBadge {
+  overdue: number
+  scope: FollowUpScope
+}
+
 /** POST /api/enquiries/:caseNo/follow-ups. "When" is a day and a time in India. */
 export interface LogFollowUpBody {
   outcomeId: number

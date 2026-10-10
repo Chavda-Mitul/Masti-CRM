@@ -328,5 +328,11 @@ describe("the follow-up desk", () => {
     expect(cases(await desk("OVERDUE", hod, "ALL"))).toEqual([late, backToday]);
     const neha = await visaStaff("Neha", "neha@masti.test");
     expect((await desk("WEEK", neha, "ALL")).rows).toEqual([]);
+
+    // The sidebar's red number: staff count their own overdue cases, the HOD the department's.
+    const badge = async (agent: Agent) => (await agent.get("/api/enquiries/follow-ups/badge")).body;
+    expect(await badge(staff)).toEqual({ overdue: 2, scope: "MINE" });
+    expect(await badge(hod)).toEqual({ overdue: 2, scope: "ALL" });
+    expect(await badge(neha)).toEqual({ overdue: 0, scope: "MINE" });
   });
 });

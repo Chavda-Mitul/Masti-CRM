@@ -12,7 +12,7 @@ import {
 } from "./enquiries.schemas";
 import * as enquiriesService from "./enquiries.service";
 import * as actions from "./enquiryActions.service";
-import { followUpDesk } from "./followUpDesk.service";
+import { followUpBadge, followUpDesk } from "./followUpDesk.service";
 
 /**
  * Enquiries across departments (docs/decisions/0003-visa-intake.md). No single department to check here:
@@ -35,6 +35,11 @@ router.get("/sources", async (_req, res) => {
 /** The follow-up desk: one bucket's rows and the four counts. */
 router.get("/follow-ups", async (req, res) => {
   res.json(await followUpDesk(followUpDeskQuerySchema.parse(req.query), currentUser(req)));
+});
+
+/** The sidebar's red number: overdue follow-ups (mine, or my department's / everyone's for an HOD / the Head). */
+router.get("/follow-ups/badge", async (req, res) => {
+  res.json(await followUpBadge(currentUser(req)));
 });
 
 // Case actions (docs/decisions/0006-visa-documents.md Decision 6). The service checks who may act on the case.

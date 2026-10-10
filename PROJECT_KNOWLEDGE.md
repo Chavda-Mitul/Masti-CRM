@@ -408,7 +408,7 @@ The database refuses department rows for anyone but `OFFICE`. Whether office sta
 - **Today**, which also hosts the **Notice board**.
 - **Enquiries** (total count), with **Visa · Holidays · Hotels · Insurance · Tickets** under it. Each has a coloured dot and a count, and filters the enquiry list.
 - *Transport · Cruise*, greyed out and tagged **PHASE 2**. Not in this project.
-- **Follow-ups** (badge = overdue + cross-sell leads to answer). Tabs: *Follow-ups* · *Cross-sell leads*.
+- **Follow-ups** (badge = overdue + cross-sell leads to answer). Tabs: *Follow-ups* · *Cross-sell leads*. The overdue part is built (10 Oct 2026): staff count their own overdue cases, an HOD the whole department, the Head everyone. It opens the Overdue tab in that scope and rechecks every minute. Cross-sell leads join the count when cross-sell is built.
 - **Clients**.
 - **Accounts**. Tabs: *Invoices & follow-up* · *Tasks & collections* · *Reports*. The field-staff app opens from Tasks & collections.
 - **Settings** (at the bottom). Tabs: *Portal logins* · *Masters & holiday calendar*.

@@ -62,11 +62,12 @@ export const logFollowUpSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const FOLLOW_UP_BUCKETS = ["OVERDUE", "TODAY", "WEEK", "POSTPONED"] as const;
+export const FOLLOW_UP_SCOPES = ["MINE", "ALL"] as const;
 
 export const followUpDeskQuerySchema = z.object({
   bucket: z.enum(FOLLOW_UP_BUCKETS).default("TODAY"),
   /** MINE: cases I own. ALL: every case I may see (the HOD's department, the Head's everything). */
-  scope: z.enum(["MINE", "ALL"]).default("MINE"),
+  scope: z.enum(FOLLOW_UP_SCOPES).default("MINE"),
 });
 
 export type PostponeInput = z.infer<typeof postponeSchema>;
@@ -75,4 +76,5 @@ export type ResumeInput = z.infer<typeof resumeSchema>;
 export type ReassignInput = z.infer<typeof reassignSchema>;
 export type LogFollowUpInput = z.infer<typeof logFollowUpSchema>;
 export type FollowUpBucket = (typeof FOLLOW_UP_BUCKETS)[number];
+export type FollowUpScope = (typeof FOLLOW_UP_SCOPES)[number];
 export type FollowUpDeskQuery = z.infer<typeof followUpDeskQuerySchema>;

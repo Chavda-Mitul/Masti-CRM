@@ -10,6 +10,7 @@ import type {
   EnquiryListFilters,
   EnquiryListPage,
   EnquirySourceOption,
+  FollowUpBadge,
   FollowUpBucket,
   FollowUpDesk,
   FollowUpScope,
@@ -31,6 +32,8 @@ export const enquiryKeys = {
   list: (filters: EnquiryListFilters) => ['enquiries', 'list', filters] as const,
   desks: () => ['enquiries', 'follow-ups'] as const,
   desk: (bucket: FollowUpBucket, scope: FollowUpScope) => ['enquiries', 'follow-ups', bucket, scope] as const,
+  /** Under desks(), so every case action that refreshes the desk refreshes the badge too. */
+  badge: ['enquiries', 'follow-ups', 'badge'] as const,
   sources: ['enquiries', 'sources'] as const,
   visaOfferings: ['enquiries', 'visa-offerings'] as const,
   lookups: ['enquiries', 'client-lookup'] as const,
@@ -177,6 +180,15 @@ export function useFollowUpDesk(bucket: FollowUpBucket, scope: FollowUpScope) {
     queryKey: enquiryKeys.desk(bucket, scope),
     queryFn: () => api<FollowUpDesk>(`/enquiries/follow-ups?bucket=${bucket}&scope=${scope}`),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** Overdue follow-ups for the sidebar. Rechecked every minute, so a case that falls due shows up without a reload. */
+export function useFollowUpBadge() {
+  return useQuery({
+    queryKey: enquiryKeys.badge,
+    queryFn: () => api<FollowUpBadge>('/enquiries/follow-ups/badge'),
+    refetchInterval: 60_000,
   })
 }
 

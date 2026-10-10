@@ -1,8 +1,9 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
+import { isHodOfAny } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
-import type { FollowUpBucket, FollowUpDeskQuery } from "./enquiries.schemas";
+import type { FollowUpBucket, FollowUpDeskQuery, FollowUpScope } from "./enquiries.schemas";
 import { rowInclude, summaryOf, viewableDepartments } from "./enquiries.service";
 import { visibleEnquiryWhere } from "./visibility";
 
@@ -50,15 +51,20 @@ function whatFor(row: DeskRow): string {
   return row.stage.nextStepLabel;
 }
 
-export async function followUpDesk(query: FollowUpDeskQuery, user: UserWithDepartments) {
+/** One bucket of the desk for this user: cases they may see, not matured, theirs only with MINE. */
+async function deskWhere(user: UserWithDepartments, scope: FollowUpScope, now: Date) {
   const departments = await viewableDepartments(user);
-  const now = new Date();
   const base: Prisma.EnquiryWhereInput[] = [
     visibleEnquiryWhere(user, departments),
     notMatured,
-    ...(query.scope === "MINE" ? [{ ownerId: user.id }] : []),
+    ...(scope === "MINE" ? [{ ownerId: user.id }] : []),
   ];
-  const where = (bucket: FollowUpBucket): Prisma.EnquiryWhereInput => ({ AND: [...base, bucketWhere(bucket, now)] });
+  return (bucket: FollowUpBucket): Prisma.EnquiryWhereInput => ({ AND: [...base, bucketWhere(bucket, now)] });
+}
+
+export async function followUpDesk(query: FollowUpDeskQuery, user: UserWithDepartments) {
+  const now = new Date();
+  const where = await deskWhere(user, query.scope, now);
 
   const [rows, overdue, today, week, postponed] = await Promise.all([
     prisma.enquiry.findMany({
@@ -95,4 +101,14 @@ export async function followUpDesk(query: FollowUpDeskQuery, user: UserWithDepar
     more: rows.length > DESK_LIMIT,
     counts: { overdue, today, week, postponed },
   };
+}
+
+/**
+ * The red number beside "Follow-ups" in the sidebar (PROJECT_KNOWLEDGE §9): overdue cases. Staff count their own; an
+ * HOD the whole department, the Head everyone (decided 10 Oct 2026). Cross-sell leads join it when they are built.
+ */
+export async function followUpBadge(user: UserWithDepartments) {
+  const scope: FollowUpScope = isHodOfAny(user) ? "ALL" : "MINE";
+  const where = await deskWhere(user, scope, new Date());
+  return { overdue: await prisma.enquiry.count({ where: where("OVERDUE") }), scope };
 }
