@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocumentArrival, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -62,3 +62,14 @@ export const linkTravellerSchema = z.object({
 
 export type UpdateCaseDocumentInput = z.infer<typeof updateCaseDocumentSchema>;
 export type LinkTravellerInput = z.infer<typeof linkTravellerSchema>;
+
+const booklets = z.number().int().min(0, "Can't be below 0.").max(50, "50 at most.").nullable().optional();
+
+/** How the documents reach us, and booklets received (Decision 4). Booklets are optional (amended 10 Oct 2026). */
+export const updateVisaCaseSchema = z.object({
+  arrival: z.enum(DocumentArrival).nullable().optional(),
+  bookletsCurrent: booklets,
+  bookletsOld: booklets,
+});
+
+export type UpdateVisaCaseInput = z.infer<typeof updateVisaCaseSchema>;

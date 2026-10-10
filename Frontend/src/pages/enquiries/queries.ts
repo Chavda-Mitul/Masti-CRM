@@ -1,8 +1,11 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { isStale } from '../../lib/apiErrors'
+import { useToast } from '../../lib/toast'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
+  DocumentArrival,
   DocumentStatus,
   EnquiryListFilters,
   EnquiryListPage,
@@ -52,6 +55,67 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
     },
+  })
+}
+
+/** How the documents reach us, and booklets received. */
+export function useUpdateVisaCase(caseNo: string) {
+  return useCaseAction<{ arrival?: DocumentArrival | null; bookletsCurrent?: number | null; bookletsOld?: number | null }>(
+    caseNo,
+    (base, body) => api(base, { method: 'PATCH', body }),
+  )
+}
+
+/**
+ * Postpone, cancel, resume, reassign: actions on the shared enquiry. They return only its new state, so the case is
+ * reloaded. A change by someone else in between (409 STALE) reloads it too, with a warning.
+ */
+function useEnquiryAction<Vars>(caseNo: string, request: (base: string, vars: Vars) => Promise<unknown>) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const base = `/enquiries/${encodeURIComponent(caseNo)}`
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(caseNo) })
+    void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
+    void queryClient.invalidateQueries({ queryKey: ['clients'] })
+  }
+  return useMutation({
+    mutationFn: (vars: Vars) => request(base, vars),
+    onSuccess: refresh,
+    onError: (error) => {
+      if (!isStale(error)) return
+      refresh()
+      toast({ tone: 'warn', message: 'Someone else changed this case after you opened it. The latest version is now loaded. Please try again.' })
+    },
+  })
+}
+
+export function usePostponeCase(caseNo: string) {
+  return useEnquiryAction<{ reasonId: number; resumeOn: string; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/postpone`, { method: 'POST', body }),
+  )
+}
+
+export function useCancelCase(caseNo: string) {
+  return useEnquiryAction<{ reasonId: number; updatedAt: string }>(caseNo, (base, body) => api(`${base}/cancel`, { method: 'POST', body }))
+}
+
+export function useResumeCase(caseNo: string) {
+  return useEnquiryAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/resume`, { method: 'POST', body }))
+}
+
+export function useReassignCase(caseNo: string) {
+  return useEnquiryAction<{ ownerId: string; updatedAt: string }>(caseNo, (base, body) => api(`${base}/owner`, { method: 'PUT', body }))
+}
+
+/** Who the HOD or Head can give the case to. */
+export function useAssignees(caseNo: string, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: [...enquiryKeys.case(caseNo), 'assignees'],
+    queryFn: async () =>
+      (await api<{ assignees: { id: string; name: string; isOwner: boolean }[] }>(`/enquiries/${encodeURIComponent(caseNo)}/assignees`))
+        .assignees,
   })
 }
 

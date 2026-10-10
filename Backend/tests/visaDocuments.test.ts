@@ -303,4 +303,32 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
     expect(past.body.message).toMatch(/moved past/);
     expect((await staff.post(`/api/visa/cases/${c.caseNo}/start`).set(json)).status).toBe(409);
   });
+
+  it("records how the documents reach us and the booklets (optional), audited", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    const patch = (agent: Agent, body: Record<string, unknown>) => agent.patch(`/api/visa/cases/${c.caseNo}`).send(body);
+
+    const set = await patch(staff, { arrival: "CLIENT_BRINGS", bookletsCurrent: 2, bookletsOld: 1 });
+    expect(set.status).toBe(200);
+    expect(set.body.case).toMatchObject({ arrival: "CLIENT_BRINGS", booklets: { current: 2, old: 1 }, stage: { code: "DOCUMENTS" } });
+
+    expect((await patch(staff, { bookletsCurrent: 51 })).status).toBe(400);
+    expect((await patch(staff, { bookletsOld: -1 })).status).toBe(400);
+    expect((await patch(staff, { arrival: "BY_POST" })).status).toBe(400);
+
+    // Booklets can be cleared (e-visas hand over no passport); only what changed is audited.
+    const cleared = await patch(staff, { arrival: "COLLECTION_BOY", bookletsCurrent: null, bookletsOld: 1 });
+    expect(cleared.body.case).toMatchObject({ arrival: "COLLECTION_BOY", booklets: { current: null, old: 1 } });
+    const entries = await prisma.auditLog.findMany({ where: { action: "visa.case.update" }, orderBy: { createdAt: "asc" } });
+    expect(entries).toHaveLength(2);
+    expect(entries[1]).toMatchObject({
+      clientId: c.client.id,
+      before: { arrival: "CLIENT_BRINGS", bookletsCurrent: 2 },
+      after: { arrival: "COLLECTION_BOY", bookletsCurrent: null },
+    });
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    expect((await patch(await loginAs("neha@masti.test"), { arrival: "CLIENT_BRINGS" })).status).toBe(403);
+  });
 });

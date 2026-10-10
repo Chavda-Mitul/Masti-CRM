@@ -23,3 +23,32 @@ export const listEnquiriesQuerySchema = z.object({
 });
 
 export type ListEnquiriesQuery = z.infer<typeof listEnquiriesQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Case actions (docs/decisions/0006-visa-documents.md Decision 6). Each sends the updatedAt the page loaded: a change by
+// someone else in between is a 409 STALE.
+// ---------------------------------------------------------------------------
+
+const updatedAt = z.iso.datetime("Reload and try again.");
+const reasonId = z.number().int().positive("Pick a reason.");
+
+export const postponeSchema = z.object({
+  reasonId,
+  /** When it comes back, YYYY-MM-DD (IST). */
+  resumeOn: z.iso.date("Pick the date it comes back."),
+  updatedAt,
+});
+
+export const cancelSchema = z.object({ reasonId, updatedAt });
+
+export const resumeSchema = z.object({ updatedAt });
+
+export const reassignSchema = z.object({
+  ownerId: z.uuid("Pick who takes it over."),
+  updatedAt,
+});
+
+export type PostponeInput = z.infer<typeof postponeSchema>;
+export type CancelInput = z.infer<typeof cancelSchema>;
+export type ResumeInput = z.infer<typeof resumeSchema>;
+export type ReassignInput = z.infer<typeof reassignSchema>;

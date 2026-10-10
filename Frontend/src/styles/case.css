@@ -372,3 +372,28 @@ button.tick:focus-visible {
 .seg-btn button:focus-visible {
   outline: 2px solid var(--primary);
 }
+
+/* Part 6: how documents arrive, booklets */
+.arrival-toggle {
+  margin-bottom: 4px;
+}
+.booklets-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 14px;
+}
+.booklets-row .lbl {
+  flex-basis: 100%;
+}
+.booklets-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.booklet-input {
+  width: 56px;
+  text-align: center;
+}

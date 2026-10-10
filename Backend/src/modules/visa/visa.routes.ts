@@ -6,6 +6,7 @@ import {
   idempotencyKeySchema,
   linkTravellerSchema,
   updateCaseDocumentSchema,
+  updateVisaCaseSchema,
   updateVisaSettingsSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
@@ -42,6 +43,12 @@ const idParam = z.string().trim().min(1).max(64);
 /** "Start collecting documents": Enquiry → Documents. */
 router.post("/cases/:caseNo/start", visaEdit, async (req, res) => {
   res.json({ case: await stepsService.startDocuments(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
+});
+
+/** How the documents reach us, and booklets received. */
+router.patch("/cases/:caseNo", visaEdit, async (req, res) => {
+  const body = updateVisaCaseSchema.parse(req.body);
+  res.json({ case: await stepsService.updateCase(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** Tick one paper: Original/Xerox, Made, Not needed, or back to Pending. */

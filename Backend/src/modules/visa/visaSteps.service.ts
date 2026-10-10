@@ -1,15 +1,16 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
-import type { LinkTravellerInput, UpdateCaseDocumentInput } from "./visa.schemas";
+import type { LinkTravellerInput, UpdateCaseDocumentInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
-// documents, and moving the case from Enquiry to Documents. Arrival, booklets, follow-ups and maturity come next.
+// documents, how they reach us and booklets (Decision 4), and moving the case from Enquiry to Documents.
 
 /** The steps where the checklist can still change. After maturity it is the processor's to check (Step 3). */
 const COLLECTING = ["ENQUIRY", "DOCUMENTS"];
@@ -100,6 +101,37 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
         clientId: enquiry.clientId,
         before: { name: doc.name, status: doc.status, receivedAs: doc.receivedAs, receivedAt: doc.receivedAt, receivedById: doc.receivedById },
         after: { name: after.name, status: after.status, receivedAs: after.receivedAs, receivedAt: after.receivedAt, receivedById: after.receivedById },
+        ip: actor.ip,
+      },
+      tx,
+    );
+    await advanceToDocuments(tx, enquiry, actor);
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * How the documents reach us ("Client brings them" / "Send collection boy") and booklets received (Decision 4).
+ * Booklets are optional (amended 10 Oct 2026). Only what changed is written and audited.
+ */
+export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, actor: Actor) {
+  const enquiry = await loadForStep2(caseNo, actor);
+  const before = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
+  const changes = onlyChanged(definedOnly(input), before);
+  const keys = Object.keys(changes);
+  if (keys.length === 0) return getVisaCaseById(enquiry.id);
+
+  await prisma.$transaction(async (tx) => {
+    const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.case.update",
+        entityType: "VisaCase",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: pick(before, keys),
+        after: pick(after, keys),
         ip: actor.ip,
       },
       tx,

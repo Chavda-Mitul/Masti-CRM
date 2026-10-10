@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDate, formatMonthYear, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
-import { useStartDocuments } from '../queries'
+import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
 import { dayMonth } from './labels'
+import { PostponeCancelDialog } from './PostponeCancelDialog'
 
 /** "2 adults, 1 child" */
 function travellers(adults: number, children: number) {
@@ -62,6 +64,49 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   )
 }
 
+/** "Postpone or cancel" on an open case, "Resume" on a postponed one (0006 Decision 6). Owner, HOD or Head. */
+function HoldButton({ visaCase: c }: { visaCase: VisaCase }) {
+  const { data: me } = useMe()
+  const toast = useToast()
+  const resume = useResumeCase(c.caseNo)
+  const [open, setOpen] = useState(false)
+  const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
+  if (!canAct) return null
+
+  if (c.status === 'POSTPONED') {
+    return (
+      <button
+        type="button"
+        className="btn"
+        disabled={resume.isPending}
+        onClick={() =>
+          resume.mutate(
+            { updatedAt: c.updatedAt },
+            {
+              onSuccess: () => toast({ tone: 'ok', message: 'Case resumed: it is back on the follow-up list.' }),
+              onError: (err) => {
+                const message = errorText(err)
+                if (message) toast({ tone: 'bad', message })
+              },
+            },
+          )
+        }
+      >
+        {resume.isPending ? 'Resuming…' : 'Resume'}
+      </button>
+    )
+  }
+  if (c.status !== 'OPEN') return null
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        Postpone or cancel
+      </button>
+      {open && <PostponeCancelDialog visaCase={c} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
 /**
  * Title, where the case came from, its status, the actions and the step chips (demo screen 07).
  * The actions show as "Soon" until their part of Step 2 is built (0006).
@@ -86,9 +131,7 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
         </div>
         <div className="case-head-actions">
           <StatusChip visaCase={c} />
-          <button type="button" className="btn" disabled title="Comes with the next part of Step 2">
-            Postpone or cancel <span className="tag">Soon</span>
-          </button>
+          <HoldButton visaCase={c} />
           {c.status === 'OPEN' && c.owner && <NextStepButton visaCase={c} />}
         </div>
       </div>
