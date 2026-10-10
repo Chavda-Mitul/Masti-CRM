@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { createVisaCaseSchema, idempotencyKeySchema, updateVisaSettingsSchema } from "./visa.schemas";
+import {
+  createVisaCaseSchema,
+  idempotencyKeySchema,
+  linkTravellerSchema,
+  updateCaseDocumentSchema,
+  updateVisaSettingsSchema,
+} from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
 const router = Router();
@@ -27,6 +34,28 @@ router.post("/cases", visaEdit, async (req, res) => {
 
 router.get("/cases/:caseNo", visaView, async (req, res) => {
   res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
+// Step 2 (docs/decisions/0006-visa-documents.md). The service also requires the case's owner, its HOD or the Head.
+const idParam = z.string().trim().min(1).max(64);
+
+/** "Start collecting documents": Enquiry → Documents. */
+router.post("/cases/:caseNo/start", visaEdit, async (req, res) => {
+  res.json({ case: await stepsService.startDocuments(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
+});
+
+/** Tick one paper: Original/Xerox, Made, Not needed, or back to Pending. */
+router.patch("/cases/:caseNo/documents/:documentId", visaEdit, async (req, res) => {
+  const body = updateCaseDocumentSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await stepsService.updateDocument(caseNo, idParam.parse(req.params.documentId), body, actorOf(req)) });
+});
+
+/** Name a traveller: link the client's family member. */
+router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req, res) => {
+  const body = linkTravellerSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 router.get("/settings", visaView, async (_req, res) => {

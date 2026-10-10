@@ -17,11 +17,14 @@ export function MemberFormDrawer({
   member,
   options,
   onClose,
+  onSaved,
 }: {
   clientId: string
   member: ClientMember | null
   options: ClientOptions
   onClose: () => void
+  /** Called with the saved person, e.g. so a visa case can name a traveller after them. */
+  onSaved?: (member: ClientMember) => void
 }) {
   const isNew = member === null
   const form = useForm<MemberFormValues>({
@@ -39,8 +42,9 @@ export function MemberFormDrawer({
     save.mutate(
       { ...(member ? { memberId: member.id } : {}), body: member ? { ...body, updatedAt: member.updatedAt } : body },
       {
-        onSuccess: () => {
+        onSuccess: (saved) => {
           drawer.release()
+          onSaved?.(saved)
           onClose()
         },
         onError: (error) => {

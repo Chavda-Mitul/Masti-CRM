@@ -33,6 +33,18 @@ export function canSeeEnquiry(user: UserWithDepartments, enquiry: { department: 
   return seesWholeDepartment(user, code) || (enquiry.ownerId !== null && enquiry.ownerId === user.id);
 }
 
+/**
+ * May this user change this enquiry (tick documents, log follow-ups…)? Department EDIT, and its owner, its HOD or the Head.
+ * View-only staff can't act; neither can a colleague who doesn't own it.
+ */
+export function assertCanActOnEnquiry(user: UserWithDepartments, enquiry: { department: { code: string }; ownerId: string | null }) {
+  const code = enquiry.department.code as DepartmentCode;
+  const owns = enquiry.ownerId !== null && enquiry.ownerId === user.id;
+  if (!can(user, code, "EDIT") || !(seesWholeDepartment(user, code) || owns)) {
+    throw forbidden("Only the person this case is assigned to, the department's HOD and the Head can change it.");
+  }
+}
+
 export function assertCanSeeEnquiry(user: UserWithDepartments, enquiry: { department: { code: string }; ownerId: string | null }) {
   if (!canSeeEnquiry(user, enquiry)) throw forbidden("This case is someone else's. Only its owner, the department's HOD and the Head can open it.");
 }

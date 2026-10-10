@@ -80,7 +80,7 @@ describe("the case page", () => {
     const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
     const self = await prisma.relation.findUniqueOrThrow({ where: { code: "SELF" } });
 
-    // Written directly: the Step 2 actions come with the next parts.
+    // Written directly, to set up every kind of state at once (the actions are tested below).
     const expiresSoon = new Date(`${addMonths(istToday(), 3)}T00:00:00Z`);
     const born = new Date(`${addMonths(istToday(), -12 * 40 - 1)}T00:00:00Z`);
     const member = await prisma.clientMember.create({
@@ -145,5 +145,162 @@ describe("the case page", () => {
     expect(c.travellers[1]).toMatchObject({ name: "AARAV MEHTA", consent: { state: "NONE" }, member: { age: null, passportStatus: null } });
 
     expect((await staff.get("/api/visa/cases/VISA-2026-9999")).status).toBe(404);
+  });
+});
+
+describe("Step 2 actions: naming travellers and ticking documents", () => {
+  type CaseDoc = { id: string; name: string; status: string; receivedAs: string | null; receivedAt: string | null; receivedBy: { name: string } | null };
+  type CaseDto = {
+    id: string;
+    caseNo: string;
+    client: { id: string };
+    stage: { code: string; step: number };
+    travellers: { id: string; name: string | null; member: { id: string } | null; done: number; need: number; documents: CaseDoc[] }[];
+  };
+
+  const docOf = (c: CaseDto, name: string, traveller = 0) => c.travellers[traveller]!.documents.find((d) => d.name === name)!;
+  const tick = (agent: Agent, c: CaseDto, docId: string, body: Record<string, unknown>) =>
+    agent.patch(`/api/visa/cases/${c.caseNo}/documents/${docId}`).send(body);
+  const json = { "Content-Type": "application/json" };
+
+  async function addMember(agent: Agent, clientId: string, name: string, relation = "SELF") {
+    const relationId = (await prisma.relation.findUniqueOrThrow({ where: { code: relation } })).id;
+    const res = await agent.post(`/api/clients/${clientId}/members`).send({ name, relationId });
+    expect(res.status).toBe(201);
+    return res.body.member.id as string;
+  }
+
+  async function freshCase(agent: Agent): Promise<CaseDto> {
+    const saved = await saveCase(agent);
+    return (await agent.get(`/api/visa/cases/${saved.caseNo}`)).body.case;
+  }
+
+  it("starts collecting documents once, audited", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    expect(c.stage).toMatchObject({ code: "ENQUIRY", step: 1 });
+
+    const started = await staff.post(`/api/visa/cases/${c.caseNo}/start`).set(json);
+    expect(started.status).toBe(200);
+    expect(started.body.case.stage).toMatchObject({ code: "DOCUMENTS", step: 2, statusLabel: "Documents pending" });
+    expect((await staff.post(`/api/visa/cases/${c.caseNo}/start`).set(json)).status).toBe(409);
+
+    const entries = await prisma.auditLog.findMany({ where: { action: "enquiry.stage" } });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ entityId: c.id, clientId: c.client.id, before: { stage: "ENQUIRY" }, after: { stage: "DOCUMENTS" } });
+  });
+
+  it("ticks papers as original or xerox, made, not needed or pending, stamping who and when", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    const passport = docOf(c, "Passport");
+    const flight = docOf(c, "Flight reservation");
+
+    expect((await tick(staff, c, passport.id, { status: "RECEIVED" })).body.issues.receivedAs).toBeDefined();
+    expect((await tick(staff, c, passport.id, { status: "MADE" })).status).toBe(400);
+    expect((await tick(staff, c, flight.id, { status: "RECEIVED", receivedAs: "ORIGINAL" })).status).toBe(400);
+
+    // The first tick also moves the case to Documents.
+    const received = await tick(staff, c, passport.id, { status: "RECEIVED", receivedAs: "XEROX" });
+    expect(received.status).toBe(200);
+    let after: CaseDto = received.body.case;
+    expect(after.stage.code).toBe("DOCUMENTS");
+    expect(docOf(after, "Passport")).toMatchObject({ status: "RECEIVED", receivedAs: "XEROX", receivedBy: { name: "Aarti Patel" } });
+    expect(Date.parse(docOf(after, "Passport").receivedAt!)).not.toBeNaN();
+    expect(after.travellers[0]).toMatchObject({ done: 1, need: 11 });
+
+    after = (await tick(staff, c, passport.id, { status: "RECEIVED", receivedAs: "ORIGINAL" })).body.case;
+    expect(docOf(after, "Passport").receivedAs).toBe("ORIGINAL");
+    after = (await tick(staff, c, flight.id, { status: "MADE" })).body.case;
+    expect(docOf(after, "Flight reservation")).toMatchObject({ status: "MADE", receivedAs: null });
+    after = (await tick(staff, c, docOf(c, "Salary slips, last 3 months").id, { status: "NOT_NEEDED" })).body.case;
+    expect(after.travellers[0]).toMatchObject({ done: 2, need: 10 });
+
+    after = (await tick(staff, c, passport.id, { status: "PENDING" })).body.case;
+    expect(docOf(after, "Passport")).toMatchObject({ status: "PENDING", receivedAs: null, receivedAt: null, receivedBy: null });
+
+    // Sending the same tick again changes nothing.
+    await tick(staff, c, passport.id, { status: "PENDING" });
+    const entries = await prisma.auditLog.findMany({ where: { action: "visa.document.update" }, orderBy: { createdAt: "asc" } });
+    expect(entries).toHaveLength(5);
+    expect(entries[0]).toMatchObject({ clientId: c.client.id, before: { status: "PENDING" }, after: { status: "RECEIVED", receivedAs: "XEROX" } });
+    expect(await prisma.auditLog.count({ where: { action: "enquiry.stage" } })).toBe(1);
+
+    // A paper from another case.
+    const other = await freshCase(staff);
+    expect((await tick(staff, c, docOf(other, "Passport").id, { status: "NOT_NEEDED" })).status).toBe(404);
+  });
+
+  it("names travellers by linking family members, and refuses another family's or the same person twice", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    const adult = c.travellers[0]!;
+    const child = c.travellers[1]!;
+    const link = (travellerId: string, memberId: string) => staff.put(`/api/visa/cases/${c.caseNo}/travellers/${travellerId}/member`).send({ memberId });
+    const rakesh = await addMember(staff, c.client.id, "Rakesh Mehta");
+    const aarav = await addMember(staff, c.client.id, "Aarav Mehta", "SON");
+
+    const linked = await link(adult.id, rakesh);
+    expect(linked.status).toBe(200);
+    expect(linked.body.case.stage.code).toBe("DOCUMENTS");
+    expect(linked.body.case.travellers[0]).toMatchObject({ name: "Rakesh Mehta", member: { id: rakesh }, consent: { state: "NONE" } });
+
+    expect((await link(child.id, rakesh)).status).toBe(409);
+
+    // Picking someone else corrects a mistake.
+    expect((await link(adult.id, aarav)).body.case.travellers[0]).toMatchObject({ name: "Aarav Mehta", member: { id: aarav } });
+
+    // Another client's family member, and an archived one.
+    const otherClient = await staff.post("/api/clients").send({ name: "Other Family", mobile: "9825000077" });
+    const stranger = await addMember(staff, otherClient.body.client.id, "Stranger Person");
+    const refused = await link(child.id, stranger);
+    expect(refused.status).toBe(400);
+    expect(refused.body.issues.memberId).toBeDefined();
+    await staff.post(`/api/clients/${c.client.id}/members/${rakesh}/archive`).set(json);
+    expect((await link(child.id, rakesh)).status).toBe(400);
+
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.traveller.link" }, orderBy: { createdAt: "asc" } });
+    expect(entry).toMatchObject({ clientId: c.client.id, before: { memberId: null, name: null }, after: { memberId: rakesh, name: "Rakesh Mehta" } });
+  });
+
+  it("lets only the owner, the Visa HOD and the Head act", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    const passport = docOf(c, "Passport");
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    expect((await tick(await loginAs("neha@masti.test"), c, passport.id, { status: "NOT_NEEDED" })).status).toBe(403);
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    expect((await tick(await loginAs("meena@masti.test"), c, passport.id, { status: "NOT_NEEDED" })).status).toBe(403);
+
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await tick(await loginAs("riya@masti.test"), c, passport.id, { status: "NOT_NEEDED" })).status).toBe(200);
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    expect((await tick(await loginAs("vimal@masti.test"), c, passport.id, { status: "PENDING" })).status).toBe(200);
+  });
+
+  it("refuses changes once the case is postponed, cancelled or past collecting documents", async () => {
+    const staff = await visaStaff();
+    const c = await freshCase(staff);
+    const passport = docOf(c, "Passport");
+    const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
+
+    await prisma.enquiry.update({
+      where: { id: c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: new Date(`${addMonths(istToday(), 1)}T00:00:00Z`) },
+    });
+    const postponed = await tick(staff, c, passport.id, { status: "NOT_NEEDED" });
+    expect(postponed.status).toBe(409);
+    expect(postponed.body.message).toMatch(/postponed/);
+
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED"), resumeOn: null } });
+    expect((await tick(staff, c, passport.id, { status: "NOT_NEEDED" })).status).toBe(409);
+
+    const filePrep = await prisma.departmentStage.findFirstOrThrow({ where: { code: "FILE_PREPARATION" } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "OPEN", reasonId: null, stageId: filePrep.id } });
+    const past = await tick(staff, c, passport.id, { status: "NOT_NEEDED" });
+    expect(past.status).toBe(409);
+    expect(past.body.message).toMatch(/moved past/);
+    expect((await staff.post(`/api/visa/cases/${c.caseNo}/start`).set(json)).status).toBe(409);
   });
 });

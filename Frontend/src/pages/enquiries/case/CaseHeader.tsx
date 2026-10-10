@@ -1,4 +1,9 @@
+import { canActOnCase } from '../../../auth/permissions'
+import { useMe } from '../../../auth/useAuth'
+import { errorText } from '../../../lib/apiErrors'
 import { formatDate, formatMonthYear, initials } from '../../../lib/format'
+import { useToast } from '../../../lib/toast'
+import { useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
 import { dayMonth } from './labels'
 
@@ -21,6 +26,40 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   if (c.status === 'CANCELLED') return <span className="chip chip-bad">Cancelled{c.reason && ` · ${c.reason.name}`}</span>
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
+}
+
+/**
+ * The step's own button. "Start collecting documents" works now; the later ones show as "Soon" until their part of
+ * Step 2 is built (0006).
+ */
+function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
+  const { data: me } = useMe()
+  const toast = useToast()
+  const start = useStartDocuments(c.caseNo)
+  const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
+
+  if (c.stage.code === 'ENQUIRY' && canAct) {
+    return (
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={start.isPending}
+        onClick={() =>
+          start.mutate(undefined, {
+            onSuccess: () => toast({ tone: 'ok', message: 'Step 2 started: collecting documents.' }),
+            onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t start. Please try again.' }),
+          })
+        }
+      >
+        {start.isPending ? 'Starting…' : `${c.stage.nextStepLabel} →`}
+      </button>
+    )
+  }
+  return (
+    <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with the next part of Step 2' : 'Only the case’s owner, its HOD and the Head can do this'}>
+      {c.stage.nextStepLabel} → {canAct && <span className="tag">Soon</span>}
+    </button>
+  )
 }
 
 /**
@@ -50,11 +89,7 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
           <button type="button" className="btn" disabled title="Comes with the next part of Step 2">
             Postpone or cancel <span className="tag">Soon</span>
           </button>
-          {c.status === 'OPEN' && c.owner && (
-            <button type="button" className="btn btn-primary" disabled title="Comes with the next part of Step 2">
-              {c.stage.nextStepLabel} → <span className="tag">Soon</span>
-            </button>
-          )}
+          {c.status === 'OPEN' && c.owner && <NextStepButton visaCase={c} />}
         </div>
       </div>
 

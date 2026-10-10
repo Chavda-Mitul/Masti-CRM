@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
 
-// Only zod is imported here, so these schemas can later be shared with the frontend.
+// Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
 /** Sanity limits on the travellers per case, not business rules. */
 export const MAX_ADULTS = 30;
@@ -42,3 +43,22 @@ export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 2 (docs/decisions/0006-visa-documents.md)
+// ---------------------------------------------------------------------------
+
+/** Ticking one paper on a traveller's checklist (Decision 2). The service checks status against the requirement. */
+export const updateCaseDocumentSchema = z.object({
+  status: z.enum(DocumentStatus),
+  /** Needed for RECEIVED: what came in. */
+  receivedAs: z.enum(ReceivedAs).nullish(),
+});
+
+/** Naming a traveller: linking the client's family member (Decision 3). */
+export const linkTravellerSchema = z.object({
+  memberId: z.uuid("Pick the family member."),
+});
+
+export type UpdateCaseDocumentInput = z.infer<typeof updateCaseDocumentSchema>;
+export type LinkTravellerInput = z.infer<typeof linkTravellerSchema>;

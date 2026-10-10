@@ -41,6 +41,15 @@ export function canSeeEnquiry(user: User, enquiry: { department: string; owner: 
   return isHodOf(user, enquiry.department) || enquiry.owner?.id === user.id
 }
 
+/**
+ * May this user change this enquiry (name travellers, tick documents…)? EDIT, and its owner, its HOD or the Head.
+ * Mirrors assertCanActOnEnquiry in Backend/src/modules/enquiries/visibility.ts.
+ */
+export function canActOnCase(user: User, enquiry: { department: string; owner: { id: string } | null }): boolean {
+  if (!can(user, enquiry.department, 'EDIT')) return false
+  return isHodOf(user, enquiry.department) || enquiry.owner?.id === user.id
+}
+
 /** HOD of any department, or the Head. Mirrors isHodOfAny in the backend. */
 export function isHodOfAny(user: User): boolean {
   if (!user.isActive) return false

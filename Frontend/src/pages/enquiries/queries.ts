@@ -3,10 +3,12 @@ import { api } from '../../lib/api'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
+  DocumentStatus,
   EnquiryListFilters,
   EnquiryListPage,
   EnquirySourceOption,
   IntakeCountry,
+  ReceivedAs,
   VisaCase,
 } from './types'
 
@@ -34,6 +36,43 @@ export function useVisaCase(caseNo: string) {
     queryKey: enquiryKeys.case(caseNo),
     queryFn: async () => (await api<{ case: VisaCase }>(`/visa/cases/${encodeURIComponent(caseNo)}`)).case,
   })
+}
+
+/**
+ * A case action returns the whole case: it replaces the page's copy. The list (its stage) and the client's open cases
+ * may have changed with it.
+ */
+function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>) {
+  const queryClient = useQueryClient()
+  const base = `/visa/cases/${encodeURIComponent(caseNo)}`
+  return useMutation({
+    mutationFn: async (vars: Vars) => (await request(base, vars)).case,
+    onSuccess: (updated) => {
+      queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+  })
+}
+
+/** "Start collecting documents": Enquiry → Documents. */
+export function useStartDocuments(caseNo: string) {
+  return useCaseAction<void>(caseNo, (base) => api(`${base}/start`, { method: 'POST' }))
+}
+
+/** Ticks one paper: Original/Xerox, Made, Not needed, or back to Pending. */
+export function useUpdateCaseDocument(caseNo: string) {
+  return useCaseAction<{ documentId: string; status: DocumentStatus; receivedAs?: ReceivedAs | null }>(
+    caseNo,
+    (base, { documentId, ...body }) => api(`${base}/documents/${documentId}`, { method: 'PATCH', body }),
+  )
+}
+
+/** Names a traveller: links the client's family member. */
+export function useLinkTraveller(caseNo: string) {
+  return useCaseAction<{ travellerId: string; memberId: string }>(caseNo, (base, { travellerId, memberId }) =>
+    api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body: { memberId } }),
+  )
 }
 
 /** All enquiries: late first, then by time due. Paged with the API's cursor ("Show more"). */
