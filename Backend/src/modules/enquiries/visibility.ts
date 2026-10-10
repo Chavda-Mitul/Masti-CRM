@@ -3,19 +3,22 @@ import { forbidden } from "../../lib/httpError";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 
-// Who sees an enquiry (docs/decisions/0006-visa-documents.md Decision 1):
-// - staff see only the enquiries they own
+// Who sees an enquiry (docs/decisions/0006-visa-documents.md Decision 1, amended 10 Oct 2026):
+// - staff with EDIT see only the enquiries they own
+// - view-only users see every enquiry of the department, read-only (e.g. Accounts handling fees and invoices)
 // - the HOD sees every enquiry of their department
 // - the Head sees everything
-// The list, the case page, the follow-up desk and the client profile all go through here, so they can't disagree.
-// The one exception is the New enquiry lookup, which shows colleagues' open cases so nobody opens a duplicate.
+// Changing an enquiry stays with its owner, its HOD or the Head (assertCanActOnEnquiry).
+// The list, the case page and the client profile all go through here, so they can't disagree. The one exception is the
+// New enquiry lookup, which shows colleagues' open cases so nobody opens a duplicate.
 
-/** Sees every enquiry of this department, not just their own: its HOD, or the Head. */
-export const seesWholeDepartment = (user: UserWithDepartments, code: string) => isHodOf(user, code as DepartmentCode);
+/** Sees every enquiry of this department, not just their own: its HOD or the Head, or a view-only user. */
+export const seesWholeDepartment = (user: UserWithDepartments, code: string) =>
+  isHodOf(user, code as DepartmentCode) || !can(user, code as DepartmentCode, "EDIT");
 
 /**
  * The enquiries this user may see, among `departments` (the ones they can VIEW). An unowned enquiry (e.g. matured,
- * waiting for a processor) is seen only by the HOD and the Head.
+ * waiting for a processor) is seen by the HOD, the Head and view-only users, not by other staff.
  */
 export function visibleEnquiryWhere(user: UserWithDepartments, departments: { id: number; code: string }[]): Prisma.EnquiryWhereInput {
   const whole = departments.filter((d) => seesWholeDepartment(user, d.code)).map((d) => d.id);
@@ -40,7 +43,7 @@ export function canSeeEnquiry(user: UserWithDepartments, enquiry: { department: 
 export function assertCanActOnEnquiry(user: UserWithDepartments, enquiry: { department: { code: string }; ownerId: string | null }) {
   const code = enquiry.department.code as DepartmentCode;
   const owns = enquiry.ownerId !== null && enquiry.ownerId === user.id;
-  if (!can(user, code, "EDIT") || !(seesWholeDepartment(user, code) || owns)) {
+  if (!can(user, code, "EDIT") || !(isHodOf(user, code) || owns)) {
     throw forbidden("Only the person this case is assigned to, the department's HOD and the Head can change it.");
   }
 }

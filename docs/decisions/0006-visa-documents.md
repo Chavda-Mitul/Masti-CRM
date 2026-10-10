@@ -17,6 +17,15 @@
   - Closes 0003's deferred items: naming travellers, ticking documents, linking family members, the consent flag, reassigning and postpone/cancel.
   - Supersedes 0003's open M4 on our side; it still needs Vimal's written confirmation.
 
+## Amendment (10 Oct 2026, project lead)
+
+Decided with the go for part 6. Where this differs from the decisions below, this wins.
+
+1. **View-only users see every case of the department, read-only** (e.g. Accounts handling fees and invoices). Staff with EDIT still see only their own; the HOD sees the department; the Head sees everything. Changing a case stays with its owner, the HOD or the Head. *Supersedes Decision 1's "staff see only their own" for view-only users, and review outcome 1.*
+2. **Booklet counts are optional.** A blank count shows as 0, and maturity doesn't require it, so e-visas (no passport handed over) aren't blocked. *Supersedes Decision 8's booklet condition and review outcome 2.*
+3. **M4 decided:** the person who takes the enquiry at intake owns it and does every follow-up and the document collection until maturity. *(Already how it works.)*
+4. **Document storage is S3-compatible** (AWS S3 or Cloudflare R2; MinIO locally, in `Backend/docker-compose.yml`). Files are private; they are shared through short-lived pre-signed URLs. Uploading scans is built after Step 2.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
@@ -146,7 +155,7 @@ Three admin-editable tables, shared by all departments, switched off rather than
 
 - every traveller is linked to a family member
 - every document is `RECEIVED`, `MADE` or `NOT_NEEDED`
-- the booklet counts are entered
+- ~~the booklet counts are entered~~ (dropped 10 Oct 2026: booklets are optional, see *Amendment*)
 
 The error lists what's missing.
 

@@ -33,12 +33,14 @@ export function isHodOf(user: User, departmentCode: string): boolean {
 }
 
 /**
- * May this user open this enquiry? Staff open their own, the HOD the department's, the Head all (0006 Decision 1).
+ * May this user open this enquiry? Staff with EDIT open their own, the HOD the department's, the Head all (0006 Decision 1).
+ * View-only users see the whole department, read-only (amended 10 Oct 2026).
  * Mirrors canSeeEnquiry in Backend/src/modules/enquiries/visibility.ts.
  */
 export function canSeeEnquiry(user: User, enquiry: { department: string; owner: { id: string } | null }): boolean {
   if (!can(user, enquiry.department, 'VIEW')) return false
-  return isHodOf(user, enquiry.department) || enquiry.owner?.id === user.id
+  if (isHodOf(user, enquiry.department) || !can(user, enquiry.department, 'EDIT')) return true
+  return enquiry.owner?.id === user.id
 }
 
 /**

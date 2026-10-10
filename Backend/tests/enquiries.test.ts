@@ -162,9 +162,12 @@ describe("GET /api/enquiries", () => {
     expect(await ids(neha)).toEqual([n1.id]);
     expect((await aarti.get("/api/enquiries")).body.departments).toEqual([expect.objectContaining({ code: "VISA", count: 1 })]);
 
-    // View-only staff own nothing, so they see nothing (0006 review outcome).
+    // View-only users (e.g. Accounts for fees) see every case of the department, read-only (0006, amended 10 Oct 2026).
     await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
-    expect(await ids(await loginAs("meena@masti.test"))).toEqual([]);
+    const meena = await loginAs("meena@masti.test");
+    expect(await ids(meena)).toEqual([a1.id, n1.id, unowned.id].sort());
+    expect((await meena.get(`/api/visa/cases/${n1.caseNo}`)).status).toBe(200);
+    expect((await meena.post(`/api/visa/cases/${n1.caseNo}/start`).set("Content-Type", "application/json")).status).toBe(403);
 
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     const hod = await loginAs("riya@masti.test");
