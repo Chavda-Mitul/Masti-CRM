@@ -1,16 +1,17 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
-import { definedOnly, onlyChanged, pick } from "../../lib/changes";
+import { assertFresh, definedOnly, onlyChanged, pick, staleError } from "../../lib/changes";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
-import type { LinkTravellerInput, UpdateCaseDocumentInput, UpdateVisaCaseInput } from "./visa.schemas";
+import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
+import { countTravellers, travellerLabel } from "./visaCase";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
-// documents, how they reach us and booklets (Decision 4), and moving the case from Enquiry to Documents.
+// documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
 
 /** The steps where the checklist can still change. After maturity it is the processor's to check (Step 3). */
 const COLLECTING = ["ENQUIRY", "DOCUMENTS"];
@@ -31,16 +32,20 @@ async function loadForStep2(caseNo: string, actor: Actor) {
 
 type Step2Case = Awaited<ReturnType<typeof loadForStep2>>;
 
+/** One step of the visa flow, by code. */
+async function visaStage(tx: Db, departmentId: number, code: string) {
+  const stage = await tx.departmentStage.findUnique({ where: { departmentId_flow_code: { departmentId, flow: VISA_FLOW, code } } });
+  if (!stage) throw new HttpError(500, "The visa steps are not set up. Run the database seed.");
+  return stage;
+}
+
 /**
  * Enquiry → Documents, once: the first name or tick does it, as does "Start collecting documents". The stage is matched
  * in the update, so two changes at the same moment move it only once. Returns whether it moved.
  */
 async function advanceToDocuments(tx: Db, enquiry: Step2Case, actor: Actor): Promise<boolean> {
   if (enquiry.stage.code !== "ENQUIRY") return false;
-  const documents = await tx.departmentStage.findUnique({
-    where: { departmentId_flow_code: { departmentId: enquiry.departmentId, flow: VISA_FLOW, code: "DOCUMENTS" } },
-  });
-  if (!documents) throw new HttpError(500, "The visa steps are not set up. Run the database seed.");
+  const documents = await visaStage(tx, enquiry.departmentId, "DOCUMENTS");
   const moved = await tx.enquiry.updateMany({ where: { id: enquiry.id, stageId: enquiry.stageId }, data: { stageId: documents.id } });
   if (moved.count === 0) return false;
   await audit(
@@ -175,5 +180,65 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
       await advanceToDocuments(tx, enquiry, actor);
     })
     .catch(rethrowSameMember);
+  return getVisaCaseById(enquiry.id);
+}
+
+/** What still stands between a case and maturity: unnamed travellers, and papers still pending, by traveller. */
+async function missingForMaturity(enquiryId: string) {
+  const travellers = await prisma.visaCaseTraveller.findMany({
+    where: { caseId: enquiryId },
+    orderBy: { position: "asc" },
+    include: { documents: { where: { status: "PENDING" }, orderBy: { sortOrder: "asc" }, select: { name: true } } },
+  });
+  const { adults } = countTravellers(travellers);
+  const label = (t: (typeof travellers)[number]) => (t.memberId ? t.name : null) ?? travellerLabel(t, adults);
+  return {
+    unnamed: travellers.filter((t) => !t.memberId).map((t) => travellerLabel(t, adults)),
+    pending: travellers.filter((t) => t.documents.length > 0).map((t) => ({ traveller: label(t), documents: t.documents.map((d) => d.name) })),
+  };
+}
+
+/**
+ * "Mark documents complete" (Decision 8): every traveller named and every paper in, made or not needed (booklets are
+ * optional, amended 10 Oct 2026). The case moves to File preparation with no owner, "Matured · to assign", for the HOD
+ * to give to a processor, who can't be the person who matured it. Returns the case by id: once its owner is cleared,
+ * the staff member who pressed it may no longer be able to open it.
+ */
+export async function mature(caseNo: string, input: MatureCaseInput, actor: Actor) {
+  const enquiry = await loadForStep2(caseNo, actor);
+  assertFresh(enquiry.updatedAt, input.updatedAt, "case");
+
+  const missing = await missingForMaturity(enquiry.id);
+  if (missing.unnamed.length > 0 || missing.pending.length > 0) {
+    const parts = [
+      ...(missing.unnamed.length > 0 ? [`name ${missing.unnamed.join(", ")}`] : []),
+      ...missing.pending.map((p) => `${p.traveller}: ${p.documents.join(", ")}`),
+    ];
+    throw new HttpError(409, `Not everything is in yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
+  }
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const filePrep = await visaStage(tx, enquiry.departmentId, "FILE_PREPARATION");
+    const written = await tx.enquiry.updateMany({
+      where: { id: enquiry.id, updatedAt: enquiry.updatedAt, stageId: enquiry.stageId },
+      data: { stageId: filePrep.id, ownerId: null, dueAt: now },
+    });
+    if (written.count === 0) throw staleError("case");
+    await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { maturedAt: now, maturedById: actor.user.id } });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.mature",
+        entityType: "Enquiry",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { stage: enquiry.stage.code, ownerId: enquiry.ownerId, dueAt: enquiry.dueAt },
+        after: { stage: "FILE_PREPARATION", ownerId: null, dueAt: now, maturedAt: now, maturedById: actor.user.id },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
   return getVisaCaseById(enquiry.id);
 }

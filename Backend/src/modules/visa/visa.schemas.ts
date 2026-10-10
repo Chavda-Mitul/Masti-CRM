@@ -73,3 +73,10 @@ export const updateVisaCaseSchema = z.object({
 });
 
 export type UpdateVisaCaseInput = z.infer<typeof updateVisaCaseSchema>;
+
+/** "Mark documents complete" (Decision 8). Sends the updatedAt the page loaded: a change by someone else is a 409 STALE. */
+export const matureCaseSchema = z.object({
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+export type MatureCaseInput = z.infer<typeof matureCaseSchema>;

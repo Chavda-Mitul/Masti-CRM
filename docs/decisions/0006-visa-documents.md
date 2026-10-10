@@ -245,7 +245,7 @@ All routes are under `requireAuth → requirePasswordChanged → requireUserType
 | `PATCH /api/visa/cases/:caseNo/documents/:documentId` | `{ status, receivedAs? }` (Decision 2) |
 | `PUT /api/visa/cases/:caseNo/travellers/:travellerId/member` | `{ memberId }` (Decision 3) |
 | `PATCH /api/visa/cases/:caseNo` | `{ arrival?, bookletsCurrent?, bookletsOld? }` |
-| `POST /api/visa/cases/:caseNo/mature` | `{ updatedAt }` (Decision 8) |
+| `POST /api/visa/cases/:caseNo/mature` | `{ updatedAt }` (Decision 8). Returns the case by id (its owner is now cleared). Not ready: `409 { message, details: { code: "NOT_READY", missing: { unnamed: ["Child 1"], pending: [{ traveller, documents: [names] }] } } }` |
 | `GET /api/visa/staff` | HOD or Head: who can own a visa case |
 | `POST /api/enquiries/:caseNo/follow-ups` | `{ outcomeId, nextStepId, nextAt, updatedAt }` |
 | `POST /api/enquiries/:caseNo/postpone` · `/cancel` · `/resume` | `{ reasonId?, resumeOn?, updatedAt }` |

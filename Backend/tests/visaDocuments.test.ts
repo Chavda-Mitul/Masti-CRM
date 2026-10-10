@@ -331,4 +331,182 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
     await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     expect((await patch(await loginAs("neha@masti.test"), { arrival: "CLIENT_BRINGS" })).status).toBe(403);
   });
+
+  describe("Mark documents complete", () => {
+    type FullCase = CaseDto & {
+      updatedAt: string;
+      owner: { name: string } | null;
+      dueAt: string | null;
+      maturedAt: string | null;
+      maturedBy: { name: string } | null;
+      booklets: { current: number | null; old: number | null };
+      travellers: (CaseDto["travellers"][number] & { documents: (CaseDoc & { requirement: string })[] })[];
+    };
+
+    const mature = (agent: Agent, c: { caseNo: string }, updatedAt: string) => agent.post(`/api/visa/cases/${c.caseNo}/mature`).send({ updatedAt });
+    const load = async (agent: Agent, caseNo: string): Promise<FullCase> => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case;
+    const link = async (agent: Agent, c: CaseDto, traveller: number, memberId: string) =>
+      expect((await agent.put(`/api/visa/cases/${c.caseNo}/travellers/${c.travellers[traveller]!.id}/member`).send({ memberId })).status).toBe(200);
+
+    /** Names both travellers and ticks every paper by what it needs (salary slips "Not needed"), except `skip`. */
+    async function completeCase(agent: Agent, c: CaseDto, skip?: string) {
+      await link(agent, c, 0, await addMember(agent, c.client.id, "Rakesh Mehta"));
+      await link(agent, c, 1, await addMember(agent, c.client.id, "Aarav Mehta", "SON"));
+      for (const t of (await load(agent, c.caseNo)).travellers) {
+        for (const d of t.documents) {
+          if (d.name === skip) continue;
+          const body =
+            d.requirement === "ARRANGED_BY_US"
+              ? { status: "MADE" }
+              : d.name.startsWith("Salary slips")
+                ? { status: "NOT_NEEDED" }
+                : { status: "RECEIVED", receivedAs: d.requirement === "ORIGINAL" ? "ORIGINAL" : "XEROX" };
+          expect((await tick(agent, c, d.id, body)).status).toBe(200);
+        }
+      }
+      return load(agent, c.caseNo);
+    }
+
+    it("refuses while a traveller is unnamed or a paper is pending, and says what is missing", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      await link(staff, c, 0, await addMember(staff, c.client.id, "Rakesh Mehta"));
+      await tick(staff, c, docOf(c, "Passport").id, { status: "RECEIVED", receivedAs: "ORIGINAL" });
+      const before = await load(staff, c.caseNo);
+
+      const refused = await mature(staff, c, before.updatedAt);
+      expect(refused.status).toBe(409);
+      expect(refused.body.details.code).toBe("NOT_READY");
+      expect(refused.body.message).toMatch(/name Child 1/);
+      expect(refused.body.details.missing.unnamed).toEqual(["Child 1"]);
+      const pending = refused.body.details.missing.pending as { traveller: string; documents: string[] }[];
+      expect(pending.map((p) => p.traveller)).toEqual(["Rakesh Mehta", "Child 1"]);
+      expect(pending[0]!.documents).not.toContain("Passport");
+      expect(pending[0]!.documents).toContain("Flight reservation");
+
+      // Nothing changed.
+      expect(await load(staff, c.caseNo)).toMatchObject({ stage: { code: "DOCUMENTS" }, owner: { name: "Aarti Patel" }, maturedAt: null });
+      expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
+
+      // One paper short is still refused.
+      const other = await freshCase(staff);
+      const almost = await completeCase(staff, other, "Passport");
+      const short = await mature(staff, other, almost.updatedAt);
+      expect(short.status).toBe(409);
+      expect(short.body.details.missing).toEqual({
+        unnamed: [],
+        pending: [
+          { traveller: "Rakesh Mehta", documents: ["Passport"] },
+          { traveller: "Aarav Mehta", documents: ["Passport"] },
+        ],
+      });
+    });
+
+    it("moves a complete case to File preparation with no owner, stamped and audited; booklets are optional", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const complete = await completeCase(staff, c);
+      expect(complete.booklets).toEqual({ current: null, old: null });
+
+      const res = await mature(staff, c, complete.updatedAt);
+      expect(res.status).toBe(200);
+      const after: FullCase = res.body.case;
+      expect(after).toMatchObject({ stage: { code: "FILE_PREPARATION", step: 3 }, status: "OPEN", owner: null, maturedBy: { name: "Aarti Patel" } });
+      expect(Math.abs(Date.parse(after.dueAt!) - Date.now())).toBeLessThan(60_000);
+      expect(after.maturedAt).toBe(after.dueAt);
+
+      const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+      const entries = await prisma.auditLog.findMany({ where: { action: "visa.mature" } });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        actorId: aarti.id,
+        entityId: c.id,
+        clientId: c.client.id,
+        before: { stage: "DOCUMENTS", ownerId: aarti.id },
+        after: { stage: "FILE_PREPARATION", ownerId: null, maturedById: aarti.id },
+      });
+
+      // The owner is cleared, so whoever matured it no longer opens it: it is the HOD's to assign.
+      expect((await staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+    });
+
+    it("lets only the owner, the Visa HOD and the Head mark it complete", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const { updatedAt } = await completeCase(staff, c);
+
+      await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+      expect((await mature(await loginAs("neha@masti.test"), c, updatedAt)).status).toBe(403);
+      await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+      expect((await mature(await loginAs("meena@masti.test"), c, updatedAt)).status).toBe(403);
+
+      await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+      const byHod = await mature(await loginAs("riya@masti.test"), c, updatedAt);
+      expect(byHod.status).toBe(200);
+      expect(byHod.body.case.maturedBy).toMatchObject({ name: "Riya" });
+
+      const second = await freshCase(staff);
+      const done = await completeCase(staff, second);
+      await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+      expect((await mature(await loginAs("vimal@masti.test"), second, done.updatedAt)).status).toBe(200);
+    });
+
+    it("refuses a stale page, a second press, and a postponed or cancelled case", async () => {
+      const staff = await visaStaff();
+      await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+      const hod = await loginAs("riya@masti.test");
+      const c = await freshCase(staff);
+      const { updatedAt } = await completeCase(staff, c);
+
+      const stale = await mature(staff, c, "2026-01-01T00:00:00.000Z");
+      expect(stale.status).toBe(409);
+      expect(stale.body.details.code).toBe("STALE");
+      expect((await mature(staff, c, "yesterday")).status).toBe(400);
+
+      expect((await mature(staff, c, updatedAt)).status).toBe(200);
+      const again = await mature(hod, c, updatedAt);
+      expect(again.status).toBe(409);
+      expect(again.body.message).toMatch(/moved past/);
+      expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(1);
+
+      const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
+      const held = await freshCase(staff);
+      const ready = await completeCase(staff, held);
+      const postponed = await staff
+        .post(`/api/enquiries/${held.caseNo}/postpone`)
+        .send({ reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: addMonths(istToday(), 1), updatedAt: ready.updatedAt });
+      expect(postponed.status).toBe(200);
+      expect((await mature(staff, held, postponed.body.enquiry.updatedAt)).body.message).toMatch(/postponed/);
+      const cancelled = await staff
+        .post(`/api/enquiries/${held.caseNo}/cancel`)
+        .send({ reasonId: await reason("TRIP_CANCELLED"), updatedAt: postponed.body.enquiry.updatedAt });
+      expect(cancelled.status).toBe(200);
+      expect((await mature(staff, held, cancelled.body.enquiry.updatedAt)).status).toBe(409);
+    });
+
+    it("locks the checklist, and the HOD gives the file to a processor other than whoever matured it", async () => {
+      const staff = await visaStaff();
+      await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+      await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+      const hod = await loginAs("riya@masti.test");
+      const c = await freshCase(staff);
+      const complete = await completeCase(staff, c);
+      const matured: FullCase = (await mature(staff, c, complete.updatedAt)).body.case;
+
+      const locked = await tick(hod, c, docOf(matured, "Passport").id, { status: "PENDING" });
+      expect(locked.status).toBe(409);
+      expect(locked.body.message).toMatch(/moved past/);
+      expect((await hod.patch(`/api/visa/cases/${c.caseNo}`).send({ bookletsCurrent: 1 })).status).toBe(409);
+
+      const assignees = (await hod.get(`/api/enquiries/${c.caseNo}/assignees`)).body.assignees as { name: string }[];
+      expect(assignees.map((a) => a.name)).not.toContain("Aarti Patel");
+      const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+      const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+      expect((await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: aarti.id, updatedAt: matured.updatedAt })).status).toBe(400);
+      expect((await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: neha.id, updatedAt: matured.updatedAt })).status).toBe(200);
+
+      const processor = await loginAs("neha@masti.test");
+      expect(await load(processor, c.caseNo)).toMatchObject({ stage: { code: "FILE_PREPARATION" }, owner: { name: "Neha" }, maturedBy: { name: "Aarti Patel" } });
+    });
+  });
 });

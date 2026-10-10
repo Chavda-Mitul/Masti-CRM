@@ -5,6 +5,7 @@ import {
   createVisaCaseSchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  matureCaseSchema,
   updateCaseDocumentSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
@@ -63,6 +64,12 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
   const body = linkTravellerSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/** "Mark documents complete": the case moves to File preparation, unowned, for the HOD to give to a processor. */
+router.post("/cases/:caseNo/mature", visaEdit, async (req, res) => {
+  const body = matureCaseSchema.parse(req.body);
+  res.json({ case: await stepsService.mature(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 router.get("/settings", visaView, async (_req, res) => {
