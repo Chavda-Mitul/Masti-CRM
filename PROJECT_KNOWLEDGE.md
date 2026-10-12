@@ -474,7 +474,7 @@ These are used by every module.
   - **Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings** (409, then save again with `confirmDuplicates: true`; audited). A second client with the same **main** number is refused.
   - **Accounting code, billing cycle and payment habit:** only Accounts (or the Head) can set them (Q34).
   - **Saves use optimistic locking** on `updatedAt`.
-- **Document vault (reusable passport/PAN scans per client): not built** (decided 8 Oct 2026). It isn't in the demo, and nobody at Masti asked for it, so it may be a change request (Q37). If it is built, it uses the S3-compatible storage (rule 4, changed 10 Oct 2026). **Aadhaar numbers are not stored** (Aadhaar rules, DPDP, S11).
+- **Document vault (reusable passport/PAN scans per client): not built** (decided 8 Oct 2026). It isn't in the demo, and nobody at Masti asked for it, so it may be a change request (Q37). If it is built, it uses the S3-compatible storage (rule 4, changed 10 Oct 2026). **Aadhaar numbers are not stored** (Aadhaar rules, DPDP, S11). If confirmed, the passport's photo page is kept per person and captured in Step 2, separate from the case's one saved PDF (12 Oct 2026, 0007 *Settled after slice 2*).
 
 ### 10.2 Enquiry: the unit of work across departments
 
@@ -1659,6 +1659,7 @@ Masti CRM/
 - **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
 - **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
 - **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.
+- **The saved file stays one scanned PDF per case; no per-paper uploads** (12 Oct 2026, after slice 2). One auto-feeder scan keeps the team fast, it is what the demo shows, and the per-paper structure already lives in the ticks and checks. The final PDF can't feed passport autofill anyway: it arrives after the application form is filled. **If passport reading (Q13) or the vault (Q37) is confirmed,** it gets one photo-page scan per person, captured in Step 2, kept on the member (reused while the passport is valid) and stored with the same S3 code. It needs Vimal's yes and a DPDP decision (how long it's kept, who opens it) first. The reasoning is in `docs/decisions/0007-visa-file-prep.md`, *Settled after slice 2*.
 
 **Decided 10 Oct 2026 (project lead), with Visa Step 2 part 6.** Details are in `docs/decisions/0006-visa-documents.md` *Amendment*; where they differ from the 9 Oct block below, these win.
 - **View-only users see every case of the department, read-only** (e.g. Accounts for fees and invoices). Staff with EDIT still see only their own; HOD the department; Head all. Changing a case stays owner / HOD / Head.
@@ -1704,7 +1705,7 @@ Masti CRM/
 | 10 | Covering-letter formats (which processes and family types); the "100 subscription" remark | C | 1 |
 | 11 | Decision per traveller or per case? | C | 1 |
 | 12 | Handover OTP/photo flow: confirm the steps shown in the field app | C | 1 |
-| 13 | Visa form autofill from a passport MRZ scan: in scope? | S | 1 |
+| 13 | Visa form autofill from a passport MRZ scan: in scope? **12 Oct:** if confirmed, it reads a separate photo-page scan per person captured in Step 2, never the final PDF (which arrives after the form is filled; 0007) | S | 1 |
 | 14 | "White-label / IP-based" CRM login: office IPs; everyone or only some roles? | C | 1 |
 | 15 | Google Workspace login through the CRM (one switch-off kills all access): feasible? in scope? | S/Y | 1 |
 | 16 | Holiday AI quote: what was built or discussed earlier, and what changes? | S | 2 |
@@ -1729,7 +1730,7 @@ Masti CRM/
 | 34 | **New:** Only Accounts (and the Head) may set the accounting code, billing cycle and payment habit. Is that right, or may each department set them when it creates a client? Built Accounts-only. | Y→C | 1 |
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
-| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). | S | 2 |
+| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007) | S | 2 |
 | 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits. | C | 1 |
 
 Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.

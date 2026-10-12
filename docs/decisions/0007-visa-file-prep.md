@@ -382,7 +382,8 @@ change is audited with `clientId`.
 - **Step 4** (docket, sticker, invoice before dispatch, vendor email). It also decides what an e-visa (no vendor, no
   passports sent) does after "File ready": for 0008.
 - **Hotel vendors,** which come with Hotels.
-- **Uploading other scans** (the client document vault, Q37: not built).
+- **Uploading other scans** (the client document vault, Q37: not built). Where passport scans would go, if
+  confirmed, is settled at the end of this record.
 
 ## Review outcome (12 Oct 2026, project lead)
 
@@ -396,3 +397,54 @@ The six points we proposed, and what was decided:
 | D | An appointment can't be in the past when entered | Catches typos; a past appointment means the date is wrong | Accepted |
 | E | The PDF goes through our API, not straight to the bucket | No CORS setup, the same on MinIO/S3/R2, and the server checks the file | Accepted |
 | F | The file can be replaced only during File preparation | After "File ready" it is what went to the vendor | Accepted |
+
+## Settled after slice 2: the saved file stays one PDF; passport scans come later, per person (12 Oct 2026, project lead)
+
+**The question.** With AI passport reading in mind (autofill, Q13), should the papers be uploaded one by one, one upload
+per checklist line, with the server merging them into one PDF for the vendor, instead of one scanned PDF?
+
+**Decided:**
+
+- **Keep Decision 8 as built:** one scanned PDF per case. Don't build per-paper uploads.
+- **If passport reading is confirmed,** add one separate, small upload: the passport's photo page, per person.
+
+**Why:**
+
+1. **Speed, and so adoption.** A processor drops the whole docket into the office scanner's auto-feeder and has one PDF
+   in about a minute. Scanning, saving and uploading about 15 papers one by one, for every traveller, would make this
+   the slowest step of the case. A strict system that is also slow gets worked around: the whole stack uploaded under
+   the first checklist line, for example. That leaves neither speed nor structure.
+2. **It is what was approved.** The meeting and demo screen 08 show one PDF, as Masti keeps today. Per-paper upload
+   would be a scope change Vimal has to agree to, and possibly a paid change request.
+3. **The structure already exists without images.** Every paper is ticked in Step 2, then checked or flagged with a
+   reason in Step 3 (Decision 3). Reports read those fields, not scans of bank statements.
+4. **Timing, the deciding point.** The final PDF is uploaded at the end of File preparation and already contains the
+   printed application form. Autofill is needed *before* the form is filled. So the final PDF arrives too late to be
+   the AI's input. They are two different jobs:
+
+   | | The saved file (built) | A passport scan (later, if confirmed) |
+   | --- | --- | --- |
+   | What it is for | Proof of what went to the vendor | Input for autofill |
+   | When | The end of File preparation | When the passport arrives (Step 2) |
+   | What | The whole docket | The photo page only |
+   | Belongs to | The case | The person: a passport lasts up to 10 years and is reused on the next trip |
+
+5. **Not "AI finds the passport inside the PDF".** Searching a 30–50-page scan for the passport pages works too late
+   (point 4), costs more per call, and is less reliable on scanner-quality pages.
+
+**If passport reading (Q13) or the document vault (Q37) is confirmed:**
+
+- **One extra scan per traveller:** the passport's photo page, captured when the passport arrives in Step 2. That is one
+  page on the scanner, or a phone photo, about 10 seconds.
+- **Kept on the person** (the client's family member), not the case, so the next trip reuses it while the passport is
+  valid.
+- **It reuses slice 2's storage:** `src/lib/storage.ts`, private short-lived links, the audit of every opening, and the
+  file checks. The saved file needs no rework. The exact table (a member-level file) is designed then.
+
+**Before anyone builds it:**
+
+- **Vimal's yes:** Q13 and Q37 are unconfirmed scope, and possibly a change request.
+- **A data-protection decision** (India's Digital Personal Data Protection Act, 2023): how long passport images are
+  kept, who may open them, and how they are removed on request. Aadhaar numbers stay unstored.
+
+**What changed now:** nothing in the code.
