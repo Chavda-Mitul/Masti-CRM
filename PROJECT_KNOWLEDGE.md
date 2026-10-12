@@ -2,7 +2,7 @@
 
 > **What this is:** the single context file for anyone, human or AI, working on this project. It distils everything in `Masti-CRM-Handover/` (handover pack, the Project Initiation Document, the client's written requirements, the meeting summary and the approved clickable demo) plus the current state of `Backend/` and `Frontend/`.
 >
-> **Last updated:** 9 Oct 2026: Visa Step 1 (intake) refreshed and built (`docs/decisions/0003-visa-intake.md`, *Refresh*); messaging deferred. **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
+> **Last updated:** 12 Oct 2026: Visa Step 2 (documents, maturity) built (`docs/decisions/0006-visa-documents.md`); Visa Step 3 (file preparation, vendor master) designed (`docs/decisions/0007-visa-file-prep.md`, proposed). **Keep it current:** when a decision is made or an open question is answered, update this file and `Masti-CRM-Handover/05_Open_Questions.md` (the decision log).
 
 ## Contents
 
@@ -592,6 +592,7 @@ These are used by every module.
 ### 10.8 Vendors
 
 - Only **registered, approved** vendors can be picked ✅. New vendors need **HOD approval** ⚠️ (demo: "Waiting HOD"). Vimal will explain the onboarding format ❓ (Q7).
+  - **Changed 12 Oct 2026 (project lead):** only the HOD or the Head adds a vendor, and adding approves it, so there is no "Waiting HOD" state. Basic fields until Vimal's format arrives (`docs/decisions/0007-visa-file-prep.md` Decision 7).
 - **Types:**
   - visa **submission agents**, by city and country coverage (e.g. Mumbai · Schengen, Ahmedabad · UK/USA, Delhi · China)
   - **hotel vendors** (create the vendor first if it's missing ✅)
@@ -1651,6 +1652,13 @@ Masti CRM/
 - **Q29:** old clients come as an Excel file; an import job is built later.
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
+
+**Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
+- **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.
+- **Pending (not built in Step 3):** the covering letter (formats to come from the project lead, M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
+- **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
+- **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
+- **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.
 
 **Decided 10 Oct 2026 (project lead), with Visa Step 2 part 6.** Details are in `docs/decisions/0006-visa-documents.md` *Amendment*; where they differ from the 9 Oct block below, these win.
 - **View-only users see every case of the department, read-only** (e.g. Accounts for fees and invoices). Staff with EDIT still see only their own; HOD the department; Head all. Changing a case stays owner / HOD / Head.
