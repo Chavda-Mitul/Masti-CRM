@@ -1,0 +1,118 @@
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { isHodOf } from '../../../auth/permissions'
+import { useMe } from '../../../auth/useAuth'
+import { errorBody, errorText } from '../../../lib/apiErrors'
+import { formatMobile, initials } from '../../../lib/format'
+import { useToast } from '../../../lib/toast'
+import { useAssignees, useReassignCase } from '../queries'
+import type { VisaCase } from '../types'
+import { isFollowUpStep } from './labels'
+
+/**
+ * The right rail (demo screen 07): who the case is for and whose job it is now. The HOD or the Head can give the case to
+ * someone else (0006 Decision 6). "Sent to the client" and "Money on this case" join it with WhatsApp and Accounts.
+ */
+export function CaseRail({ visaCase: c }: { visaCase: VisaCase }) {
+  const { data: me } = useMe()
+  const [reassigning, setReassigning] = useState(false)
+  const canReassign = !!me && isHodOf(me, c.department.code) && (c.status === 'OPEN' || c.status === 'POSTPONED')
+
+  return (
+    <aside className="card pad">
+      <div className="rail-section">
+        <div className="lbl">Who it is for</div>
+        <div className="rail-person">
+          <span className="avatar">{initials(c.client.name)}</span>
+          <div>
+            <Link to={`/clients/${c.client.id}`}>
+              <strong>{c.client.name}</strong>
+            </Link>
+            <span className="mono small">{formatMobile(c.client.mobile)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rail-section">
+        <div className="lbl">Whose job it is now</div>
+        {c.owner ? (
+          <div className="rail-person">
+            <span className="avatar" style={{ background: 'var(--ink)', color: 'var(--on-fill)' }}>
+              {initials(c.owner.name)}
+            </span>
+            <div>
+              <strong>{c.owner.name}</strong>
+              <span className="muted small">{isFollowUpStep(c) ? 'Follow-up' : 'Processing'}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="muted small" style={{ margin: '8px 0 0' }}>
+            Waiting for the HOD to pick a processor.
+          </p>
+        )}
+        {canReassign && (
+          <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => setReassigning(true)}>
+            {c.owner ? 'Reassign' : 'Assign processor'}
+          </button>
+        )}
+      </div>
+      {reassigning && <ReassignDialog visaCase={c} onClose={() => setReassigning(false)} />}
+    </aside>
+  )
+}
+
+function ReassignDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
+  const toast = useToast()
+  const assignees = useAssignees(c.caseNo, true)
+  const reassign = useReassignCase(c.caseNo)
+  const [ownerId, setOwnerId] = useState('')
+  const fieldError = errorBody(reassign.error)?.issues?.ownerId?.[0]
+  const message = fieldError ? null : errorText(reassign.error)
+  const choices = (assignees.data ?? []).filter((a) => !a.isOwner)
+
+  const save = () =>
+    reassign.mutate(
+      { ownerId, updatedAt: c.updatedAt },
+      {
+        onSuccess: () => {
+          toast({ tone: 'ok', message: `Case given to ${choices.find((a) => a.id === ownerId)?.name ?? 'them'}.` })
+          onClose()
+        },
+      },
+    )
+
+  return (
+    <div className="overlay overlay-center" onClick={onClose}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="reassign-title" onClick={(e) => e.stopPropagation()}>
+        <h2 className="h2" id="reassign-title">
+          {c.owner ? `Give ${c.caseNo} to someone else` : `Pick a processor for ${c.caseNo}`}
+        </h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          {c.owner ? `It is with ${c.owner.name} now. ` : ''}They will see it in their list and do its follow-ups.
+        </p>
+        <label className="field">
+          <span className="lbl">Give it to</span>
+          <select className="select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} disabled={assignees.isPending}>
+            <option value="">{assignees.isPending ? 'Loading…' : 'Pick a person…'}</option>
+            {choices.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          {fieldError && <span className="field-error">{fieldError}</span>}
+        </label>
+        {assignees.isError && <div className="alert alert-bad">{errorText(assignees.error)}</div>}
+        {message && <div className="alert alert-bad">{message}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
+          </button>
+          <button type="button" className="btn btn-primary" disabled={!ownerId || reassign.isPending} onClick={save}>
+            {reassign.isPending ? 'Saving…' : 'Give the case'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

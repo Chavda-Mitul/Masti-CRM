@@ -74,7 +74,7 @@ export function ClientDetailPage() {
           )}
           {canAddEnquiry && (
             <Link className="btn btn-primary" to={`/enquiries/new?mobile=${encodeURIComponent(c.mobile)}`}>
-              New enquiry for {c.name?.split(' ')[0] ?? 'this client'}
+              New enquiry
             </Link>
           )}
         </div>
@@ -134,12 +134,15 @@ function CasesCard({ client }: { client: ClientProfile }) {
                   {style.label}
                 </span>
                 <div className="case-list-main">
-                  <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} className="mono">
+                  <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} className="mono">
                     {e.caseNo}
                   </Link>
                   <div className="muted small">{e.summary}</div>
                 </div>
-                <span className="small">{e.stage}</span>
+                <div className="small" style={{ textAlign: 'right' }}>
+                  {e.stage}
+                  <div className="muted">{e.owner ? e.owner.name : 'Waiting for the HOD'}</div>
+                </div>
               </li>
             )
           })}

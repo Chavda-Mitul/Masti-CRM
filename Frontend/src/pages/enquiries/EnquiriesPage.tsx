@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { can } from '../../auth/permissions'
+import { can, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { errorText } from '../../lib/apiErrors'
 import { departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
@@ -9,15 +9,32 @@ import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/enquiries.css'
 import { dueOf } from './due'
 import { useEnquiryList } from './queries'
-import type { DepartmentChip, EnquiryListFilters, EnquiryRow } from './types'
+import { statusNote } from './status'
+import type { DepartmentChip, EnquiryListFilters, EnquiryRow, ListStatus } from './types'
 
 /** The selling departments get a chip; any other department (Accounts…) only when it has open enquiries. */
 const SELLING = new Set<string>(SELLING_DEPARTMENTS)
 
 /**
+ * Open cases by default; postponed and cancelled ones are found here too (?status=postponed). "To assign" (open, nobody's
+ * yet: matured and waiting for a processor) is for the HOD and the Head, who pick the processor (?status=to_assign).
+ */
+const STATUSES: { value: ListStatus; label: string; assignersOnly?: boolean }[] = [
+  { value: 'OPEN', label: 'Open' },
+  { value: 'POSTPONED', label: 'Postponed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'TO_ASSIGN', label: 'To assign', assignersOnly: true },
+]
+
+function statusOf(param: string | null, assigns: boolean): ListStatus {
+  return STATUSES.find((s) => s.value === param?.toUpperCase() && (assigns || !s.assignersOnly))?.value ?? 'OPEN'
+}
+
+/**
  * All enquiries (demo screens 02/03): every department in one list, late first, then by time due.
- * Department, "Only mine" and search live in the URL (?department=VISA&mine=true&q=), so the sidebar can link to a
- * department and Back returns to the same list. Clicking a row opens its steps on the right.
+ * Open / Postponed / Cancelled, department, "Only mine" and search live in the URL
+ * (?status=postponed&department=VISA&mine=true&q=), so the sidebar can link to a department and Back returns to the same
+ * list. Clicking a row opens its steps on the right.
  */
 export function EnquiriesPage() {
   const { data: me } = useMe()
@@ -36,9 +53,13 @@ export function EnquiriesPage() {
     if (urlQ !== q) setSearch(urlQ)
   }
 
+  const assigns = !!me && isHodOfAny(me)
+  const status = statusOf(params.get('status'), assigns)
   const filters: EnquiryListFilters = {
+    status,
     department: params.get('department')?.toUpperCase() ?? '',
-    mine: params.get('mine') === 'true',
+    // Cases to assign are nobody's, so "Only mine" doesn't apply there.
+    mine: status !== 'TO_ASSIGN' && params.get('mine') === 'true',
     q,
   }
   const list = useEnquiryList(filters)
@@ -55,7 +76,7 @@ export function EnquiriesPage() {
     )
   }, [q, setParams])
 
-  const setParam = (key: 'department' | 'mine', value: string) =>
+  const setParam = (key: 'status' | 'department' | 'mine', value: string) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
@@ -85,17 +106,15 @@ export function EnquiriesPage() {
             <span className="dot dot-lg" style={{ background: style?.solid ?? 'var(--primary)' }} />
             {current ? `${current.name} enquiries` : 'All enquiries'}
           </h1>
-          <p>
-            {firstPage
-              ? `${total} open · ${firstPage.lateCount} running late · late first, then by time due · click a row to see its steps`
-              : 'Every open enquiry, late first, then by time due.'}
-          </p>
+          <p>{summaryLine(filters.status, total, firstPage?.lateCount)}</p>
         </div>
         <div className="head-actions">
-          <label className="check">
-            <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
-            Only mine
-          </label>
+          {filters.status !== 'TO_ASSIGN' && (
+            <label className="check">
+              <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
+              Only mine
+            </label>
+          )}
           {canAdd && (
             <Link to="/enquiries/new" className="btn btn-primary">
               + New enquiry
@@ -141,6 +160,23 @@ export function EnquiriesPage() {
               placeholder="Search a case number, client name or mobile"
               aria-label="Search enquiries"
             />
+            <div className="kind-toggle" role="tablist" aria-label="Which enquiries">
+              {STATUSES.filter((s) => assigns || !s.assignersOnly).map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={filters.status === s.value}
+                  className={filters.status === s.value ? 'on' : ''}
+                  onClick={() => {
+                    setSelected(null)
+                    setParam('status', s.value === 'OPEN' ? '' : s.value.toLowerCase())
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {list.isPending ? (
@@ -151,8 +187,12 @@ export function EnquiriesPage() {
             </div>
           ) : rows.length === 0 ? (
             <div className="pad muted card-fill-empty">
-              {filters.q || filters.mine ? 'No enquiries match.' : 'No open enquiries.'}
-              {canAdd && !filters.q && !filters.mine && (
+              {filters.q || filters.mine
+                ? 'No enquiries match.'
+                : filters.status === 'TO_ASSIGN'
+                  ? 'No cases waiting for a processor.'
+                  : `No ${filters.status.toLowerCase()} enquiries.`}
+              {canAdd && filters.status === 'OPEN' && !filters.q && !filters.mine && (
                 <div style={{ marginTop: 12 }}>
                   <Link to="/enquiries/new" className="btn btn-primary">
                     + New enquiry
@@ -201,6 +241,15 @@ export function EnquiriesPage() {
   )
 }
 
+/** "4 open · 1 running late · …" under the title, for the picked status. */
+function summaryLine(status: ListStatus, total: number, late: number | undefined): string {
+  if (late === undefined) return 'Every open enquiry, late first, then by time due.'
+  if (status === 'POSTPONED') return `${total} postponed · ${late} past their date · soonest back first · click a row to see its steps`
+  if (status === 'CANCELLED') return `${total} cancelled · click a row to see its steps`
+  if (status === 'TO_ASSIGN') return `${total} waiting for a processor · click a row to see its steps`
+  return `${total} open · ${late} running late · late first, then by time due · click a row to see its steps`
+}
+
 function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; onClick: () => void }) {
   const style = departmentStyle(row.department.code)
   const due = dueOf(row.dueAt)
@@ -236,7 +285,7 @@ function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; o
         </div>
         <StageBar step={row.stage.step} of={row.stage.of} color={style.solid} />
       </td>
-      <td className="small col-next">{row.stage.nextStepLabel}</td>
+      <td className="small col-next">{statusNote(row) ?? row.stage.nextStepLabel}</td>
       <td className={`small due due-${due.tone}`}>{due.text}</td>
       <td>
         {row.owner ? (
@@ -305,17 +354,21 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
       </ol>
 
       <div className="lbl" style={{ marginTop: 18 }}>
-        Next step
+        {row.status === 'OPEN' ? 'Next step' : 'Status'}
       </div>
-      <div style={{ fontWeight: 700, marginTop: 4 }}>{row.stage.nextStepLabel}</div>
+      <div style={{ fontWeight: 700, marginTop: 4 }}>{statusNote(row) ?? row.stage.nextStepLabel}</div>
       <div className="small" style={{ marginTop: 2 }}>
-        Due <span className={`due due-${due.tone}`}>{due.text}</span>
-        {row.owner && ` · ${row.owner.name}`}
+        {row.dueAt && (
+          <>
+            {row.status === 'POSTPONED' ? 'Back on the desk' : 'Due'} <span className={`due due-${due.tone}`}>{due.text}</span>
+          </>
+        )}
+        {row.owner && `${row.dueAt ? ' · ' : ''}${row.owner.name}`}
       </div>
 
-      <button type="button" className="btn" style={{ marginTop: 18, width: '100%' }} disabled title="The case page comes with the next step">
-        Open full case › <span className="tag">Soon</span>
-      </button>
+      <Link to={`/enquiries/${encodeURIComponent(row.caseNo)}`} className="btn" style={{ marginTop: 18, width: '100%' }}>
+        Open full case ›
+      </Link>
     </aside>
   )
 }

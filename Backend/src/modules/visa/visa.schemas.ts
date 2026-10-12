@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { DocumentArrival, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
 
-// Only zod is imported here, so these schemas can later be shared with the frontend.
+// Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
 /** Sanity limits on the travellers per case, not business rules. */
 export const MAX_ADULTS = 30;
@@ -42,3 +43,40 @@ export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 2 (docs/decisions/0006-visa-documents.md)
+// ---------------------------------------------------------------------------
+
+/** Ticking one paper on a traveller's checklist (Decision 2). The service checks status against the requirement. */
+export const updateCaseDocumentSchema = z.object({
+  status: z.enum(DocumentStatus),
+  /** Needed for RECEIVED: what came in. */
+  receivedAs: z.enum(ReceivedAs).nullish(),
+});
+
+/** Naming a traveller: linking the client's family member (Decision 3). */
+export const linkTravellerSchema = z.object({
+  memberId: z.uuid("Pick the family member."),
+});
+
+export type UpdateCaseDocumentInput = z.infer<typeof updateCaseDocumentSchema>;
+export type LinkTravellerInput = z.infer<typeof linkTravellerSchema>;
+
+const booklets = z.number().int().min(0, "Can't be below 0.").max(50, "50 at most.").nullable().optional();
+
+/** How the documents reach us, and booklets received (Decision 4). Booklets are optional (amended 10 Oct 2026). */
+export const updateVisaCaseSchema = z.object({
+  arrival: z.enum(DocumentArrival).nullable().optional(),
+  bookletsCurrent: booklets,
+  bookletsOld: booklets,
+});
+
+export type UpdateVisaCaseInput = z.infer<typeof updateVisaCaseSchema>;
+
+/** "Mark documents complete" (Decision 8). Sends the updatedAt the page loaded: a change by someone else is a 409 STALE. */
+export const matureCaseSchema = z.object({
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+export type MatureCaseInput = z.infer<typeof matureCaseSchema>;

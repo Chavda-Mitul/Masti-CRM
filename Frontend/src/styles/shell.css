@@ -98,6 +98,25 @@
   padding: 2px 7px;
   border-radius: 6px;
 }
+/* The red count beside "Follow-ups": overdue cases. */
+.nav-badge {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: var(--bad);
+}
+.nav.active .nav-badge {
+  box-shadow: 0 0 0 2px #fff;
+}
 
 .sidebar-spacer {
   flex: 1;

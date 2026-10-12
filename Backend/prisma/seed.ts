@@ -67,7 +67,7 @@ async function main() {
     update: {},
     create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
   });
-  console.log("Enquiry sources, visa steps and visa follow-up timing ready.");
+  console.log("Enquiry sources, visa steps, follow-up and reason dropdowns, and visa follow-up timing ready.");
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
   if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {

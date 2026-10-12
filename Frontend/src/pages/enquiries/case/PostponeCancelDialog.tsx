@@ -1,0 +1,127 @@
+import { useState } from 'react'
+import { errorBody, errorText } from '../../../lib/apiErrors'
+import { istToday } from '../../../lib/format'
+import { useToast } from '../../../lib/toast'
+import { useMasterList } from '../../settings/masters/queries'
+import { useCancelCase, usePostponeCase } from '../queries'
+import type { VisaCase } from '../types'
+
+type Kind = 'POSTPONE' | 'CANCEL'
+
+/** "YYYY-MM-DD" one day after `date`. */
+function nextDay(date: string) {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Postpone (a reason and when it comes back) or cancel (a reason) a case (0006 Decision 6). Reasons are fixed lists
+ * from Settings → Masters: "Fixed reasons only — no free text anywhere."
+ */
+export function PostponeCancelDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
+  const toast = useToast()
+  const reasons = useMasterList('enquiry-reasons')
+  const postpone = usePostponeCase(c.caseNo)
+  const cancel = useCancelCase(c.caseNo)
+  const [kind, setKind] = useState<Kind>('POSTPONE')
+  const [reasonId, setReasonId] = useState('')
+  const [resumeOn, setResumeOn] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const options = (reasons.data ?? []).filter((r) => r.isActive && r.kind === kind)
+  const action = kind === 'POSTPONE' ? postpone : cancel
+  const minDate = nextDay(istToday())
+
+  /** The backend's per-field messages (400 issues), next to the matching inputs. */
+  const onError = (err: unknown) => {
+    const issues = errorBody(err)?.issues ?? {}
+    setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
+  }
+
+  const submit = () => {
+    const missing: Record<string, string> = {}
+    if (!reasonId) missing.reasonId = kind === 'POSTPONE' ? 'Pick a reason for postponing.' : 'Pick a reason for cancelling.'
+    if (kind === 'POSTPONE' && !resumeOn) missing.resumeOn = 'Pick the date it comes back.'
+    setErrors(missing)
+    if (Object.keys(missing).length) return
+
+    const done = (message: string) => () => {
+      toast({ tone: 'ok', message })
+      onClose()
+    }
+    if (kind === 'POSTPONE') {
+      postpone.mutate({ reasonId: Number(reasonId), resumeOn, updatedAt: c.updatedAt }, { onSuccess: done('Case postponed.'), onError })
+    } else {
+      cancel.mutate({ reasonId: Number(reasonId), updatedAt: c.updatedAt }, { onSuccess: done('Case cancelled.'), onError })
+    }
+  }
+
+  const message = errorText(action.error)
+
+  return (
+    <div className="overlay overlay-center" onClick={onClose}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="postpone-title" onClick={(e) => e.stopPropagation()}>
+        <h2 className="h2" id="postpone-title">
+          Postpone or cancel {c.caseNo}
+        </h2>
+
+        <div className="kind-toggle" role="radiogroup" aria-label="Postpone or cancel">
+          {(['POSTPONE', 'CANCEL'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={kind === k}
+              className={kind === k ? 'on' : ''}
+              onClick={() => {
+                setKind(k)
+                setReasonId('')
+                setErrors({})
+              }}
+            >
+              {k === 'POSTPONE' ? 'Postpone' : 'Cancel the case'}
+            </button>
+          ))}
+        </div>
+
+        <label className="field">
+          <span className="lbl">Reason</span>
+          <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} disabled={reasons.isPending}>
+            <option value="">{reasons.isPending ? 'Loading…' : 'Pick a reason…'}</option>
+            {options.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          {errors.reasonId && <span className="field-error">{errors.reasonId}</span>}
+          <span className="hint">Fixed reasons only — no free text anywhere.</span>
+        </label>
+
+        {kind === 'POSTPONE' ? (
+          <label className="field">
+            <span className="lbl">Comes back on</span>
+            <input className="input" type="date" min={minDate} value={resumeOn} onChange={(e) => setResumeOn(e.target.value)} />
+            {errors.resumeOn && <span className="field-error">{errors.resumeOn}</span>}
+            <span className="hint">It returns to the follow-up list that day (the next open day if the office is closed).</span>
+          </label>
+        ) : (
+          <p className="muted small" style={{ margin: 0 }}>
+            A cancelled case stays on file but can’t be reopened.
+          </p>
+        )}
+
+        {message && <div className="alert alert-bad">{message}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
+          </button>
+          <button type="button" className={kind === 'CANCEL' ? 'btn btn-dark' : 'btn btn-primary'} disabled={action.isPending} onClick={submit}>
+            {action.isPending ? 'Saving…' : kind === 'POSTPONE' ? 'Postpone' : 'Cancel the case'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -320,7 +320,7 @@ Read these before writing any code.
    - There is no update or delete path. Corrections go only through a **credit note** (e.g. on recall) or an **additional invoice** (visa: at most **one** per file).
    - Accounts must see the debit the moment the invoice is raised, even if payment comes later.
    - **This is not accounting software.** It stops at invoices, credit notes and payment follow-up.
-4. **Documents are links, not uploads.** Refusal letters, consents, the final submitted visa file (one PDF), boarding passes and so on live in Masti's Google Drive or OneDrive. The CRM stores the link "so it stays fast". **Clients never upload anything:** papers are scanned in the office.
+4. **Documents live in S3-compatible storage** (changed 10 Oct 2026, project lead; it was "links to Masti's Google Drive or OneDrive"). Refusal letters, consents, the final submitted visa file (one PDF), scans and so on are stored privately in AWS S3 or Cloudflare R2 (MinIO locally), and shared through **short-lived pre-signed URLs**. **Clients never upload anything:** papers are scanned in the office.
 5. **Audit everything.**
    - Each document tick, follow-up, stage change, handover, portal login and money event records **who** and **when** (date, hour, minute).
    - Field actions also record **where** (GPS), plus photo, selfie and OTP proof.
@@ -408,7 +408,7 @@ The database refuses department rows for anyone but `OFFICE`. Whether office sta
 - **Today**, which also hosts the **Notice board**.
 - **Enquiries** (total count), with **Visa · Holidays · Hotels · Insurance · Tickets** under it. Each has a coloured dot and a count, and filters the enquiry list.
 - *Transport · Cruise*, greyed out and tagged **PHASE 2**. Not in this project.
-- **Follow-ups** (badge = overdue + cross-sell leads to answer). Tabs: *Follow-ups* · *Cross-sell leads*.
+- **Follow-ups** (badge = overdue + cross-sell leads to answer). Tabs: *Follow-ups* · *Cross-sell leads*. The overdue part is built (10 Oct 2026): staff count their own overdue cases, an HOD the whole department, the Head everyone. It opens the Overdue tab in that scope and rechecks every minute. Cross-sell leads join the count when cross-sell is built.
 - **Clients**.
 - **Accounts**. Tabs: *Invoices & follow-up* · *Tasks & collections* · *Reports*. The field-staff app opens from Tasks & collections.
 - **Settings** (at the bottom). Tabs: *Portal logins* · *Masters & holiday calendar*.
@@ -474,7 +474,7 @@ These are used by every module.
   - **Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings** (409, then save again with `confirmDuplicates: true`; audited). A second client with the same **main** number is refused.
   - **Accounting code, billing cycle and payment habit:** only Accounts (or the Head) can set them (Q34).
   - **Saves use optimistic locking** on `updatedAt`.
-- **Document vault (reusable passport/PAN scans per client): not built** (decided 8 Oct 2026). It isn't in the demo, and nobody at Masti asked for it, so it may be a change request (Q37). If it is built, it stores Drive/OneDrive links, not S3 uploads (rule 4). **Aadhaar numbers are not stored** (Aadhaar rules, DPDP, S11).
+- **Document vault (reusable passport/PAN scans per client): not built** (decided 8 Oct 2026). It isn't in the demo, and nobody at Masti asked for it, so it may be a change request (Q37). If it is built, it uses the S3-compatible storage (rule 4, changed 10 Oct 2026). **Aadhaar numbers are not stored** (Aadhaar rules, DPDP, S11).
 
 ### 10.2 Enquiry: the unit of work across departments
 
@@ -1030,6 +1030,7 @@ This is part of Stage 1 ✅.
 - **Table:** Due · Client & case · Desk (department) · What for · Last contact ("WhatsApp reminder · 11:00", "Call · 28 Sep", "List sent · 3 Oct").
 - **Log call** opens inline: What happened / Next step / When → Save.
 - It holds the day's calls across departments. The team split is ❓ (Q2).
+- **Built (10 Oct 2026, project lead):** "When" starts empty. Logging a call on a postponed case resumes it. The Postponed tab lists every postponed case. Today and This week include late cases. A matured visa case leaves the desk. Details: `docs/decisions/0006-visa-documents.md`, *Amendment* items 5–9.
 
 ### 12.13 Cross-sell leads ✅
 
@@ -1368,7 +1369,7 @@ Source: `04_Engineering_Constraints.md`. Neither the contract-based nor the clie
 
 7. No free text.
 8. Immutable invoices from the quote breakup. At most one additional invoice per visa file. A recall produces a credit note (embassy fee only by default, HOD override). Not accounting software.
-9. Documents as Drive/OneDrive links. Each submitted visa file is saved as one PDF.
+9. Documents in S3-compatible storage, shared through pre-signed URLs (changed 10 Oct 2026; was Drive/OneDrive links). Each submitted visa file is saved as one PDF.
 10. In-office scanning only.
 11. Staff → HOD → Head roles. Disabling a user ends all access.
 12. Audit trail: who, when (to the minute), where.
@@ -1651,6 +1652,23 @@ Masti CRM/
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
+**Decided 10 Oct 2026 (project lead), with Visa Step 2 part 6.** Details are in `docs/decisions/0006-visa-documents.md` *Amendment*; where they differ from the 9 Oct block below, these win.
+- **View-only users see every case of the department, read-only** (e.g. Accounts for fees and invoices). Staff with EDIT still see only their own; HOD the department; Head all. Changing a case stays owner / HOD / Head.
+- **Booklet counts are optional** (blank shows 0); maturity doesn't require them, so e-visas aren't blocked.
+- **M4 decided:** the intake person owns the case and does all follow-ups and document collection until maturity.
+- **Document storage: S3-compatible** (AWS S3 or R2; MinIO locally in `Backend/docker-compose.yml`), private, shared through short-lived pre-signed URLs. Golden rule 4 updated. Uploading scans comes after Step 2. M16 answered.
+- **Part 8, maturity:** "Mark documents complete" lists what is missing first. Matured cases wait under a **To assign** sidebar item (with a count, HODs and the Head only) that opens the enquiries list on a To assign tab, so no case sits idle without a processor (0006 *Amendment* 10–11).
+
+**Decided 9 Oct 2026 (project lead), before Visa Step 2 (Documents).**
+- **Follow-ups belong to the person assigned to the case**, who sees only their own (as in other CRMs). The department's HOD sees all of the department's cases and follow-ups and can reassign them; the Head sees everything. This settles Q2/M4 for our side (still confirm with Vimal).
+- **At maturity ("Mark documents complete") the case is handed to a processor the HOD picks**, as in the demo. The follow-up person scans; the processor checks.
+- **Step 2 includes:** the per-traveller checklist (naming travellers), the follow-up log (three dropdowns) with "My follow-ups", postpone/cancel with fixed reasons, a consent flag per traveller (the "I agree" link waits for WhatsApp), and booklets received plus how documents arrive (the collection boy's job waits for the field app).
+- **Document storage is open again: an S3 bucket or Drive**, decided later (changes golden rule 4, which assumed Drive/OneDrive links only). Step 2 is built without storing files; don't build anything that assumes links only.
+- **WhatsApp templates:** we draft them in **English** and show the client; they go to Meta after the client approves. Replaces waiting for Vimal's wording (Q8/M1).
+- **Invoice number series:** our choice, kept as a setting (not hard-coded). M7's "continue the current series" is dropped.
+- **Docket and dispatch (Q1):** the project lead takes it to the client. Not built yet.
+- **Payment/advance (S1):** not a blocker.
+
 **Decided 8 Oct 2026 (project lead), for the client master.** Details are in §10.1; the design is `docs/decisions/0004-client-master.md`.
 - The client master is built **before** the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
 - Clients get extra mobile numbers, a GSTIN and a PAN (typed, not verified). "Complete before invoicing" is a setting, not code.
@@ -1703,7 +1721,7 @@ Masti CRM/
 | 34 | **New:** Only Accounts (and the Head) may set the accounting code, billing cycle and payment habit. Is that right, or may each department set them when it creates a client? Built Accounts-only. | Y→C | 1 |
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
-| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: Drive/OneDrive links, not uploads. | S | 2 |
+| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). | S | 2 |
 | 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits. | C | 1 |
 
 Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.

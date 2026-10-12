@@ -25,8 +25,10 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 | Where | Commands |
 |---|---|
-| `Backend/` | `npm run db:up` (local Postgres via docker compose), `npm run db:migrate`, `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test`, `npm run typecheck`, `npm run build` |
+| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test`, `npm run typecheck`, `npm run build` |
 | `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
+
+Make new migrations with `prisma migrate diff` and remove its proposed `DROP INDEX "HolidayTarget_unique"` (hand-written SQL that must stay). `npm run db:migrate` (`prisma migrate dev`) stops at a prompt over that index and holds the migration lock.
 
 `Backend/.env` (see `.env.example`) and `Backend/.env.test` are gitignored; never commit them or print their values. Tests wipe the database named in `.env.test`.
 
@@ -52,7 +54,7 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 1. **The demo is the scope, not the spec.** Values marked ⚠️ (intervals, %, windows, wording) become configurable master data seeded with the demo value. Never hard-code them.
 2. **No free text** for reasons, outcomes or statuses. Use dropdowns backed by admin-editable master tables. Reports read only structured fields.
 3. **Invoices** are generated from the quote breakup and **never edited**. Corrections go only through a credit note or the one additional invoice allowed per visa file. This is not accounting software.
-4. **Documents are Drive/OneDrive links**, not uploads. Clients never upload; scanning happens in the office.
+4. **Documents live in S3-compatible storage** (AWS S3 or R2; MinIO locally), private, shared through short-lived pre-signed URLs (decided 10 Oct 2026; it was Drive/OneDrive links). Clients never upload; scanning happens in the office.
 5. **Audit everything:** who and when (to the minute), plus GPS for field actions.
 6. **Roles are Staff → HOD → Head**, scoped by department. HOD-only: refund override, vendor approval, portal password reset. Disabling a user ends all of their access.
 7. **Client updates go out automatically on WhatsApp** (Business API with approved templates), triggered by state changes.

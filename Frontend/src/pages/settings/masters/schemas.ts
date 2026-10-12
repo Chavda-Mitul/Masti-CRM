@@ -100,6 +100,26 @@ export const enquirySourceFormSchema = z.object({
 })
 export type EnquirySourceFormValues = z.infer<typeof enquirySourceFormSchema>
 
+const optionCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. NO_ANSWER.')
+
+/** A follow-up "What happened" or "Next step". Mirrors Backend/src/modules/enquiryMasters/enquiryMasters.schemas.ts. */
+export const followUpOptionFormSchema = z.object({
+  code: optionCode,
+  name: required(80, 'Enter the wording staff will pick.'),
+  sortOrder,
+})
+export type FollowUpOptionFormValues = z.infer<typeof followUpOptionFormSchema>
+
+/** A postpone or cancel reason. The kind is set once. */
+export const enquiryReasonFormSchema = followUpOptionFormSchema.extend({
+  kind: z.enum(['POSTPONE', 'CANCEL']),
+})
+export type EnquiryReasonFormValues = z.infer<typeof enquiryReasonFormSchema>
+
 export const embassyFormSchema = z.object({
   code: z
     .string()

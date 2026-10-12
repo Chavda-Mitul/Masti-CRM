@@ -1,30 +1,33 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { z } from "zod";
+import { fromDbDate } from "../../lib/dates";
 import { badRequest, forbidden } from "../../lib/httpError";
-import { can, type DepartmentCode } from "../auth/permissions";
+import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 import { countTravellers, travellersLabel } from "../visa/visaCase";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
+import { visibleEnquiryWhere } from "./visibility";
 
 // The All enquiries list (§12.2): every department in one list, late first, then by time due (§9).
 // Each department adds its own part (VisaCase now; holidays, hotels… in Stage 2) and its own one-line summary.
 
-const rowInclude = {
+export const rowInclude = {
   department: { select: { id: true, code: true, name: true } },
   client: { select: { id: true, name: true, mobile: true } },
   source: { select: { code: true, name: true } },
   stage: true,
   owner: { select: { id: true, name: true } },
+  reason: { select: { name: true } },
   visa: { include: { offering: { include: offeringInclude }, travellers: { select: { isChild: true } } } },
 } satisfies Prisma.EnquiryInclude;
 
 type EnquiryRow = Prisma.EnquiryGetPayload<{ include: typeof rowInclude }>;
 
 /** "France (Schengen) · Tourist · 2 adults, 2 children". Stage 2 departments add their own line here. */
-function summaryOf(row: EnquiryRow): string {
+export function summaryOf(row: EnquiryRow): string {
   if (row.visa) {
     const { adults, children } = countTravellers(row.visa.travellers);
     return `${offeringLabel(row.visa.offering)} · ${travellersLabel(adults, children)}`;
@@ -33,7 +36,7 @@ function summaryOf(row: EnquiryRow): string {
 }
 
 /** Active departments the user may see, in menu order. */
-async function viewableDepartments(user: UserWithDepartments) {
+export async function viewableDepartments(user: UserWithDepartments) {
   const departments = await prisma.department.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
   return departments.filter((d) => can(user, d.code as DepartmentCode, "VIEW"));
 }
@@ -81,19 +84,33 @@ function afterCursor(cursor: ListCursor): Prisma.EnquiryWhereInput {
   return { OR: [{ dueAt: { gt: dueAt } }, { dueAt: null }, { AND: [{ dueAt }, sameDueAtAfter] }] };
 }
 
+/**
+ * The departments whose cases this user gives out: those they are HOD of (the Head: every one). "To assign" lists and
+ * counts only these. A view-only user sees the whole department but doesn't assign, so they are refused like staff.
+ */
+async function assigningDepartments(user: UserWithDepartments) {
+  const departments = (await viewableDepartments(user)).filter((d) => isHodOf(user, d.code as DepartmentCode));
+  if (departments.length === 0) throw forbidden("Only an HOD or the Head assigns cases.");
+  return departments;
+}
+
 export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDepartments) {
-  const departments = await viewableDepartments(user);
+  const departments = query.unassigned ? await assigningDepartments(user) : await viewableDepartments(user);
   let shown = departments;
   if (query.department) {
     shown = departments.filter((d) => d.code === query.department);
-    if (shown.length === 0) throw forbidden("You don't have access to this department's enquiries.");
+    if (shown.length === 0) {
+      throw forbidden(query.unassigned ? "Only the department's HOD or the Head assigns its cases." : "You don't have access to this department's enquiries.");
+    }
   }
 
-  // Everything but the department, so the department chips can show their counts.
+  // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
+  // HODs their department's, the Head everything (visibility.ts).
   const base: Prisma.EnquiryWhereInput[] = [
-    { departmentId: { in: departments.map((d) => d.id) } },
+    visibleEnquiryWhere(user, departments),
     { status: query.status },
     ...(query.mine ? [{ ownerId: user.id }] : []),
+    ...(query.unassigned ? [{ ownerId: null }] : []),
     ...(query.q ? [searchWhere(query.q)] : []),
   ];
   const where: Prisma.EnquiryWhereInput = { AND: [...base, { departmentId: { in: shown.map((d) => d.id) } }] };
@@ -133,6 +150,9 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       client: row.client,
       summary: summaryOf(row),
       status: row.status,
+      /** Why it was postponed or cancelled, and when a postponed one comes back (the Postponed / Cancelled filters). */
+      reason: row.reason,
+      resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       source: row.source,
       origin: row.origin,
@@ -151,22 +171,46 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
   };
 }
 
+/**
+ * The sidebar's "To assign" count: open cases with no owner (matured, waiting for a processor) in the departments this
+ * user is HOD of; the Head counts every department. Cases should never sit idle without a processor (10 Oct 2026).
+ */
+export async function toAssignCount(user: UserWithDepartments) {
+  const departments = await assigningDepartments(user);
+  const count = await prisma.enquiry.count({
+    where: { status: "OPEN", ownerId: null, departmentId: { in: departments.map((d) => d.id) } },
+  });
+  return { count };
+}
+
 /** Not finished yet: a postponed case is still the client's case if they come back. */
 const OPEN_STATUSES = ["OPEN", "POSTPONED"] as const;
 
 /**
- * The client's unfinished cases in the departments the user can view, newest first. The New enquiry form shows them so
- * staff can spot an existing case before making a duplicate; it warns but doesn't block, since a family can plan two
- * trips (0003, GET /api/clients/lookup).
+ * The client's unfinished cases, newest first, with whose they are.
+ * - `visible` (the client profile): only the cases this user may open (visibility.ts).
+ * - `department` (the New enquiry lookup): every case in the departments the user can view, colleagues' too, so staff spot
+ *   an existing case before making a duplicate. It warns but doesn't block, since a family can plan two trips (0003).
  */
-export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments) {
+export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments, scope: "visible" | "department") {
   const departments = await viewableDepartments(user);
   const rows = await prisma.enquiry.findMany({
-    where: { clientId, status: { in: [...OPEN_STATUSES] }, departmentId: { in: departments.map((d) => d.id) } },
+    where: {
+      AND: [
+        { clientId, status: { in: [...OPEN_STATUSES] } },
+        scope === "visible" ? visibleEnquiryWhere(user, departments) : { departmentId: { in: departments.map((d) => d.id) } },
+      ],
+    },
     include: rowInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
-  return rows.map((row) => ({ caseNo: row.caseNo, department: row.department.code, summary: summaryOf(row), stage: row.stage.name }));
+  return rows.map((row) => ({
+    caseNo: row.caseNo,
+    department: row.department.code,
+    summary: summaryOf(row),
+    stage: row.stage.name,
+    owner: row.owner,
+  }));
 }
 
 /** "Came in through" on the New enquiry form: active sources staff may pick. */

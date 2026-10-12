@@ -8,14 +8,16 @@ import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
+import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
+import { getClientSettings } from "../clients/clients.settings";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
-import type { Actor } from "../users/user";
+import type { Actor, UserWithDepartments } from "../users/user";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
 import { FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
-import { toVisaCaseDto, travellersLabel, visaCaseInclude } from "./visaCase";
+import { toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
 // Nothing is sent to the client yet: the WhatsApp outbox comes with the provider integration.
@@ -229,20 +231,29 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 // Reading a case
 // ---------------------------------------------------------------------------
 
-/** Steps in the case's flow: "step 2 of 8". */
-async function stageCount(stage: { departmentId: number; flow: string }) {
-  return prisma.departmentStage.count({ where: { departmentId: stage.departmentId, flow: stage.flow } });
+/** The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), and the passport-warning setting. */
+async function toDto(row: VisaCaseRow) {
+  const [steps, clientSettings] = await Promise.all([
+    prisma.departmentStage.findMany({
+      where: { departmentId: row.stage.departmentId, flow: row.stage.flow },
+      orderBy: { sortOrder: "asc" },
+      select: { code: true, name: true },
+    }),
+    getClientSettings(),
+  ]);
+  return toVisaCaseDto(row, steps, istToday(), clientSettings);
 }
 
-async function getVisaCaseById(id: string) {
-  const row = await prisma.enquiry.findUniqueOrThrow({ where: { id }, include: visaCaseInclude });
-  return toVisaCaseDto(row, await stageCount(row.stage));
+export async function getVisaCaseById(id: string) {
+  return toDto(await prisma.enquiry.findUniqueOrThrow({ where: { id }, include: visaCaseInclude }));
 }
 
-export async function getVisaCase(caseNo: string) {
+/** The case page. Staff open only their own cases, the HOD the department's, the Head all (0006 Decision 1). */
+export async function getVisaCase(caseNo: string, user: UserWithDepartments) {
   const row = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: visaCaseInclude });
   if (!row?.visa) throw notFound("Case not found.");
-  return toVisaCaseDto(row, await stageCount(row.stage));
+  assertCanSeeEnquiry(user, row);
+  return toDto(row);
 }
 
 // ---------------------------------------------------------------------------

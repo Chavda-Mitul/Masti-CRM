@@ -2,13 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { Link, useBlocker, useNavigate, useSearchParams } from 'react-router'
-import { can } from '../../auth/permissions'
+import { can, canSeeEnquiry } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FormField, RequiredMark } from '../../components/FormField'
 import { applyServerIssues, errorText } from '../../lib/apiErrors'
 import { DEPARTMENT_STYLE, departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
-import { istToday } from '../../lib/format'
+import { formatMobile, istToday } from '../../lib/format'
 import { filtered, mobileChars } from '../../lib/inputFilters'
 import { useToast } from '../../lib/toast'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
@@ -49,17 +49,13 @@ export function NewEnquiryPage() {
 
   const form = useForm<VisaEnquiryFormValues>({
     resolver: zodResolver(visaEnquiryFormSchema),
-    defaultValues: emptyVisaEnquiry(params.get('mobile') ?? ''),
+    // No source is picked for the user: a default would quietly count every forgotten pick as WhatsApp in reports.
+    defaultValues: emptyVisaEnquiry(formatMobile(params.get('mobile'))),
   })
-  const { control, register, handleSubmit, setError, setValue, resetField, formState } = form
+  const { control, register, handleSubmit, setError, setValue, formState } = form
   const { errors } = formState
   const [mobile, countryId, travelMonth] = useWatch({ control, name: ['mobile', 'countryId', 'travelMonth'] })
 
-  // "WhatsApp" first ⚠️ (the demo's default): the first source by the master's order. Not a change by the user.
-  const firstSource = sources.data?.[0]?.code
-  useEffect(() => {
-    if (firstSource && !form.getValues('sourceCode')) resetField('sourceCode', { defaultValue: firstSource })
-  }, [firstSource, form, resetField])
 
   const lookupMobile = useDebouncedValue(normaliseMobile(mobile), 300)
   const lookup = useClientLookup(lookupMobile)
@@ -192,10 +188,15 @@ export function NewEnquiryPage() {
             <ul>
               {openEnquiries.map((e) => (
                 <li key={e.caseNo}>
-                  <Link to={`/enquiries?q=${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
-                    {e.caseNo}
-                  </Link>{' '}
-                  · {departmentStyle(e.department).label} · {e.summary} · {e.stage}
+                  {/* A colleague's case is listed so nobody opens a duplicate, but only its owner, the HOD and the Head open it. */}
+                  {canSeeEnquiry(me, e) ? (
+                    <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} target="_blank" rel="noreferrer">
+                      {e.caseNo}
+                    </Link>
+                  ) : (
+                    <span className="mono">{e.caseNo}</span>
+                  )}{' '}
+                  · {departmentStyle(e.department).label} · {e.summary} · {e.stage} · {e.owner ? `with ${e.owner.name}` : 'waiting for the HOD'}
                 </li>
               ))}
             </ul>

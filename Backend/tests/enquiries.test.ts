@@ -82,7 +82,8 @@ describe("GET /api/enquiries", () => {
     await saveVisa(aarti, "9825000001");
     await hotelsEnquiry("+919825000099");
 
-    await createUser({ name: "Harsh", email: "hotels@masti.test", departments: [{ code: "HOTELS", access: "VIEW" }] });
+    // The Hotels HOD: sees every Hotels enquiry, and nothing of Visa.
+    await createUser({ name: "Harsh", email: "hotels@masti.test", departments: [{ code: "HOTELS", role: "HOD" }] });
     const hotels = await loginAs("hotels@masti.test");
     const mine = await hotels.get("/api/enquiries");
     expect(mine.body.enquiries.map((e: { caseNo: string }) => e.caseNo)).toEqual(["HOT-2026-0001"]);
@@ -126,13 +127,11 @@ describe("GET /api/enquiries", () => {
     expect(mine.body.enquiries.map((e: { id: string }) => e.id).sort()).toEqual([a1.id, a2.id].sort());
 
     const codes = async (q: string) => (await aarti.get(`/api/enquiries?q=${encodeURIComponent(q)}`)).body.enquiries.map((e: { caseNo: string }) => e.caseNo);
-    expect(await codes(n1.caseNo.toLowerCase())).toEqual([n1.caseNo]);
+    expect(await codes(a1.caseNo.toLowerCase())).toEqual([a1.caseNo]);
+    // Neha's case doesn't turn up in Aarti's search: staff see only their own (0006 Decision 1).
+    expect(await codes(n1.caseNo)).toEqual([]);
     expect(await codes("rakesh")).toEqual([a2.caseNo]);
     expect(await codes("98250 41")).toEqual([a1.caseNo]);
-
-    await prisma.enquiry.update({ where: { id: n1.id }, data: { status: "CANCELLED" } });
-    expect((await aarti.get("/api/enquiries")).body.enquiries).toHaveLength(2);
-    expect((await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([n1.id]);
 
     const page1 = await aarti.get("/api/enquiries?limit=1");
     expect(page1.body.enquiries).toHaveLength(1);
@@ -140,6 +139,61 @@ describe("GET /api/enquiries", () => {
     expect(page2.body.enquiries).toHaveLength(1);
     expect(page2.body.nextCursor).toBeNull();
     expect(page2.body.enquiries[0].id).not.toBe(page1.body.enquiries[0].id);
+
+    const tripCancelled = await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } });
+    await prisma.enquiry.update({ where: { id: a2.id }, data: { status: "CANCELLED", reasonId: tripCancelled.id } });
+    expect((await aarti.get("/api/enquiries")).body.enquiries.map((e: { id: string }) => e.id)).toEqual([a1.id]);
+    const cancelled = (await aarti.get("/api/enquiries?status=CANCELLED")).body.enquiries;
+    expect(cancelled.map((e: { id: string }) => e.id)).toEqual([a2.id]);
+    expect(cancelled[0]).toMatchObject({ status: "CANCELLED", reason: { name: tripCancelled.name }, resumeOn: null });
+    // Search works inside the picked status too: a cancelled case is found by its number.
+    expect((await aarti.get(`/api/enquiries?status=CANCELLED&q=${a2.caseNo}`)).body.enquiries).toHaveLength(1);
+    expect((await aarti.get(`/api/enquiries?q=${a2.caseNo}`)).body.enquiries).toHaveLength(0);
+  });
+
+  it("shows staff only their own enquiries, the HOD the whole department, and the Head everything", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const neha = await loginAs("neha@masti.test");
+    const a1 = await saveVisa(aarti, "9825000001");
+    const n1 = await saveVisa(neha, "9825000002");
+    // No owner: e.g. matured, waiting for the HOD to pick a processor.
+    const unowned = await saveVisa(aarti, "9825000003");
+    await prisma.enquiry.update({ where: { id: unowned.id }, data: { ownerId: null } });
+
+    const ids = async (agent: Agent) => (await agent.get("/api/enquiries")).body.enquiries.map((e: { id: string }) => e.id).sort();
+    expect(await ids(aarti)).toEqual([a1.id]);
+    expect(await ids(neha)).toEqual([n1.id]);
+    expect((await aarti.get("/api/enquiries")).body.departments).toEqual([expect.objectContaining({ code: "VISA", count: 1 })]);
+
+    // View-only users (e.g. Accounts for fees) see every case of the department, read-only (0006, amended 10 Oct 2026).
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    const meena = await loginAs("meena@masti.test");
+    expect(await ids(meena)).toEqual([a1.id, n1.id, unowned.id].sort());
+    expect((await meena.get(`/api/visa/cases/${n1.caseNo}`)).status).toBe(200);
+    expect((await meena.post(`/api/visa/cases/${n1.caseNo}/start`).set("Content-Type", "application/json")).status).toBe(403);
+
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    expect(await ids(hod)).toEqual([a1.id, n1.id, unowned.id].sort());
+    expect((await hod.get("/api/enquiries?mine=true")).body.enquiries).toEqual([]);
+
+    // An HOD of another department sees none of Visa.
+    await createUser({ name: "Harsh", email: "harsh@masti.test", departments: [{ code: "HOTELS", role: "HOD" }] });
+    expect(await ids(await loginAs("harsh@masti.test"))).toEqual([]);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    expect(await ids(await loginAs("vimal@masti.test"))).toEqual([a1.id, n1.id, unowned.id].sort());
+
+    // The case page follows the same rule.
+    expect((await aarti.get(`/api/visa/cases/${a1.caseNo}`)).status).toBe(200);
+    const other = await aarti.get(`/api/visa/cases/${n1.caseNo}`);
+    expect(other.status).toBe(403);
+    expect(other.body.message).toMatch(/someone else/);
+    expect((await aarti.get(`/api/visa/cases/${unowned.caseNo}`)).status).toBe(403);
+    expect((await hod.get(`/api/visa/cases/${n1.caseNo}`)).status).toBe(200);
+    expect((await hod.get(`/api/visa/cases/${unowned.caseNo}`)).status).toBe(200);
   });
 
   it("counts steps within each flow, so one department can run two (Insurance: policies and claims)", async () => {

@@ -72,6 +72,7 @@
 
 .enq-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding-bottom: 16px;
 }
@@ -358,4 +359,64 @@
 }
 .who-fields .mobile-input {
   max-width: none;
+}
+
+/* "Log call" (0006 Decision 6): three dropdown-style fields and Save on one line, wrapping in narrow cards. */
+.log-call {
+  padding: 14px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+}
+.log-call-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.log-call-grid .field {
+  margin: 0;
+}
+.log-call-when {
+  display: flex;
+  gap: 6px;
+}
+.log-call-when .input {
+  min-width: 0;
+}
+.log-call-actions {
+  display: flex;
+  gap: 8px;
+  align-self: end;
+  justify-content: flex-end;
+}
+.log-call-note {
+  margin: 10px 0 0;
+}
+.log-call .alert {
+  margin-top: 10px;
+}
+
+/* The follow-up desk (demo screen 21). */
+.desk-tabs {
+  margin-bottom: 16px;
+}
+.desk-tabs .tab-count {
+  font-weight: 600;
+  opacity: 0.7;
+}
+.desk-name {
+  font-weight: 800;
+  color: var(--primary);
+  text-decoration: none;
+}
+.desk-name:hover {
+  text-decoration: underline;
+}
+.desk-table td {
+  vertical-align: middle;
+}
+.desk-form-row td {
+  padding-top: 0;
 }
