@@ -126,6 +126,8 @@ export interface CreateVisaCaseBody {
 export type DocumentRequirement = 'ORIGINAL' | 'XEROX_OK' | 'ARRANGED_BY_US'
 export type DocumentStatus = 'PENDING' | 'RECEIVED' | 'MADE' | 'NOT_NEEDED'
 export type ReceivedAs = 'ORIGINAL' | 'XEROX'
+/** The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3). */
+export type DocumentCheck = 'CHECKED' | 'NEEDS_REPLACING'
 export type DocumentArrival = 'CLIENT_BRINGS' | 'COLLECTION_BOY'
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
 
@@ -142,6 +144,12 @@ export interface CaseDocument {
   receivedAs: ReceivedAs | null
   receivedAt: string | null
   receivedBy: PersonRef | null
+  /** Step 3: null until the processor checks it. */
+  check: DocumentCheck | null
+  /** Why it needs replacing, from Settings → Masters → Document problems. */
+  checkReason: { id: number; name: string } | null
+  checkedAt: string | null
+  checkedBy: PersonRef | null
 }
 
 /** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
@@ -171,6 +179,9 @@ export interface CaseTraveller {
   /** Everything not marked "Not needed" */
   need: number
   pendingCount: number
+  /** Step 3: papers the processor has checked, and papers flagged to be replaced. */
+  checked: number
+  needsReplacing: number
 }
 
 export interface CaseFollowUp {

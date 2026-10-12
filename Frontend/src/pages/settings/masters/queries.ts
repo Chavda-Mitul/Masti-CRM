@@ -8,6 +8,7 @@ import type {
   ChecklistLineBody,
   Country,
   DocumentMaster,
+  DocumentProblemReason,
   EnquiryReason,
   EnquirySource,
   FollowUpOption,
@@ -138,6 +139,7 @@ interface MasterRow {
   'follow-up-next-steps': FollowUpOption
   'enquiry-reasons': EnquiryReason
   vendors: Vendor
+  'document-problem-reasons': DocumentProblemReason
 }
 
 /** The JSON key each list and save comes back under. */
@@ -151,6 +153,7 @@ const LIST_KEY = {
   'follow-up-next-steps': 'nextSteps',
   'enquiry-reasons': 'reasons',
   vendors: 'vendors',
+  'document-problem-reasons': 'problemReasons',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -162,6 +165,7 @@ const ITEM_KEY = {
   'follow-up-next-steps': 'nextStep',
   'enquiry-reasons': 'reason',
   vendors: 'vendor',
+  'document-problem-reasons': 'problemReason',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -192,7 +196,8 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       // A vendor lists its countries by name.
       if (resource === 'countries') void queryClient.invalidateQueries({ queryKey: masterKeys.list('vendors') })
       // Vendors change nothing else (the case's vendor picker comes with Step 3).
-      if (resource === 'vendors') return
+      // Nor do the document problems: the case page reads this same list.
+      if (resource === 'vendors' || resource === 'document-problem-reasons') return
       if (resource === 'enquiry-sources') {
         // The New enquiry form's "Came in through" chips.
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })

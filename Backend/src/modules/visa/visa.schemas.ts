@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentArrival, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocumentArrival, DocumentCheck, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -80,3 +80,24 @@ export const matureCaseSchema = z.object({
 });
 
 export type MatureCaseInput = z.infer<typeof matureCaseSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 3 (docs/decisions/0007-visa-file-prep.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The processor's check of one paper (Decision 3): Checked, or Needs replacing with a reason from the master list;
+ * null sets it back to "to check". The reason is ignored unless the paper needs replacing.
+ */
+export const checkCaseDocumentSchema = z
+  .object({
+    check: z.enum(DocumentCheck).nullable(),
+    reasonId: z.number().int().positive().nullish(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.check === "NEEDS_REPLACING" && v.reasonId == null) {
+      ctx.addIssue({ code: "custom", path: ["reasonId"], message: "Pick what's wrong with it." });
+    }
+  });
+
+export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;

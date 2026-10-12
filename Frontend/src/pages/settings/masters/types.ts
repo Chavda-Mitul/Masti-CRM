@@ -208,6 +208,15 @@ export interface FollowUpOption {
   isActive: boolean
 }
 
+/** Why a paper needs replacing in Step 3: "Not signed", "Wrong photo size"… (0007 Decision 3). */
+export interface DocumentProblemReason {
+  id: number
+  code: string
+  name: string
+  sortOrder: number
+  isActive: boolean
+}
+
 export type EnquiryReasonKind = 'POSTPONE' | 'CANCEL'
 
 /** Why a case was postponed or cancelled. The kind never changes. */
@@ -226,3 +235,4 @@ export type MasterResource =
   | 'follow-up-next-steps'
   | 'enquiry-reasons'
   | 'vendors'
+  | 'document-problem-reasons'

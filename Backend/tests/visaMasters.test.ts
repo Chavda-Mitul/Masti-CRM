@@ -246,7 +246,62 @@ describe("checklists", () => {
   });
 });
 
+describe("document problems (why a paper needs replacing, 0007 Decision 3)", () => {
+  it("is seeded with the placeholder reasons, read by Visa staff and written only by the Visa HOD or the Head", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/document-problem-reasons");
+    expect(list.status).toBe(200);
+    expect(list.body.problemReasons.map((r: { name: string }) => r.name)).toEqual([
+      "Wrong photo size",
+      "Not signed",
+      "Expired",
+      "Copy not clear",
+      "Wrong dates",
+    ]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const editor = await loginAs("neha@masti.test");
+    const refused = await editor.post("/api/masters/document-problem-reasons").send({ code: "torn", name: "Torn" });
+    expect(refused.status).toBe(403);
+    expect(refused.body.message).toMatch(/Visa HOD/);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/document-problem-reasons").send({ code: " torn ", name: "Torn" });
+    expect(created.status).toBe(201);
+    expect(created.body.problemReason).toMatchObject({ code: "TORN", name: "Torn", isActive: true });
+    expect(await prisma.auditLog.count({ where: { action: "documentProblemReason.create" } })).toBe(1);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    expect((await head.post("/api/masters/document-problem-reasons").send({ code: "STAINED", name: "Stained" })).status).toBe(201);
+  });
+
+  it("refuses a used or badly formed code, never changes a code, and switches reasons off", async () => {
+    const hod = await visaHod();
+    expect((await hod.post("/api/masters/document-problem-reasons").send({ code: "NOT_SIGNED", name: "Unsigned" })).status).toBe(409);
+    expect((await hod.post("/api/masters/document-problem-reasons").send({ code: "not signed", name: "Unsigned" })).status).toBe(400);
+
+    const expired = await prisma.documentProblemReason.findUniqueOrThrow({ where: { code: "EXPIRED" } });
+    const patched = await hod.patch(`/api/masters/document-problem-reasons/${expired.id}`).send({ code: "OLD", name: "Out of date" });
+    expect(patched.status).toBe(200);
+    expect(patched.body.problemReason).toMatchObject({ code: "EXPIRED", name: "Out of date" });
+
+    const unchanged = await hod.patch(`/api/masters/document-problem-reasons/${expired.id}`).send({ name: "Out of date" });
+    expect(unchanged.status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { action: "documentProblemReason.update" } })).toBe(1);
+
+    await hod.patch(`/api/masters/document-problem-reasons/${expired.id}`).send({ isActive: false });
+    const active = await hod.get("/api/masters/document-problem-reasons?active=true");
+    expect(active.body.problemReasons.map((r: { code: string }) => r.code)).not.toContain("EXPIRED");
+    expect((await hod.get("/api/masters/document-problem-reasons")).body.problemReasons).toHaveLength(5);
+  });
+});
+
 describe("the database", () => {
+  it("refuses a lowercase document problem code", async () => {
+    await expect(prisma.documentProblemReason.create({ data: { code: "not signed", name: "x" } })).rejects.toThrow();
+  });
+
   it("refuses a checklist quantity outside 1–20 and a lowercase code", async () => {
     const offering = await franceTourist();
     await expect(

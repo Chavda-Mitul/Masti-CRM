@@ -1,12 +1,10 @@
-import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
-import { VISA_FLOW } from "../enquiries/enquiries.seed";
-import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
+import { COLLECTING, loadCase, lockCase, visaStage, type LockedCase } from "./caseLock";
 import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { countTravellers, travellerLabel } from "./visaCase";
@@ -14,61 +12,11 @@ import { countTravellers, travellerLabel } from "./visaCase";
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
 // documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
 
-/** The steps where the checklist can still change. After maturity it is the processor's to check (Step 3). */
-const COLLECTING = ["ENQUIRY", "DOCUMENTS"];
-
-const caseInclude = {
-  department: { select: { code: true } },
-  stage: true,
-  visa: { select: { enquiryId: true } },
-} satisfies Prisma.EnquiryInclude;
-
-type Step2Case = Prisma.EnquiryGetPayload<{ include: typeof caseInclude }>;
-
-/** Refuses unless this user may change the case and it is still collecting documents. */
-function assertStep2(enquiry: Step2Case, actor: Actor) {
-  assertCanSeeEnquiry(actor.user, enquiry);
-  assertCanActOnEnquiry(actor.user, enquiry);
-  if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
-  if (enquiry.status !== "OPEN") throw conflict("This case is closed, so its documents can't change.");
-  if (!COLLECTING.includes(enquiry.stage.code)) throw conflict("This case has moved past collecting documents.");
-}
-
-/** The case, if this user may change it and it is still collecting documents: the quick check before any transaction. */
-async function loadForStep2(caseNo: string, actor: Actor) {
-  const enquiry = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: caseInclude });
-  if (!enquiry?.visa) throw notFound("Case not found.");
-  assertStep2(enquiry, actor);
-  return enquiry;
-}
-
-/**
- * The first thing every Step 2 write and maturity does in its transaction: lock the case's row, then read it again and
- * repeat the checks. They take the same lock, so they run one after another:
- * - a tick can't land between maturity's check that every paper is in and its move to File preparation
- * - a tick that waited behind maturity then sees the case has moved on, and is refused
- * Postpone, cancel and reassign update the same row, so a tick waits for them too and sees their result. Ticks don't
- * change the case's updatedAt, so they never make "Mark documents complete" on someone else's open page stale.
- */
-async function lockForStep2(tx: Db, enquiryId: string, actor: Actor) {
-  await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${enquiryId} FOR UPDATE`;
-  const enquiry = await tx.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, include: caseInclude });
-  assertStep2(enquiry, actor);
-  return enquiry;
-}
-
-/** One step of the visa flow, by code. */
-async function visaStage(tx: Db, departmentId: number, code: string) {
-  const stage = await tx.departmentStage.findUnique({ where: { departmentId_flow_code: { departmentId, flow: VISA_FLOW, code } } });
-  if (!stage) throw new HttpError(500, "The visa steps are not set up. Run the database seed.");
-  return stage;
-}
-
 /**
  * Enquiry → Documents, once: the first name or tick does it, as does "Start collecting documents". The stage is matched
  * in the update, so two changes at the same moment move it only once. Returns whether it moved.
  */
-async function advanceToDocuments(tx: Db, enquiry: Step2Case, actor: Actor): Promise<boolean> {
+async function advanceToDocuments(tx: Db, enquiry: LockedCase, actor: Actor): Promise<boolean> {
   if (enquiry.stage.code !== "ENQUIRY") return false;
   const documents = await visaStage(tx, enquiry.departmentId, "DOCUMENTS");
   const moved = await tx.enquiry.updateMany({ where: { id: enquiry.id, stageId: enquiry.stageId }, data: { stageId: documents.id } });
@@ -91,9 +39,9 @@ async function advanceToDocuments(tx: Db, enquiry: Step2Case, actor: Actor): Pro
 
 /** "Start collecting documents". */
 export async function startDocuments(caseNo: string, actor: Actor) {
-  const enquiry = await loadForStep2(caseNo, actor);
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
   if (enquiry.stage.code !== "ENQUIRY") throw conflict("Documents are already being collected for this case.");
-  const moved = await prisma.$transaction(async (tx) => advanceToDocuments(tx, await lockForStep2(tx, enquiry.id, actor), actor));
+  const moved = await prisma.$transaction(async (tx) => advanceToDocuments(tx, await lockCase(tx, enquiry.id, actor, COLLECTING), actor));
   if (!moved) throw conflict("Documents are already being collected for this case.");
   return getVisaCaseById(enquiry.id);
 }
@@ -103,7 +51,7 @@ export async function startDocuments(caseNo: string, actor: Actor) {
  * clears it. Each tick stamps who and when, to the minute; the audit log keeps the history.
  */
 export async function updateDocument(caseNo: string, documentId: string, input: UpdateCaseDocumentInput, actor: Actor) {
-  const enquiry = await loadForStep2(caseNo, actor);
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
   const doc = await prisma.visaCaseDocument.findFirst({ where: { id: documentId, traveller: { caseId: enquiry.id } } });
   if (!doc) throw notFound("Document not found on this case.");
 
@@ -118,7 +66,7 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
   const receivedAs = input.status === "RECEIVED" ? (input.receivedAs ?? null) : null;
 
   await prisma.$transaction(async (tx) => {
-    const locked = await lockForStep2(tx, enquiry.id, actor);
+    const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     // The paper as it is now, under the lock: someone may have ticked it while this request waited.
     const before = await tx.visaCaseDocument.findUniqueOrThrow({ where: { id: doc.id } });
     // Re-sending the same tick changes nothing (and doesn't move its time).
@@ -148,10 +96,10 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
  * Booklets are optional (amended 10 Oct 2026). Only what changed is written and audited.
  */
 export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, actor: Actor) {
-  const enquiry = await loadForStep2(caseNo, actor);
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
 
   await prisma.$transaction(async (tx) => {
-    const locked = await lockForStep2(tx, enquiry.id, actor);
+    const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
     const changes = onlyChanged(definedOnly(input), before);
     const keys = Object.keys(changes);
@@ -182,7 +130,7 @@ const rethrowSameMember = rethrowUnique("This person is already a traveller on t
  * another member corrects a mistake. New people are added to the family first (POST /api/clients/:id/members).
  */
 export async function linkTraveller(caseNo: string, travellerId: string, input: LinkTravellerInput, actor: Actor) {
-  const enquiry = await loadForStep2(caseNo, actor);
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
   const found = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
   if (!found) throw notFound("Traveller not found on this case.");
   const member = await prisma.clientMember.findUnique({ where: { id: input.memberId } });
@@ -191,7 +139,7 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
 
   await prisma
     .$transaction(async (tx) => {
-      const locked = await lockForStep2(tx, enquiry.id, actor);
+      const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
       const traveller = await tx.visaCaseTraveller.findUniqueOrThrow({ where: { id: found.id } });
       if (traveller.memberId === member.id) return;
       const after = await tx.visaCaseTraveller.update({ where: { id: traveller.id }, data: { memberId: member.id, name: member.name } });
@@ -235,16 +183,16 @@ async function missingForMaturity(db: Db, enquiryId: string) {
  * to give to a processor, who can't be the person who matured it. Returns the case by id: once its owner is cleared,
  * the staff member who pressed it may no longer be able to open it.
  *
- * The checklist is checked under the case's lock, in the same transaction as the move (lockForStep2), so a paper
+ * The checklist is checked under the case's lock, in the same transaction as the move (lockCase), so a paper
  * un-ticked at the same moment either lands first and stops it, or waits and is then refused.
  */
 export async function mature(caseNo: string, input: MatureCaseInput, actor: Actor) {
-  const enquiry = await loadForStep2(caseNo, actor);
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
 
   const now = new Date();
   await prisma.$transaction(async (tx) => {
-    const locked = await lockForStep2(tx, enquiry.id, actor);
+    const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     assertFresh(locked.updatedAt, input.updatedAt, "case");
     const missing = await missingForMaturity(tx, enquiry.id);
     if (missing.unnamed.length > 0 || missing.pending.length > 0) {

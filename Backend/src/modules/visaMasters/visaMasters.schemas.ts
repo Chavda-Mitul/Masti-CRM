@@ -81,6 +81,19 @@ export const updateDocumentSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** Why a paper needs replacing in Step 3 ("Not signed"), docs/decisions/0007-visa-file-prep.md Decision 3. */
+export const createDocumentProblemReasonSchema = z.object({
+  code: keyCode,
+  name: text(80),
+  sortOrder: sortOrder.default(0),
+  isActive: z.boolean().default(true),
+});
+export const updateDocumentProblemReasonSchema = z.object({
+  name: text(80).optional(),
+  sortOrder: sortOrder.optional(),
+  isActive: z.boolean().optional(),
+});
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -128,6 +141,8 @@ export type CreateEmbassyInput = z.infer<typeof createEmbassySchema>;
 export type UpdateEmbassyInput = z.infer<typeof updateEmbassySchema>;
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
+export type CreateDocumentProblemReasonInput = z.infer<typeof createDocumentProblemReasonSchema>;
+export type UpdateDocumentProblemReasonInput = z.infer<typeof updateDocumentProblemReasonSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

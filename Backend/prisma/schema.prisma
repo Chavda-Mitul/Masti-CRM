@@ -76,6 +76,7 @@ model User {
   enquiriesOwned     Enquiry[]          @relation("EnquiryOwner")
   enquiriesCreated   Enquiry[]          @relation("EnquiryCreatedBy")
   documentsReceived  VisaCaseDocument[] @relation("DocumentReceivedBy")
+  documentsChecked   VisaCaseDocument[] @relation("DocumentCheckedBy")
   followUpsLogged    FollowUp[]         @relation("FollowUpBy")
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
 
@@ -808,27 +809,51 @@ enum ReceivedAs {
   XEROX
 }
 
+/// The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3).
+enum DocumentCheck {
+  CHECKED
+  NEEDS_REPLACING
+}
+
+/// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
+model DocumentProblemReason {
+  id        Int                @id @default(autoincrement())
+  /// NOT_SIGNED, EXPIRED… Never changes.
+  code      String             @unique
+  name      String
+  sortOrder Int                @default(0)
+  isActive  Boolean            @default(true)
+  documents VisaCaseDocument[]
+}
+
 /// A traveller's copy of a checklist line. The name, detail, requirement, quantity and note are copied,
 /// so editing the master never changes an open case.
 model VisaCaseDocument {
-  id           String              @id @default(uuid())
-  travellerId  String
+  id            String                 @id @default(uuid())
+  travellerId   String
   /// Kept for reports ("which document is pending most often").
-  documentId   Int
-  name         String
-  detail       String?
-  requirement  DocumentRequirement
-  quantity     Int                 @default(1) @db.SmallInt
-  note         String?
-  sortOrder    Int
-  status       DocumentStatus      @default(PENDING)
+  documentId    Int
+  name          String
+  detail        String?
+  requirement   DocumentRequirement
+  quantity      Int                    @default(1) @db.SmallInt
+  note          String?
+  sortOrder     Int
+  status        DocumentStatus         @default(PENDING)
   // Filled in Step 2, when the paper is scanned in the office:
-  receivedAs   ReceivedAs?
-  receivedAt   DateTime?           @db.Timestamptz(3)
-  receivedById String?
-  traveller    VisaCaseTraveller   @relation(fields: [travellerId], references: [id], onDelete: Restrict)
-  document     DocumentMaster      @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  receivedBy   User?               @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAs    ReceivedAs?
+  receivedAt    DateTime?              @db.Timestamptz(3)
+  receivedById  String?
+  // Filled in Step 3, when the processor checks the paper. A reason exactly when it needs replacing (hand-written CHECKs).
+  check         DocumentCheck?
+  checkReasonId Int?
+  checkedAt     DateTime?              @db.Timestamptz(3)
+  checkedById   String?
+  traveller     VisaCaseTraveller      @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  document      DocumentMaster         @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  receivedBy    User?                  @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  checkReason   DocumentProblemReason? @relation(fields: [checkReasonId], references: [id], onDelete: Restrict)
+  checkedBy     User?                  @relation("DocumentCheckedBy", fields: [checkedById], references: [id], onDelete: Restrict)
 
   @@unique([travellerId, documentId])
   @@index([documentId, status])

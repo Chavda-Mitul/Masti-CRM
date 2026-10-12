@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
+  checkCaseDocumentSchema,
   createVisaCaseSchema,
   idempotencyKeySchema,
   linkTravellerSchema,
@@ -11,6 +12,7 @@ import {
   updateVisaSettingsSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as filePrepService from "./visaFilePrep.service";
 import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
@@ -70,6 +72,15 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
 router.post("/cases/:caseNo/mature", visaEdit, async (req, res) => {
   const body = matureCaseSchema.parse(req.body);
   res.json({ case: await stepsService.mature(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+// Step 3 (docs/decisions/0007-visa-file-prep.md). The service also requires the case's owner, its HOD or the Head.
+
+/** The processor's check of one paper: Checked, Needs replacing (with a reason), or back to "to check". */
+router.patch("/cases/:caseNo/documents/:documentId/check", visaEdit, async (req, res) => {
+  const body = checkCaseDocumentSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await filePrepService.checkDocument(caseNo, idParam.parse(req.params.documentId), body, actorOf(req)) });
 });
 
 router.get("/settings", visaView, async (_req, res) => {

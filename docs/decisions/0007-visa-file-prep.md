@@ -63,6 +63,10 @@ What the sources say (PROJECT_KNOWLEDGE.md §10.8, §12.4 Step 3, §12.20, §16.
 - **Every Step 3 change locks the case row first** and repeats its checks, as Step 2 does (0006 amendment 12).
   `lockForStep2` becomes one helper that takes the steps allowed, so Step 2 and Step 3 share it.
 
+**Built 12 Oct 2026:** `Backend/src/modules/visa/caseLock.ts`, with `loadCase` / `lockCase` and a `StepRule`:
+`COLLECTING` (Step 2, same messages as before) and `PREPARING` (Step 3: "This can only be changed during file
+preparation."). Step 3's writes live in `visaFilePrep.service.ts`.
+
 ### 2. The matured banner
 
 | Situation | What it says |
@@ -71,6 +75,9 @@ What the sources say (PROJECT_KNOWLEDGE.md §10.8, §12.4 Step 3, §12.20, §16.
 | No processor yet | "Matured 6 Oct — All documents are in. Waiting for the HOD to pick a processor." |
 
 It reads `maturedAt`, `maturedBy` and the owner, which the case already has. The wording is the demo's ⚠️.
+
+**Built 12 Oct 2026** (`Frontend/src/pages/enquiries/case/MaturedBanner.tsx`). It shows while the case is at File
+preparation only; later steps will have their own.
 
 ### 3. The processor checks every paper
 
@@ -93,6 +100,26 @@ The meeting's "the processor receives and checks the documents", built as a seco
   audited, so the history stays.
 - **Step 2's receipt is kept as it was:** Original/Xerox, and who received it and when. The check is its own record.
 - **A database check:** a reason is set exactly when the paper needs replacing.
+
+**Built 12 Oct 2026:**
+
+- **API:**
+  - `PATCH /api/visa/cases/:caseNo/documents/:documentId/check`, audited as `visa.document.check`
+  - the master at `GET/POST/PATCH /api/masters/document-problem-reasons`
+  - migration `20261012100000_document_checks`
+- **Screens:**
+  - Once a case has matured, the checklist's Status column becomes **Check**. The receipt's time moves to a hover.
+  - The processor gets two buttons on each paper: **✓ Checked** and **Needs replacing…**, which opens a reason picker.
+  - The count reads "8 / 10 checked", and a traveller's tab shows how many papers need replacing.
+  - The master is Settings → Masters → Lists → **Document problems**.
+- **Settled while building:**
+  - Pressing **Checked** again sets the paper back to "to check" (`check: null`), to undo a mis-click.
+  - Re-sending the same check changes nothing, and its first time stays.
+  - Checks don't change the case's `updatedAt`, as with ticks, so they never make someone else's page stale.
+  - Hand-written checks also require a check to carry who and when, and to be on a paper that came in or was made.
+  - **Clicking quickly down the list:** the answers to several changes in flight can come back out of order, and an
+    older one used to overwrite a newer one on screen. The server was always right. Now the last change to finish
+    reloads the case instead. This fixes Step 2's ticks too, since they share the code.
 
 ### 4. Trip details
 

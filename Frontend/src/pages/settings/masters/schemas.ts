@@ -137,6 +137,18 @@ export const embassyFormSchema = z.object({
 })
 export type EmbassyFormValues = z.infer<typeof embassyFormSchema>
 
+/** Why a paper needs replacing in Step 3 (Backend visaMasters.schemas.ts createDocumentProblemReasonSchema). */
+export const documentProblemFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. NOT_SIGNED.'),
+  name: required(80, 'Enter what is wrong, e.g. Not signed.'),
+  sortOrder,
+})
+export type DocumentProblemFormValues = z.infer<typeof documentProblemFormSchema>
+
 /** A visa submission agent (Backend/src/modules/vendors/vendors.schemas.ts). Contact details use the client forms' rules. */
 export const vendorFormSchema = z.object({
   name: required(120, 'Enter the vendor’s name.'),

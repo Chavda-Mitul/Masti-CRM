@@ -6,6 +6,7 @@ import type {
   ClientLookup,
   CreateVisaCaseBody,
   DocumentArrival,
+  DocumentCheck,
   DocumentStatus,
   EnquiryListFilters,
   EnquiryListPage,
@@ -52,6 +53,9 @@ export function useVisaCase(caseNo: string) {
   })
 }
 
+/** Cases that had several actions running at once: the last to finish reloads the case rather than trusting its answer. */
+const overlapping = new Set<string>()
+
 /**
  * A case action returns the whole case: it replaces the page's copy. The list (its stage), the follow-up desk (documents
  * pending) and the client's open cases may have changed with it. One that sends updatedAt ("Mark documents complete")
@@ -61,10 +65,22 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
   const queryClient = useQueryClient()
   const toast = useToast()
   const base = `/visa/cases/${encodeURIComponent(caseNo)}`
+  const mutationKey = ['case-action', caseNo.toUpperCase()]
   return useMutation({
+    mutationKey,
     mutationFn: async (vars: Vars) => (await request(base, vars)).case,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
+    onSettled: (updated) => {
+      // Ticking down a list sends several changes at once, and their answers can come back out of order: an older
+      // answer must not overwrite a newer one. While others are still running an answer is held back, and the last one
+      // to finish reloads the case instead.
+      if (queryClient.isMutating({ mutationKey }) > 1) {
+        overlapping.add(mutationKey[1]!)
+        return
+      }
+      if (overlapping.delete(mutationKey[1]!)) void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(caseNo) })
+      else if (updated) queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
+    },
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
@@ -162,6 +178,16 @@ export function useUpdateCaseDocument(caseNo: string) {
   return useCaseAction<{ documentId: string; status: DocumentStatus; receivedAs?: ReceivedAs | null }>(
     caseNo,
     (base, { documentId, ...body }) => api(`${base}/documents/${documentId}`, { method: 'PATCH', body }),
+  )
+}
+
+/**
+ * The processor's check of one paper in Step 3: Checked, Needs replacing (with a reason from the list), or null for
+ * "to check". Like ticks, it waits its turn on the case and doesn't make anyone's page stale.
+ */
+export function useCheckCaseDocument(caseNo: string) {
+  return useCaseAction<{ documentId: string; check: DocumentCheck | null; reasonId?: number }>(caseNo, (base, { documentId, ...body }) =>
+    api(`${base}/documents/${documentId}/check`, { method: 'PATCH', body }),
   )
 }
 

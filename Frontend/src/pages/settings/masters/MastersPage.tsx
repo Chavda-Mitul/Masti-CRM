@@ -20,6 +20,7 @@ export function MastersPage() {
   const countries = useMasterList('countries', visa)
   const visaTypes = useMasterList('visa-types', visa)
   const documents = useMasterList('documents', visa)
+  const problems = useMasterList('document-problem-reasons', visa)
   const sources = useMasterList('enquiry-sources', visa)
   const embassies = useMasterList('embassies')
   const outcomes = useMasterList('follow-up-outcomes')
@@ -71,6 +72,10 @@ export function MastersPage() {
               <Link className="kv-line" to="/settings/masters/lists?tab=documents">
                 <span>Documents</span>
                 <strong>{active(documents.data)}</strong>
+              </Link>
+              <Link className="kv-line" to="/settings/masters/lists?tab=document-problem-reasons">
+                <span>Document problems</span>
+                <strong>{active(problems.data)}</strong>
               </Link>
               <Link className="kv-line" to="/settings/masters/lists?tab=enquiry-sources">
                 <span>Enquiry sources</span>

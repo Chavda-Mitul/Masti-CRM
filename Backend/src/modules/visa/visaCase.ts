@@ -34,7 +34,10 @@ export const visaCaseInclude = {
         orderBy: { position: "asc" },
         include: {
           member: { include: { relation: true, consent: true } },
-          documents: { orderBy: { sortOrder: "asc" }, include: { receivedBy: personSelect } },
+          documents: {
+            orderBy: { sortOrder: "asc" },
+            include: { receivedBy: personSelect, checkedBy: personSelect, checkReason: { select: { id: true, name: true } } },
+          },
         },
       },
     },
@@ -134,12 +137,20 @@ export function toVisaCaseDto(row: VisaCaseRow, steps: { code: string; name: str
           receivedAs: d.receivedAs,
           receivedAt: d.receivedAt,
           receivedBy: d.receivedBy,
+          /** The processor's check in Step 3 (0007 Decision 3): null until checked. */
+          check: d.check,
+          checkReason: d.checkReason,
+          checkedAt: d.checkedAt,
+          checkedBy: d.checkedBy,
         })),
         /** In or made; "8 / 11 for Rakesh". */
         done: t.documents.filter((d) => d.status === "RECEIVED" || d.status === "MADE").length,
         /** Everything not marked "Not needed". */
         need: t.documents.filter((d) => d.status !== "NOT_NEEDED").length,
         pendingCount: t.documents.filter((d) => d.status === "PENDING").length,
+        /** Step 3: papers the processor has checked, and papers flagged to be replaced. */
+        checked: t.documents.filter((d) => d.check === "CHECKED").length,
+        needsReplacing: t.documents.filter((d) => d.check === "NEEDS_REPLACING").length,
       };
     }),
     followUps: row.followUps.map((f) => ({

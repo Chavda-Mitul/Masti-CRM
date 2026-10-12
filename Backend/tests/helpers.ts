@@ -24,7 +24,7 @@ export async function resetDb() {
       '"CaseCounter", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
-      '"DocumentMaster", "Embassy", "VisaType", "Country", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
+      '"DocumentProblemReason", "DocumentMaster", "Embassy", "VisaType", "Country", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
   );
   await prisma.department.createMany({
     data: DEPARTMENTS.map(({ code, casePrefix }, i) => ({ code, casePrefix, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
