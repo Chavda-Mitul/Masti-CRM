@@ -21,6 +21,9 @@ export const visaCaseInclude = {
   owner: personSelect,
   createdBy: personSelect,
   reason: { select: { id: true, code: true, name: true, kind: true } },
+  /** The current final file (0007 Decision 8): the newest upload. Older ones are counted, not loaded. */
+  files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
+  _count: { select: { files: { where: { kind: "FINAL_FILE" } } } },
   followUps: {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: CASE_FOLLOW_UPS,
@@ -75,8 +78,16 @@ function consentOf(t: TravellerRow) {
 /**
  * @param steps the case's flow, in order: the step chips ("Enquiry → Documents → …")
  * @param today IST date, for the travellers' age and passport status
+ * @param finalFileMaxMb the setting visa.finalFile.maxMb
  */
-export function toVisaCaseDto(row: VisaCaseRow, steps: { code: string; name: string }[], today: string, clientSettings: ClientSettings) {
+export function toVisaCaseDto(
+  row: VisaCaseRow,
+  steps: { code: string; name: string }[],
+  today: string,
+  clientSettings: ClientSettings,
+  finalFileMaxMb: number,
+) {
+  const finalFile = row.files[0];
   const visa = row.visa;
   if (!visa) throw new Error(`Enquiry ${row.caseNo} has no visa part.`);
   const { adults, children } = countTravellers(visa.travellers);
@@ -107,6 +118,19 @@ export function toVisaCaseDto(row: VisaCaseRow, steps: { code: string; name: str
     booklets: { current: visa.bookletsCurrent, old: visa.bookletsOld },
     maturedAt: visa.maturedAt,
     maturedBy: visa.maturedBy,
+    /** Step 3's saved file, kept as proof: the current one, how many were uploaded in all, and the size limit. */
+    finalFile: finalFile
+      ? {
+          id: finalFile.id,
+          fileName: finalFile.fileName,
+          sizeBytes: finalFile.sizeBytes,
+          pageCount: finalFile.pageCount,
+          uploadedAt: finalFile.uploadedAt,
+          uploadedBy: finalFile.uploadedBy,
+        }
+      : null,
+    finalFileCopies: row._count.files,
+    finalFileMaxMb,
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {

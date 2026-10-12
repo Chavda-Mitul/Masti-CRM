@@ -79,6 +79,7 @@ model User {
   documentsChecked   VisaCaseDocument[] @relation("DocumentCheckedBy")
   followUpsLogged    FollowUp[]         @relation("FollowUpBy")
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
+  caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
 
   @@index([type, isActive])
 }
@@ -704,11 +705,37 @@ model Enquiry {
   reason         EnquiryReason?  @relation(fields: [reasonId], references: [id], onDelete: Restrict)
   visa           VisaCase?
   followUps      FollowUp[]
+  files          CaseFile[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
   @@index([ownerId, status, dueAt])
   @@index([clientId])
+}
+
+enum CaseFileKind {
+  /// The visa file as it went to the vendor, one PDF (docs/decisions/0007-visa-file-prep.md Decision 8).
+  FINAL_FILE
+}
+
+/// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
+/// same kind becomes the current one, and the older ones stay as proof.
+model CaseFile {
+  id           String       @id @default(uuid())
+  enquiryId    String
+  kind         CaseFileKind
+  /// cases/<enquiryId>/final/<uuid>.pdf: no two uploads ever share a key.
+  storageKey   String       @unique
+  /// The name it opens and saves under: VISA-2026-0001_Mehta_file.pdf.
+  fileName     String
+  sizeBytes    Int
+  pageCount    Int
+  uploadedById String
+  uploadedAt   DateTime     @default(now()) @db.Timestamptz(3)
+  enquiry      Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  uploadedBy   User         @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([enquiryId, kind, uploadedAt])
 }
 
 /// A logged follow-up: What happened → Next step → When (0006 Decision 6). Append-only. Logging one sets the

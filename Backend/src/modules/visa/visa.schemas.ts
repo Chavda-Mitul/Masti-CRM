@@ -15,7 +15,12 @@ export const firstFollowUpSchema = z.object({
   at: hhmm,
 });
 
-export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema });
+/** The largest final file (one PDF) a case can keep (docs/decisions/0007-visa-file-prep.md Decision 8). */
+export const finalFileSchema = z.object({
+  maxMb: z.number().int().min(1).max(200),
+});
+
+export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
@@ -40,6 +45,7 @@ export const createVisaCaseSchema = z
 export const idempotencyKeySchema = z.string().trim().min(8).max(100).optional();
 
 export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
+export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;

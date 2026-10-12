@@ -1,11 +1,15 @@
+import { HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addMonths, istToday } from "../src/lib/dates";
+import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { holdCaseLock, saveCase, untilWaitingOnLock, visaStaff, type Agent } from "./visaHelpers";
 
-// Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper.
+// Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, and the
+// saved file in the test bucket (MinIO, emptied by globalSetup).
 
 beforeEach(async () => {
   await resetDb();
@@ -284,5 +288,179 @@ describe("the database", () => {
     await expect(
       prisma.visaCaseDocument.update({ where: { id: slips.id }, data: { check: "CHECKED", checkedAt: new Date(), checkedById: by } }),
     ).rejects.toThrow();
+  });
+});
+
+describe("the saved file (Decision 8)", () => {
+  /** A real PDF with `pages` blank pages. */
+  async function pdf(pages: number) {
+    const doc = await PDFDocument.create();
+    for (let i = 0; i < pages; i++) doc.addPage();
+    return Buffer.from(await doc.save());
+  }
+  const upload = (agent: Agent, caseNo: string, body: Buffer, type = "application/pdf") =>
+    agent.post(`/api/visa/cases/${caseNo}/files/final`).set("Content-Type", type).send(body);
+  const objectsOf = async (enquiryId: string) =>
+    (await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: `cases/${enquiryId}/` }))).Contents ?? [];
+  const link = (agent: Agent, caseNo: string, fileId: string) => agent.get(`/api/visa/cases/${caseNo}/files/${fileId}/link`);
+
+  it("stores a PDF in the bucket: pages counted, named after the case and the client, audited", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    const file = await pdf(3);
+
+    const res = await upload(processor, c.caseNo, file);
+    expect(res.status).toBe(200);
+    expect(res.body.case).toMatchObject({
+      finalFile: { fileName: `${c.caseNo}_Mehta_file.pdf`, pageCount: 3, sizeBytes: file.length, uploadedBy: { name: "Neha Joshi" } },
+      finalFileCopies: 1,
+      finalFileMaxMb: 50,
+    });
+
+    const row = await prisma.caseFile.findFirstOrThrow({ where: { enquiryId: c.id } });
+    expect(row.storageKey).toMatch(new RegExp(`^cases/${c.id}/final/[0-9a-f-]{36}\\.pdf$`));
+    const stored = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: row.storageKey }));
+    expect(stored).toMatchObject({ ContentLength: file.length, ContentType: "application/pdf" });
+
+    const entries = await prisma.auditLog.findMany({ where: { action: "visa.file.upload" } });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ entityId: row.id, clientId: c.client.id, after: { fileName: row.fileName, pageCount: 3, replaces: null } });
+  });
+
+  it("makes a newer upload the current file and keeps the older one", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    await upload(processor, c.caseNo, await pdf(2));
+    const first = await prisma.caseFile.findFirstOrThrow({ where: { enquiryId: c.id } });
+
+    const res = await upload(processor, c.caseNo, await pdf(5));
+    expect(res.status).toBe(200);
+    expect(res.body.case).toMatchObject({ finalFile: { pageCount: 5 }, finalFileCopies: 2 });
+    expect(res.body.case.finalFile.id).not.toBe(first.id);
+    expect(await objectsOf(c.id)).toHaveLength(2);
+    const second = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.file.upload", entityId: res.body.case.finalFile.id } });
+    expect(second.after).toMatchObject({ replaces: first.id });
+  });
+
+  it("refuses what isn't a PDF, and keeps nothing", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+
+    const empty = await upload(processor, c.caseNo, Buffer.alloc(0));
+    expect(empty.status).toBe(400);
+    expect(empty.body.message).toMatch(/Pick the PDF/);
+
+    const text = await upload(processor, c.caseNo, Buffer.from("just some text"));
+    expect(text.status).toBe(400);
+    expect(text.body.message).toMatch(/isn't a PDF/);
+
+    const broken = await upload(processor, c.caseNo, Buffer.from("%PDF-1.7\nthis is not really a pdf"));
+    expect(broken.status).toBe(400);
+    expect(broken.body.message).toMatch(/can't be opened/);
+
+    // A form (multipart) is refused before it reaches the route (the CSRF guard); JSON is refused by the route.
+    const form = await processor.post(`/api/visa/cases/${c.caseNo}/files/final`).field("file", "x");
+    expect(form.status).toBe(415);
+    const json = await processor.post(`/api/visa/cases/${c.caseNo}/files/final`).send({ file: "x" });
+    expect(json.status).toBe(415);
+
+    expect(await prisma.caseFile.count()).toBe(0);
+    expect(await objectsOf(c.id)).toHaveLength(0);
+  });
+
+  it("refuses a file over the size limit, which the Visa HOD sets", async () => {
+    const c = await maturedCase();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    expect((await hod.put("/api/visa/settings").send({ finalFile: { maxMb: 0 } })).status).toBe(400);
+    const saved = await hod.put("/api/visa/settings").send({ finalFile: { maxMb: 1 } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.settings.finalFile).toEqual({ maxMb: 1 });
+
+    const processor = await neha();
+    expect((await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case.finalFileMaxMb).toBe(1);
+    const big = Buffer.concat([await pdf(1), Buffer.alloc(1.2 * 1024 * 1024)]);
+    const res = await upload(processor, c.caseNo, big);
+    expect(res.status).toBe(413);
+    expect(res.body.message).toMatch(/over 1 MB/);
+    expect(await objectsOf(c.id)).toHaveLength(0);
+  });
+
+  it("lets the processor, the HOD and the Head upload, during File preparation only", async () => {
+    const c = await maturedCase();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    const file = await pdf(1);
+
+    expect((await upload(c.staff, c.caseNo, file)).status).toBe(403);
+    expect((await upload(await loginAs("meena@masti.test"), c.caseNo, file)).status).toBe(403);
+    expect((await upload(await loginAs("riya@masti.test"), c.caseNo, file)).status).toBe(200);
+    expect((await upload(await loginAs("vimal@masti.test"), c.caseNo, file)).status).toBe(200);
+
+    const dispatch = await prisma.departmentStage.findFirstOrThrow({ where: { code: "DISPATCH" } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: dispatch.id } });
+    const late = await upload(await neha(), c.caseNo, file);
+    expect(late.status).toBe(409);
+    expect(late.body.message).toMatch(/during file preparation/);
+    expect(await objectsOf(c.id)).toHaveLength(2);
+  });
+
+  it("before a processor is picked, only the HOD and the Head upload", async () => {
+    const c = await maturedCase({ assigned: false });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const file = await pdf(1);
+    expect((await upload(await neha(), c.caseNo, file)).status).toBe(403);
+    expect((await upload(await loginAs("riya@masti.test"), c.caseNo, file)).status).toBe(200);
+  });
+
+  it("removes the stored copy when the case moved on while the upload waited", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    const dispatch = await prisma.departmentStage.findFirstOrThrow({ where: { code: "DISPATCH" } });
+    const file = await pdf(2);
+
+    // Stands in for "File ready" (a later slice) moving the case on while the upload waits for the case.
+    const fileReady = holdCaseLock(c.id, (tx) => tx.enquiry.update({ where: { id: c.id }, data: { stageId: dispatch.id } }));
+    await fileReady.ready;
+    const pending = upload(processor, c.caseNo, file).then((r) => r);
+    try {
+      await untilWaitingOnLock();
+    } finally {
+      fileReady.release();
+    }
+    await fileReady.done;
+    const res = await pending;
+    expect(res.status).toBe(409);
+    expect(await prisma.caseFile.count()).toBe(0);
+    expect(await objectsOf(c.id)).toHaveLength(0);
+  });
+
+  it("opens through a short-lived link, for anyone who can open the case, audited", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    const file = await pdf(4);
+    const fileId = (await upload(processor, c.caseNo, file)).body.case.finalFile.id as string;
+
+    const res = await link(processor, c.caseNo, fileId);
+    expect(res.status).toBe(200);
+    expect(res.body.url).toMatch(/X-Amz-Expires=300/);
+    expect(Math.abs(Date.parse(res.body.expiresAt) - (Date.now() + 300_000))).toBeLessThan(10_000);
+    const opened = await fetch(res.body.url);
+    expect(opened.status).toBe(200);
+    expect(opened.headers.get("content-disposition")).toContain(`${c.caseNo}_Mehta_file.pdf`);
+    expect(Buffer.from(await opened.arrayBuffer()).equals(file)).toBe(true);
+
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    expect((await link(hod, c.caseNo, fileId)).status).toBe(200);
+    // Aarti matured it but doesn't own it any more, so she can't open the case or its file.
+    expect((await link(c.staff, c.caseNo, fileId)).status).toBe(403);
+
+    // A file belongs to its own case only.
+    const other = await saveCase(c.staff);
+    expect((await link(hod, other.caseNo, fileId)).status).toBe(404);
+
+    expect(await prisma.auditLog.count({ where: { action: "visa.file.open", entityId: fileId } })).toBe(2);
   });
 });

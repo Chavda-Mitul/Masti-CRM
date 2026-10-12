@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
 import type {
@@ -189,6 +189,32 @@ export function useCheckCaseDocument(caseNo: string) {
   return useCaseAction<{ documentId: string; check: DocumentCheck | null; reasonId?: number }>(caseNo, (base, { documentId, ...body }) =>
     api(`${base}/documents/${documentId}/check`, { method: 'PATCH', body }),
   )
+}
+
+/** Uploads the final file (one PDF). A newer upload becomes the current one; older ones are kept. */
+export function useUploadFinalFile(caseNo: string) {
+  return useCaseAction<{ file: File }>(caseNo, (base, { file }) => uploadPdf(`${base}/files/final`, file))
+}
+
+/**
+ * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
+ * click itself, so popup blockers allow it, and pointed at the file once the link arrives.
+ */
+export function useOpenCaseFile(caseNo: string) {
+  const toast = useToast()
+  return (fileId: string) => {
+    const tab = window.open('', '_blank')
+    if (tab) tab.opener = null
+    api<{ url: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
+      .then(({ url }) => {
+        if (tab) tab.location.href = url
+        else window.location.href = url
+      })
+      .catch((err: unknown) => {
+        tab?.close()
+        toast({ tone: 'bad', message: err instanceof Error ? err.message : 'Couldn’t open the file. Please try again.' })
+      })
+  }
 }
 
 /** Names a traveller: links the client's family member. */

@@ -193,6 +193,29 @@
 .matured-banner strong {
   font-weight: 800;
 }
+/* Step 3's saved file, kept as proof (demo screen 08). */
+.saved-file {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.saved-file .kv {
+  border-bottom: 0;
+  padding: 0;
+}
+.saved-file-name {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.saved-file-meta {
+  margin: -4px 0 0;
+}
+.saved-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 /* A not-needed paper fades, but its "Needed" button stays readable so it can be undone. */
 .checklist-row.off > :not(.row-action) {
   opacity: 0.45;

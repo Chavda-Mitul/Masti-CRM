@@ -152,6 +152,17 @@ export interface CaseDocument {
   checkedBy: PersonRef | null
 }
 
+/** A file kept in the private document store (0007 Decision 8). It opens through a short-lived link. */
+export interface CaseFile {
+  id: string
+  /** "VISA-2026-0001_Mehta_file.pdf" */
+  fileName: string
+  sizeBytes: number
+  pageCount: number
+  uploadedAt: string
+  uploadedBy: PersonRef
+}
+
 /** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
 export type CaseConsent = { state: 'UNLINKED' } | { state: 'NONE' } | { state: 'ON_FILE'; agreedAt: string }
 
@@ -224,6 +235,12 @@ export interface VisaCase {
   booklets: { current: number | null; old: number | null }
   maturedAt: string | null
   maturedBy: PersonRef | null
+  /** Step 3's saved file, kept as proof: the current upload, or null. */
+  finalFile: CaseFile | null
+  /** Every upload of the final file, the current one included; older ones are kept. */
+  finalFileCopies: number
+  /** The largest PDF the server accepts (setting visa.finalFile). */
+  finalFileMaxMb: number
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

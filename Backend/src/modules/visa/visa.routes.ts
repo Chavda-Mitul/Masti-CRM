@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
+import { HttpError } from "../../lib/httpError";
+import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
   checkCaseDocumentSchema,
@@ -81,6 +83,27 @@ router.patch("/cases/:caseNo/documents/:documentId/check", visaEdit, async (req,
   const body = checkCaseDocumentSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await filePrepService.checkDocument(caseNo, idParam.parse(req.params.documentId), body, actorOf(req)) });
+});
+
+/**
+ * Upload the final file: the PDF itself is the body (Content-Type: application/pdf), not a form. The case and the size
+ * limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/files/final", visaEdit, async (req, res) => {
+  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+    throw new HttpError(415, "Upload the file as a PDF.");
+  }
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await filePrepService.finalFileLimit(caseNo, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await filePrepService.uploadFinalFile(caseNo, bytes, actor) });
+});
+
+/** A short-lived link that opens one of the case's files ({ url, expiresAt }). Opening is audited. */
+router.get("/cases/:caseNo/files/:fileId/link", visaView, async (req, res) => {
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json(await filePrepService.openCaseFile(caseNo, idParam.parse(req.params.fileId), actorOf(req)));
 });
 
 router.get("/settings", visaView, async (_req, res) => {

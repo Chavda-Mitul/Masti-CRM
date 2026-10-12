@@ -12,6 +12,7 @@ import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
 import { FollowUpsCard } from './FollowUpsCard'
 import { MaturedBanner } from './MaturedBanner'
+import { SavedFileCard } from './SavedFileCard'
 
 /**
  * One visa case (demo screen 07): the header with its steps, then the Step 2 cards (checklist, how documents arrive,
@@ -54,6 +55,7 @@ export function VisaCasePage() {
         <div className="case-col">
           <MaturedBanner visaCase={c} />
           <ChecklistCard visaCase={c} />
+          <SavedFileCard visaCase={c} />
           <div className="case-pair">
             <ArrivalCard visaCase={c} />
             <FollowUpsCard visaCase={c} />

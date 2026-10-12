@@ -220,6 +220,26 @@ The first upload in the CRM (golden rule 4: S3-compatible, private, shared throu
   - `pdf-lib`, for the page count
   - the `S3_*` settings, added to `src/config/env.ts`
 
+**Built 12 Oct 2026** (slice 2, moved ahead of trip details so the storage risk showed early):
+
+- **API and data:**
+  - `POST /api/visa/cases/:caseNo/files/final` and `GET /api/visa/cases/:caseNo/files/:fileId/link`
+  - table `CaseFile` (migration `20261012110000_case_files`), audited as `visa.file.upload` and `visa.file.open`
+  - the "Saved file — kept as proof" card on the case page
+- **Settled while building:**
+  - **The PDF is the request body itself** (`Content-Type: application/pdf`), not a form. That keeps the CSRF guard: no
+    other site's form can send that type, so `requireJson` now accepts JSON or a PDF.
+  - **Held in memory, not streamed.** Counting the pages needs the whole file, so the server reads it into memory (at
+    most the limit), checks it, then sends it to the bucket. A bigger upload is refused with 413.
+  - **The bucket first, then the row.** The upload to the bucket happens before the case lock, so a slow upload never
+    holds the case. If the case moved on meanwhile, the row isn't saved and the object is removed again.
+  - **The link is per file** (`/files/:fileId/link`), not `/files/final/link`, so older copies and later files can use
+    it. Opening a file is audited too, because it holds passports.
+  - **The size limit** (`visa.finalFile.maxMb`, 50 ⚠️) is changed through `PUT /api/visa/settings`, like the
+    follow-up timing. Neither has a screen yet. The page checks the type and the size before sending.
+  - **Tests** use their own bucket (`masti-crm-test` by default, from `.env.test`), created and emptied at the start of
+    every run.
+
 ### 9. "File ready — add to docket"
 
 Pressed by the processor, the HOD or the Head. **Refused** (`409 NOT_READY`, listing what is missing, like maturity)

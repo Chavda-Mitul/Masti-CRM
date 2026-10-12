@@ -16,7 +16,7 @@ import { findOrCreateClientByMobile } from "../clients/clients.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
-import { FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
+import { FINAL_FILE_KEY, FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
 import { toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
@@ -231,17 +231,21 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 // Reading a case
 // ---------------------------------------------------------------------------
 
-/** The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), and the passport-warning setting. */
+/**
+ * The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), the passport-warning setting, and the
+ * largest final file allowed (the page checks it before uploading).
+ */
 async function toDto(row: VisaCaseRow) {
-  const [steps, clientSettings] = await Promise.all([
+  const [steps, clientSettings, visaSettings] = await Promise.all([
     prisma.departmentStage.findMany({
       where: { departmentId: row.stage.departmentId, flow: row.stage.flow },
       orderBy: { sortOrder: "asc" },
       select: { code: true, name: true },
     }),
     getClientSettings(),
+    getVisaSettings(),
   ]);
-  return toVisaCaseDto(row, steps, istToday(), clientSettings);
+  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb);
 }
 
 export async function getVisaCaseById(id: string) {
@@ -264,14 +268,20 @@ export async function getSettings() {
   return getVisaSettings();
 }
 
-/** The Head or the Visa HOD. A change applies to enquiries saved after it. */
+/**
+ * The Head or the Visa HOD. A follow-up timing change applies to enquiries saved after it; a file size limit to the next
+ * upload. Only the keys sent and changed are written, each audited on its own.
+ */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
-  if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa timing.");
+  if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
   const before = await getVisaSettings();
-  if (!input.firstFollowUp || JSON.stringify(input.firstFollowUp) === JSON.stringify(before.firstFollowUp)) return before;
-  const after = input.firstFollowUp;
-  await prisma.$transaction((tx) =>
-    saveSetting(tx, { key: FIRST_FOLLOW_UP_KEY, before: before.firstFollowUp, after, actorId: actor.user.id, ip: actor.ip }),
-  );
+  const changes = [
+    { key: FIRST_FOLLOW_UP_KEY, before: before.firstFollowUp, after: input.firstFollowUp },
+    { key: FINAL_FILE_KEY, before: before.finalFile, after: input.finalFile },
+  ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));
+  if (changes.length === 0) return before;
+  await prisma.$transaction(async (tx) => {
+    for (const c of changes) await saveSetting(tx, { key: c.key, before: c.before, after: c.after!, actorId: actor.user.id, ip: actor.ip });
+  });
   return getVisaSettings();
 }
