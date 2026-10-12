@@ -2,17 +2,19 @@ import { randomUUID } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { definedOnly, onlyChanged, pick } from "../../lib/changes";
+import { istDateTimeToUtc } from "../../lib/dates";
 import { badRequest, fieldError, notFound } from "../../lib/httpError";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
 import { loadCase, lockCase, PREPARING } from "./caseLock";
-import type { CheckCaseDocumentInput } from "./visa.schemas";
+import type { CheckCaseDocumentInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 
-// Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, and the
-// saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
+// Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
+// traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
 
 /**
  * The processor checks one paper again (Decision 3): Checked, or Needs replacing with a reason from the master list.
@@ -64,6 +66,49 @@ export async function checkDocument(caseNo: string, documentId: string, input: C
         clientId: enquiry.clientId,
         before: snapshot(before),
         after: snapshot(after),
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * One traveller's portal details (Decision 5): the acknowledgement number the portal gave, and the appointment, a day
+ * and a time in India. A newly set appointment can't be in the past; there is no holiday check, because the portal
+ * gave that slot. Saved whatever the visa's "Appointment needed" says: the switch only decides what "File ready" asks
+ * for. Only what changed is written and audited.
+ */
+export async function updateApplication(caseNo: string, travellerId: string, input: UpdateApplicationInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, PREPARING);
+  const found = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
+  if (!found) throw notFound("Traveller not found on this case.");
+  const { appointment, ...rest } = input;
+  const sent = definedOnly({
+    ...rest,
+    appointmentAt: appointment === undefined ? undefined : appointment && istDateTimeToUtc(appointment.on, appointment.at),
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await lockCase(tx, enquiry.id, actor, PREPARING);
+    const before = await tx.visaCaseTraveller.findUniqueOrThrow({ where: { id: found.id } });
+    const changes = onlyChanged(sent, before);
+    const keys = Object.keys(changes);
+    if (keys.length === 0) return;
+    if (changes.appointmentAt && changes.appointmentAt.getTime() <= Date.now()) {
+      throw fieldError("appointment", "Pick a time later than now.");
+    }
+    const after = await tx.visaCaseTraveller.update({ where: { id: found.id }, data: changes });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.traveller.application",
+        entityType: "VisaCaseTraveller",
+        entityId: found.id,
+        clientId: enquiry.clientId,
+        before: { name: before.name, ...pick(before, keys) },
+        after: { name: after.name, ...pick(after, keys) },
         ip: actor.ip,
       },
       tx,

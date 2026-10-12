@@ -129,6 +129,16 @@ export type ReceivedAs = 'ORIGINAL' | 'XEROX'
 /** The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3). */
 export type DocumentCheck = 'CHECKED' | 'NEEDS_REPLACING'
 export type DocumentArrival = 'CLIENT_BRINGS' | 'COLLECTION_BOY'
+export type EntryType = 'SINGLE' | 'DOUBLE' | 'MULTIPLE'
+
+/** Trip details (0007 Decision 4). Dates are YYYY-MM-DD; the duration is worked out from them. */
+export interface CaseTrip {
+  departOn: string | null
+  returnOn: string | null
+  entryType: EntryType | null
+  /** The hotel's name and city. */
+  hotelStay: string | null
+}
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
 
 /** A traveller's copy of a checklist line (copied at intake, so master edits never change an open case). */
@@ -184,6 +194,9 @@ export interface CaseTraveller {
     passportStatus: PassportStatus | null
   } | null
   consent: CaseConsent
+  /** Step 3, from the government portal (0007 Decision 5). */
+  ackNo: string | null
+  appointmentAt: string | null
   documents: CaseDocument[]
   /** In or made */
   done: number
@@ -225,10 +238,14 @@ export interface VisaCase {
   origin: EnquiryOrigin
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }
+  /** The visa's switches (0007 Decision 6), read live: what "File ready" asks for. */
+  appointmentNeeded: boolean
+  vendorNeeded: boolean
   adults: number
   children: number
   travelMonth: string
   travelDate: string | null
+  trip: CaseTrip
   owner: PersonRef | null
   dueAt: string | null
   arrival: DocumentArrival | null

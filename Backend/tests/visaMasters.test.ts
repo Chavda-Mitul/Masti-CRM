@@ -143,6 +143,36 @@ describe("countries, visa types, documents and offerings", () => {
     await hod.patch(`/api/masters/visa-offerings/${offering.id}`).send({ isActive: false });
     expect((await hod.patch(`/api/masters/documents/${await documentId("PASSPORT")}`).send({ isActive: false })).status).toBe(200);
   });
+
+  it("switches what File ready asks for (appointment, vendor) on each visa: Visa HOD or Head only (0007 Decision 6)", async () => {
+    const offering = await franceTourist();
+    const hod = await visaHod();
+    const staff = await visaStaff();
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+
+    const listed = (await staff.get("/api/masters/visa-offerings")).body.offerings[0];
+    expect(listed).toMatchObject({ appointmentNeeded: true, vendorNeeded: true });
+
+    const refused = await staff.patch(`/api/masters/visa-offerings/${offering.id}`).send({ vendorNeeded: false });
+    expect(refused.status).toBe(403);
+    expect((await hod.patch(`/api/masters/visa-offerings/${offering.id}`).send({})).status).toBe(400);
+
+    const patched = await hod.patch(`/api/masters/visa-offerings/${offering.id}`).send({ appointmentNeeded: false, vendorNeeded: false });
+    expect(patched.status).toBe(200);
+    expect(patched.body.offering).toMatchObject({ isActive: true, appointmentNeeded: false, vendorNeeded: false });
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "visaOffering.update" } });
+    expect(audit.before).toEqual({ appointmentNeeded: true, vendorNeeded: true });
+    expect(audit.after).toEqual({ appointmentNeeded: false, vendorNeeded: false });
+
+    // The same again writes nothing; the Head can switch one back.
+    expect((await hod.patch(`/api/masters/visa-offerings/${offering.id}`).send({ vendorNeeded: false })).status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { action: "visaOffering.update" } })).toBe(1);
+    expect((await head.patch(`/api/masters/visa-offerings/${offering.id}`).send({ vendorNeeded: true })).status).toBe(200);
+
+    const checklist = await staff.get(`/api/masters/visa-offerings/${offering.id}/checklist`);
+    expect(checklist.body.offering).toMatchObject({ appointmentNeeded: false, vendorNeeded: true });
+  });
 });
 
 describe("checklists", () => {

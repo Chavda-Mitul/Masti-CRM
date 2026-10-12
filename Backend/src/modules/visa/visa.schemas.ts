@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentArrival, DocumentCheck, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -107,3 +107,47 @@ export const checkCaseDocumentSchema = z
   });
 
 export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;
+
+const blankToNull = (value: unknown) => (typeof value === "string" && value.trim() === "" ? null : value);
+const somethingToChange = (v: object) => Object.values(v).some((value) => value !== undefined);
+
+/**
+ * Trip details (Decision 4). Each field is optional (only what changed is sent) and null clears it. The service checks
+ * the dates against today and against each other, on the values as stored.
+ */
+export const updateTripSchema = z
+  .object({
+    departOn: z.iso.date("Use a valid date.").nullable().optional(),
+    returnOn: z.iso.date("Use a valid date.").nullable().optional(),
+    entryType: z.enum(EntryType).nullable().optional(),
+    /** The hotel's name and city: data for the forms, so short text is allowed here (not a reason or a status). */
+    hotelStay: z.preprocess(blankToNull, z.string().trim().max(200, "200 characters at most.").nullable()).optional(),
+  })
+  .refine(somethingToChange, { message: "Nothing to change." });
+
+export type UpdateTripInput = z.infer<typeof updateTripSchema>;
+
+/** "fra1 mu2026 0648" is FRA1MU20260648: spaces go, letters become capitals. Blank clears it. */
+const ackNo = z.preprocess(
+  (value) => (typeof value === "string" ? value.replace(/\s+/g, "").toUpperCase() || null : value),
+  z.string().regex(/^[A-Z0-9]{4,40}$/, "Capitals and digits only, 4–40 characters.").nullable(),
+);
+
+/**
+ * One traveller's portal details (Decision 5): the acknowledgement number, and the appointment as a day and a time in
+ * India (as follow-ups are sent). null clears either.
+ */
+export const updateApplicationSchema = z
+  .object({
+    ackNo: ackNo.optional(),
+    appointment: z
+      .object({
+        on: z.iso.date("Pick the day."),
+        at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick the time."),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine(somethingToChange, { message: "Nothing to change." });
+
+export type UpdateApplicationInput = z.infer<typeof updateApplicationSchema>;

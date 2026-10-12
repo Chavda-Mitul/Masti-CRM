@@ -229,7 +229,13 @@ export function useOfferings(enabled = true) {
 export function useSaveOffering() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, body }: { id?: number; body: { countryId: number; visaTypeId: number } | { isActive: boolean } }) =>
+    mutationFn: async ({
+      id,
+      body,
+    }: {
+      id?: number
+      body: { countryId: number; visaTypeId: number } | { isActive?: boolean; appointmentNeeded?: boolean; vendorNeeded?: boolean }
+    }) =>
       (await api<{ offering: Offering }>(id ? `/masters/visa-offerings/${id}` : '/masters/visa-offerings', {
         method: id ? 'PATCH' : 'POST',
         body,
@@ -238,6 +244,8 @@ export function useSaveOffering() {
       void queryClient.invalidateQueries({ queryKey: masterKeys.offerings })
       void queryClient.invalidateQueries({ queryKey: masterKeys.checklist(offering.id) })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings })
+      // Open cases read the visa's switches live.
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
     },
   })
 }

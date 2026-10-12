@@ -35,6 +35,21 @@ export function istToday(): string {
   )
 }
 
+/** A moment as the day and the time it is in India: { date: "2026-10-09", time: "10:30" }, to fill date and time inputs. */
+export function istParts(iso: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}` }
+}
+
 /** "8 Oct, 4:12 pm" in Indian time. */
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—'

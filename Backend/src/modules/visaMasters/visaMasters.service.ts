@@ -256,6 +256,8 @@ function toOfferingDto(o: OfferingRow & { _count?: { checklist: number } }) {
     country: o.country,
     visaType: o.visaType,
     isActive: o.isActive,
+    appointmentNeeded: o.appointmentNeeded,
+    vendorNeeded: o.vendorNeeded,
     ...(o._count ? { checklistCount: o._count.checklist } : {}),
     updatedAt: o.updatedAt,
   };
@@ -305,7 +307,7 @@ export async function updateOffering(id: number, input: UpdateOfferingInput, act
   assertCanEditVisaMasters(actor.user);
   const before = await prisma.visaOffering.findUnique({ where: { id } });
   if (!before) throw notFound("Visa offering not found.");
-  const changes = onlyChanged(input, before);
+  const changes = onlyChanged(definedOnly(input), before);
   await saveChanges({
     before,
     changes,

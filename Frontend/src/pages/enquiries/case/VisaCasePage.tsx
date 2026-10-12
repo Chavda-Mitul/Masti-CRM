@@ -5,6 +5,7 @@ import { errorText } from '../../../lib/apiErrors'
 import { departmentStyle } from '../../../lib/departments'
 import '../../../styles/case.css'
 import { useVisaCase } from '../queries'
+import { ApplicationCard } from './ApplicationCard'
 import { ArrivalCard } from './ArrivalCard'
 import { CaseHeader } from './CaseHeader'
 import { CaseRail } from './CaseRail'
@@ -13,6 +14,7 @@ import { ConsentCard } from './ConsentCard'
 import { FollowUpsCard } from './FollowUpsCard'
 import { MaturedBanner } from './MaturedBanner'
 import { SavedFileCard } from './SavedFileCard'
+import { TripCard } from './TripCard'
 
 /**
  * One visa case (demo screen 07): the header with its steps, then the Step 2 cards (checklist, how documents arrive,
@@ -55,6 +57,8 @@ export function VisaCasePage() {
         <div className="case-col">
           <MaturedBanner visaCase={c} />
           <ChecklistCard visaCase={c} />
+          <TripCard visaCase={c} />
+          <ApplicationCard visaCase={c} />
           <SavedFileCard visaCase={c} />
           <div className="case-pair">
             <ArrivalCard visaCase={c} />

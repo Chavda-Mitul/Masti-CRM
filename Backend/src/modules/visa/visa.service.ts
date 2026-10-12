@@ -156,6 +156,8 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
           offeringId: offering.id,
           travelMonth: toDbDate(`${input.travelMonth}-01`),
           travelDate: input.travelDate ? toDbDate(input.travelDate) : null,
+          // Trip details start from the exact date, if there was one (0007 Decision 4); travelDate stays as filed.
+          departOn: input.travelDate ? toDbDate(input.travelDate) : null,
         },
       });
 

@@ -83,6 +83,11 @@ export function ChecklistsPage() {
                 <tr key={o.id} className={o.isActive ? undefined : 'row-off'}>
                   <td style={{ fontWeight: 700 }}>
                     <Link to={`/settings/masters/checklists/${o.id}`}>{o.label}</Link>
+                    {(!o.appointmentNeeded || !o.vendorNeeded) && (
+                      <div className="muted small" style={{ fontWeight: 400 }}>
+                        {[!o.appointmentNeeded && 'No appointment', !o.vendorNeeded && 'No vendor'].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {o.checklistCount ? (

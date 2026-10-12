@@ -9,7 +9,9 @@ import {
   idempotencyKeySchema,
   linkTravellerSchema,
   matureCaseSchema,
+  updateApplicationSchema,
   updateCaseDocumentSchema,
+  updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
 } from "./visa.schemas";
@@ -70,6 +72,12 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
   res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
+/** Trip details: travelling out, coming back, the entry type and the hotel stay (Documents or File preparation). */
+router.patch("/cases/:caseNo/trip", visaEdit, async (req, res) => {
+  const body = updateTripSchema.parse(req.body);
+  res.json({ case: await stepsService.updateTrip(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
 /** "Mark documents complete": the case moves to File preparation, unowned, for the HOD to give to a processor. */
 router.post("/cases/:caseNo/mature", visaEdit, async (req, res) => {
   const body = matureCaseSchema.parse(req.body);
@@ -83,6 +91,13 @@ router.patch("/cases/:caseNo/documents/:documentId/check", visaEdit, async (req,
   const body = checkCaseDocumentSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await filePrepService.checkDocument(caseNo, idParam.parse(req.params.documentId), body, actorOf(req)) });
+});
+
+/** One traveller's acknowledgement number and appointment, from the government portal. */
+router.patch("/cases/:caseNo/travellers/:travellerId/application", visaEdit, async (req, res) => {
+  const body = updateApplicationSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await filePrepService.updateApplication(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /**

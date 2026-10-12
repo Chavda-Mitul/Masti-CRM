@@ -1658,6 +1658,13 @@ Masti CRM/
 - **Pending (not built in Step 3):** the covering letter (formats to come from the project lead, M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
 - **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
 - **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
+- **Built so far (12 Oct 2026):**
+  - the processor's checks and the matured banner
+  - the saved file (one PDF in S3-compatible storage)
+  - the trip details: travelling out starts from the intake's exact travel date, and a new travelling out can't be in the past
+  - each traveller's acknowledgement number and appointment (a day and a time in India)
+  - the two switches, in the checklist editor
+  - Still to come: a vendor on the case, then "File ready" (0007 *Built* notes).
 - **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.
 - **The saved file stays one scanned PDF per case; no per-paper uploads** (12 Oct 2026, after slice 2). One auto-feeder scan keeps the team fast, it is what the demo shows, and the per-paper structure already lives in the ticks and checks. The final PDF can't feed passport autofill anyway: it arrives after the application form is filled. **If passport reading (Q13) or the vault (Q37) is confirmed,** it gets one photo-page scan per person, captured in Step 2, kept on the member (reused while the passport is valid) and stored with the same S3 code. It needs Vimal's yes and a DPDP decision (how long it's kept, who opens it) first. The reasoning is in `docs/decisions/0007-visa-file-prep.md`, *Settled after slice 2*.
 

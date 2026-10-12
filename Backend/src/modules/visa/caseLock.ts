@@ -17,8 +17,14 @@ export interface StepRule {
 /** Step 2: the checklist can change until maturity. After that it is the processor's to check. */
 export const COLLECTING: StepRule = { stages: ["ENQUIRY", "DOCUMENTS"], wrongStage: "This case has moved past collecting documents." };
 
-/** Step 3: the processor's checks, and (in later slices) the file, the vendor and the portal details. */
+/** Step 3: the processor's checks, the file, the portal details and (in later slices) the vendor. */
 export const PREPARING: StepRule = { stages: ["FILE_PREPARATION"], wrongStage: "This can only be changed during file preparation." };
+
+/** Trip details (0007 Decision 4): captured as the documents come in, and corrected during file preparation. */
+export const TRIP: StepRule = {
+  stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION"],
+  wrongStage: "Trip details can't change once the file is ready.",
+};
 
 const caseInclude = {
   department: { select: { code: true } },

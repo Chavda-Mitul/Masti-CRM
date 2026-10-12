@@ -492,17 +492,21 @@ model HolidayTarget {
 
 /// A visa Masti processes: country × visa type. The checklist (and, later, fees) hang off it.
 model VisaOffering {
-  id         Int                 @id @default(autoincrement())
-  countryId  Int
-  visaTypeId Int
-  isActive   Boolean             @default(true)
-  createdAt  DateTime            @default(now()) @db.Timestamptz(3)
+  id                Int                 @id @default(autoincrement())
+  countryId         Int
+  visaTypeId        Int
+  isActive          Boolean             @default(true)
+  /// "File ready" asks every traveller for a portal appointment (0007 Decision 6). Off for e-visas. Read live.
+  appointmentNeeded Boolean             @default(true)
+  /// "File ready" asks for a vendor (0007 Decision 6). Off for e-visas. Read live.
+  vendorNeeded      Boolean             @default(true)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
   /// Bumped when the checklist is replaced: the optimistic-lock token for PUT …/checklist.
-  updatedAt  DateTime            @updatedAt @db.Timestamptz(3)
-  country    Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
-  visaType   VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
-  checklist  VisaChecklistItem[]
-  cases      VisaCase[]
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+  country           Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  visaType          VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  checklist         VisaChecklistItem[]
+  cases             VisaCase[]
 
   @@unique([countryId, visaTypeId])
 }
@@ -767,9 +771,16 @@ enum DocumentArrival {
   COLLECTION_BOY
 }
 
+/// The visa's entries (0007 Decision 4). The visa rules fix these, and the forms will branch on them.
+enum EntryType {
+  SINGLE
+  DOUBLE
+  MULTIPLE
+}
+
 /// Traveller counts come from the VisaCaseTraveller rows.
 /// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
-/// booklet counts are 0–50.
+/// booklet counts are 0–50; returnOn is not before departOn; hotelStay is 1–200 characters.
 model VisaCase {
   enquiryId       String              @id
   offeringId      Int
@@ -782,6 +793,13 @@ model VisaCase {
   /// Step 2: passports received (current + old). Checked again at handover.
   bookletsCurrent Int?                @db.SmallInt
   bookletsOld     Int?                @db.SmallInt
+  /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
+  /// travelDate. "File ready" needs departOn, returnOn and entryType.
+  departOn        DateTime?           @db.Date
+  returnOn        DateTime?           @db.Date
+  entryType       EntryType?
+  /// The hotel's name and city, for the forms: data, not a reason or a status.
+  hotelStay       String?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
   maturedAt       DateTime?           @db.Timestamptz(3)
   maturedById     String?
@@ -796,17 +814,22 @@ model VisaCase {
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
 /// the client's family member (0006 Decision 3), which brings the passport and the consent.
 model VisaCaseTraveller {
-  id        String             @id @default(uuid())
-  caseId    String
+  id            String             @id @default(uuid())
+  caseId        String
   /// 1, 2, 3… Adults first, then children.
-  position  Int
-  isChild   Boolean
+  position      Int
+  isChild       Boolean
   /// Passport name, copied from the member when linked: what the case was filed under.
-  name      String?
-  memberId  String?
-  visaCase  VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
-  member    ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  documents VisaCaseDocument[]
+  name          String?
+  memberId      String?
+  /// From the government portal, typed in at File preparation (0007 Decision 5). Capitals and digits, 4–40 (checked
+  /// in the migration).
+  ackNo         String?
+  /// The portal appointment, entered as a day and a time in India.
+  appointmentAt DateTime?          @db.Timestamptz(3)
+  visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  documents     VisaCaseDocument[]
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])

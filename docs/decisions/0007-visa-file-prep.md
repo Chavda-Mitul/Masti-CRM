@@ -139,12 +139,45 @@ The details the forms and the covering letter will need, "captured as the docume
   optional.
 - The intake's `travelMonth` and `travelDate` stay as they were filed.
 
+**Built 12 Oct 2026** (slice 3, with Decisions 5 and 6):
+
+- **API and data:**
+  - `PATCH /api/visa/cases/:caseNo/trip`, audited as `visa.trip.update` (only the changed fields)
+  - migration `20261012120000_trip_and_application`
+  - the **Trip details** card on the case page
+- **Settled while building:**
+  - **Pre-filled means stored.** A new case with an exact travel date starts with `departOn` set to it, and the
+    migration did the same for existing cases. So "File ready" reads what is stored, and nobody has to re-save it.
+  - **A newly set travelling out can't be in the past,** as at intake. Coming back is checked against travelling out
+    as stored, so sending one date alone is checked too.
+  - **Editable at Enquiry as well.** Like any Step 2 change, the first trip save at the Enquiry stage moves the case
+    to Documents. After File preparation the answer is "Trip details can't change once the file is ready."
+  - **It doesn't change the case's `updatedAt`,** like ticks and checks, so it never makes someone else's open page
+    stale.
+  - **Duration** counts both days (15 → 26 Dec is 12 days), as the visa counts them.
+
 ### 5. Each traveller: acknowledgement number and appointment
 
 | Field | Rule |
 | --- | --- |
 | Acknowledgement no. | Typed in from the portal. Capitals and digits, 4–40 characters, e.g. `FRA1MU20261006481`. |
 | Appointment | Date and time (IST). It can't be in the past when entered. There is no holiday check, because the portal gave that slot. Asked for only when the visa's **Appointment needed** is on. |
+
+**Built 12 Oct 2026:**
+
+- **API:** `PATCH /api/visa/cases/:caseNo/travellers/:travellerId/application`, audited as
+  `visa.traveller.application`. File preparation only.
+- **Screen:** the **Apply on the government portal** card (demo screen 08). Each traveller has a row with their own
+  **Save**.
+- **Settled while building:**
+  - **The appointment is sent as a day and a time in India,** `{ appointment: { on, at } }`, as follow-ups are. The
+    server turns it into the moment. `null` clears it.
+  - **The acknowledgement number is cleaned up:** spaces go and letters become capitals ("fra1 mu2026 0648" is saved
+    as `FRA1MU20260648`). Anything else that isn't a capital or a digit is refused.
+  - **Saved even when Appointment needed is off.** The switch only decides what "File ready" asks for and whether the
+    page shows the column.
+  - **Not shown yet:** the portal box ("Log in for me") and the Read passport scan, Fill and Print buttons. They are
+    pending (Decision 2), so the page shows no dead buttons.
 
 ### 6. The visa's switches: Appointment needed, Vendor needed
 
@@ -156,6 +189,16 @@ The details the forms and the covering letter will need, "captured as the docume
 - **Who edits them:** the Visa HOD or the Head, on the offering in Settings → Masters → Checklists (0005 Decision 8).
 - **Read live at "File ready",** not copied at intake. Checklists are copied so that editing them never changes an
   open case; a switch is different, because correcting it should help the cases already open.
+
+**Built 12 Oct 2026:**
+
+- **API:** `PATCH /api/masters/visa-offerings/:id` takes `isActive`, `appointmentNeeded` and `vendorNeeded`, any of
+  them. The audit stays `visaOffering.update`.
+- **On the case:** the case sends both switches, read live.
+- **Screen:** a **Before the file is ready** card in the checklist editor, with two checkboxes that save on click.
+  The checklist list shows "No appointment · No vendor" when one is off.
+- **Like "Switch off this visa",** the checkboxes wait while the checklist has unsaved changes. Changing one also
+  makes an open checklist editor elsewhere stale, because both share the offering's `updatedAt`.
 
 ### 7. The vendor master
 

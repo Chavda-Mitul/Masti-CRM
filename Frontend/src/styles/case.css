@@ -216,6 +216,67 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
+/* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
+.trip-form .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(max(220px, calc((100% - 14px) / 2)), 1fr));
+}
+.trip-duration {
+  padding: 9px 0;
+  font-size: 14px;
+}
+.trip-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.application {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.application-scroll {
+  overflow-x: auto;
+}
+.application-table th,
+.application-table td {
+  padding: 10px 8px;
+}
+.application-table th {
+  background: none;
+}
+.application-table th:first-child,
+.application-table td:first-child {
+  padding-left: 0;
+}
+.application-table th:last-child,
+.application-table td:last-child {
+  padding-right: 0;
+}
+.application-table tbody tr:hover {
+  background: none;
+}
+.application-table .field-error {
+  display: block;
+  margin-top: 4px;
+}
+.ack-input {
+  width: 100%;
+  min-width: 180px;
+}
+.appointment-inputs {
+  display: flex;
+  gap: 6px;
+}
+.appointment-inputs .input {
+  min-width: 0;
+}
+.application-save {
+  width: 1%;
+  white-space: nowrap;
+}
 /* A not-needed paper fades, but its "Needed" button stays readable so it can be undone. */
 .checklist-row.off > :not(.row-action) {
   opacity: 0.45;

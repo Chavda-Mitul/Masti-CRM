@@ -220,6 +220,12 @@ a.kv-line:hover {
   flex-direction: column;
   padding-bottom: 80px; /* room for the save bar */
 }
+.file-ready-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
 .checklist-tools {
   display: flex;
   align-items: center;

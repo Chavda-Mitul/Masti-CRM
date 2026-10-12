@@ -150,6 +150,9 @@ export interface Offering {
   country: { id: number; code: string; name: string; zone: string | null; isActive: boolean }
   visaType: { id: number; code: string; name: string; isActive: boolean }
   isActive: boolean
+  /** What "File ready" asks for (0007 Decision 6): both on by default, off for e-visas. */
+  appointmentNeeded: boolean
+  vendorNeeded: boolean
   checklistCount?: number
   updatedAt: string
 }
@@ -174,6 +177,8 @@ export interface Checklist {
     country: { id: number; code: string; name: string; zone: string | null; isActive: boolean; label: string }
     visaType: { id: number; code: string; name: string; isActive: boolean }
     isActive: boolean
+    appointmentNeeded: boolean
+    vendorNeeded: boolean
     updatedAt: string
   }
   items: ChecklistItem[]

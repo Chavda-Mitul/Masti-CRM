@@ -110,7 +110,17 @@ export const updateEnquirySourceSchema = z.object({
 });
 
 export const createOfferingSchema = z.object({ countryId: id, visaTypeId: id });
-export const updateOfferingSchema = z.object({ isActive: z.boolean() });
+/**
+ * Switching the visa off or on, and what "File ready" asks for (docs/decisions/0007-visa-file-prep.md Decision 6):
+ * a portal appointment for every traveller, and a vendor. Both are off for e-visas.
+ */
+export const updateOfferingSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    appointmentNeeded: z.boolean().optional(),
+    vendorNeeded: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((value) => value !== undefined), { message: "Nothing to change." });
 
 export const MAX_CHECKLIST_ITEMS = 60;
 

@@ -6,7 +6,7 @@ import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { holdCaseLock, saveCase, untilWaitingOnLock, visaStaff, type Agent } from "./visaHelpers";
+import { holdCaseLock, maturedCase, saveCase, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, and the
 // saved file in the test bucket (MinIO, emptied by globalSetup).
@@ -32,33 +32,6 @@ interface CaseDto {
   caseNo: string;
   updatedAt: string;
   travellers: { documents: CaseDoc[]; checked: number; needsReplacing: number }[];
-}
-
-/**
- * A France case (1 adult, 1 child) that matured: every paper in or made, the adult's salary slips not needed, at File
- * preparation, matured by Aarti and given to Neha Joshi (or still waiting for a processor). Set straight in the
- * database; maturity itself is tested in visaDocuments.test.ts.
- */
-async function maturedCase({ assigned = true } = {}) {
-  const staff = await visaStaff();
-  const saved = await saveCase(staff);
-  const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
-  const neha = await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
-  const now = new Date();
-  const docs = await prisma.visaCaseDocument.findMany({ where: { traveller: { caseId: saved.id } } });
-  for (const d of docs) {
-    const data =
-      d.requirement === "ARRANGED_BY_US"
-        ? { status: "MADE" as const, receivedAt: now, receivedById: aarti.id }
-        : d.name.startsWith("Salary slips")
-          ? { status: "NOT_NEEDED" as const }
-          : { status: "RECEIVED" as const, receivedAs: d.requirement === "ORIGINAL" ? ("ORIGINAL" as const) : ("XEROX" as const), receivedAt: now, receivedById: aarti.id };
-    await prisma.visaCaseDocument.update({ where: { id: d.id }, data });
-  }
-  const filePrep = await prisma.departmentStage.findFirstOrThrow({ where: { code: "FILE_PREPARATION" } });
-  await prisma.enquiry.update({ where: { id: saved.id }, data: { stageId: filePrep.id, ownerId: assigned ? neha.id : null, dueAt: now } });
-  await prisma.visaCase.update({ where: { enquiryId: saved.id }, data: { maturedAt: now, maturedById: aarti.id } });
-  return { ...saved, staff };
 }
 
 const neha = () => loginAs("neha@masti.test");

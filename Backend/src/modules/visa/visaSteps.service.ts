@@ -1,11 +1,12 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
+import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
-import { COLLECTING, loadCase, lockCase, visaStage, type LockedCase } from "./caseLock";
-import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateVisaCaseInput } from "./visa.schemas";
+import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
+import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { countTravellers, travellerLabel } from "./visaCase";
 
@@ -114,6 +115,62 @@ export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, act
         clientId: enquiry.clientId,
         before: pick(before, keys),
         after: pick(after, keys),
+        ip: actor.ip,
+      },
+      tx,
+    );
+    await advanceToDocuments(tx, locked, actor);
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+const dbDate = (value: string | null | undefined) => (value == null ? value : toDbDate(value));
+
+/** The trip as the audit log shows it: dates as plain days. */
+function tripView(row: { departOn: Date | null; returnOn: Date | null; entryType: string | null; hotelStay: string | null }) {
+  return {
+    departOn: row.departOn && fromDbDate(row.departOn),
+    returnOn: row.returnOn && fromDbDate(row.returnOn),
+    entryType: row.entryType,
+    hotelStay: row.hotelStay,
+  };
+}
+
+/**
+ * Trip details (docs/decisions/0007-visa-file-prep.md Decision 4): travelling out, coming back, the entry type and the
+ * hotel stay. Captured as the documents come in and corrected during file preparation; like any Step 2 change, the
+ * first one moves the case from Enquiry to Documents. Only what changed is written and audited. A newly set travelling
+ * out can't be in the past, and coming back is checked against travelling out as stored, so one date alone is checked
+ * too. Like ticks, it doesn't change the case's updatedAt.
+ */
+export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, TRIP);
+  const sent = definedOnly({ ...input, departOn: dbDate(input.departOn), returnOn: dbDate(input.returnOn) });
+
+  await prisma.$transaction(async (tx) => {
+    const locked = await lockCase(tx, enquiry.id, actor, TRIP);
+    const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
+    const changes = onlyChanged(sent, before);
+    const keys = Object.keys(changes);
+    if (keys.length === 0) return;
+
+    if (changes.departOn && fromDbDate(changes.departOn) < istToday()) {
+      throw fieldError("departOn", "Travelling out can't be in the past.");
+    }
+    const departOn = changes.departOn !== undefined ? changes.departOn : before.departOn;
+    const returnOn = changes.returnOn !== undefined ? changes.returnOn : before.returnOn;
+    if (departOn && returnOn && returnOn < departOn) throw fieldError("returnOn", "Coming back can't be before travelling out.");
+
+    const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.trip.update",
+        entityType: "VisaCase",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: pick(tripView(before), keys),
+        after: pick(tripView(after), keys),
         ip: actor.ip,
       },
       tx,

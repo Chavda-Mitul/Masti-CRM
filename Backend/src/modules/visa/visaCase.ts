@@ -108,10 +108,20 @@ export function toVisaCaseDto(
     offeringId: visa.offeringId,
     country: { id: visa.offering.country.id, name: visa.offering.country.name, zone: visa.offering.country.zone, label: countryLabel(visa.offering.country) },
     visaType: { id: visa.offering.visaType.id, name: visa.offering.visaType.name },
+    /** The visa's switches (0007 Decision 6), read live: correcting one helps the cases already open. */
+    appointmentNeeded: visa.offering.appointmentNeeded,
+    vendorNeeded: visa.offering.vendorNeeded,
     adults,
     children,
     travelMonth: fromDbDate(visa.travelMonth).slice(0, 7),
     travelDate: visa.travelDate ? fromDbDate(visa.travelDate) : null,
+    /** Trip details (0007 Decision 4). The duration is worked out from the two dates. */
+    trip: {
+      departOn: visa.departOn ? fromDbDate(visa.departOn) : null,
+      returnOn: visa.returnOn ? fromDbDate(visa.returnOn) : null,
+      entryType: visa.entryType,
+      hotelStay: visa.hotelStay,
+    },
     owner: row.owner,
     dueAt: row.dueAt,
     arrival: visa.arrival,
@@ -150,6 +160,9 @@ export function toVisaCaseDto(
           passportStatus: member.passportStatus,
         },
         consent: consentOf(t),
+        /** Step 3, from the government portal (0007 Decision 5). */
+        ackNo: t.ackNo,
+        appointmentAt: t.appointmentAt,
         documents: t.documents.map((d) => ({
           id: d.id,
           name: d.name,

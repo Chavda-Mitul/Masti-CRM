@@ -8,6 +8,7 @@ import type {
   DocumentArrival,
   DocumentCheck,
   DocumentStatus,
+  EntryType,
   EnquiryListFilters,
   EnquiryListPage,
   EnquirySourceOption,
@@ -221,6 +222,22 @@ export function useOpenCaseFile(caseNo: string) {
 export function useLinkTraveller(caseNo: string) {
   return useCaseAction<{ travellerId: string; memberId: string }>(caseNo, (base, { travellerId, memberId }) =>
     api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body: { memberId } }),
+  )
+}
+
+/** Trip details: only the fields that changed; null clears one. */
+export function useUpdateTrip(caseNo: string) {
+  return useCaseAction<{ departOn?: string | null; returnOn?: string | null; entryType?: EntryType | null; hotelStay?: string | null }>(
+    caseNo,
+    (base, body) => api(`${base}/trip`, { method: 'PATCH', body }),
+  )
+}
+
+/** One traveller's acknowledgement number and appointment (a day and a time in India); null clears either. */
+export function useUpdateApplication(caseNo: string) {
+  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null }>(
+    caseNo,
+    (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/application`, { method: 'PATCH', body }),
   )
 }
 
