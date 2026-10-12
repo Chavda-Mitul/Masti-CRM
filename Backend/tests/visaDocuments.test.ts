@@ -509,6 +509,84 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(await load(processor, c.caseNo)).toMatchObject({ stage: { code: "FILE_PREPARATION" }, owner: { name: "Neha" }, maturedBy: { name: "Aarti Patel" } });
     });
 
+    /** Waits until another connection is blocked on a row lock: the request under test has reached the locked case. */
+    async function untilWaitingOnLock() {
+      for (let i = 0; i < 200; i++) {
+        const [row] = await prisma.$queryRaw<{ n: bigint }[]>`
+          SELECT count(*) AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+        if (Number(row!.n) > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("Nothing waited on the case's lock.");
+    }
+
+    /** A transaction that locks the case, does `work` and holds the lock until release(): an in-flight Step 2 change. */
+    function holdCaseLock(enquiryId: string, work: (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => Promise<unknown>) {
+      let release!: () => void;
+      let locked!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      const ready = new Promise<void>((resolve) => (locked = resolve));
+      const done = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${enquiryId} FOR UPDATE`;
+          await work(tx);
+          locked();
+          await held;
+        },
+        { timeout: 15_000 },
+      );
+      return { ready, release, done };
+    }
+
+    it("doesn't mature a case while a paper is being un-ticked: it waits, then sees the paper pending", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const complete = await completeCase(staff, c);
+      const passport = docOf(complete, "Passport");
+
+      // Un-ticking the passport is mid-transaction: it holds the case and has set the paper back to Pending, not committed.
+      const untick = holdCaseLock(c.id, (tx) =>
+        tx.visaCaseDocument.update({ where: { id: passport.id }, data: { status: "PENDING", receivedAs: null, receivedAt: null, receivedById: null } }),
+      );
+      await untick.ready;
+      const pressed = mature(staff, c, complete.updatedAt).then((r) => r);
+      try {
+        await untilWaitingOnLock();
+      } finally {
+        untick.release();
+        await untick.done;
+      }
+
+      const res = await pressed;
+      expect(res.status).toBe(409);
+      expect(res.body.details).toMatchObject({ code: "NOT_READY", missing: { pending: [{ traveller: "Rakesh Mehta", documents: ["Passport"] }] } });
+      expect(await load(staff, c.caseNo)).toMatchObject({ stage: { code: "DOCUMENTS" }, owner: { name: "Aarti Patel" }, maturedAt: null });
+    });
+
+    it("doesn't let a tick slip in while the case is being matured: it waits, then sees the case has moved on", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const complete = await completeCase(staff, c);
+      const passport = docOf(complete, "Passport");
+      const filePrep = await prisma.departmentStage.findFirstOrThrow({ where: { code: "FILE_PREPARATION" } });
+
+      // Maturity is mid-transaction: it holds the case and has moved it to File preparation, not committed.
+      const maturing = holdCaseLock(c.id, (tx) => tx.enquiry.update({ where: { id: c.id }, data: { stageId: filePrep.id } }));
+      await maturing.ready;
+      const ticked = tick(staff, c, passport.id, { status: "PENDING" }).then((r) => r);
+      try {
+        await untilWaitingOnLock();
+      } finally {
+        maturing.release();
+        await maturing.done;
+      }
+
+      const res = await ticked;
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/moved past/);
+      expect(await prisma.visaCaseDocument.findUniqueOrThrow({ where: { id: passport.id } })).toMatchObject({ status: "RECEIVED" });
+    });
+
     it("waits under To assign for the HOD and the Head until a processor is picked", async () => {
       const staff = await visaStaff();
       await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
@@ -526,10 +604,28 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
 
       expect(await toAssign(hod)).toEqual([c.caseNo]);
       expect(await toAssign(head)).toEqual([c.caseNo]);
-      expect(await toAssign(staff)).toEqual([]);
       expect(await count(hod)).toBe(1);
       expect(await count(head)).toBe(1);
-      expect((await staff.get("/api/enquiries/to-assign")).status).toBe(403);
+      // Only those who assign may ask: staff and view-only users (who see the whole department) are refused.
+      await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+      const viewOnly = await loginAs("meena@masti.test");
+      for (const agent of [staff, viewOnly]) {
+        expect((await agent.get("/api/enquiries?unassigned=true")).status).toBe(403);
+        expect((await agent.get("/api/enquiries/to-assign")).status).toBe(403);
+      }
+      // An HOD elsewhere who can view Visa sees only their own department's cases to assign.
+      await createUser({
+        name: "Kiran",
+        email: "kiran@masti.test",
+        departments: [
+          { code: "HOLIDAYS", role: "HOD" },
+          { code: "VISA", access: "VIEW" },
+        ],
+      });
+      const otherHod = await loginAs("kiran@masti.test");
+      expect(await toAssign(otherHod)).toEqual([]);
+      expect(await count(otherHod)).toBe(0);
+      expect((await otherHod.get("/api/enquiries?unassigned=true&department=VISA")).status).toBe(403);
 
       const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
       expect((await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: neha.id, updatedAt: matured.updatedAt })).status).toBe(200);

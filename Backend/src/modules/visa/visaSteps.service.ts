@@ -1,6 +1,7 @@
+import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
-import { assertFresh, definedOnly, onlyChanged, pick, staleError } from "../../lib/changes";
+import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
@@ -16,21 +17,45 @@ import { countTravellers, travellerLabel } from "./visaCase";
 /** The steps where the checklist can still change. After maturity it is the processor's to check (Step 3). */
 const COLLECTING = ["ENQUIRY", "DOCUMENTS"];
 
-const caseInclude = { department: { select: { code: true } }, stage: true, visa: { select: { enquiryId: true } } } as const;
+const caseInclude = {
+  department: { select: { code: true } },
+  stage: true,
+  visa: { select: { enquiryId: true } },
+} satisfies Prisma.EnquiryInclude;
 
-/** The case, if this user may change it and it is still collecting documents. */
-async function loadForStep2(caseNo: string, actor: Actor) {
-  const enquiry = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: caseInclude });
-  if (!enquiry?.visa) throw notFound("Case not found.");
+type Step2Case = Prisma.EnquiryGetPayload<{ include: typeof caseInclude }>;
+
+/** Refuses unless this user may change the case and it is still collecting documents. */
+function assertStep2(enquiry: Step2Case, actor: Actor) {
   assertCanSeeEnquiry(actor.user, enquiry);
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
   if (enquiry.status !== "OPEN") throw conflict("This case is closed, so its documents can't change.");
   if (!COLLECTING.includes(enquiry.stage.code)) throw conflict("This case has moved past collecting documents.");
+}
+
+/** The case, if this user may change it and it is still collecting documents: the quick check before any transaction. */
+async function loadForStep2(caseNo: string, actor: Actor) {
+  const enquiry = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: caseInclude });
+  if (!enquiry?.visa) throw notFound("Case not found.");
+  assertStep2(enquiry, actor);
   return enquiry;
 }
 
-type Step2Case = Awaited<ReturnType<typeof loadForStep2>>;
+/**
+ * The first thing every Step 2 write and maturity does in its transaction: lock the case's row, then read it again and
+ * repeat the checks. They take the same lock, so they run one after another:
+ * - a tick can't land between maturity's check that every paper is in and its move to File preparation
+ * - a tick that waited behind maturity then sees the case has moved on, and is refused
+ * Postpone, cancel and reassign update the same row, so a tick waits for them too and sees their result. Ticks don't
+ * change the case's updatedAt, so they never make "Mark documents complete" on someone else's open page stale.
+ */
+async function lockForStep2(tx: Db, enquiryId: string, actor: Actor) {
+  await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${enquiryId} FOR UPDATE`;
+  const enquiry = await tx.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, include: caseInclude });
+  assertStep2(enquiry, actor);
+  return enquiry;
+}
 
 /** One step of the visa flow, by code. */
 async function visaStage(tx: Db, departmentId: number, code: string) {
@@ -68,7 +93,7 @@ async function advanceToDocuments(tx: Db, enquiry: Step2Case, actor: Actor): Pro
 export async function startDocuments(caseNo: string, actor: Actor) {
   const enquiry = await loadForStep2(caseNo, actor);
   if (enquiry.stage.code !== "ENQUIRY") throw conflict("Documents are already being collected for this case.");
-  const moved = await prisma.$transaction((tx) => advanceToDocuments(tx, enquiry, actor));
+  const moved = await prisma.$transaction(async (tx) => advanceToDocuments(tx, await lockForStep2(tx, enquiry.id, actor), actor));
   if (!moved) throw conflict("Documents are already being collected for this case.");
   return getVisaCaseById(enquiry.id);
 }
@@ -91,11 +116,14 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
 
   const done = input.status === "RECEIVED" || input.status === "MADE";
   const receivedAs = input.status === "RECEIVED" ? (input.receivedAs ?? null) : null;
-  // Re-sending the same tick changes nothing (and doesn't move its time).
-  if (doc.status === input.status && doc.receivedAs === receivedAs) return getVisaCaseById(enquiry.id);
 
-  const data = { status: input.status, receivedAs, receivedAt: done ? new Date() : null, receivedById: done ? actor.user.id : null };
   await prisma.$transaction(async (tx) => {
+    const locked = await lockForStep2(tx, enquiry.id, actor);
+    // The paper as it is now, under the lock: someone may have ticked it while this request waited.
+    const before = await tx.visaCaseDocument.findUniqueOrThrow({ where: { id: doc.id } });
+    // Re-sending the same tick changes nothing (and doesn't move its time).
+    if (before.status === input.status && before.receivedAs === receivedAs) return;
+    const data = { status: input.status, receivedAs, receivedAt: done ? new Date() : null, receivedById: done ? actor.user.id : null };
     const after = await tx.visaCaseDocument.update({ where: { id: doc.id }, data });
     await audit(
       {
@@ -104,13 +132,13 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
         entityType: "VisaCaseDocument",
         entityId: doc.id,
         clientId: enquiry.clientId,
-        before: { name: doc.name, status: doc.status, receivedAs: doc.receivedAs, receivedAt: doc.receivedAt, receivedById: doc.receivedById },
+        before: { name: before.name, status: before.status, receivedAs: before.receivedAs, receivedAt: before.receivedAt, receivedById: before.receivedById },
         after: { name: after.name, status: after.status, receivedAs: after.receivedAs, receivedAt: after.receivedAt, receivedById: after.receivedById },
         ip: actor.ip,
       },
       tx,
     );
-    await advanceToDocuments(tx, enquiry, actor);
+    await advanceToDocuments(tx, locked, actor);
   });
   return getVisaCaseById(enquiry.id);
 }
@@ -121,12 +149,13 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
  */
 export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, actor: Actor) {
   const enquiry = await loadForStep2(caseNo, actor);
-  const before = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
-  const changes = onlyChanged(definedOnly(input), before);
-  const keys = Object.keys(changes);
-  if (keys.length === 0) return getVisaCaseById(enquiry.id);
 
   await prisma.$transaction(async (tx) => {
+    const locked = await lockForStep2(tx, enquiry.id, actor);
+    const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
+    const changes = onlyChanged(definedOnly(input), before);
+    const keys = Object.keys(changes);
+    if (keys.length === 0) return;
     const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
     await audit(
       {
@@ -141,7 +170,7 @@ export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, act
       },
       tx,
     );
-    await advanceToDocuments(tx, enquiry, actor);
+    await advanceToDocuments(tx, locked, actor);
   });
   return getVisaCaseById(enquiry.id);
 }
@@ -154,15 +183,17 @@ const rethrowSameMember = rethrowUnique("This person is already a traveller on t
  */
 export async function linkTraveller(caseNo: string, travellerId: string, input: LinkTravellerInput, actor: Actor) {
   const enquiry = await loadForStep2(caseNo, actor);
-  const traveller = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
-  if (!traveller) throw notFound("Traveller not found on this case.");
+  const found = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
+  if (!found) throw notFound("Traveller not found on this case.");
   const member = await prisma.clientMember.findUnique({ where: { id: input.memberId } });
   if (!member || member.clientId !== enquiry.clientId) throw fieldError("memberId", "Pick someone from this client's family list.");
   if (member.archivedAt) throw fieldError("memberId", "This person was taken off the family list.");
-  if (traveller.memberId === member.id) return getVisaCaseById(enquiry.id);
 
   await prisma
     .$transaction(async (tx) => {
+      const locked = await lockForStep2(tx, enquiry.id, actor);
+      const traveller = await tx.visaCaseTraveller.findUniqueOrThrow({ where: { id: found.id } });
+      if (traveller.memberId === member.id) return;
       const after = await tx.visaCaseTraveller.update({ where: { id: traveller.id }, data: { memberId: member.id, name: member.name } });
       await audit(
         {
@@ -177,15 +208,15 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
         },
         tx,
       );
-      await advanceToDocuments(tx, enquiry, actor);
+      await advanceToDocuments(tx, locked, actor);
     })
     .catch(rethrowSameMember);
   return getVisaCaseById(enquiry.id);
 }
 
 /** What still stands between a case and maturity: unnamed travellers, and papers still pending, by traveller. */
-async function missingForMaturity(enquiryId: string) {
-  const travellers = await prisma.visaCaseTraveller.findMany({
+async function missingForMaturity(db: Db, enquiryId: string) {
+  const travellers = await db.visaCaseTraveller.findMany({
     where: { caseId: enquiryId },
     orderBy: { position: "asc" },
     include: { documents: { where: { status: "PENDING" }, orderBy: { sortOrder: "asc" }, select: { name: true } } },
@@ -203,28 +234,29 @@ async function missingForMaturity(enquiryId: string) {
  * optional, amended 10 Oct 2026). The case moves to File preparation with no owner, "Matured · to assign", for the HOD
  * to give to a processor, who can't be the person who matured it. Returns the case by id: once its owner is cleared,
  * the staff member who pressed it may no longer be able to open it.
+ *
+ * The checklist is checked under the case's lock, in the same transaction as the move (lockForStep2), so a paper
+ * un-ticked at the same moment either lands first and stops it, or waits and is then refused.
  */
 export async function mature(caseNo: string, input: MatureCaseInput, actor: Actor) {
   const enquiry = await loadForStep2(caseNo, actor);
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
 
-  const missing = await missingForMaturity(enquiry.id);
-  if (missing.unnamed.length > 0 || missing.pending.length > 0) {
-    const parts = [
-      ...(missing.unnamed.length > 0 ? [`name ${missing.unnamed.join(", ")}`] : []),
-      ...missing.pending.map((p) => `${p.traveller}: ${p.documents.join(", ")}`),
-    ];
-    throw new HttpError(409, `Not everything is in yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
-  }
-
   const now = new Date();
   await prisma.$transaction(async (tx) => {
+    const locked = await lockForStep2(tx, enquiry.id, actor);
+    assertFresh(locked.updatedAt, input.updatedAt, "case");
+    const missing = await missingForMaturity(tx, enquiry.id);
+    if (missing.unnamed.length > 0 || missing.pending.length > 0) {
+      const parts = [
+        ...(missing.unnamed.length > 0 ? [`name ${missing.unnamed.join(", ")}`] : []),
+        ...missing.pending.map((p) => `${p.traveller}: ${p.documents.join(", ")}`),
+      ];
+      throw new HttpError(409, `Not everything is in yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
+    }
+
     const filePrep = await visaStage(tx, enquiry.departmentId, "FILE_PREPARATION");
-    const written = await tx.enquiry.updateMany({
-      where: { id: enquiry.id, updatedAt: enquiry.updatedAt, stageId: enquiry.stageId },
-      data: { stageId: filePrep.id, ownerId: null, dueAt: now },
-    });
-    if (written.count === 0) throw staleError("case");
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: filePrep.id, ownerId: null, dueAt: now } });
     await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { maturedAt: now, maturedById: actor.user.id } });
     await audit(
       {
@@ -233,7 +265,7 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
         entityType: "Enquiry",
         entityId: enquiry.id,
         clientId: enquiry.clientId,
-        before: { stage: enquiry.stage.code, ownerId: enquiry.ownerId, dueAt: enquiry.dueAt },
+        before: { stage: locked.stage.code, ownerId: locked.ownerId, dueAt: locked.dueAt },
         after: { stage: "FILE_PREPARATION", ownerId: null, dueAt: now, maturedAt: now, maturedById: actor.user.id },
         ip: actor.ip,
       },

@@ -84,12 +84,24 @@ function afterCursor(cursor: ListCursor): Prisma.EnquiryWhereInput {
   return { OR: [{ dueAt: { gt: dueAt } }, { dueAt: null }, { AND: [{ dueAt }, sameDueAtAfter] }] };
 }
 
+/**
+ * The departments whose cases this user gives out: those they are HOD of (the Head: every one). "To assign" lists and
+ * counts only these. A view-only user sees the whole department but doesn't assign, so they are refused like staff.
+ */
+async function assigningDepartments(user: UserWithDepartments) {
+  const departments = (await viewableDepartments(user)).filter((d) => isHodOf(user, d.code as DepartmentCode));
+  if (departments.length === 0) throw forbidden("Only an HOD or the Head assigns cases.");
+  return departments;
+}
+
 export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDepartments) {
-  const departments = await viewableDepartments(user);
+  const departments = query.unassigned ? await assigningDepartments(user) : await viewableDepartments(user);
   let shown = departments;
   if (query.department) {
     shown = departments.filter((d) => d.code === query.department);
-    if (shown.length === 0) throw forbidden("You don't have access to this department's enquiries.");
+    if (shown.length === 0) {
+      throw forbidden(query.unassigned ? "Only the department's HOD or the Head assigns its cases." : "You don't have access to this department's enquiries.");
+    }
   }
 
   // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
@@ -164,8 +176,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
  * user is HOD of; the Head counts every department. Cases should never sit idle without a processor (10 Oct 2026).
  */
 export async function toAssignCount(user: UserWithDepartments) {
-  const departments = (await viewableDepartments(user)).filter((d) => isHodOf(user, d.code as DepartmentCode));
-  if (departments.length === 0) throw forbidden("Only an HOD or the Head assigns cases.");
+  const departments = await assigningDepartments(user);
   const count = await prisma.enquiry.count({
     where: { status: "OPEN", ownerId: null, departmentId: { in: departments.map((d) => d.id) } },
   });
