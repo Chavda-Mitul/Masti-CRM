@@ -19,6 +19,7 @@ import type {
   HolidayTargetOptions,
   MasterResource,
   Offering,
+  Vendor,
   VisaType,
 } from './types'
 
@@ -136,6 +137,7 @@ interface MasterRow {
   'follow-up-outcomes': FollowUpOption
   'follow-up-next-steps': FollowUpOption
   'enquiry-reasons': EnquiryReason
+  vendors: Vendor
 }
 
 /** The JSON key each list and save comes back under. */
@@ -148,6 +150,7 @@ const LIST_KEY = {
   'follow-up-outcomes': 'outcomes',
   'follow-up-next-steps': 'nextSteps',
   'enquiry-reasons': 'reasons',
+  vendors: 'vendors',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -158,6 +161,7 @@ const ITEM_KEY = {
   'follow-up-outcomes': 'outcome',
   'follow-up-next-steps': 'nextStep',
   'enquiry-reasons': 'reason',
+  vendors: 'vendor',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -185,6 +189,10 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
         void queryClient.invalidateQueries({ queryKey: holidayKeys.all })
         void queryClient.invalidateQueries({ queryKey: masterKeys.list('embassies') })
       }
+      // A vendor lists its countries by name.
+      if (resource === 'countries') void queryClient.invalidateQueries({ queryKey: masterKeys.list('vendors') })
+      // Vendors change nothing else (the case's vendor picker comes with Step 3).
+      if (resource === 'vendors') return
       if (resource === 'enquiry-sources') {
         // The New enquiry form's "Came in through" chips.
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })

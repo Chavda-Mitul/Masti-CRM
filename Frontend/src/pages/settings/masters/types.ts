@@ -114,6 +114,26 @@ export interface Embassy {
   country: { id: number; code: string; name: string; zone: string | null }
 }
 
+/**
+ * A visa submission agent (docs/decisions/0007-visa-file-prep.md Decision 7). Only the Visa HOD or the Head adds one,
+ * and adding approves it. Switched off, never deleted.
+ */
+export interface Vendor {
+  id: number
+  kind: 'VISA_AGENT'
+  name: string
+  city: string
+  contactName: string | null
+  /** +91XXXXXXXXXX */
+  mobile: string | null
+  email: string | null
+  isActive: boolean
+  /** The countries it submits files for, by name. */
+  countries: { id: number; code: string; name: string; zone: string | null }[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface DocumentMaster {
   id: number
   code: string
@@ -205,3 +225,4 @@ export type MasterResource =
   | 'follow-up-outcomes'
   | 'follow-up-next-steps'
   | 'enquiry-reasons'
+  | 'vendors'

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { normaliseMobile } from "../src/lib/contact";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN, PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
+import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
@@ -39,10 +40,16 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays and checklists the same way (Settings → Masters)", async () => {
-    const frontend = (await import(frontendMasterSchemas)) as { MAX_RANGE_DAYS: number; MAX_TARGETS: number; MAX_CHECKLIST_ITEMS: number };
+  it("limits holidays, checklists and vendors the same way (Settings → Masters)", async () => {
+    const frontend = (await import(frontendMasterSchemas)) as {
+      MAX_RANGE_DAYS: number;
+      MAX_TARGETS: number;
+      MAX_CHECKLIST_ITEMS: number;
+      MAX_VENDOR_COUNTRIES: number;
+    };
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
     expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
     expect(frontend.MAX_CHECKLIST_ITEMS).toBe(MAX_CHECKLIST_ITEMS);
+    expect(frontend.MAX_VENDOR_COUNTRIES).toBe(MAX_VENDOR_COUNTRIES);
   });
 });

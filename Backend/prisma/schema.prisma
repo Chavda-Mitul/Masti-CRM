@@ -344,6 +344,7 @@ model Country {
   offerings      VisaOffering[]
   embassies      Embassy[]
   holidayTargets HolidayTarget[]
+  vendors        VendorCountry[]
 }
 
 model VisaType {
@@ -369,6 +370,44 @@ model Embassy {
   country        Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
   holidayTargets HolidayTarget[]
 
+  @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Vendors (docs/decisions/0007-visa-file-prep.md Decision 7). Only the Visa HOD or the Head adds one, and adding
+// approves it. Switched off, never deleted: a case that picked a vendor keeps it.
+// ---------------------------------------------------------------------------
+
+/// Visa submission agents now; hotel vendors join with Hotels (Stage 2).
+enum VendorKind {
+  VISA_AGENT
+}
+
+/// Unique (kind, lower(name), lower(city)), and name and city not blank: hand-written in the migration.
+model Vendor {
+  id          Int             @id @default(autoincrement())
+  kind        VendorKind      @default(VISA_AGENT)
+  name        String /// "Global Visa Services"
+  city        String /// "Mumbai"
+  contactName String?
+  /// +91XXXXXXXXXX (src/lib/contact.ts).
+  mobile      String?
+  /// Lowercased. Step 4's dispatch email will need it.
+  email       String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  countries   VendorCountry[]
+}
+
+/// The countries a vendor submits files for ("Mumbai · Schengen"). Replaced as a set when the vendor is edited.
+model VendorCountry {
+  vendorId  Int
+  countryId Int
+  vendor    Vendor  @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@id([vendorId, countryId])
   @@index([countryId])
 }
 

@@ -158,6 +158,17 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
 - **A vendor switched off after being picked** stays on the case for the record, but "File ready" asks for an active
   one.
 
+**Built 12 Oct 2026** (the master only; picking a vendor on a case comes with the Step 3 case work):
+
+- **Backend:** `Backend/src/modules/vendors/` and migration `20261012090000_vendors`.
+- **Screen:** Settings → Masters → Lists → **Vendors**, plus a Vendors card on the Masters page.
+- **Settled while building:**
+  - The duplicate check compares `lower(name)` and `lower(city)`, exactly as the unique index does, so the friendly
+    message and the database never disagree.
+  - A country switched off later stays on the vendors that already cover it; it just can't be added to another vendor.
+  - `prisma migrate diff` doesn't propose dropping the expression index, so only `HolidayTarget_unique` needs removing
+    from its output, as before.
+
 ### 8. The saved file, kept as proof
 
 The first upload in the CRM (golden rule 4: S3-compatible, private, shared through short-lived pre-signed links).
