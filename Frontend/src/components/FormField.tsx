@@ -8,6 +8,7 @@ export function FormField({
   children,
   wide,
   required,
+  className,
 }: {
   label: string
   error?: string | undefined
@@ -17,9 +18,11 @@ export function FormField({
   wide?: boolean
   /** Shows a red * after the label. The form's own validation is what enforces it. */
   required?: boolean
+  /** Extra classes on the field, e.g. its width in a 12-column grid. */
+  className?: string
 }) {
   return (
-    <label className={`field${error ? ' field-invalid' : ''}`} style={wide ? { gridColumn: '1 / -1' } : undefined}>
+    <label className={`field${error ? ' field-invalid' : ''}${className ? ` ${className}` : ''}`} style={wide ? { gridColumn: '1 / -1' } : undefined}>
       <span>
         {label}
         {required && <RequiredMark />}

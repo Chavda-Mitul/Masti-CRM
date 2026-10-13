@@ -314,46 +314,87 @@ fieldset:disabled .seg-sm label {
 }
 .company-card {
   align-items: stretch;
+  gap: 0;
 }
-.company-numbering {
-  max-width: 560px;
+.company-card > .h2 {
+  margin-bottom: 12px;
+}
+.company-card > .alert {
+  margin-bottom: 4px;
 }
 .company-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
+/* One part of the card: a title and what it's for on the left, the fields on the right. */
 .company-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px 32px;
+  padding: 22px 0;
+  border-top: 1px solid var(--divider);
+}
+.company-card > .alert + .company-form > .company-section:first-child,
+.company-card > .h2 + .company-form > .company-section:first-child {
+  border-top: 0;
+}
+.company-section-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+}
+.company-section-head p {
   margin: 0;
-  padding: 0;
-  border: 0;
+  line-height: 1.45;
+}
+.company-section-body {
   min-width: 0;
 }
-.company-section > .lbl {
-  padding: 0;
-}
-.company-section p {
-  margin: 0;
-}
-.company-grid {
+/* The fields: a 12-column grid, each field given its width. */
+.company-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px 14px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.company-fields > .field {
+  min-width: 0;
+}
+.company-fields .span-2 {
+  grid-column: span 2;
+}
+.company-fields .span-3 {
+  grid-column: span 3;
+}
+.company-fields .span-4 {
+  grid-column: span 4;
+}
+.company-fields .span-5 {
+  grid-column: span 5;
+}
+.company-fields .span-6 {
+  grid-column: span 6;
+}
+.company-fields .span-12 {
+  grid-column: 1 / -1;
+}
+.company-fields .textarea {
+  min-height: 0;
+}
+.company-form-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 6px;
 }
 .company-view {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 6px 18px;
 }
-.company-extras {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--divider);
+.company-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .company-terms-list {
   margin: 0;
@@ -362,8 +403,8 @@ fieldset:disabled .seg-sm label {
 }
 .company-images {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 20px;
 }
 .company-image {
   display: flex;
@@ -374,7 +415,7 @@ fieldset:disabled .seg-sm label {
 }
 .company-image-box {
   width: 100%;
-  height: 96px;
+  height: 110px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -388,14 +429,34 @@ fieldset:disabled .seg-sm label {
   max-height: 100%;
   object-fit: contain;
 }
+/* Narrower: the title goes above the fields, and the fields pair up. */
+@media (max-width: 1100px) {
+  .company-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .company-fields .span-2,
+  .company-fields .span-3,
+  .company-fields .span-4,
+  .company-fields .span-5 {
+    grid-column: span 6;
+  }
+  /* Takes the whole row here, so the fields after it pair up evenly. */
+  .company-fields .wide-md {
+    grid-column: 1 / -1;
+  }
+}
+/* A phone: one field per row. */
+@media (max-width: 600px) {
+  .company-fields > .field {
+    grid-column: 1 / -1;
+  }
+  .company-images {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .invoice-number-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 12px;
   width: 100%;
-}
-@media (max-width: 760px) {
-  .company-extras {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }

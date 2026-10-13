@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
@@ -42,15 +42,30 @@ export function CompanyDetailsCard() {
             </div>
           )}
           {isHead ? <DetailsForm details={view.data.details} /> : <DetailsView details={view.data.details} />}
-          <div className="company-extras">
+          <Section title="Invoice terms" description="Printed at the foot of every invoice, one term per line, up to 10.">
             <TermsSection canEdit={isHead} />
+          </Section>
+          <Section title="Logo & signature" description="PNG or JPEG, up to 2 MB each. Both are printed on every invoice.">
             <div className="company-images">
               <ImageTile kind="logo" label="Logo" image={view.data.images.logo} canEdit={isHead} />
-              <ImageTile kind="signature" label="Signature" image={view.data.images.signature} canEdit={isHead} note="Printed on every invoice." />
+              <ImageTile kind="signature" label="Signature" image={view.data.images.signature} canEdit={isHead} />
             </div>
-          </div>
+          </Section>
         </>
       )}
+    </section>
+  )
+}
+
+/** One part of the card: its title and what it's for on the left, its fields on the right (stacked on a narrow screen). */
+function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <section className="company-section">
+      <div className="company-section-head">
+        <h3 className="company-section-title">{title}</h3>
+        <p className="muted small">{description}</p>
+      </div>
+      <div className="company-section-body">{children}</div>
     </section>
   )
 }
@@ -75,14 +90,16 @@ function DetailsView({ details: d }: { details: CompanyDetails }) {
     ['SWIFT', d.bank?.swift ?? null],
   ]
   return (
-    <dl className="kv-list company-view">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value ?? <span className="muted">Not set</span>}</dd>
-        </div>
-      ))}
-    </dl>
+    <Section title="Details" description="Printed on parcel stickers and invoices. The Head changes them.">
+      <dl className="kv-list company-view">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value ?? <span className="muted">Not set</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </Section>
   )
 }
 
@@ -133,10 +150,20 @@ function toBody(v: CompanyDetailsFormValues): Partial<CompanyDetails> {
 
 const FIELDS = ['name', 'address', 'phone', 'phone2', 'email', 'website', 'pan', 'gstin', 'stateCode'] as const
 
+/**
+ * The Head's form. It is built once the GST states are in: a select only shows its saved value if that option exists
+ * when the form starts, and a blank state would then be saved over the real one.
+ */
 function DetailsForm({ details }: { details: CompanyDetails }) {
+  const options = useClientOptions()
+  if (options.isPending) return <p className="muted">Loading…</p>
+  if (options.isError) return <div className="alert alert-bad">{errorText(options.error)}</div>
+  return <DetailsFormFields details={details} states={options.data.states} />
+}
+
+function DetailsFormFields({ details, states }: { details: CompanyDetails; states: { code: string; name: string }[] }) {
   const toast = useToast()
   const update = useUpdateCompanyDetails()
-  const options = useClientOptions()
   const { register, handleSubmit, formState, reset, setError } = useForm<CompanyDetailsFormValues>({
     resolver: zodResolver(companyDetailsFormSchema),
     defaultValues: toForm(details),
@@ -162,45 +189,42 @@ function DetailsForm({ details }: { details: CompanyDetails }) {
   })
 
   return (
-    <form onSubmit={onSubmit} noValidate className="settings-form company-form">
-      <fieldset className="company-section">
-        <legend className="lbl">Company</legend>
-        <p className="muted small">The name, address and phone are printed as “From” on every parcel sticker, and head every invoice.</p>
-        <div className="form-grid company-grid">
-          <FormField label="Name" error={errors.name?.message}>
+    <form onSubmit={onSubmit} noValidate className="company-form">
+      <Section title="Company" description="The name, address and phone are printed as “From” on every parcel sticker, and head every invoice.">
+        <div className="company-fields">
+          <FormField className="span-6 wide-md" label="Name" error={errors.name?.message}>
             <input className="input" {...register('name')} />
           </FormField>
-          <FormField label="Phone" error={errors.phone?.message}>
+          <FormField className="span-3" label="Phone" error={errors.phone?.message}>
             <input className="input" {...register('phone')} />
           </FormField>
-          <FormField label="Address" error={errors.address?.message}>
-            <textarea className="input textarea" rows={2} {...register('address')} />
-          </FormField>
-          <FormField label="24/7 phone" error={errors.phone2?.message}>
+          <FormField className="span-3" label="24/7 phone" error={errors.phone2?.message}>
             <input className="input" {...register('phone2')} />
           </FormField>
-          <FormField label="Email" error={errors.email?.message}>
+          <FormField className="span-12" label="Address" error={errors.address?.message}>
+            <textarea className="input textarea" rows={2} {...register('address')} />
+          </FormField>
+          <FormField className="span-6" label="Email" error={errors.email?.message}>
             <input className="input" type="email" {...register('email')} placeholder="accounts@…" />
           </FormField>
-          <FormField label="Website" error={errors.website?.message}>
+          <FormField className="span-6" label="Website" error={errors.website?.message}>
             <input className="input" {...register('website')} placeholder="www.…" />
           </FormField>
         </div>
-      </fieldset>
+      </Section>
 
-      <fieldset className="company-section">
-        <legend className="lbl">Tax</legend>
-        <div className="form-grid company-grid">
-          <FormField label="GSTIN" error={errors.gstin?.message} hint="The PAN and state fill in from it when left empty.">
-            <input className="input mono upper" {...register('gstin')} />
+      <Section title="Tax" description="Printed on every invoice. Fill in the GSTIN and the PAN and state fill in from it.">
+        <div className="company-fields">
+          <FormField className="span-5" label="GSTIN" error={errors.gstin?.message}>
+            <input className="input mono upper" {...register('gstin')} placeholder="15 characters" />
           </FormField>
-          <FormField label="PAN" error={errors.pan?.message}>
+          <FormField className="span-3" label="PAN" error={errors.pan?.message}>
             <input className="input mono upper" {...register('pan')} />
           </FormField>
-          <FormField label="State" error={errors.stateCode?.message} hint="Decides CGST + SGST or IGST on each invoice.">
-            <select className="select" {...register('stateCode')} disabled={options.isPending}>
+          <FormField className="span-4 wide-md" label="State" error={errors.stateCode?.message} hint="Decides CGST + SGST or IGST.">
+            <select className="select" {...register('stateCode')}>
               <option value="">Not set</option>
-              {(options.data?.states ?? []).map((s) => (
+              {states.map((s) => (
                 <option key={s.code} value={s.code}>
                   {s.name} ({s.code})
                 </option>
@@ -208,36 +232,35 @@ function DetailsForm({ details }: { details: CompanyDetails }) {
             </select>
           </FormField>
         </div>
-      </fieldset>
+      </Section>
 
-      <fieldset className="company-section">
-        <legend className="lbl">Bank</legend>
-        <div className="form-grid company-grid">
-          <FormField label="Account name" error={errors.accountName?.message}>
+      <Section title="Bank" description="The account clients pay into, printed at the foot of every invoice.">
+        <div className="company-fields">
+          <FormField className="span-6" label="Account name" error={errors.accountName?.message}>
             <input className="input" {...register('accountName')} />
           </FormField>
-          <FormField label="Account number" error={errors.accountNo?.message}>
+          <FormField className="span-6" label="Account number" error={errors.accountNo?.message}>
             <input className="input mono" inputMode="numeric" {...register('accountNo')} />
           </FormField>
-          <FormField label="Bank" error={errors.bankName?.message}>
+          <FormField className="span-4" label="Bank" error={errors.bankName?.message}>
             <input className="input" {...register('bankName')} />
           </FormField>
-          <FormField label="Branch" error={errors.branch?.message}>
+          <FormField className="span-4" label="Branch" error={errors.branch?.message}>
             <input className="input" {...register('branch')} />
           </FormField>
-          <FormField label="IFSC" error={errors.ifsc?.message}>
+          <FormField className="span-2" label="IFSC" error={errors.ifsc?.message}>
             <input className="input mono upper" {...register('ifsc')} />
           </FormField>
-          <FormField label="SWIFT" error={errors.swift?.message} hint="Optional: for payments from abroad.">
+          <FormField className="span-2" label="SWIFT" error={errors.swift?.message} hint="Optional">
             <input className="input mono upper" {...register('swift')} />
           </FormField>
         </div>
-      </fieldset>
+      </Section>
 
       {bankError && <div className="alert alert-bad">Bank: {bankError}</div>}
       {update.error && !errorBody(update.error)?.issues && <div className="alert alert-bad">{errorText(update.error)}</div>}
-      <div>
-        <button type="submit" className="btn btn-sm btn-primary" disabled={!formState.isDirty || update.isPending}>
+      <div className="company-form-foot">
+        <button type="submit" className="btn btn-primary" disabled={!formState.isDirty || update.isPending}>
           {update.isPending ? 'Saving…' : 'Save details'}
         </button>
       </div>
@@ -256,14 +279,12 @@ function TermsSection({ canEdit }: { canEdit: boolean }) {
   const issues = errorBody(save.error)?.issues
 
   return (
-    <div className="company-section company-terms">
-      <span className="lbl">Invoice terms</span>
+    <div className="company-terms">
       {terms.isPending ? (
         <p className="muted small">Loading…</p>
       ) : canEdit ? (
         <>
           <textarea className="input textarea" rows={6} value={text} onChange={(e) => setDraft(e.target.value)} aria-label="Invoice terms, one per line" />
-          <span className="muted small">One term per line, up to 10. Printed at the foot of every invoice.</span>
           {(issues?.lines?.[0] ?? (save.error && errorText(save.error))) && <div className="alert alert-bad">{issues?.lines?.[0] ?? errorText(save.error)}</div>}
           <div>
             <button
@@ -298,7 +319,7 @@ function TermsSection({ canEdit }: { canEdit: boolean }) {
 }
 
 /** The logo or the signature: a preview, who uploaded it, and Upload / Replace for the Head. */
-function ImageTile({ kind, label, image, canEdit, note }: { kind: CompanyImageKind; label: string; image: CompanyImage | null; canEdit: boolean; note?: string }) {
+function ImageTile({ kind, label, image, canEdit }: { kind: CompanyImageKind; label: string; image: CompanyImage | null; canEdit: boolean }) {
   const toast = useToast()
   const upload = useUploadCompanyImage(kind)
   const link = useCompanyImageLink(kind, !!image)
@@ -332,7 +353,6 @@ function ImageTile({ kind, label, image, canEdit, note }: { kind: CompanyImageKi
           {image.uploadedBy.name}, {formatDateTime(image.uploadedAt)}
         </span>
       )}
-      {note && <span className="muted small">{note}</span>}
       {canEdit && (
         <>
           <button type="button" className="btn btn-sm" disabled={upload.isPending} onClick={() => input.current?.click()}>
@@ -346,7 +366,6 @@ function ImageTile({ kind, label, image, canEdit, note }: { kind: CompanyImageKi
             aria-label={`${label} image`}
             onChange={(e) => send(e.target.files?.[0])}
           />
-          <span className="muted small">PNG or JPEG, up to 2 MB</span>
         </>
       )}
     </div>
