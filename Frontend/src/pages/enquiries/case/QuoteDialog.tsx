@@ -117,130 +117,150 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
     )
   }
 
+  const total = travellersPaise + servicePaise + tax
+
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog quote-dialog" role="dialog" aria-modal="true" aria-labelledby="quote-title" onClick={(e) => e.stopPropagation()}>
-        <h2 className="h2" id="quote-title">
-          {q ? 'Edit the quote' : 'Add a quote'} · {c.caseNo}
-        </h2>
-        <p className="muted small" style={{ margin: 0 }}>
-          The invoice is built from this quote; nobody types amounts on the invoice. Each traveller: one lump sum, or
-          itemised.
-        </p>
+        <header className="quote-head">
+          <div>
+            <h2 className="h2" id="quote-title">
+              {q ? 'Edit the quote' : 'Add a quote'}
+            </h2>
+            <p className="muted small" style={{ margin: 0 }}>
+              <span className="mono">{c.caseNo}</span> · {c.travellers.length} {c.travellers.length === 1 ? 'traveller' : 'travellers'}. The invoice is
+              built from this quote, so this is the only place amounts are typed.
+            </p>
+          </div>
+          <button type="button" className="quote-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </header>
 
-        <label className="field">
-          <span className="lbl">Processing speed</span>
-          <select className="select" value={chosenSpeed} onChange={(e) => setSpeedId(e.target.value)} disabled={speeds.isPending}>
-            {!chosenSpeed && <option value="">{speeds.isPending ? 'Loading…' : 'Pick a speed…'}</option>}
-            {speedOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.isActive ? '' : ' (switched off)'}
-              </option>
-            ))}
-          </select>
-          {/* An empty list (no speeds added, or all switched off) would otherwise look like a broken dropdown. */}
-          {speeds.isSuccess && speedOptions.length === 0 ? (
-            <span className="field-error">
-              No processing speeds yet. Ask the Visa HOD to add them in Settings → Masters → Lists → Processing speeds.
-            </span>
-          ) : (
-            tried && !chosenSpeed && <span className="field-error">Pick the processing speed.</span>
-          )}
-        </label>
-
-        <div className="quote-lines">
-          {lines.map(({ traveller: t, result }) => {
-            const d = drafts[t.id]!
-            return (
-              <div key={t.id} className="quote-line">
-                <div className="quote-line-head">
-                  <strong>{t.member?.name ?? t.name ?? t.label}</strong>
-                  <div className="seg-btn" role="radiogroup" aria-label={`How ${t.label} is priced`}>
-                    {(['LUMP_SUM', 'ITEMISED'] as const).map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        role="radio"
-                        aria-checked={d.form === f}
-                        className={d.form === f ? 'on' : ''}
-                        onClick={() => setDraft(t.id, { form: f })}
-                      >
-                        {f === 'LUMP_SUM' ? 'Lump sum' : 'Itemised'}
-                      </button>
-                    ))}
+        <div className="quote-body">
+          <section className="quote-section">
+            <h3 className="lbl">Travellers</h3>
+            <div className="quote-lines">
+              {lines.map(({ traveller: t, result }, i) => {
+                const d = drafts[t.id]!
+                const name = t.member?.name ?? t.name
+                return (
+                  <div key={t.id} className="quote-line">
+                    <div className="quote-line-head">
+                      <span className="quote-line-no">{i + 1}</span>
+                      <div className="quote-line-who">
+                        <strong>{name ?? t.label}</strong>
+                        {name && <span className="muted small">{t.label}</span>}
+                      </div>
+                      <div className="seg-btn" role="radiogroup" aria-label={`How ${t.label} is priced`}>
+                        {(['LUMP_SUM', 'ITEMISED'] as const).map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            role="radio"
+                            aria-checked={d.form === f}
+                            className={d.form === f ? 'on' : ''}
+                            onClick={() => setDraft(t.id, { form: f })}
+                          >
+                            {f === 'LUMP_SUM' ? 'Lump sum' : 'Itemised'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className={`quote-amounts${d.form === 'ITEMISED' ? ' itemised' : ''}`}>
+                      {d.form === 'LUMP_SUM' ? (
+                        <MoneyInput label="Amount" value={d.lumpSum} onChange={(v) => setDraft(t.id, { lumpSum: v })} placeholder="0.00" />
+                      ) : (
+                        ITEMS.map(([key, label]) => (
+                          <MoneyInput key={key} label={label} value={d[key]} onChange={(v) => setDraft(t.id, { [key]: v })} placeholder="0" />
+                        ))
+                      )}
+                      <div className="quote-line-total">
+                        <span className="lbl">Total</span>
+                        {'total' in result ? <strong>{formatRupees(result.total)}</strong> : <strong className="muted">—</strong>}
+                      </div>
+                    </div>
+                    {tried && 'error' in result && <span className="field-error">{result.error}</span>}
                   </div>
-                </div>
-                <div className="quote-amounts">
-                  {d.form === 'LUMP_SUM' ? (
-                    <label className="field">
-                      <span className="lbl">Amount (₹)</span>
-                      <input className="input" inputMode="decimal" value={d.lumpSum} onChange={(e) => setDraft(t.id, { lumpSum: e.target.value })} />
-                    </label>
-                  ) : (
-                    ITEMS.map(([key, label]) => (
-                      <label key={key} className="field">
-                        <span className="lbl">{label} (₹)</span>
-                        <input
-                          className="input"
-                          inputMode="decimal"
-                          value={d[key]}
-                          placeholder="0"
-                          onChange={(e) => setDraft(t.id, { [key]: e.target.value })}
-                        />
-                      </label>
-                    ))
-                  )}
-                </div>
-                <div className="quote-line-total">
-                  {'total' in result ? (
-                    <span>{formatRupees(result.total)}</span>
-                  ) : (
-                    tried && <span className="field-error">{result.error}</span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="quote-section quote-case">
+            <label className="field">
+              <span className="lbl">Processing speed</span>
+              <select className="select" value={chosenSpeed} onChange={(e) => setSpeedId(e.target.value)} disabled={speeds.isPending}>
+                {!chosenSpeed && <option value="">{speeds.isPending ? 'Loading…' : 'Pick a speed…'}</option>}
+                {speedOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.isActive ? '' : ' (switched off)'}
+                  </option>
+                ))}
+              </select>
+              {/* An empty list (no speeds added, or all switched off) would otherwise look like a broken dropdown. */}
+              {speeds.isSuccess && speedOptions.length === 0 ? (
+                <span className="field-error">
+                  No processing speeds yet. Ask the Visa HOD to add them in Settings → Masters → Lists → Processing speeds.
+                </span>
+              ) : (
+                tried && !chosenSpeed && <span className="field-error">Pick the processing speed.</span>
+              )}
+            </label>
+            <div className="field">
+              <MoneyInput label="Masti’s service charge" value={service} onChange={setService} placeholder="0" />
+              <span className="muted small">GST {rate}% applies to this part only.</span>
+              {tried && 'error' in serviceAmount && <span className="field-error">{serviceAmount.error}</span>}
+            </div>
+          </section>
+
+          {speeds.isError && <div className="alert alert-bad">{errorText(speeds.error)}</div>}
+          {serverMessage && <div className="alert alert-bad">{serverMessage}</div>}
         </div>
 
-        <label className="field">
-          <span className="lbl">Masti’s service charge (₹)</span>
-          <input className="input" inputMode="decimal" value={service} placeholder="0" onChange={(e) => setService(e.target.value)} style={{ maxWidth: 200 }} />
-          <span className="muted small">GST applies to this part only.</span>
-          {tried && 'error' in serviceAmount && <span className="field-error">{serviceAmount.error}</span>}
-        </label>
-
-        <div className="quote-totals">
-          <div className="kv">
-            <span>Travellers</span>
-            <span>{formatRupees(travellersPaise)}</span>
+        <footer className="quote-foot">
+          <dl className="quote-sums">
+            <div>
+              <dt>Travellers</dt>
+              <dd>{formatRupees(travellersPaise)}</dd>
+            </div>
+            <div>
+              <dt>Service</dt>
+              <dd>{formatRupees(servicePaise)}</dd>
+            </div>
+            <div>
+              <dt>GST {rate}%</dt>
+              <dd>{formatRupees(tax)}</dd>
+            </div>
+            <div className="quote-grand">
+              <dt>Total</dt>
+              <dd>{formatRupees(total)}</dd>
+            </div>
+          </dl>
+          <div className="quote-actions">
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary" disabled={save.isPending || (tried && !valid)} onClick={submit}>
+              {save.isPending ? 'Saving…' : 'Save quote'}
+            </button>
           </div>
-          <div className="kv">
-            <span>Service charge</span>
-            <span>{formatRupees(servicePaise)}</span>
-          </div>
-          <div className="kv">
-            <span>GST {rate}% on the service charge</span>
-            <span>{formatRupees(tax)}</span>
-          </div>
-          <div className="kv quote-total">
-            <span>Total</span>
-            <strong>{formatRupees(travellersPaise + servicePaise + tax)}</strong>
-          </div>
-        </div>
-
-        {speeds.isError && <div className="alert alert-bad">{errorText(speeds.error)}</div>}
-        {serverMessage && <div className="alert alert-bad">{serverMessage}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="btn" onClick={onClose}>
-            Close
-          </button>
-          <button type="button" className="btn btn-primary" disabled={save.isPending || (tried && !valid)} onClick={submit}>
-            {save.isPending ? 'Saving…' : 'Save quote'}
-          </button>
-        </div>
+        </footer>
       </div>
     </div>
+  )
+}
+
+/** An amount in rupees, with ₹ inside the box and the figures right-aligned. */
+function MoneyInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <label className="field money-field">
+      <span className="lbl">{label}</span>
+      <span className="money-input">
+        <span aria-hidden="true">₹</span>
+        <input className="input" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      </span>
+    </label>
   )
 }
