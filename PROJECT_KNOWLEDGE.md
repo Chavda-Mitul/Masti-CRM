@@ -1604,7 +1604,7 @@ Masti CRM/
 | 4 | Hotel options per quote | Client: max 3–4 (5 tolerated). Demo and PID: up to 4. | Limit 4, configurable. |
 | 5 | Hotel markup floor | Client: nice-to-have ("no big need right now"), by category or price range. PID: "minimum markup is set by star rating". Demo: 3★ 10%, 4★ 8%, 5★ 6%. | In scope (PID), by star rating. The values are samples (Q17). |
 | 6 | Hotel competitor sites | Client: the company picks its competitors (e.g. 4; MakeMyTrip + 3). PID and demo: MakeMyTrip, Agoda, Booking.com + vendor. | A configurable list, seeded with the PID's three + vendor (Q18). |
-| 7 | When the visa invoice is raised | Written doc: before couriering to the vendor. Meeting: at courier time, or earlier where fees are paid upfront (VFS). Demo: it must be locked before the docket leaves. | It must exist before dispatch; allow it earlier (Q6). |
+| 7 | When the visa invoice is raised | Written doc: before couriering to the vendor. Meeting: at courier time, or earlier where fees are paid upfront (VFS). Demo: it must be locked before the docket leaves. | **Decided 13 Oct 2026 (0009):** any time after the quote is entered, required before dispatch; raised by the case owner, the Visa HOD or the Head. |
 | 8 | Visa intake fields | Written doc: "country, time, type, no. of pax". Meeting and demo: country, visa type, adults, children (+ mobile). | **Decided 8 Oct 2026:** "time" is the travel month/date, captured at intake. Intake = country, visa type, adults, children, travel month (+ optional exact date) + mobile. |
 | 9 | Additional-invoice limit outside visa | Only stated for visa files (max 1) | Apply it to visa; ask before generalising. |
 | 10 | Ticket fare changes vs locked invoices | The fare-change log shows "Add to invoice" | Bill through a new invoice or a credit note. Never edit an issued invoice. Confirm the mechanism. |
@@ -1652,6 +1652,18 @@ Masti CRM/
 - **Q29:** old clients come as an Excel file; an import job is built later.
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
+
+**Decided 13 Oct 2026 (project lead), for the visa invoice.** The design is `docs/decisions/0009-visa-invoice.md` (decided; not built yet).
+- **The CRM makes visa invoices** from go-live; Masti's current software stops issuing them (an export can come later, Q26).
+- **The price is a quote on the case** (per traveller a lump sum, or itemised embassy / VFS / other, plus Masti's service charge), editable and audited until the invoice is raised, then frozen. The invoice copies it. There is no fee sheet per visa: Masti quotes lump sums (B1 dropped).
+- **GST only on the service charge** (18% ⚠️, SAC 998559 ⚠️, settings): CGST + SGST for Gujarat clients, IGST otherwise; no service charge means no tax line. ⚠️ Masti's accountant to confirm.
+- **Numbering continues Masti's series:** `MVI` + 8 digits, never restarting, with the starting number a setting. This replaces the 9 Oct "our choice" decision.
+- **Q6 answered:** raised any time after the quote, required before dispatch, by the case owner, the Visa HOD or the Head; the client must pass `clients.invoiceReadiness`; a confirm step first.
+- **One invoice per case,** one line per traveller. **A server PDF** in Masti's layout, stored privately and never regenerated.
+- **Printed from settings:** `company.details` gains the second phone, email, website, PAN, GSTIN, state code and bank details; the terms are a list; the **logo and signature images** are uploaded by the Head.
+- **Never edited** (a database trigger). The additional invoice and the credit note come with Step 5. ❓ **Correcting a wrong invoice before dispatch** is open, for Masti's accountant.
+- **Not in 0009:** payments and the balance, WhatsApp sending, cross-sell leads, the accounting export, other departments' invoices.
+- **Build order:** the quote card → invoice settings → raising the invoice (+ PDF) → the Docket card's Invoice column → then the Dispatch card (0008).
 
 **Decided 13 Oct 2026 (project lead), for Visa Step 4 (Docket & dispatch).** The design is `docs/decisions/0008-visa-docket-dispatch.md` (decided; not built yet).
 - **Build order:** dockets and the sticker first, then the visa invoice in its own record (0009), then dispatch, always with the invoice check. No file can leave without its invoice (rule 3).
@@ -1704,7 +1716,7 @@ Masti CRM/
 - **Step 2 includes:** the per-traveller checklist (naming travellers), the follow-up log (three dropdowns) with "My follow-ups", postpone/cancel with fixed reasons, a consent flag per traveller (the "I agree" link waits for WhatsApp), and booklets received plus how documents arrive (the collection boy's job waits for the field app).
 - **Document storage is open again: an S3 bucket or Drive**, decided later (changes golden rule 4, which assumed Drive/OneDrive links only). Step 2 is built without storing files; don't build anything that assumes links only.
 - **WhatsApp templates:** we draft them in **English** and show the client; they go to Meta after the client approves. Replaces waiting for Vimal's wording (Q8/M1).
-- **Invoice number series:** our choice, kept as a setting (not hard-coded). M7's "continue the current series" is dropped.
+- **Invoice number series:** our choice, kept as a setting (not hard-coded). M7's "continue the current series" is dropped. *(Replaced 13 Oct 2026 by 0009: continue Masti's `MVI` series, with the starting number a setting.)*
 - **Docket and dispatch (Q1):** the project lead takes it to the client. Not built yet. *(13 Oct 2026: our answer is in the Visa Step 4 block above and 0008.)*
 - **Payment/advance (S1):** not a blocker.
 
@@ -1728,7 +1740,7 @@ Masti CRM/
 | 3 | Collection boy's device: phone or tablet; web app or WhatsApp-only jobs? | Y→C | 1 |
 | 4 | Click-to-login: how it works, which portals it supports | Y | 1 |
 | 5 | ~~Reminder schedule~~ **Answered 8 Oct:** an admin setting, seeded 2 days / 11:00 | C | 1 |
-| 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** still open; the invoice gets its own record (0009) and is required before dispatch (0008) | C | 1 |
+| 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** answered in 0009: any time after the quote, required before dispatch (0008) | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
 | 8 | WhatsApp message step list and wording (urgent: Meta approval). **8 Oct:** placeholder text until then; still needed | C | 1 |
 | 9 | Consent wording (passport-transit risk, booking-before-visa risk) | C | 1 |
