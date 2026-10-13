@@ -2,7 +2,7 @@
 
 - **Status:** decided (13 Oct 2026, project lead). Components 1–3, the quote, the invoice settings and raising the
   invoice, are built
-  (13 Oct 2026). One point is waiting for Masti's accountant
+  (13 Oct 2026). Masti answered M36 the same day: GST as built (Decision 3), and every correction is a credit note
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** the price quoted on a visa case, and raising the visa tax invoice from it:
@@ -26,6 +26,8 @@ What the sources say:
 | Demo ⚠️ (screen 09) | The docket's Invoice column ("INV-0412 · locked" / "Raise invoice first"). The rule copy: "The invoice is built from the price quoted at the start — nobody types amounts — and can never be edited." The right rail shows "Money on this case". |
 | Masti, 13 Oct 2026 (through the project lead) | Masti often quotes **one lump sum**, with no strict fee breakdown. There is no fee sheet per visa (the hand-over plan's B1 assumption is dropped). |
 | Masti's two invoice PDFs (13 Oct 2026; real client data, kept out of the repo) | See below. |
+| Masti, 13 Oct 2026 (through the project lead), answering M36 | A flat **18% GST on Masti's own service charge** only. An invoice is **never cancelled or changed**; a mistake is corrected only by a **credit note**, even before the file is dispatched. |
+| A vendor's tax invoice to Masti (13 Oct 2026; kept out of the repo) | The same treatment from the other side: 18% IGST only on the vendor's handling, delivery and misc charges; the visa, VFS and DD fees are untaxed, collected "as pure agent". |
 
 **Masti's current TAX INVOICE** (from their accounting software's "Voucher (Single Print)"):
 
@@ -131,10 +133,9 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - any other state: **IGST**
 - **The embassy, VFS and other amounts carry no GST** (passed on).
 - **A quote with no service charge gets no tax line,** like Masti's lump-sum invoice today.
-- ⚠️ **Masti's accountant must confirm** the GST treatment, including lump sums with no service charge. We build what
-  their current invoices show; we aren't tax advisers. Asked as M36 in `QUESTIONS_TO_ASK.md`. **Until they answer
-  (13 Oct 2026, project lead): 18% on the service charge only,** which is the setting's value, so a different answer
-  changes the setting, not the code.
+- **Confirmed 13 Oct 2026 (Masti, M36):** a flat 18% on the service charge only; the embassy, VFS and other amounts
+  are untaxed; a quote with no service charge has no tax line. A vendor's invoice to Masti treats its own fees the
+  same way. This is what was built, so no code changed. The rate stays a setting.
 - **Rounding:** the tax is worked out in paise and rounded to the nearest paisa. CGST and SGST are each half of the
   total tax; if it doesn't split evenly, the odd paisa goes to CGST. The amount in words is in Indian numbering
   ("Four Thousand Rupees").
@@ -290,10 +291,13 @@ copied onto the invoice. A later edit to the client or the company never changes
   `AuditLog_append_only` (migration `20261007191550_auth`).
 - **The one additional invoice per file and the credit note** (a recall refunds the embassy fee only) come with
   **Step 5**, in their own record.
-- ❓ **Open: correcting a wrong invoice before dispatch.** This is a question for Masti's accountant. One option is
-  for the Visa HOD to cancel it with a reason (kept on record, number used) and re-raise; the other is a credit note
-  only. **Until it's answered, a raised invoice can't be undone,** so the confirm step (Decision 5) matters. Asked as
-  M36 in `QUESTIONS_TO_ASK.md`.
+- **Correcting a wrong invoice, decided 13 Oct 2026 (Masti, M36):** an invoice is never cancelled or changed. Every
+  correction is a **credit note**, even before the file is dispatched. The lock as built (no edit route, the trigger)
+  is exactly what they need, and the confirm step (Decision 5) still matters.
+  - **So the credit note must be possible from the moment an invoice is raised,** not only on a recall at Step 5. It
+    is designed with Step 5.
+  - ❓ **Open (M37):** after a credit note, is the corrected invoice the case's one additional invoice, or a new
+    invoice of its own? Decided when the credit note is designed.
 
 ### 10. Not in this record
 
@@ -397,8 +401,9 @@ Then 0008's Dispatch card, with the invoice check.
 
 ## Still needed from Masti
 
-- **Their accountant (M36):** confirm GST on the service charge only, the lump sum with no tax line, and how a wrong
-  invoice is corrected before dispatch (Decision 9). Until then: 18% on the service charge only.
+- ~~Their accountant (M36)~~: **answered 13 Oct 2026.** GST as built (Decision 3); corrections only by credit note
+  (Decision 9).
+- **M37:** after a credit note, is the corrected invoice the one additional invoice, or a new one (Decision 9)?
 - **The last `MVI` number** before go-live (the starting number). Until handover the series starts at 1.
 - ~~The logo and signature artwork~~: **received 13 Oct 2026.** Upload-ready copies (trimmed, print size, under the
   2 MB limit) are in `Masti-CRM-Handover/references/branding/` (gitignored: the signature is never committed). The
