@@ -10,7 +10,7 @@ import type { FollowUpOption } from '../types'
 import { ListCard } from './ListCard'
 import { MasterDrawer, ToggleActiveButton } from './MasterDrawer'
 
-type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps'
+type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps' | 'processing-speeds'
 
 const COPY: Record<OptionResource, { title: string; column: string; one: string; intro: string; placeholder: string; codeHint: string }> = {
   'follow-up-outcomes': {
@@ -29,9 +29,20 @@ const COPY: Record<OptionResource, { title: string; column: string; one: string;
     placeholder: 'Call again',
     codeHint: 'e.g. CALL_AGAIN.',
   },
+  'processing-speeds': {
+    title: 'Processing speeds',
+    column: 'Processing speed',
+    one: 'a processing speed',
+    intro: 'How fast the embassy processes the application, picked on the case’s quote and printed on the invoice line.',
+    placeholder: 'Express',
+    codeHint: 'e.g. EXPRESS.',
+  },
 }
 
-/** The two follow-up dropdowns (0006 Decision 7). No free text: reports count these. */
+/**
+ * Simple dropdown lists of a code and a name: the two follow-up dropdowns (0006 Decision 7) and the processing speeds
+ * on a visa quote (0009). No free text: reports count these.
+ */
 export function FollowUpOptionsTable({ resource, canEdit, showInactive }: { resource: OptionResource; canEdit: boolean; showInactive: boolean }) {
   const copy = COPY[resource]
   const list = useMasterList(resource)

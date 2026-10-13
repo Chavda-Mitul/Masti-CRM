@@ -1664,6 +1664,7 @@ Masti CRM/
 - **Never edited** (a database trigger). The additional invoice and the credit note come with Step 5. ❓ **Correcting a wrong invoice before dispatch** is open, for Masti's accountant.
 - **Not in 0009:** payments and the balance, WhatsApp sending, cross-sell leads, the accounting export, other departments' invoices.
 - **Build order:** the quote card → invoice settings → raising the invoice (+ PDF) → the Docket card's Invoice column → then the Dispatch card (0008).
+- **Built so far:** component 1, **the quote** (13 Oct 2026). "Money on this case" in the case's right rail. Per traveller a lump sum or itemised, plus the service charge and the processing speed (a master list: Normal / Express / Super priority ⚠️). GST is previewed on the service charge. It's editable from Step 1 until the file goes to the vendor, by the case owner, the Visa HOD or the Head, and audited. The `visa.invoice` setting (MVI series, 18% GST) came with it.
 
 **Decided 13 Oct 2026 (project lead), for Visa Step 4 (Docket & dispatch).** The design is `docs/decisions/0008-visa-docket-dispatch.md` (decided; not built yet).
 - **Build order:** dockets and the sticker first, then the visa invoice in its own record (0009), then dispatch, always with the invoice check. No file can leave without its invoice (rule 3).

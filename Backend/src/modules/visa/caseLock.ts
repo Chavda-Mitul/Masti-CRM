@@ -23,6 +23,12 @@ export const PREPARING: StepRule = { stages: ["FILE_PREPARATION"], wrongStage: "
 /** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): adding a file-ready case to a docket, or taking it out. */
 export const DISPATCHING: StepRule = { stages: ["DISPATCH"], wrongStage: "This can only be changed while the case waits for dispatch." };
 
+/** The quote (docs/decisions/0009-visa-invoice.md Decision 2): from Step 1 until the file goes to the vendor. */
+export const QUOTING: StepRule = {
+  stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH"],
+  wrongStage: "The quote can't change once the file has gone to the vendor.",
+};
+
 /** Trip details (0007 Decision 4): captured as the documents come in, and corrected during file preparation. */
 export const TRIP: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION"],

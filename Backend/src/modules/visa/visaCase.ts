@@ -1,5 +1,6 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { fromDbDate } from "../../lib/dates";
+import { lineTotalPaise, quoteTotals } from "../../lib/money";
 import { toMemberDto } from "../clients/client";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
@@ -69,6 +70,10 @@ export const visaCaseInclude = {
       },
       /** Step 4 (0008 Decision 2): the docket this case goes in, with every case in it for the docket table. */
       docket: { select: docketSelect },
+      /** The price (0009 Decision 2), per traveller and Masti's service charge. */
+      quote: {
+        include: { processingSpeed: { select: { id: true, name: true, isActive: true } }, updatedBy: personSelect, lines: true },
+      },
       travellers: {
         orderBy: { position: "asc" },
         include: {
@@ -146,6 +151,34 @@ export function docketOf(d: DocketRow, enquiryId: string) {
   };
 }
 
+type QuoteRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["quote"]>;
+
+/**
+ * The quote with its totals (0009 Decisions 2 and 3): each traveller's amount, Masti's service charge, GST on the
+ * service charge only (the rate setting), and the total. `complete` is false if a traveller has no line.
+ */
+function quoteOf(q: QuoteRow, travellerIds: string[], gstRatePercent: number) {
+  const lines = q.lines.map((l) => ({
+    travellerId: l.travellerId,
+    form: l.form,
+    lumpSumPaise: l.lumpSumPaise,
+    embassyFeePaise: l.embassyFeePaise,
+    vfsFeePaise: l.vfsFeePaise,
+    otherFeePaise: l.otherFeePaise,
+    totalPaise: lineTotalPaise(l),
+  }));
+  return {
+    processingSpeed: q.processingSpeed,
+    ...quoteTotals(q.lines, q.serviceChargePaise, gstRatePercent),
+    gstRatePercent,
+    lines,
+    complete: travellerIds.every((id) => lines.some((l) => l.travellerId === id)),
+    /** The quote's own token: send it back when saving. */
+    updatedAt: q.updatedAt,
+    updatedBy: q.updatedBy,
+  };
+}
+
 /** The vendor's shared open docket, while this case isn't in one: "Add to docket D-2026-0003 (2 cases)". */
 function openDocketOf(vendor: VendorRow | null) {
   const open = vendor?.dockets[0];
@@ -163,6 +196,7 @@ function consentOf(t: TravellerRow) {
  * @param steps the case's flow, in order: the step chips ("Enquiry → Documents → …")
  * @param today IST date, for the travellers' age and passport status
  * @param finalFileMaxMb the setting visa.finalFile.maxMb
+ * @param gstRatePercent the setting visa.invoice.gstRatePercent, for the quote's GST
  */
 export function toVisaCaseDto(
   row: VisaCaseRow,
@@ -170,6 +204,7 @@ export function toVisaCaseDto(
   today: string,
   clientSettings: ClientSettings,
   finalFileMaxMb: number,
+  gstRatePercent: number,
 ) {
   const finalFile = row.files[0];
   const visa = row.visa;
@@ -236,6 +271,10 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
+    gstRatePercent,
+    /** The price (0009): null until someone enters it. */
+    quote: visa.quote && quoteOf(visa.quote, visa.travellers.map((t) => t.id), gstRatePercent),
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {

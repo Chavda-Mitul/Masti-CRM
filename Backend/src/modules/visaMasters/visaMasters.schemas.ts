@@ -94,6 +94,19 @@ export const updateDocumentProblemReasonSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** How fast the embassy processes an application (docs/decisions/0009-visa-invoice.md): picked on the quote. */
+export const createProcessingSpeedSchema = z.object({
+  code: keyCode,
+  name: text(80),
+  sortOrder: sortOrder.default(0),
+  isActive: z.boolean().default(true),
+});
+export const updateProcessingSpeedSchema = z.object({
+  name: text(80).optional(),
+  sortOrder: sortOrder.optional(),
+  isActive: z.boolean().optional(),
+});
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -153,6 +166,8 @@ export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 export type CreateDocumentProblemReasonInput = z.infer<typeof createDocumentProblemReasonSchema>;
 export type UpdateDocumentProblemReasonInput = z.infer<typeof updateDocumentProblemReasonSchema>;
+export type CreateProcessingSpeedInput = z.infer<typeof createProcessingSpeedSchema>;
+export type UpdateProcessingSpeedInput = z.infer<typeof updateProcessingSpeedSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

@@ -19,6 +19,7 @@ type ListTab =
   | 'embassies'
   | 'documents'
   | 'document-problem-reasons'
+  | 'processing-speeds'
   | 'enquiry-sources'
   | 'follow-up-outcomes'
   | 'follow-up-next-steps'
@@ -38,6 +39,7 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
     canEdit: canEditVisaMasters,
     editors: 'the Head and the Visa HOD',
   },
+  { value: 'processing-speeds', label: 'Processing speeds', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'enquiry-sources', label: 'Enquiry sources', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'vendors', label: 'Vendors', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
@@ -104,7 +106,7 @@ export function MasterListsPage() {
       {tab === 'documents' && <DocumentsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'document-problem-reasons' && <DocumentProblemsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'enquiry-sources' && <EnquirySourcesTable canEdit={canEdit} showInactive={showInactive} />}
-      {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps') && (
+      {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps' || tab === 'processing-speeds') && (
         <FollowUpOptionsTable key={tab} resource={tab} canEdit={canEdit} showInactive={showInactive} />
       )}
       {tab === 'enquiry-reasons' && <EnquiryReasonsTable canEdit={canEdit} showInactive={showInactive} />}

@@ -14,7 +14,16 @@ import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { DEFAULT_DOCKET, DEFAULT_FIRST_FOLLOW_UP, DEFAULT_STICKER, DOCKET_KEY, FIRST_FOLLOW_UP_KEY, STICKER_KEY } from "../src/modules/visa/visa.settings";
+import {
+  DEFAULT_DOCKET,
+  DEFAULT_FIRST_FOLLOW_UP,
+  DEFAULT_INVOICE,
+  DEFAULT_STICKER,
+  DOCKET_KEY,
+  FIRST_FOLLOW_UP_KEY,
+  INVOICE_KEY,
+  STICKER_KEY,
+} from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS } from "../src/modules/company/company.settings";
 import {
   DEFAULT_EXPIRY_WARNINGS,
@@ -68,11 +77,12 @@ async function main() {
     update: {},
     create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
   });
-  // Docket numbers and the parcel sticker's size (docs/decisions/0008-visa-docket-dispatch.md Decisions 5 and 7) ⚠️, and
-  // Masti's own details for the sticker (and later the invoice).
+  // Docket numbers and the parcel sticker's size (docs/decisions/0008-visa-docket-dispatch.md Decisions 5 and 7) ⚠️, the
+  // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
+    [INVOICE_KEY, DEFAULT_INVOICE],
     [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],
   ] as const) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });

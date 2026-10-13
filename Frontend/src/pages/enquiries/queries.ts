@@ -7,6 +7,7 @@ import type {
   CreateVisaCaseBody,
   DocketKind,
   DocketStickerData,
+  SaveQuoteBody,
   DocumentArrival,
   DocumentCheck,
   DocumentStatus,
@@ -263,6 +264,11 @@ export function useMarkFileReady(caseNo: string) {
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
 export function useSetVendor(caseNo: string) {
   return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
+}
+
+/** The quote (0009 Decision 2): saved whole. A save that missed someone else's (409 STALE) reloads the case. */
+export function useSaveQuote(caseNo: string) {
+  return useCaseAction<SaveQuoteBody>(caseNo, (base, body) => api(`${base}/quote`, { method: 'PUT', body }))
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */

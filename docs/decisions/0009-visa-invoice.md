@@ -1,6 +1,6 @@
 # 0009 · The visa invoice: the quote, the locked tax invoice and its PDF
 
-- **Status:** decided (13 Oct 2026, project lead); not built yet. One point is waiting for Masti's accountant
+- **Status:** decided (13 Oct 2026, project lead). Component 1, the quote, is built (13 Oct 2026). One point is waiting for Masti's accountant
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** the price quoted on a visa case, and raising the visa tax invoice from it:
@@ -72,6 +72,53 @@ stops issuing visa invoices. An export to it can come later (Q26).
 - **The invoice copies the quote.** The invoice itself has no amount fields, so "nobody types amounts" holds where
   the demo means it: on the invoice.
 - **Money is stored in paise, as integers,** never as floating point. Amounts can't be negative.
+- **The processing speed** (the "(NORMAL)" on Masti's invoice line) is picked on the quote from an admin-editable list,
+  seeded ⚠️ with Normal / Express / Super priority. **Decided 13 Oct 2026 (project lead).**
+- **Editable from Step 1** (the Enquiry step), so the price can be noted when it's first given to the client, until
+  the file goes to the vendor. **Decided 13 Oct 2026 (project lead).**
+
+**Built 13 Oct 2026** (component 1, the quote):
+
+- **API and data:**
+  - `PUT /api/visa/cases/:caseNo/quote` with
+    `{ processingSpeedId, serviceChargePaise, lines: [{ travellerId, form, … }], updatedAt }`, which returns
+    `{ case }`.
+  - Tables `VisaQuote` (one per case), `VisaQuoteLine` (one per traveller) and `ProcessingSpeed` (migration
+    `20261013120000_visa_quote`).
+  - Hand-written CHECKs:
+    - every amount is 0 to ₹10,00,000 (a sanity limit)
+    - the amounts match the form: a lump sum has only `lumpSumPaise`; itemised has the three fees (0 allowed)
+  - Audited as `visa.quote.save` on the Enquiry, with `clientId`; before and after are the whole quote.
+  - The case sends `quote { processingSpeed, serviceChargePaise, lines (each with totalPaise), travellersPaise,
+    gstRatePercent, gstPaise, totalPaise, complete, updatedAt, updatedBy }`, plus `gstRatePercent` for a quote not yet
+    entered.
+  - The master list is at `GET/POST/PATCH /api/masters/processing-speeds`.
+  - **The setting `visa.invoice`** (Decisions 3 and 4) was brought forward into this component, because the GST
+    preview needs the rate. It's changed through `PUT /api/visa/settings`.
+- **Screen:**
+  - **"Money on this case"** in the right rail, as in the demo: each traveller's amount, the service charge, GST,
+    the total, the processing speed, and who quoted it and when. **Add quote** / **Edit quote** for whoever can act
+    on the case.
+  - The quote dialog has:
+    - the processing speed
+    - per traveller, a **Lump sum / Itemised** switch with the amounts in rupees
+    - the service charge
+    - live totals
+  - Settings → Masters → Lists → **Processing speeds**. It reuses the generic option table, with the follow-up
+    dropdowns.
+- **Settled while building:**
+  - **The quote has its own token** (`updatedAt`, null for a new quote). Two people editing it can't overwrite each
+    other. A stale save closes the dialog and reloads the case with the usual warning.
+  - **Saving moves neither the case's `updatedAt`** (like trip details, so nobody else's page goes stale) **nor the
+    quote's own token** when nothing changed. An unchanged save writes no audit row either.
+  - **The lines must be exactly the case's travellers.** Lump-sum and itemised fields can't be mixed: the other
+    form's fields are refused, not ignored. An itemised blank counts as 0 on the screen.
+  - **A processing speed switched off since** it was picked can be kept, but not chosen anew.
+  - **GST:** `src/lib/money.ts` rounds half up to the paisa (₹3.33 at 18% → 60 paise). `splitIntraState` puts the odd
+    paisa on CGST, ready for the invoice. The frontend's preview uses the same sum.
+  - **Errors on one line** come back grouped under `lines` (the shared error handler keys on the first path segment),
+    so the dialog checks each traveller's amount itself before sending.
+  - **"Frozen once invoiced"** is added with component 3, when invoices exist.
 
 ### 3. GST
 
@@ -111,9 +158,8 @@ stops issuing visa invoices. An export to it can come later (Q26).
 ### 6. One invoice per case
 
 - **Each visa case gets one invoice,** with **one line per traveller:**
-  `001 · name · FRANCE(TOURIST)(NORMAL)(SINGLE) · Visa` ⚠️.
-  > *To settle in the invoice component's plan:* "NORMAL" looks like the processing speed, which the CRM doesn't
-  > store. Either print the entry type only, or add a field.
+  `001 · name · FRANCE(TOURIST)(NORMAL)(SINGLE) · Visa` ⚠️, where NORMAL is the quote's processing speed (Decision 2)
+  and SINGLE the entry type.
 - **Two cases for the same client get two invoices.**
 
 ### 7. The PDF
@@ -217,11 +263,11 @@ model InvoiceCounter { id Int @id @default(1); lastValue Int }   // one row; the
 ## Components (one at a time, each planned, built, tested and committed on its own)
 
 1. **The quote card** on the case: per-traveller lump sum or itemised, the service charge, the totals and GST
-   preview; editable until invoiced; audited.
+   preview; editable until invoiced; audited. **Built 13 Oct 2026**, with the processing speed and the `visa.invoice`
+   setting.
 2. **Invoice settings:**
    - the extended Company details card: fields, bank, terms
    - the logo and signature upload
-   - the `visa.invoice` setting
 3. **Raise the invoice:**
    - the readiness checks and the confirm step
    - number, snapshot, GST, lines

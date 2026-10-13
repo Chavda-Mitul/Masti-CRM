@@ -220,6 +220,9 @@ export interface FollowUpOption {
   isActive: boolean
 }
 
+/** How fast the embassy processes the application: "Normal", "Express"… (0009). Picked on the quote. */
+export type ProcessingSpeed = FollowUpOption
+
 /** Why a paper needs replacing in Step 3: "Not signed", "Wrong photo size"… (0007 Decision 3). */
 export interface DocumentProblemReason {
   id: number
@@ -248,3 +251,4 @@ export type MasterResource =
   | 'enquiry-reasons'
   | 'vendors'
   | 'document-problem-reasons'
+  | 'processing-speeds'

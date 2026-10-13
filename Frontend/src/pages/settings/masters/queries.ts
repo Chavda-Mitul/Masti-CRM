@@ -9,6 +9,7 @@ import type {
   Country,
   DocumentMaster,
   DocumentProblemReason,
+  ProcessingSpeed,
   EnquiryReason,
   EnquirySource,
   FollowUpOption,
@@ -164,6 +165,7 @@ interface MasterRow {
   'enquiry-reasons': EnquiryReason
   vendors: Vendor
   'document-problem-reasons': DocumentProblemReason
+  'processing-speeds': ProcessingSpeed
 }
 
 /** The JSON key each list and save comes back under. */
@@ -178,6 +180,7 @@ const LIST_KEY = {
   'enquiry-reasons': 'reasons',
   vendors: 'vendors',
   'document-problem-reasons': 'problemReasons',
+  'processing-speeds': 'processingSpeeds',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -190,6 +193,7 @@ const ITEM_KEY = {
   'enquiry-reasons': 'reason',
   vendors: 'vendor',
   'document-problem-reasons': 'problemReason',
+  'processing-speeds': 'processingSpeed',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -227,6 +231,11 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       }
       // The document problems change nothing else: the case page reads this same list.
       if (resource === 'document-problem-reasons') return
+      // A case's quote shows its processing speed by name.
+      if (resource === 'processing-speeds') {
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+        return
+      }
       if (resource === 'enquiry-sources') {
         // The New enquiry form's "Came in through" chips.
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })

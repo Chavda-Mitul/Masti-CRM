@@ -10,6 +10,7 @@ import {
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  saveQuoteSchema,
   matureCaseSchema,
   setVendorSchema,
   takeOutOfDocketSchema,
@@ -22,6 +23,7 @@ import {
 import * as visaService from "./visa.service";
 import * as docketService from "./visaDocket.service";
 import * as filePrepService from "./visaFilePrep.service";
+import * as quoteService from "./visaQuote.service";
 import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
@@ -115,6 +117,12 @@ router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   const body = setVendorSchema.parse(req.body);
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, saved whole. */
+router.put("/cases/:caseNo/quote", visaEdit, async (req, res) => {
+  const body = saveQuoteSchema.parse(req.body);
+  res.json({ case: await quoteService.saveQuote(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): join the vendor's docket (GROUP) or start one of its own (OWN). */

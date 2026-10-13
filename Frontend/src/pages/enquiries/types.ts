@@ -277,6 +277,46 @@ export interface DocketStickerData {
   size: { widthMm: number; heightMm: number }
 }
 
+/** A traveller's amount: one lump sum, or itemised (0009 Decision 2). */
+export type QuoteForm = 'LUMP_SUM' | 'ITEMISED'
+
+/** The price on a visa case (docs/decisions/0009-visa-invoice.md Decision 2). Money is in paise. */
+export interface CaseQuote {
+  processingSpeed: { id: number; name: string; isActive: boolean }
+  serviceChargePaise: number
+  lines: {
+    travellerId: string
+    form: QuoteForm
+    lumpSumPaise: number | null
+    embassyFeePaise: number | null
+    vfsFeePaise: number | null
+    otherFeePaise: number | null
+    totalPaise: number
+  }[]
+  /** The travellers' amounts together (passed on, no GST) */
+  travellersPaise: number
+  gstRatePercent: number
+  /** GST on the service charge only */
+  gstPaise: number
+  totalPaise: number
+  /** False if a traveller has no amount */
+  complete: boolean
+  /** The quote's own token: send it back when saving */
+  updatedAt: string
+  updatedBy: PersonRef
+}
+
+/** PUT /api/visa/cases/:caseNo/quote */
+export interface SaveQuoteBody {
+  processingSpeedId: number
+  serviceChargePaise: number
+  lines: (
+    | { travellerId: string; form: 'LUMP_SUM'; lumpSumPaise: number }
+    | { travellerId: string; form: 'ITEMISED'; embassyFeePaise: number; vfsFeePaise: number; otherFeePaise: number }
+  )[]
+  updatedAt: string | null
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -324,6 +364,10 @@ export interface VisaCase {
   docket: CaseDocket | null
   /** While it isn't in one: the vendor's shared open docket it would join, if that holds any files. */
   openDocket: { docketNo: string; caseCount: number } | null
+  /** GST on the service charge (the setting visa.invoice), for a quote being entered */
+  gstRatePercent: number
+  /** The price (0009), or null until someone enters it */
+  quote: CaseQuote | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

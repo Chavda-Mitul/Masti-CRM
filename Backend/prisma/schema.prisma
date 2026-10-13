@@ -82,6 +82,7 @@ model User {
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
+  quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
 
   @@index([type, isActive])
 }
@@ -869,6 +870,7 @@ model VisaCase {
   vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket          Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
+  quote           VisaQuote?
 
   @@index([offeringId])
   @@index([vendorId])
@@ -895,6 +897,7 @@ model VisaCaseTraveller {
   visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents     VisaCaseDocument[]
+  quoteLine     VisaQuoteLine?
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])
@@ -928,6 +931,18 @@ enum ReceivedAs {
 enum DocumentCheck {
   CHECKED
   NEEDS_REPLACING
+}
+
+/// How fast the embassy processes the application: "Normal", "Express"… (docs/decisions/0009-visa-invoice.md Decision 6).
+/// Picked on the case's quote and printed on the invoice line. Edited by the Visa HOD or the Head.
+model ProcessingSpeed {
+  id        Int         @id @default(autoincrement())
+  /// NORMAL, EXPRESS… Never changes.
+  code      String      @unique
+  name      String
+  sortOrder Int         @default(0)
+  isActive  Boolean     @default(true)
+  quotes    VisaQuote[]
 }
 
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
@@ -982,4 +997,49 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the visa invoice will print. Money is in
+// paise, as integers. Editable until the invoice is raised.
+// ---------------------------------------------------------------------------
+
+/// A traveller's amount: one lump sum, or the embassy fee, VFS fee and other, itemised.
+enum QuoteForm {
+  LUMP_SUM
+  ITEMISED
+}
+
+/// One per visa case. Hand-written in the migration: the service charge is 0–10,00,00,000 paise.
+model VisaQuote {
+  enquiryId          String          @id
+  processingSpeedId  Int
+  /// Masti's own service (processing) charge for the case: the only part GST applies to (0009 Decision 3).
+  serviceChargePaise Int             @default(0)
+  updatedById        String
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  /// The quote's own optimistic-lock token: two people editing one quote can't overwrite each other.
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  visaCase           VisaCase        @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
+  processingSpeed    ProcessingSpeed @relation(fields: [processingSpeedId], references: [id], onDelete: Restrict)
+  updatedBy          User            @relation("VisaQuoteUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  lines              VisaQuoteLine[]
+
+  @@index([processingSpeedId])
+  @@index([updatedById])
+}
+
+/// One per traveller. Hand-written in the migration: the amounts match the form, and each is 0–10,00,00,000 paise.
+model VisaQuoteLine {
+  travellerId     String            @id
+  enquiryId       String
+  form            QuoteForm
+  lumpSumPaise    Int?
+  embassyFeePaise Int?
+  vfsFeePaise     Int?
+  otherFeePaise   Int?
+  traveller       VisaCaseTraveller @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  quote           VisaQuote         @relation(fields: [enquiryId], references: [enquiryId], onDelete: Cascade)
+
+  @@index([enquiryId])
 }
