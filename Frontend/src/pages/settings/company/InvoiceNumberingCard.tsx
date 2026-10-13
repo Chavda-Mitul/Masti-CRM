@@ -5,9 +5,9 @@ import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
-import { useSaveVisaInvoiceSetting, useVisaInvoiceSetting } from './queries'
-import { invoiceSettingFormSchema, type InvoiceSettingFormValues } from './schemas'
-import type { InvoiceSetting } from './types'
+import { useSaveVisaInvoiceSetting, useVisaInvoiceSetting } from '../masters/queries'
+import { invoiceSettingFormSchema, type InvoiceSettingFormValues } from '../masters/schemas'
+import type { InvoiceSetting } from '../masters/types'
 
 /** "MVI00001379" */
 const numberOf = (s: Pick<InvoiceSetting, 'prefix' | 'digits' | 'startAt'>) => `${s.prefix}${String(s.startAt).padStart(s.digits, '0')}`

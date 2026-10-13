@@ -8,9 +8,9 @@ import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { compact } from '../../clients/schemas'
 import { useClientOptions } from '../../clients/queries'
-import { useCompanyDetails, useCompanyImageLink, useInvoiceTerms, useSaveInvoiceTerms, useUpdateCompanyDetails, useUploadCompanyImage } from './queries'
-import { companyDetailsFormSchema, type CompanyDetailsFormValues } from './schemas'
-import type { CompanyDetails, CompanyImage, CompanyImageKind, CompanyView } from './types'
+import { useCompanyDetails, useCompanyImageLink, useInvoiceTerms, useSaveInvoiceTerms, useUpdateCompanyDetails, useUploadCompanyImage } from '../masters/queries'
+import { companyDetailsFormSchema, type CompanyDetailsFormValues } from '../masters/schemas'
+import type { CompanyDetails, CompanyImage, CompanyImageKind, CompanyView } from '../masters/types'
 
 /** The backend's sanity limit for a logo or signature (company.service.ts MAX_IMAGE_BYTES). */
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024

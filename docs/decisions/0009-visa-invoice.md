@@ -176,7 +176,7 @@ stops issuing visa invoices. An export to it can come later (Q26).
 
 ### 8. What it prints: the settings
 
-**The `company.details` setting gains** (the Head edits it in Settings → Masters):
+**The `company.details` setting gains** (the Head edits it in Settings → Company & invoice):
 - the 24/7 phone, the accounts email and the website
 - **Masti's PAN, GSTIN and state code** (24, which decides CGST+SGST versus IGST)
 - **the bank details:** account name, number, bank, branch, IFSC, SWIFT
@@ -199,6 +199,8 @@ copied onto the invoice. A later edit to the client or the company never changes
 - **The Head types Masti's PAN, GSTIN, state and bank details in.** They start empty; nothing like a bank account
   number is kept in the code or the seed.
 - **The settings live on the Masters page** (the Company details card grows), not in a new Settings tab.
+  *Changed later the same day (the project lead):* they moved to their own tab, **Settings → Company & invoice**,
+  together with the Invoice numbering & GST card.
 
 **Built 13 Oct 2026** (component 2, the invoice settings):
 
@@ -219,7 +221,7 @@ copied onto the invoice. A later edit to the client or the company never changes
   - **`src/lib/storage.ts`** gains `getObject`, for the invoice PDF to embed the images.
   - **`src/middleware/requireJson.ts`** now takes PNG and JPEG uploads, and compares the exact media type (so
     `application/jsonx` or `image/pngx` is refused).
-- **Screen (Settings → Masters):**
+- **Screen (Settings → Company & invoice, a tab of its own since 13 Oct 2026):**
   - **"Company details & invoice"**, a full-width card:
     - Company, Tax and Bank sections; the Head edits
     - the invoice terms, one per line

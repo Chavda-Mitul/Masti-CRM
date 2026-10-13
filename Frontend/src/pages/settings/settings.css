@@ -306,10 +306,17 @@ fieldset:disabled .seg-sm label {
   font-weight: 700;
 }
 
-/* Masti's details and the invoice's settings (0009 Decision 8): a full-width card at the foot of the Masters page. */
+/* Settings → Company & invoice (0009 Decision 8): Masti's details and the invoice's settings. */
+.company-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .company-card {
-  grid-column: 1 / -1;
   align-items: stretch;
+}
+.company-numbering {
+  max-width: 560px;
 }
 .company-form {
   display: flex;
