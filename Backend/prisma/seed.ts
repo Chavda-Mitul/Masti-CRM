@@ -68,7 +68,7 @@ async function main() {
   // System masters (docs/decisions/0005-system-masters.md): dummy until Masti sends B1/B2. Existing rows are kept.
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
-  console.log("Visa masters (France Tourist dummy), document problem reasons, the weekly Sunday off and holiday settings ready.");
+  console.log("Visa masters (France Tourist dummy), document problem reasons, processing speeds, the weekly Sunday off and holiday settings ready.");
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
   await seedEnquiryMasters(prisma);
@@ -87,7 +87,9 @@ async function main() {
   ] as const) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
-  console.log("Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size and the company details ready.");
+  console.log(
+    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, and the company details ready.",
+  );
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
   if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {

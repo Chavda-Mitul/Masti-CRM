@@ -139,7 +139,14 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
               </option>
             ))}
           </select>
-          {tried && !chosenSpeed && <span className="field-error">Pick the processing speed.</span>}
+          {/* An empty list (no speeds added, or all switched off) would otherwise look like a broken dropdown. */}
+          {speeds.isSuccess && speedOptions.length === 0 ? (
+            <span className="field-error">
+              No processing speeds yet. Ask the Visa HOD to add them in Settings → Masters → Lists → Processing speeds.
+            </span>
+          ) : (
+            tried && !chosenSpeed && <span className="field-error">Pick the processing speed.</span>
+          )}
         </label>
 
         <div className="quote-lines">
