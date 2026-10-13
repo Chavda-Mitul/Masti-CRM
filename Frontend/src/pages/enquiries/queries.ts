@@ -241,6 +241,11 @@ export function useUpdateApplication(caseNo: string) {
   )
 }
 
+/** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
+export function useSetVendor(caseNo: string) {
+  return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
+}
+
 /** All enquiries (open, postponed or cancelled): late first, then by time due. Paged with the API's cursor ("Show more"). */
 export function useEnquiryList(filters: EnquiryListFilters) {
   return useInfiniteQuery({

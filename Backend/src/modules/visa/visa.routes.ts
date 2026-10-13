@@ -9,6 +9,7 @@ import {
   idempotencyKeySchema,
   linkTravellerSchema,
   matureCaseSchema,
+  setVendorSchema,
   updateApplicationSchema,
   updateCaseDocumentSchema,
   updateTripSchema,
@@ -98,6 +99,12 @@ router.patch("/cases/:caseNo/travellers/:travellerId/application", visaEdit, asy
   const body = updateApplicationSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await filePrepService.updateApplication(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/** The case's vendor, from the active vendors covering its country; null clears it. */
+router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
+  const body = setVendorSchema.parse(req.body);
+  res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

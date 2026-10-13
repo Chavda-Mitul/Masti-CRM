@@ -33,6 +33,7 @@ export const visaCaseInclude = {
     include: {
       offering: { include: offeringInclude },
       maturedBy: personSelect,
+      vendor: { select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true } },
       travellers: {
         orderBy: { position: "asc" },
         include: {
@@ -141,6 +142,8 @@ export function toVisaCaseDto(
       : null,
     finalFileCopies: row._count.files,
     finalFileMaxMb,
+    /** The submission agent (Decision 7). isActive false: switched off since it was picked, so "File ready" will ask for another. */
+    vendor: visa.vendor,
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {

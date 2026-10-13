@@ -216,6 +216,28 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The vendor the file goes to (0007 Decision 7): the last row of the card, as in the demo. */
+.saved-file-vendor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+.saved-file-vendor .kv {
+  gap: 12px;
+}
+.saved-file-vendor .select {
+  flex: 0 1 300px;
+  min-width: 0;
+}
+.saved-file-vendor-name {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.saved-file-vendor-note {
+  margin: 0;
+}
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
 .trip-form .form-grid {

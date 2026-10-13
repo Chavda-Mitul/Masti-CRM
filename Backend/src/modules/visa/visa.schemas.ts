@@ -151,3 +151,10 @@ export const updateApplicationSchema = z
   .refine(somethingToChange, { message: "Nothing to change." });
 
 export type UpdateApplicationInput = z.infer<typeof updateApplicationSchema>;
+
+/** The case's vendor (Decision 7), from the active vendors covering its country. null clears the pick. */
+export const setVendorSchema = z.object({
+  vendorId: z.number("Pick a vendor.").int().positive("Pick a vendor.").nullable(),
+});
+
+export type SetVendorInput = z.infer<typeof setVendorSchema>;

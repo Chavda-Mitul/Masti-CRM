@@ -220,6 +220,17 @@ export interface CaseFollowUp {
 }
 
 /** GET /api/visa/cases/:caseNo (Backend/src/modules/visa/visaCase.ts). */
+/** The case's vendor. isActive false: switched off since it was picked, so "File ready" will ask for another. */
+export interface CaseVendor {
+  id: number
+  name: string
+  city: string
+  isActive: boolean
+  contactName: string | null
+  /** +91XXXXXXXXXX */
+  mobile: string | null
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -258,6 +269,8 @@ export interface VisaCase {
   finalFileCopies: number
   /** The largest PDF the server accepts (setting visa.finalFile). */
   finalFileMaxMb: number
+  /** The submission agent picked during File preparation (0007 Decision 7), or null. */
+  vendor: CaseVendor | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

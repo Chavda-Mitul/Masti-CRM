@@ -9,7 +9,7 @@ import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
 import { loadCase, lockCase, PREPARING } from "./caseLock";
-import type { CheckCaseDocumentInput, UpdateApplicationInput } from "./visa.schemas";
+import type { CheckCaseDocumentInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 
@@ -109,6 +109,55 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
         clientId: enquiry.clientId,
         before: { name: before.name, ...pick(before, keys) },
         after: { name: after.name, ...pick(after, keys) },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/** "Global Visa Services · Mumbai", as the case page shows it and the audit log keeps it. */
+const vendorLabel = (v: { name: string; city: string } | null) => (v ? `${v.name} · ${v.city}` : null);
+
+/**
+ * The submission agent for this case (Decision 7): one of the active vendors that cover the case's country. null clears
+ * the pick. Allowed whatever the visa's "Vendor needed" says: the switch only decides what "File ready" asks for. A
+ * vendor switched off after being picked stays on the case until someone picks another.
+ */
+export async function setVendor(caseNo: string, input: SetVendorInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, PREPARING);
+
+  await prisma.$transaction(async (tx) => {
+    await lockCase(tx, enquiry.id, actor, PREPARING);
+    const visa = await tx.visaCase.findUniqueOrThrow({
+      where: { enquiryId: enquiry.id },
+      include: { vendor: { select: { name: true, city: true } }, offering: { include: { country: { select: { id: true, name: true } } } } },
+    });
+    if (visa.vendorId === input.vendorId) return;
+
+    let picked: { name: string; city: string } | null = null;
+    if (input.vendorId !== null) {
+      const vendor = await tx.vendor.findUnique({
+        where: { id: input.vendorId },
+        include: { countries: { where: { countryId: visa.offering.country.id }, select: { countryId: true } } },
+      });
+      if (!vendor) throw fieldError("vendorId", "Pick a vendor from the list.");
+      if (!vendor.isActive) throw fieldError("vendorId", "This vendor is switched off. Pick an active one.");
+      if (vendor.countries.length === 0) throw fieldError("vendorId", `${vendor.name} doesn't cover ${visa.offering.country.name}. Pick one that does.`);
+      picked = vendor;
+    }
+
+    await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { vendorId: input.vendorId } });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.vendor.set",
+        entityType: "VisaCase",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { vendorId: visa.vendorId, vendor: vendorLabel(visa.vendor) },
+        after: { vendorId: input.vendorId, vendor: vendorLabel(picked) },
         ip: actor.ip,
       },
       tx,

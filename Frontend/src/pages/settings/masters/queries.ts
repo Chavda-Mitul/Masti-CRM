@@ -195,9 +195,14 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       }
       // A vendor lists its countries by name.
       if (resource === 'countries') void queryClient.invalidateQueries({ queryKey: masterKeys.list('vendors') })
-      // Vendors change nothing else (the case's vendor picker comes with Step 3).
-      // Nor do the document problems: the case page reads this same list.
-      if (resource === 'vendors' || resource === 'document-problem-reasons') return
+      // A case shows its vendor's name, city and contact, and whether it was switched off since; the case's picker
+      // reads this same list.
+      if (resource === 'vendors') {
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+        return
+      }
+      // The document problems change nothing else: the case page reads this same list.
+      if (resource === 'document-problem-reasons') return
       if (resource === 'enquiry-sources') {
         // The New enquiry form's "Came in through" chips.
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })

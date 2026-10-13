@@ -400,6 +400,8 @@ model Vendor {
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
   countries   VendorCountry[]
+  /// The visa cases that picked it (0007 Decision 7). A vendor is never deleted, so they keep it.
+  cases       VisaCase[]
 }
 
 /// The countries a vendor submits files for ("Mumbai · Schengen"). Replaced as a set when the vendor is edited.
@@ -800,15 +802,20 @@ model VisaCase {
   entryType       EntryType?
   /// The hotel's name and city, for the forms: data, not a reason or a status.
   hotelStay       String?
+  /// The submission agent, picked during File preparation from the active vendors covering the case's country
+  /// (0007 Decision 7). Switched off later, it stays here; "File ready" then asks for an active one.
+  vendorId        Int?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
   maturedAt       DateTime?           @db.Timestamptz(3)
   maturedById     String?
   enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
 
   @@index([offeringId])
+  @@index([vendorId])
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking

@@ -239,6 +239,31 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
   - `prisma migrate diff` doesn't propose dropping the expression index, so only `HolidayTarget_unique` needs removing
     from its output, as before.
 
+**Built 13 Oct 2026** (slice 4, the vendor on the case):
+
+- **API and data:**
+  - `PUT /api/visa/cases/:caseNo/vendor` with `{ vendorId }`; `null` clears the pick
+  - `VisaCase.vendorId` (migration `20261013090000_case_vendor`), `ON DELETE RESTRICT`
+  - audited as `visa.vendor.set`, before and after as the id and "Name · City"
+  - the case sends `vendor { id, name, city, isActive, contactName, mobile }`
+- **Screen:** the last row of the "Saved file — kept as proof" card, where the demo shows it. While the case is at File
+  preparation, the processor, the HOD or the Head picks from a list. It saves as soon as one is picked.
+- **Settled while building:**
+  - **Refused with a reason under `vendorId`:** an unknown vendor, a switched-off one, or one that doesn't cover the
+    case's country. Sending the vendor already on the case changes nothing, so it isn't refused even if switched off
+    since.
+  - **Allowed when the visa's "Vendor needed" is off,** as the appointment is. The page says "This visa needs no
+    vendor." and shows no list while nothing is picked.
+  - **The case's `updatedAt` doesn't move,** like the other Step 3 edits.
+  - **A vendor switched off after being picked** shows a "Switched off" chip and "Pick an active vendor before the
+    file is ready."
+  - **The contact person and mobile** from the master show under the name, for the next day's "did you get it?" call.
+    The demo shows only the name and the city.
+  - **When no vendor covers the country,** staff see "No vendor covers France yet — ask the Visa HOD to add one". The
+    HOD and the Head see a link to the Vendors list instead.
+  - **The picker reads the master's vendor list** and filters it on the page. Saving a vendor in Settings refreshes
+    open cases.
+
 ### 8. The saved file, kept as proof
 
 The first upload in the CRM (golden rule 4: S3-compatible, private, shared through short-lived pre-signed links).
