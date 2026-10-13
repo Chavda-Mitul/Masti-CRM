@@ -24,7 +24,7 @@ function missingOf(c: VisaCase): FileReadyMissing {
     ackNo: c.travellers.filter((t) => !t.ackNo).map(name),
     appointment: c.appointmentNeeded ? c.travellers.filter((t) => !t.appointmentAt).map(name) : [],
     finalFile: !c.finalFile,
-    vendor: !c.vendorNeeded ? null : !c.vendor ? 'NONE' : c.vendor.isActive ? null : 'SWITCHED_OFF',
+    vendor: !c.vendorNeeded ? null : !c.vendor ? 'NONE' : !c.vendor.isActive ? 'SWITCHED_OFF' : c.vendor.coversCountry ? null : 'NOT_COVERING',
     trip: (['departOn', 'returnOn', 'entryType'] as const).filter((field) => c.trip[field] === null),
   }
 }
@@ -102,6 +102,11 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
               {missing.finalFile && <li>The saved file (PDF)</li>}
               {missing.vendor === 'NONE' && <li>A vendor</li>}
               {missing.vendor === 'SWITCHED_OFF' && <li>An active vendor ({c.vendor ? `${c.vendor.name} is` : 'the one picked is'} switched off)</li>}
+              {missing.vendor === 'NOT_COVERING' && (
+                <li>
+                  A vendor that covers {c.country.name} ({c.vendor ? c.vendor.name : 'the one picked'} no longer does)
+                </li>
+              )}
               {missing.trip.length > 0 && <li>Trip details: {missing.trip.map((field) => TRIP_WORDS[field]).join(', ')}</li>}
             </ul>
           </div>

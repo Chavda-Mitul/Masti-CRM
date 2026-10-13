@@ -34,7 +34,9 @@ export const visaCaseInclude = {
       offering: { include: offeringInclude },
       maturedBy: personSelect,
       fileReadyBy: personSelect,
-      vendor: { select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true } },
+      vendor: {
+        select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true, countries: { select: { countryId: true } } },
+      },
       travellers: {
         orderBy: { position: "asc" },
         include: {
@@ -69,6 +71,11 @@ export function travellersLabel(adults: number, children: number) {
 }
 
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
+
+/** The case's vendor, and whether it still covers the case's country. */
+function vendorOf({ countries, ...vendor }: NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>, countryId: number) {
+  return { ...vendor, coversCountry: countries.some((c) => c.countryId === countryId) };
+}
 
 /** The consent card (0006 Decision 5): flagged until the "I agree" link, which comes with WhatsApp, fills it. */
 function consentOf(t: TravellerRow) {
@@ -143,8 +150,11 @@ export function toVisaCaseDto(
       : null,
     finalFileCopies: row._count.files,
     finalFileMaxMb,
-    /** The submission agent (Decision 7). isActive false: switched off since it was picked, so "File ready" will ask for another. */
-    vendor: visa.vendor,
+    /**
+     * The submission agent (Decision 7). isActive false, or coversCountry false (the case's country was taken off the
+     * vendor since it was picked): "File ready" will ask for another.
+     */
+    vendor: visa.vendor && vendorOf(visa.vendor, visa.offering.country.id),
     /** "File ready — add to docket" (Decision 9): Step 3 is done and read-only. */
     fileReadyAt: visa.fileReadyAt,
     fileReadyBy: visa.fileReadyBy,

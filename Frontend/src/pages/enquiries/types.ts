@@ -229,6 +229,8 @@ export interface CaseVendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
+  /** false when the case's country was taken off the vendor after it was picked: "File ready" asks for another. */
+  coversCountry: boolean
 }
 
 export interface VisaCase {
@@ -325,7 +327,7 @@ export interface FileReadyMissing {
   /** No saved file yet */
   finalFile: boolean
   /** null when fine, or when the visa needs no vendor */
-  vendor: 'NONE' | 'SWITCHED_OFF' | null
+  vendor: 'NONE' | 'SWITCHED_OFF' | 'NOT_COVERING' | null
   trip: TripField[]
 }
 

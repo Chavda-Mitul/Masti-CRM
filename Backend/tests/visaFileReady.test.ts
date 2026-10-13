@@ -120,6 +120,25 @@ describe('"File ready — add to docket" (Decision 9)', () => {
       message: /an active vendor/,
     },
     {
+      what: "a vendor covering the country (France was taken off the one picked)",
+      make: async (c) => {
+        const cn = await prisma.country.findUniqueOrThrow({ where: { code: "CN" } });
+        await prisma.vendorCountry.deleteMany({ where: { vendorId: c.vendor.id } });
+        await prisma.vendorCountry.create({ data: { vendorId: c.vendor.id, countryId: cn.id } });
+      },
+      expected: { vendor: "NOT_COVERING" },
+      message: /a vendor that covers France \(the one picked no longer does\)/,
+    },
+    {
+      what: "an active vendor, when the one picked is both switched off and no longer covers the country",
+      make: async (c) => {
+        await prisma.vendorCountry.deleteMany({ where: { vendorId: c.vendor.id } });
+        await prisma.vendor.update({ where: { id: c.vendor.id }, data: { isActive: false } });
+      },
+      expected: { vendor: "SWITCHED_OFF" },
+      message: /an active vendor/,
+    },
+    {
       what: "travelling out",
       make: (c) => prisma.visaCase.update({ where: { enquiryId: c.id }, data: { departOn: null } }),
       expected: { trip: ["departOn"] },

@@ -285,14 +285,15 @@ const TRIP_WORDS: Record<(typeof TRIP_FIELDS)[number], string> = { departOn: "tr
 /**
  * What still stands between a case and "File ready": papers not checked or needing replacing (only those that came in
  * or that we made), each traveller's acknowledgement number and appointment (if the visa needs one), the saved file,
- * an active vendor (if the visa needs one) and the trip details. Read under the case's lock.
+ * an active vendor that still covers the case's country (if the visa needs one) and the trip details. Read under the
+ * case's lock. Also returns the country's name, for the message.
  */
 async function missingForFileReady(db: Db, enquiryId: string) {
   const visa = await db.visaCase.findUniqueOrThrow({
     where: { enquiryId },
     include: {
-      offering: { select: { appointmentNeeded: true, vendorNeeded: true } },
-      vendor: { select: { isActive: true } },
+      offering: { select: { appointmentNeeded: true, vendorNeeded: true, country: { select: { id: true, name: true } } } },
+      vendor: { select: { isActive: true, countries: { select: { countryId: true } } } },
       travellers: {
         orderBy: { position: "asc" },
         include: {
@@ -304,8 +305,12 @@ async function missingForFileReady(db: Db, enquiryId: string) {
   const files = await db.caseFile.count({ where: { enquiryId, kind: "FINAL_FILE" } });
   const { adults } = countTravellers(visa.travellers);
   const label = (t: (typeof visa.travellers)[number]) => (t.memberId ? t.name : null) ?? travellerLabel(t, adults);
+  const country = visa.offering.country;
+  // Picked when it was active and covered the country (setVendor); either may have changed since in the vendor master.
+  const vendorProblem = (vendor: NonNullable<typeof visa.vendor>) =>
+    !vendor.isActive ? ("SWITCHED_OFF" as const) : vendor.countries.some((c) => c.countryId === country.id) ? null : ("NOT_COVERING" as const);
 
-  return {
+  const missing = {
     papers: visa.travellers
       .map((t) => ({
         traveller: label(t),
@@ -316,15 +321,16 @@ async function missingForFileReady(db: Db, enquiryId: string) {
     ackNo: visa.travellers.filter((t) => !t.ackNo).map(label),
     appointment: visa.offering.appointmentNeeded ? visa.travellers.filter((t) => !t.appointmentAt).map(label) : [],
     finalFile: files === 0,
-    vendor: !visa.offering.vendorNeeded ? null : !visa.vendor ? ("NONE" as const) : visa.vendor.isActive ? null : ("SWITCHED_OFF" as const),
+    vendor: !visa.offering.vendorNeeded ? null : !visa.vendor ? ("NONE" as const) : vendorProblem(visa.vendor),
     trip: TRIP_FIELDS.filter((field) => visa[field] === null),
   };
+  return { missing, country: country.name };
 }
 
-type FileReadyMissing = Awaited<ReturnType<typeof missingForFileReady>>;
+type FileReadyMissing = Awaited<ReturnType<typeof missingForFileReady>>["missing"];
 
 /** "Rakesh: Bank statement still to check; acknowledgement no. for Aarav; the saved file (PDF)" */
-function describeMissing(m: FileReadyMissing): string[] {
+function describeMissing(m: FileReadyMissing, country: string): string[] {
   return [
     ...m.papers.flatMap((p) => [
       ...(p.toCheck.length > 0 ? [`${p.traveller}: ${p.toCheck.join(", ")} still to check`] : []),
@@ -333,7 +339,9 @@ function describeMissing(m: FileReadyMissing): string[] {
     ...(m.ackNo.length > 0 ? [`acknowledgement no. for ${m.ackNo.join(", ")}`] : []),
     ...(m.appointment.length > 0 ? [`appointment for ${m.appointment.join(", ")}`] : []),
     ...(m.finalFile ? ["the saved file (PDF)"] : []),
-    ...(m.vendor === "NONE" ? ["a vendor"] : m.vendor === "SWITCHED_OFF" ? ["an active vendor (the one picked is switched off)"] : []),
+    ...(m.vendor === "NONE" ? ["a vendor"] : []),
+    ...(m.vendor === "SWITCHED_OFF" ? ["an active vendor (the one picked is switched off)"] : []),
+    ...(m.vendor === "NOT_COVERING" ? [`a vendor that covers ${country} (the one picked no longer does)`] : []),
     ...(m.trip.length > 0 ? [`trip details (${m.trip.map((field) => TRIP_WORDS[field]).join(", ")})`] : []),
   ];
 }
@@ -355,8 +363,8 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
     assertFresh(locked.updatedAt, input.updatedAt, "case");
     if (!locked.ownerId) throw conflict("Give this case to a processor first.");
 
-    const missing = await missingForFileReady(tx, enquiry.id);
-    const parts = describeMissing(missing);
+    const { missing, country } = await missingForFileReady(tx, enquiry.id);
+    const parts = describeMissing(missing, country);
     if (parts.length > 0) throw new HttpError(409, `Not ready yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
 
     const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");

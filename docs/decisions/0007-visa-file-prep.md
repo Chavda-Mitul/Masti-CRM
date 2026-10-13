@@ -227,6 +227,10 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
   - If none covers the country, the page says so ("No vendor covers France yet — ask the Visa HOD to add one").
 - **A vendor switched off after being picked** stays on the case for the record, but "File ready" asks for an active
   one.
+- **A vendor that stops covering the case's country after being picked** (the HOD takes the country off it) is treated
+  the same way: it stays on the case, and "File ready" asks for a vendor that covers the country. *(Added 13 Oct 2026,
+  from code review: the picker already refuses a vendor that doesn't cover the country, so "File ready" must not accept
+  one.)*
 
 **Built 12 Oct 2026** (the master only; picking a vendor on a case comes with the Step 3 case work):
 
@@ -245,7 +249,8 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
   - `PUT /api/visa/cases/:caseNo/vendor` with `{ vendorId }`; `null` clears the pick
   - `VisaCase.vendorId` (migration `20261013090000_case_vendor`), `ON DELETE RESTRICT`
   - audited as `visa.vendor.set`, before and after as the id and "Name · City"
-  - the case sends `vendor { id, name, city, isActive, contactName, mobile }`
+  - the case sends `vendor { id, name, city, isActive, contactName, mobile, coversCountry }`; `coversCountry` is false
+    when the case's country was taken off the vendor after it was picked
 - **Screen:** the last row of the "Saved file — kept as proof" card, where the demo shows it. While the case is at File
   preparation, the processor, the HOD or the Head picks from a list. It saves as soon as one is picked.
 - **Settled while building:**
@@ -255,6 +260,8 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
   - **Allowed when the visa's "Vendor needed" is off,** as the appointment is. The page says "This visa needs no
     vendor." and shows no list while nothing is picked.
   - **The case's `updatedAt` doesn't move,** like the other Step 3 edits.
+  - **A vendor that no longer covers the country** shows a "No longer covers France" chip and "Pick a vendor that
+    covers France before the file is ready." (added 13 Oct).
   - **A vendor switched off after being picked** shows a "Switched off" chip and "Pick an active vendor before the
     file is ready."
   - **The contact person and mobile** from the master show under the name, for the next day's "did you get it?" call.
@@ -317,7 +324,7 @@ Pressed by the processor, the HOD or the Head. **Refused** (`409 NOT_READY`, lis
 - every traveller has an **acknowledgement number**
 - every traveller has an **appointment** (if the visa's Appointment needed is on)
 - the **final PDF** is uploaded
-- an **active vendor** is picked (if the visa's Vendor needed is on)
+- an **active vendor that covers the case's country** is picked (if the visa's Vendor needed is on)
 - the **trip details** are in: travelling out, coming back and the entry type
 
 **When it succeeds,** in one transaction, under the case lock:
@@ -339,7 +346,8 @@ Step 4's next-step button shows "Soon" until it is built.
   - audited as `visa.file.ready`. The after values include the vendor's id and the saved file's id, so the record
     shows what went to the docket.
   - `409 NOT_READY` has `details.missing`: `{ papers: [{ traveller, toCheck, needsReplacing }], ackNo, appointment,
-    finalFile, vendor: "NONE" | "SWITCHED_OFF" | null, trip }`
+    finalFile, vendor: "NONE" | "SWITCHED_OFF" | "NOT_COVERING" | null, trip }`. A vendor that is both switched off
+    and no longer covering is reported as `SWITCHED_OFF`.
 - **Screen:**
   - the header's next-step button opens a **File ready — add to docket** dialog, built like maturity's
   - the dialog lists what's missing from the loaded case; the server's list replaces it if they disagree
@@ -457,6 +465,7 @@ change is audited with `clientId`.
   - duplicates (kind, name, city) are refused
   - a switched-off vendor, or one that doesn't cover the country, is refused on a case
   - a vendor switched off after being picked blocks "File ready"
+  - a vendor that no longer covers the case's country blocks "File ready" too
 - **The file:**
   - a non-PDF is refused
   - a file over the limit is refused

@@ -1664,7 +1664,7 @@ Masti CRM/
   - the trip details: travelling out starts from the intake's exact travel date, and a new travelling out can't be in the past
   - each traveller's acknowledgement number and appointment (a day and a time in India)
   - the two switches, in the checklist editor
-  - the vendor on the case (13 Oct): picked at the bottom of the saved-file card, as in the demo, from the active vendors covering the country; a vendor switched off later stays on the case, flagged
+  - the vendor on the case (13 Oct): picked at the bottom of the saved-file card, as in the demo, from the active vendors covering the country; a vendor switched off later, or no longer covering the country, stays on the case, flagged, and blocks "File ready"
   - **"File ready — add to docket" (13 Oct): Step 3 is complete.** It lists what's missing, refuses a case with no processor, then moves the case to Docket & dispatch with its processor ("File ready · to dispatch") and leaves Step 3 read-only.
   - Next: Step 4, docket and dispatch (0008). A developer guide to Step 3 is in `docs/features/visa-file-preparation.md`.
 - **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.

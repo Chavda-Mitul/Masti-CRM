@@ -123,11 +123,13 @@ export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
 const vendorLabel = (v: { name: string; city: string }) => `${v.name} · ${v.city}`
 
 const switchedOffChip = <span className="chip chip-muted chip-sm">Switched off</span>
+const notCoveringChip = (country: string) => <span className="chip chip-muted chip-sm">No longer covers {country}</span>
 
 /**
  * The vendor the file goes to (0007 Decision 7): picked during File preparation from the active vendors that cover the
- * case's country, and saved as soon as it is picked. A vendor switched off after being picked stays on the case,
- * flagged, until someone picks another. Not asked for when the visa's "Vendor needed" is off (e-visas).
+ * case's country, and saved as soon as it is picked. A vendor switched off, or no longer covering the country, after
+ * being picked stays on the case, flagged, until someone picks another. Not asked for when the visa's "Vendor needed"
+ * is off (e-visas).
  */
 function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: boolean }) {
   const { data: me } = useMe()
@@ -181,7 +183,7 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
             {picked && !pickedListed && (
               <option value={picked.id} disabled>
                 {vendorLabel(picked)}
-                {picked.isActive ? '' : ' (switched off)'}
+                {!picked.isActive ? ' (switched off)' : picked.coversCountry ? '' : ` (doesn’t cover ${c.country.name})`}
               </option>
             )}
             {options.map((v) => (
@@ -192,7 +194,7 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
           </select>
         ) : picked ? (
           <strong className="saved-file-vendor-name">
-            {vendorLabel(picked)} {!picked.isActive && switchedOffChip}
+            {vendorLabel(picked)} {!picked.isActive ? switchedOffChip : !picked.coversCountry && notCoveringChip(c.country.name)}
           </strong>
         ) : (
           <span className="muted">Not picked yet</span>
@@ -201,6 +203,11 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
       {picked && <VendorContact vendor={picked} />}
       {editable && picked && !picked.isActive && (
         <p className="small saved-file-vendor-note">{switchedOffChip} Pick an active vendor before the file is ready.</p>
+      )}
+      {editable && picked && picked.isActive && !picked.coversCountry && (
+        <p className="small saved-file-vendor-note">
+          {notCoveringChip(c.country.name)} Pick a vendor that covers {c.country.name} before the file is ready.
+        </p>
       )}
       {editable && vendors.isSuccess && options.length === 0 && (
         <p className="muted small saved-file-vendor-note">

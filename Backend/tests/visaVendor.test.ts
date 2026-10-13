@@ -20,6 +20,7 @@ interface CaseVendor {
   isActive: boolean;
   contactName: string | null;
   mobile: string | null;
+  coversCountry: boolean;
 }
 interface CaseDto {
   updatedAt: string;
@@ -62,6 +63,7 @@ describe("the case's vendor (Decision 7)", () => {
       isActive: true,
       contactName: "Sanjay Rao",
       mobile: "+919820012345",
+      coversCountry: true,
     });
     // A field on the case, like the checks: nobody's open page goes stale.
     expect((res.body.case as CaseDto).updatedAt).toBe(before.updatedAt);
@@ -155,6 +157,21 @@ describe("the case's vendor (Decision 7)", () => {
     // Restrict: the case keeps the vendor it picked (its countries are removed first, so only the case holds it).
     await prisma.vendorCountry.deleteMany({ where: { vendorId: v.id } });
     await expect(prisma.vendor.delete({ where: { id: v.id } })).rejects.toThrow();
+  });
+
+  it("stays on the case when the case's country is taken off it later, flagged", async () => {
+    const c = await maturedCase();
+    const v = await vendor("Global Visa Services", "Mumbai", ["FR", "CN"]);
+    const processor = await neha();
+    expect((await pick(processor, c.caseNo, { vendorId: v.id })).status).toBe(200);
+
+    const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
+    await prisma.vendorCountry.delete({ where: { vendorId_countryId: { vendorId: v.id, countryId: fr.id } } });
+    expect((await load(processor, c.caseNo)).vendor).toMatchObject({ id: v.id, isActive: true, coversCountry: false });
+    // Re-sending it is no change, so it isn't refused; picked afresh, it is, like any vendor that doesn't cover the country.
+    expect((await pick(processor, c.caseNo, { vendorId: v.id })).status).toBe(200);
+    expect((await pick(processor, c.caseNo, { vendorId: null })).status).toBe(200);
+    expect((await pick(processor, c.caseNo, { vendorId: v.id })).body.issues.vendorId[0]).toMatch(/doesn't cover France/);
   });
 
   it("waits for a change that moves the case on, then is refused and saves nothing", async () => {
