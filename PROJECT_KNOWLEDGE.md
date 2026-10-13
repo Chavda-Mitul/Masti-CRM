@@ -1665,7 +1665,8 @@ Masti CRM/
   - each traveller's acknowledgement number and appointment (a day and a time in India)
   - the two switches, in the checklist editor
   - the vendor on the case (13 Oct): picked at the bottom of the saved-file card, as in the demo, from the active vendors covering the country; a vendor switched off later stays on the case, flagged
-  - Still to come: "File ready" (0007 *Built* notes).
+  - **"File ready — add to docket" (13 Oct): Step 3 is complete.** It lists what's missing, refuses a case with no processor, then moves the case to Docket & dispatch with its processor ("File ready · to dispatch") and leaves Step 3 read-only.
+  - Next: Step 4, docket and dispatch (0008). A developer guide to Step 3 is in `docs/features/visa-file-preparation.md`.
 - **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.
 - **The saved file stays one scanned PDF per case; no per-paper uploads** (12 Oct 2026, after slice 2). One auto-feeder scan keeps the team fast, it is what the demo shows, and the per-paper structure already lives in the ticks and checks. The final PDF can't feed passport autofill anyway: it arrives after the application form is filled. **If passport reading (Q13) or the vault (Q37) is confirmed,** it gets one photo-page scan per person, captured in Step 2, kept on the member (reused while the passport is valid) and stored with the same S3 code. It needs Vimal's yes and a DPDP decision (how long it's kept, who opens it) first. The reasoning is in `docs/decisions/0007-visa-file-prep.md`, *Settled after slice 2*.
 

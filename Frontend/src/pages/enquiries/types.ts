@@ -271,6 +271,9 @@ export interface VisaCase {
   finalFileMaxMb: number
   /** The submission agent picked during File preparation (0007 Decision 7), or null. */
   vendor: CaseVendor | null
+  /** "File ready — add to docket" (0007 Decision 9): Step 3 is done and read-only. */
+  fileReadyAt: string | null
+  fileReadyBy: PersonRef | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]
@@ -309,6 +312,23 @@ export interface FollowUpDesk {
 
 /** GET /api/enquiries/follow-ups/badge: the sidebar's red number. ALL for an HOD (their departments) and the Head (everyone). */
 /** What still stands between a case and maturity (409 NOT_READY from "Mark documents complete"). */
+export type TripField = 'departOn' | 'returnOn' | 'entryType'
+
+/** What "File ready" still needs (409 NOT_READY details.missing, 0007 Decision 9). */
+export interface FileReadyMissing {
+  /** Papers that came in or were made, not checked yet or needing replacing, by traveller */
+  papers: { traveller: string; toCheck: string[]; needsReplacing: string[] }[]
+  /** Travellers without an acknowledgement number */
+  ackNo: string[]
+  /** Travellers without an appointment (empty when the visa needs none) */
+  appointment: string[]
+  /** No saved file yet */
+  finalFile: boolean
+  /** null when fine, or when the visa needs no vendor */
+  vendor: 'NONE' | 'SWITCHED_OFF' | null
+  trip: TripField[]
+}
+
 export interface MaturityMissing {
   /** Travellers not yet linked to a family member: "Child 1" */
   unnamed: string[]

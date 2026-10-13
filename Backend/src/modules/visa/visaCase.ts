@@ -33,6 +33,7 @@ export const visaCaseInclude = {
     include: {
       offering: { include: offeringInclude },
       maturedBy: personSelect,
+      fileReadyBy: personSelect,
       vendor: { select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true } },
       travellers: {
         orderBy: { position: "asc" },
@@ -144,6 +145,9 @@ export function toVisaCaseDto(
     finalFileMaxMb,
     /** The submission agent (Decision 7). isActive false: switched off since it was picked, so "File ready" will ask for another. */
     vendor: visa.vendor,
+    /** "File ready — add to docket" (Decision 9): Step 3 is done and read-only. */
+    fileReadyAt: visa.fileReadyAt,
+    fileReadyBy: visa.fileReadyBy,
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {

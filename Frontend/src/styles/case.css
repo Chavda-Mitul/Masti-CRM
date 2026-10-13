@@ -562,3 +562,8 @@ button.tick:focus-visible {
 .missing-list li + li {
   margin-top: 2px;
 }
+/* "File ready" can list every paper of a large family: scroll inside the dialog rather than past the screen. */
+.file-ready-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}

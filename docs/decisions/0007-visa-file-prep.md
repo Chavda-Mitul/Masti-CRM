@@ -330,6 +330,33 @@ Pressed by the processor, the HOD or the Head. **Refused** (`409 NOT_READY`, lis
 
 Step 4's next-step button shows "Soon" until it is built.
 
+**Built 13 Oct 2026** (slice 5; Step 3 is complete):
+
+- **API and data:**
+  - `POST /api/visa/cases/:caseNo/file-ready` with `{ updatedAt }`
+  - `VisaCase.fileReadyAt` and `fileReadyById` (migration `20261013100000_file_ready`, with a CHECK that both are set
+    together)
+  - audited as `visa.file.ready`. The after values include the vendor's id and the saved file's id, so the record
+    shows what went to the docket.
+  - `409 NOT_READY` has `details.missing`: `{ papers: [{ traveller, toCheck, needsReplacing }], ackNo, appointment,
+    finalFile, vendor: "NONE" | "SWITCHED_OFF" | null, trip }`
+- **Screen:**
+  - the header's next-step button opens a **File ready — add to docket** dialog, built like maturity's
+  - the dialog lists what's missing from the loaded case; the server's list replaces it if they disagree
+  - once ready, the Saved file card says who marked it and when
+- **Settled while building:**
+  - **A case with no processor is refused** ("Give this case to a processor first"). Step 4 is the processor's work,
+    and the header shows no button until a processor is assigned.
+  - **At Docket & dispatch the status chip says "File ready · to dispatch"** instead of the seeded "Dispatched" ⚠️,
+    which isn't true until Step 4 sends the docket. It works like "Matured · to assign"; Step 4 will replace it.
+  - **The case's `updatedAt` is checked,** as for maturity: a page that missed a reassign or a postpone gets
+    `409 STALE`. The Step 3 edits don't move it, so they never make this button stale.
+  - **Nothing new makes Step 3 read-only:** every Step 3 write already needs File preparation (trip details stop
+    there too).
+  - **A `NOT_READY` answer reloads the case,** so the cards behind the dialog show the same thing as its list (found
+    in the browser check: a paper flagged meanwhile still showed as Checked).
+  - **The dialog scrolls inside itself** when the list is longer than the screen (a large family's papers on a phone).
+
 ### 10. Settings and seed data (golden rule 1)
 
 | What | Seeded with |

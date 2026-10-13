@@ -79,6 +79,7 @@ model User {
   documentsChecked   VisaCaseDocument[] @relation("DocumentCheckedBy")
   followUpsLogged    FollowUp[]         @relation("FollowUpBy")
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
+  visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
 
   @@index([type, isActive])
@@ -808,14 +809,20 @@ model VisaCase {
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
   maturedAt       DateTime?           @db.Timestamptz(3)
   maturedById     String?
+  /// "File ready — add to docket" (0007 Decision 9): Step 3 is done and the case moved to Docket & dispatch. Both set
+  /// together (checked in the migration).
+  fileReadyAt     DateTime?           @db.Timestamptz(3)
+  fileReadyById   String?
   enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  fileReadyBy     User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
 
   @@index([offeringId])
   @@index([vendorId])
+  @@index([fileReadyById])
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking

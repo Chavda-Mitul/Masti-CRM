@@ -6,6 +6,7 @@ import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordCh
 import {
   checkCaseDocumentSchema,
   createVisaCaseSchema,
+  fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
   matureCaseSchema,
@@ -99,6 +100,12 @@ router.patch("/cases/:caseNo/travellers/:travellerId/application", visaEdit, asy
   const body = updateApplicationSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await filePrepService.updateApplication(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/** "File ready — add to docket": 409 NOT_READY with details.missing until Step 3 is complete. */
+router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
+  const body = fileReadySchema.parse(req.body);
+  res.json({ case: await filePrepService.markFileReady(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** The case's vendor, from the active vendors covering its country; null clears it. */

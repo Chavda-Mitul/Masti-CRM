@@ -1,17 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
-import { definedOnly, onlyChanged, pick } from "../../lib/changes";
+import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { istDateTimeToUtc } from "../../lib/dates";
-import { badRequest, fieldError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
-import { loadCase, lockCase, PREPARING } from "./caseLock";
-import type { CheckCaseDocumentInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
+import { loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
+import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
+import { countTravellers, travellerLabel } from "./visaCase";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -272,4 +273,114 @@ export async function openCaseFile(caseNo: string, fileId: string, actor: Actor)
     ip: actor.ip,
   });
   return link;
+}
+
+// ---------------------------------------------------------------------------
+// "File ready — add to docket" (Decision 9)
+// ---------------------------------------------------------------------------
+
+const TRIP_FIELDS = ["departOn", "returnOn", "entryType"] as const;
+const TRIP_WORDS: Record<(typeof TRIP_FIELDS)[number], string> = { departOn: "travelling out", returnOn: "coming back", entryType: "entry" };
+
+/**
+ * What still stands between a case and "File ready": papers not checked or needing replacing (only those that came in
+ * or that we made), each traveller's acknowledgement number and appointment (if the visa needs one), the saved file,
+ * an active vendor (if the visa needs one) and the trip details. Read under the case's lock.
+ */
+async function missingForFileReady(db: Db, enquiryId: string) {
+  const visa = await db.visaCase.findUniqueOrThrow({
+    where: { enquiryId },
+    include: {
+      offering: { select: { appointmentNeeded: true, vendorNeeded: true } },
+      vendor: { select: { isActive: true } },
+      travellers: {
+        orderBy: { position: "asc" },
+        include: {
+          documents: { where: { status: { in: ["RECEIVED", "MADE"] } }, orderBy: { sortOrder: "asc" }, select: { name: true, check: true } },
+        },
+      },
+    },
+  });
+  const files = await db.caseFile.count({ where: { enquiryId, kind: "FINAL_FILE" } });
+  const { adults } = countTravellers(visa.travellers);
+  const label = (t: (typeof visa.travellers)[number]) => (t.memberId ? t.name : null) ?? travellerLabel(t, adults);
+
+  return {
+    papers: visa.travellers
+      .map((t) => ({
+        traveller: label(t),
+        toCheck: t.documents.filter((d) => d.check === null).map((d) => d.name),
+        needsReplacing: t.documents.filter((d) => d.check === "NEEDS_REPLACING").map((d) => d.name),
+      }))
+      .filter((p) => p.toCheck.length > 0 || p.needsReplacing.length > 0),
+    ackNo: visa.travellers.filter((t) => !t.ackNo).map(label),
+    appointment: visa.offering.appointmentNeeded ? visa.travellers.filter((t) => !t.appointmentAt).map(label) : [],
+    finalFile: files === 0,
+    vendor: !visa.offering.vendorNeeded ? null : !visa.vendor ? ("NONE" as const) : visa.vendor.isActive ? null : ("SWITCHED_OFF" as const),
+    trip: TRIP_FIELDS.filter((field) => visa[field] === null),
+  };
+}
+
+type FileReadyMissing = Awaited<ReturnType<typeof missingForFileReady>>;
+
+/** "Rakesh: Bank statement still to check; acknowledgement no. for Aarav; the saved file (PDF)" */
+function describeMissing(m: FileReadyMissing): string[] {
+  return [
+    ...m.papers.flatMap((p) => [
+      ...(p.toCheck.length > 0 ? [`${p.traveller}: ${p.toCheck.join(", ")} still to check`] : []),
+      ...(p.needsReplacing.length > 0 ? [`${p.traveller}: ${p.needsReplacing.join(", ")} needs replacing`] : []),
+    ]),
+    ...(m.ackNo.length > 0 ? [`acknowledgement no. for ${m.ackNo.join(", ")}`] : []),
+    ...(m.appointment.length > 0 ? [`appointment for ${m.appointment.join(", ")}`] : []),
+    ...(m.finalFile ? ["the saved file (PDF)"] : []),
+    ...(m.vendor === "NONE" ? ["a vendor"] : m.vendor === "SWITCHED_OFF" ? ["an active vendor (the one picked is switched off)"] : []),
+    ...(m.trip.length > 0 ? [`trip details (${m.trip.map((field) => TRIP_WORDS[field]).join(", ")})`] : []),
+  ];
+}
+
+/**
+ * "File ready — add to docket" (Decision 9), by the processor, the HOD or the Head. Everything Step 3 asks for is
+ * checked under the case's lock, in the same transaction as the move, so a check or a pick changed at the same moment
+ * either lands first and is seen, or waits and is then refused. The case moves to Docket & dispatch, due now, and stays
+ * with its processor; who and when are stamped. Step 3 is read-only after this, because every Step 3 write needs File
+ * preparation. A case nobody owns yet is refused: Step 4 is the processor's work.
+ */
+export async function markFileReady(caseNo: string, input: FileReadyInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, PREPARING);
+  assertFresh(enquiry.updatedAt, input.updatedAt, "case");
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const locked = await lockCase(tx, enquiry.id, actor, PREPARING);
+    assertFresh(locked.updatedAt, input.updatedAt, "case");
+    if (!locked.ownerId) throw conflict("Give this case to a processor first.");
+
+    const missing = await missingForFileReady(tx, enquiry.id);
+    const parts = describeMissing(missing);
+    if (parts.length > 0) throw new HttpError(409, `Not ready yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
+
+    const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt: now } });
+    const visa = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { fileReadyAt: now, fileReadyById: actor.user.id } });
+    // What went to the docket: the current saved file and the vendor.
+    const file = await tx.caseFile.findFirstOrThrow({
+      where: { enquiryId: enquiry.id, kind: "FINAL_FILE" },
+      orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.file.ready",
+        entityType: "Enquiry",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { stage: locked.stage.code, dueAt: locked.dueAt },
+        after: { stage: "DISPATCH", dueAt: now, fileReadyAt: now, fileReadyById: actor.user.id, vendorId: visa.vendorId, finalFileId: file.id },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
 }

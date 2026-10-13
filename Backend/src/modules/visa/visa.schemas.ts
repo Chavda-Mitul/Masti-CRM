@@ -87,6 +87,11 @@ export const matureCaseSchema = z.object({
 
 export type MatureCaseInput = z.infer<typeof matureCaseSchema>;
 
+/** "File ready — add to docket" (0007 Decision 9) sends the case's updatedAt, like maturity. */
+export const fileReadySchema = matureCaseSchema;
+
+export type FileReadyInput = z.infer<typeof fileReadySchema>;
+
 // ---------------------------------------------------------------------------
 // Step 3 (docs/decisions/0007-visa-file-prep.md)
 // ---------------------------------------------------------------------------

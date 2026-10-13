@@ -5,8 +5,9 @@ do what, and what happens, step by step, when someone uses it.
 
 - **The business decisions** (why it works this way) are in
   [`docs/decisions/0007-visa-file-prep.md`](../decisions/0007-visa-file-prep.md).
-- **This guide** describes the code as it is on the `feat/visa-file-prep` branch (12 Oct 2026), including the work
-  not yet committed. Where the decision record plans something that isn't built yet, this guide says so.
+- **This guide** describes the code as it is on the `feat/visa-file-prep` branch (written 12 Oct 2026; the status
+  table, the endpoints and §9–10 brought up to date on 13 Oct, when Step 3 was finished). Where the decision record
+  plans something that isn't built yet, this guide says so.
 
 ---
 
@@ -35,16 +36,16 @@ Supporting all of this are three things the HOD manages: a **vendor master** (th
 | Matured banner | Built |
 | Processor checks each paper | Built |
 | "Document problems" reasons list | Built |
-| Trip details | Built (uncommitted) |
-| Acknowledgement number and appointment per traveller | Built (uncommitted) |
-| Appointment needed / Vendor needed switches on the visa | Built (uncommitted): stored, editable in Settings → Masters → Checklists, and the case page follows them. Nothing enforces them yet. |
+| Trip details | Built |
+| Acknowledgement number and appointment per traveller | Built |
+| Appointment needed / Vendor needed switches on the visa | Built: stored, editable in Settings → Masters → Checklists, and the case page follows them. "File ready" enforces them. |
 | Saved file (PDF upload and opening) | Built |
 | Vendor master (Settings → Masters → Lists → Vendors) | Built |
-| **Picking a vendor on a case** (`PUT …/vendor`, `VisaCase.vendorId`) | **Not built.** No column, no route. |
-| **"File ready — add to docket"** (`POST …/file-ready`, `fileReadyAt`) | **Not built.** No column, no route. Nothing moves a case out of File preparation yet. |
+| Picking a vendor on a case (`PUT …/vendor`, `VisaCase.vendorId`) | Built (13 Oct): the last row of the "Saved file" card, as in the demo. |
+| "File ready — add to docket" (`POST …/file-ready`, `fileReadyAt`/`fileReadyById`) | Built (13 Oct): checks everything below, then moves the case to Docket & dispatch with its processor. |
 | Covering letter, "Log in for me", passport-scan reading, print form | Not in scope here (decision record, Decision 2) |
 
-Keep the last rows in mind as you read: today, a case at File preparation stays there.
+After "File ready" the case is at Docket & dispatch (Step 4), which isn't built yet: its button shows "Soon".
 
 ---
 
@@ -57,7 +58,7 @@ Keep the last rows in mind as you read: today, a case at File preparation stays 
 | `src/modules/visa/visa.routes.ts` | The HTTP endpoints. Parses input with zod, calls a service, returns `{ case }`. No rules live here. |
 | `src/modules/visa/visa.schemas.ts` | zod schemas for every request body (Step 3 section at the bottom). |
 | `src/modules/visa/caseLock.ts` | **The heart of the safety rules.** Who may change a case, at which step, and the row lock that makes changes take turns. |
-| `src/modules/visa/visaFilePrep.service.ts` | Step 3 writes: `checkDocument`, `updateApplication`, `finalFileLimit`, `uploadFinalFile`, `openCaseFile`. |
+| `src/modules/visa/visaFilePrep.service.ts` | Step 3 writes: `checkDocument`, `updateApplication`, `setVendor`, `finalFileLimit`, `uploadFinalFile`, `openCaseFile`, and `markFileReady` (with `missingForFileReady`). |
 | `src/modules/visa/visaSteps.service.ts` | Step 2 writes, plus `updateTrip` (trip details can change in Steps 1–3, so it lives here) and `mature`. |
 | `src/modules/visa/visaCase.ts` | Builds the case object the browser receives (`toVisaCaseDto`). Every write returns this whole object. |
 | `src/modules/visa/visa.settings.ts` | The `visa.finalFile` setting (`{ maxMb: 50 }` by default). |
@@ -79,7 +80,8 @@ Keep the last rows in mind as you read: today, a case at File preparation stays 
 | `pages/enquiries/case/NeedsReplacingDialog.tsx` | The reason picker for Needs replacing. |
 | `pages/enquiries/case/TripCard.tsx` | Trip details: a form when editable, a read-only view otherwise. |
 | `pages/enquiries/case/ApplicationCard.tsx` | "Apply on the government portal": one row per traveller, acknowledgement number and appointment. |
-| `pages/enquiries/case/SavedFileCard.tsx` | "Saved file — kept as proof": upload, replace, open. |
+| `pages/enquiries/case/SavedFileCard.tsx` | "Saved file — kept as proof": upload, replace, open; the vendor row; who marked the file ready. |
+| `pages/enquiries/case/FileReadyDialog.tsx` | "File ready — add to docket", opened from the header's next-step button: lists what's missing, then marks it. |
 | `pages/settings/masters/checklists/ChecklistEditorPage.tsx` | The "Before the file is ready" card (`FileReadySwitches`): the visa's two switches. |
 | `pages/settings/masters/checklists/ChecklistsPage.tsx` | The visa list. A visa with a switch off shows "No appointment · No vendor" under its name. |
 | `pages/enquiries/queries.ts` | TanStack Query hooks. Every case write goes through `useCaseAction` (section 6.2). |
@@ -210,6 +212,8 @@ reach them. Every write returns `{ case: VisaCaseDto }`, the whole fresh case.
 | `PATCH /api/visa/cases/:caseNo/travellers/:travellerId/application` | Visa EDIT | owner / HOD / Head, `PREPARING` | `{ ackNo?, appointment?: { on: "YYYY-MM-DD", at: "HH:mm" } \| null }` |
 | `PATCH /api/visa/cases/:caseNo/trip` | Visa EDIT | owner / HOD / Head, `TRIP` | `{ departOn?, returnOn?, entryType?, hotelStay? }` |
 | `POST /api/visa/cases/:caseNo/files/final` | Visa EDIT | owner / HOD / Head, `PREPARING` | **the raw PDF bytes**, `Content-Type: application/pdf` |
+| `PUT /api/visa/cases/:caseNo/vendor` | Visa EDIT | owner / HOD / Head, `PREPARING`; an active vendor covering the country | `{ vendorId: number \| null }` |
+| `POST /api/visa/cases/:caseNo/file-ready` | Visa EDIT | owner / HOD / Head, `PREPARING`, a processor assigned, nothing missing (`409 NOT_READY` with `details.missing`) | `{ updatedAt }` |
 | `GET /api/visa/cases/:caseNo/files/:fileId/link` | Visa VIEW | anyone who can **see** the case, at any step | — → `{ url, expiresAt }` |
 | `GET/POST/PATCH /api/masters/vendors` | VIEW reads, EDIT writes | writes: Visa HOD / Head | `?active=`, `?countryId=` on GET |
 | `GET/POST/PATCH /api/masters/document-problem-reasons` | VIEW reads, EDIT writes | writes: Visa HOD / Head | |
@@ -559,8 +563,11 @@ to reach that address**, not only the server.
 | `tests/vendors.test.ts` | Who may read and write, adding, duplicates, replacing countries, switched-off countries, switching off rather than deleting, list filters. |
 | `tests/visaHelpers.ts` | `maturedCase({ assigned })` builds a case already at File preparation (assigned to Neha unless `assigned: false`); `untilWaitingOnLock()` is used by the race tests. |
 
-The test for "refused once the file is ready" moves the case to a later stage **directly in the database**, because
-the "File ready" action doesn't exist yet.
+| `tests/visaVendor.test.ts` | Picking, changing and clearing the vendor; switched-off, unknown and not-covering vendors refused; who may pick; a vendor switched off later stays on the case; the lock race. |
+| `tests/visaFileReady.test.ts` | "File ready" success (stage, owner, due, stamps, audit); each missing piece refused on its own; the switches; who may press it; stale and no-processor refusals; Step 3 read-only afterwards; the lock race; the DB pair check. `readyCase()` in `visaHelpers.ts` builds a case with Step 3 done. |
+
+The older tests for "refused once the file is ready" move the case to a later stage **directly in the database**; they
+were written before the "File ready" action existed, and still test the same rule.
 
 ---
 
@@ -578,9 +585,9 @@ the "File ready" action doesn't exist yet.
 - **Talk to the bucket only through `src/lib/storage.ts`.** Never store or log a pre-signed URL.
 - **New migrations:** use `prisma migrate diff`, and delete the `DROP INDEX "HolidayTarget_unique"` line it proposes
   (see `CLAUDE.md`).
-- **Still to build for Step 3 to be complete:** `VisaCase.vendorId` and the vendor picker (active vendors covering the
-  case's country only), then `POST …/file-ready`. It should check every received or made paper is Checked and none
-  Needs replacing, every ack no., every appointment if `appointmentNeeded`, a final PDF, an active vendor if
-  `vendorNeeded`, and departOn, returnOn and entryType. It should answer `409 NOT_READY` with `details.missing`, like
-  `mature` does, then move the case to Docket & dispatch under the same lock. The full spec is in the decision record,
-  Decision 9.
+- **"File ready" is the end of Step 3.** `markFileReady` checks, under the lock: every received or made paper
+  Checked and none Needs replacing, every ack no., every appointment if `appointmentNeeded`, the saved file, an active
+  vendor if `vendorNeeded`, and departOn, returnOn and entryType. It answers `409 NOT_READY` with `details.missing`
+  (like `mature`), refuses a case with no processor, then moves the case to Docket & dispatch with its owner and
+  stamps `fileReadyAt`/`fileReadyById`. If you add something Step 3 must have, add it to `missingForFileReady` **and**
+  to `missingOf` in `FileReadyDialog.tsx`, which shows the same list before anything is sent.

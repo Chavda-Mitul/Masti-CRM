@@ -110,6 +110,11 @@ export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
       </div>
 
       <VendorRow visaCase={c} editable={editable} />
+      {c.fileReadyAt && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Marked file ready by {c.fileReadyBy?.name ?? 'someone'}, {formatDateTime(c.fileReadyAt)}.
+        </p>
+      )}
     </section>
   )
 }

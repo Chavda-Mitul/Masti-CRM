@@ -241,6 +241,11 @@ export function useUpdateApplication(caseNo: string) {
   )
 }
 
+/** "File ready — add to docket" (0007 Decision 9): 409 NOT_READY lists what Step 3 still lacks. */
+export function useMarkFileReady(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/file-ready`, { method: 'POST', body }))
+}
+
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
 export function useSetVendor(caseNo: string) {
   return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
