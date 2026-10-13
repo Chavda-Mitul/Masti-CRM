@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -20,7 +20,38 @@ export const finalFileSchema = z.object({
   maxMb: z.number().int().min(1).max(200),
 });
 
-export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema });
+/** Docket numbers, "D-2026-0001" (docs/decisions/0008-visa-docket-dispatch.md Decision 7): the prefix is letters only. */
+export const docketSettingSchema = z.object({
+  prefix: z.string().regex(/^[A-Z]{1,8}$/, "Use 1–8 capital letters, e.g. D."),
+});
+
+/** The parcel sticker's size in millimetres (0008 Decision 5): a 100 × 150 mm thermal label by default. */
+const stickerMm = z.number().int().min(50, "50 mm at least.").max(300, "300 mm at most.");
+export const stickerSettingSchema = z.object({ widthMm: stickerMm, heightMm: stickerMm });
+
+/**
+ * The visa invoice (docs/decisions/0009-visa-invoice.md Decisions 3 and 4): Masti's number series (MVI + 8 digits,
+ * continuing from startAt) and GST on the service charge. The quote's GST preview reads the rate.
+ */
+export const invoiceSettingSchema = z.object({
+  prefix: z.string().regex(/^[A-Z]{1,8}$/, "Use 1–8 capital letters, e.g. MVI."),
+  digits: z.number().int().min(4).max(12),
+  startAt: z.number().int().min(1).max(2_000_000_000),
+  gstRatePercent: z
+    .number()
+    .min(0)
+    .max(28)
+    .refine((r) => Math.abs(r * 100 - Math.round(r * 100)) < 1e-9, "At most 2 decimals."),
+  sac: z.string().regex(/^\d{4,8}$/, "4–8 digits, e.g. 998559."),
+});
+
+export const visaSettingsSchema = z.object({
+  firstFollowUp: firstFollowUpSchema,
+  finalFile: finalFileSchema,
+  docket: docketSettingSchema,
+  sticker: stickerSettingSchema,
+  invoice: invoiceSettingSchema,
+});
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
@@ -46,6 +77,9 @@ export const idempotencyKeySchema = z.string().trim().min(8).max(100).optional()
 
 export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
 export type FinalFileSetting = z.infer<typeof finalFileSchema>;
+export type DocketSetting = z.infer<typeof docketSettingSchema>;
+export type StickerSetting = z.infer<typeof stickerSettingSchema>;
+export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -163,3 +197,54 @@ export const setVendorSchema = z.object({
 });
 
 export type SetVendorInput = z.infer<typeof setVendorSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 4 (docs/decisions/0008-visa-docket-dispatch.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Add to docket" (Decision 2): GROUP joins the vendor's shared open docket ("Several files in one"), OWN starts a
+ * docket holding just this case ("One file per docket"). Sends the case's updatedAt, like "File ready".
+ */
+export const addToDocketSchema = z.object({
+  mode: z.enum(DocketKind, "Pick how this file goes."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Take out of docket" (Decision 10), while the docket is open. */
+export const takeOutOfDocketSchema = matureCaseSchema;
+
+export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
+export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
+
+// ---------------------------------------------------------------------------
+// The quote (docs/decisions/0009-visa-invoice.md Decision 2). Money is in paise, as integers.
+// ---------------------------------------------------------------------------
+
+/** ₹10,00,000 per amount: a sanity limit, not a business rule (checked in the database too). */
+export const MAX_AMOUNT_PAISE = 100_000_000;
+
+const paise = z
+  .number("Enter an amount.")
+  .int("Whole paise only.")
+  .min(0, "Can't be below 0.")
+  .max(MAX_AMOUNT_PAISE, "₹10,00,000 at most.");
+
+/** One traveller's amount: a lump sum, or itemised. Fields of the other form are refused, not ignored. */
+const quoteLineSchema = z.discriminatedUnion("form", [
+  z.strictObject({ travellerId: z.uuid(), form: z.literal("LUMP_SUM"), lumpSumPaise: paise }),
+  z.strictObject({ travellerId: z.uuid(), form: z.literal("ITEMISED"), embassyFeePaise: paise, vfsFeePaise: paise, otherFeePaise: paise }),
+]);
+
+/**
+ * Saving the whole quote. `updatedAt` is the quote's own token: null for a new quote, else the quote's updatedAt as the
+ * page loaded it (a change by someone else in between is a 409 STALE).
+ */
+export const saveQuoteSchema = z.object({
+  processingSpeedId: z.number("Pick the processing speed.").int().positive("Pick the processing speed."),
+  serviceChargePaise: paise,
+  lines: z.array(quoteLineSchema).min(1, "Give every traveller an amount.").max(MAX_ADULTS + MAX_CHILDREN),
+  updatedAt: z.iso.datetime("Reload and try again.").nullable(),
+});
+
+export type SaveQuoteInput = z.infer<typeof saveQuoteSchema>;

@@ -1,5 +1,6 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { fromDbDate } from "../../lib/dates";
+import { lineTotalPaise, quoteTotals } from "../../lib/money";
 import { toMemberDto } from "../clients/client";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
@@ -12,6 +13,26 @@ import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.servic
 export const CASE_FOLLOW_UPS = 20;
 
 const personSelect = { select: { id: true, name: true } } as const;
+
+/** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
+export const docketSelect = {
+  docketNo: true,
+  kind: true,
+  status: true,
+  openedAt: true,
+  vendor: { select: { name: true, city: true } },
+  cases: {
+    orderBy: { enquiry: { caseNo: "asc" } },
+    select: {
+      enquiryId: true,
+      bookletsCurrent: true,
+      bookletsOld: true,
+      enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
+      offering: { select: { country: { select: { name: true } } } },
+      _count: { select: { travellers: true } },
+    },
+  },
+} satisfies Prisma.DocketSelect;
 
 export const visaCaseInclude = {
   department: { select: { code: true, name: true } },
@@ -35,7 +56,23 @@ export const visaCaseInclude = {
       maturedBy: personSelect,
       fileReadyBy: personSelect,
       vendor: {
-        select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true, countries: { select: { countryId: true } } },
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          isActive: true,
+          contactName: true,
+          mobile: true,
+          countries: { select: { countryId: true } },
+          /** Its shared open docket (0008 Decision 2): "Add to docket" joins it. */
+          dockets: { where: { status: "OPEN", kind: "GROUP" }, select: { docketNo: true, _count: { select: { cases: true } } } },
+        },
+      },
+      /** Step 4 (0008 Decision 2): the docket this case goes in, with every case in it for the docket table. */
+      docket: { select: docketSelect },
+      /** The price (0009 Decision 2), per traveller and Masti's service charge. */
+      quote: {
+        include: { processingSpeed: { select: { id: true, name: true, isActive: true } }, updatedBy: personSelect, lines: true },
       },
       travellers: {
         orderBy: { position: "asc" },
@@ -58,6 +95,11 @@ export function travellerLabel(t: { position: number; isChild: boolean }, adults
   return t.isChild ? `Child ${t.position - adults}` : `Adult ${t.position}`;
 }
 
+/** "Mehta" for "Rakesh Mehta": the client's last name, as the docket table and the saved file's name show it. */
+export function familyName(clientName: string | null) {
+  return clientName?.trim().split(/\s+/).at(-1) ?? "";
+}
+
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
@@ -72,9 +114,75 @@ export function travellersLabel(adults: number, children: number) {
 
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
 
+type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
+
 /** The case's vendor, and whether it still covers the case's country. */
-function vendorOf({ countries, ...vendor }: NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>, countryId: number) {
-  return { ...vendor, coversCountry: countries.some((c) => c.countryId === countryId) };
+function vendorOf(v: VendorRow, countryId: number) {
+  const { id, name, city, isActive, contactName, mobile } = v;
+  return { id, name, city, isActive, contactName, mobile, coversCountry: v.countries.some((c) => c.countryId === countryId) };
+}
+
+type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
+
+/**
+ * The docket table (0008 Decision 4). Passports are the current booklets counted in Step 2, or one per traveller when
+ * nobody counted them; old passports go in the parcel too, so the totals count both. Other cases in the docket show
+ * only their number, family name, country and passports.
+ */
+export function docketOf(d: DocketRow, enquiryId: string) {
+  const cases = d.cases.map((c) => ({
+    caseNo: c.enquiry.caseNo,
+    family: familyName(c.enquiry.client.name),
+    country: c.offering.country.name,
+    passports: c.bookletsCurrent ?? c._count.travellers,
+    oldPassports: c.bookletsOld ?? 0,
+    isThisCase: c.enquiryId === enquiryId,
+  }));
+  return {
+    docketNo: d.docketNo,
+    kind: d.kind,
+    status: d.status,
+    /** "Open since 12 Oct, not sent yet" from the next day on. */
+    openedAt: d.openedAt,
+    vendor: d.vendor,
+    cases,
+    totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
+    totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),
+  };
+}
+
+type QuoteRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["quote"]>;
+
+/**
+ * The quote with its totals (0009 Decisions 2 and 3): each traveller's amount, Masti's service charge, GST on the
+ * service charge only (the rate setting), and the total. `complete` is false if a traveller has no line.
+ */
+function quoteOf(q: QuoteRow, travellerIds: string[], gstRatePercent: number) {
+  const lines = q.lines.map((l) => ({
+    travellerId: l.travellerId,
+    form: l.form,
+    lumpSumPaise: l.lumpSumPaise,
+    embassyFeePaise: l.embassyFeePaise,
+    vfsFeePaise: l.vfsFeePaise,
+    otherFeePaise: l.otherFeePaise,
+    totalPaise: lineTotalPaise(l),
+  }));
+  return {
+    processingSpeed: q.processingSpeed,
+    ...quoteTotals(q.lines, q.serviceChargePaise, gstRatePercent),
+    gstRatePercent,
+    lines,
+    complete: travellerIds.every((id) => lines.some((l) => l.travellerId === id)),
+    /** The quote's own token: send it back when saving. */
+    updatedAt: q.updatedAt,
+    updatedBy: q.updatedBy,
+  };
+}
+
+/** The vendor's shared open docket, while this case isn't in one: "Add to docket D-2026-0003 (2 cases)". */
+function openDocketOf(vendor: VendorRow | null) {
+  const open = vendor?.dockets[0];
+  return open && open._count.cases > 0 ? { docketNo: open.docketNo, caseCount: open._count.cases } : null;
 }
 
 /** The consent card (0006 Decision 5): flagged until the "I agree" link, which comes with WhatsApp, fills it. */
@@ -88,6 +196,7 @@ function consentOf(t: TravellerRow) {
  * @param steps the case's flow, in order: the step chips ("Enquiry → Documents → …")
  * @param today IST date, for the travellers' age and passport status
  * @param finalFileMaxMb the setting visa.finalFile.maxMb
+ * @param gstRatePercent the setting visa.invoice.gstRatePercent, for the quote's GST
  */
 export function toVisaCaseDto(
   row: VisaCaseRow,
@@ -95,6 +204,7 @@ export function toVisaCaseDto(
   today: string,
   clientSettings: ClientSettings,
   finalFileMaxMb: number,
+  gstRatePercent: number,
 ) {
   const finalFile = row.files[0];
   const visa = row.visa;
@@ -158,6 +268,13 @@ export function toVisaCaseDto(
     /** "File ready — add to docket" (Decision 9): Step 3 is done and read-only. */
     fileReadyAt: visa.fileReadyAt,
     fileReadyBy: visa.fileReadyBy,
+    /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
+    docket: visa.docket && docketOf(visa.docket, row.id),
+    openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
+    gstRatePercent,
+    /** The price (0009): null until someone enters it. */
+    quote: visa.quote && quoteOf(visa.quote, visa.travellers.map((t) => t.id), gstRatePercent),
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {

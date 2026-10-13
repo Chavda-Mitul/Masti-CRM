@@ -18,6 +18,13 @@ export async function putObject(key: string, body: Buffer, contentType: string):
   await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType, ContentLength: body.length }));
 }
 
+/** The object's bytes, for the server's own use (the invoice PDF embeds the logo and signature). */
+export async function getObject(key: string): Promise<Buffer> {
+  const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) throw new Error(`Empty object ${key}`);
+  return Buffer.from(await res.Body.transformToByteArray());
+}
+
 export async function deleteObject(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }

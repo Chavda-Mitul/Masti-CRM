@@ -9,6 +9,7 @@ import {
   createEmbassySchema,
   createEnquirySourceSchema,
   createOfferingSchema,
+  createProcessingSpeedSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
   listQuerySchema,
@@ -19,6 +20,7 @@ import {
   updateEmbassySchema,
   updateEnquirySourceSchema,
   updateOfferingSchema,
+  updateProcessingSpeedSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
 import * as mastersService from "./visaMasters.service";
@@ -102,6 +104,20 @@ router.post("/document-problem-reasons", visaEdit, async (req, res) => {
 router.patch("/document-problem-reasons/:id", visaEdit, async (req, res) => {
   const body = updateDocumentProblemReasonSchema.parse(req.body);
   res.json({ problemReason: await mastersService.updateDocumentProblemReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Processing speeds: picked on a visa case's quote (docs/decisions/0009-visa-invoice.md)
+router.get("/processing-speeds", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ processingSpeeds: await mastersService.listProcessingSpeeds(active) });
+});
+router.post("/processing-speeds", visaEdit, async (req, res) => {
+  const body = createProcessingSpeedSchema.parse(req.body);
+  res.status(201).json({ processingSpeed: await mastersService.createProcessingSpeed(body, actorOf(req)) });
+});
+router.patch("/processing-speeds/:id", visaEdit, async (req, res) => {
+  const body = updateProcessingSpeedSchema.parse(req.body);
+  res.json({ processingSpeed: await mastersService.updateProcessingSpeed(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

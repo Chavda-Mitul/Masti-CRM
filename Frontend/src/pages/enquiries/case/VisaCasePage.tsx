@@ -11,9 +11,11 @@ import { CaseHeader } from './CaseHeader'
 import { CaseRail } from './CaseRail'
 import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
+import { DocketCard } from './DocketCard'
 import { FollowUpsCard } from './FollowUpsCard'
 import { MaturedBanner } from './MaturedBanner'
 import { SavedFileCard } from './SavedFileCard'
+import { StickerCard } from './StickerCard'
 import { TripCard } from './TripCard'
 
 /**
@@ -55,6 +57,8 @@ export function VisaCasePage() {
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">
+          <DocketCard visaCase={c} />
+          <StickerCard visaCase={c} />
           <MaturedBanner visaCase={c} />
           <ChecklistCard visaCase={c} />
           <TripCard visaCase={c} />

@@ -5,6 +5,9 @@ import { useToast } from '../../lib/toast'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
+  DocketKind,
+  DocketStickerData,
+  SaveQuoteBody,
   DocumentArrival,
   DocumentCheck,
   DocumentStatus,
@@ -44,6 +47,9 @@ export const enquiryKeys = {
   lookup: (mobile: string) => ['enquiries', 'client-lookup', mobile] as const,
   cases: ['enquiries', 'case'] as const,
   case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
+  /** Every docket's label: a docket change on any case, or new company details, can change them. */
+  stickers: ['enquiries', 'sticker'] as const,
+  sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
 /** One visa case: the case page (Step 2 onwards). */
@@ -62,7 +68,11 @@ const overlapping = new Set<string>()
  * pending) and the client's open cases may have changed with it. One that sends updatedAt ("Mark documents complete")
  * can meet a change by someone else (409 STALE): the case is reloaded, with a warning.
  */
-function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>) {
+function useCaseAction<Vars>(
+  caseNo: string,
+  request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>,
+  { otherCases = false }: { otherCases?: boolean } = {},
+) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const base = `/visa/cases/${encodeURIComponent(caseNo)}`
@@ -82,6 +92,11 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
       else if (updated) queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
     },
     onSuccess: () => {
+      // A docket change shows on every case in that docket, not just this one, and on its label.
+      if (otherCases) {
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases, predicate: (q) => q.queryKey[2] !== caseNo.toUpperCase() })
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.stickers })
+      }
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
@@ -249,6 +264,32 @@ export function useMarkFileReady(caseNo: string) {
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
 export function useSetVendor(caseNo: string) {
   return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
+}
+
+/** The quote (0009 Decision 2): saved whole. A save that missed someone else's (409 STALE) reloads the case. */
+export function useSaveQuote(caseNo: string) {
+  return useCaseAction<SaveQuoteBody>(caseNo, (base, body) => api(`${base}/quote`, { method: 'PUT', body }))
+}
+
+/** The docket's parcel label (0008 Decision 5), once the case is in a docket. */
+export function useDocketSticker(caseNo: string, enabled = true) {
+  return useQuery({
+    queryKey: enquiryKeys.sticker(caseNo),
+    queryFn: async () => (await api<{ sticker: DocketStickerData }>(`/visa/cases/${encodeURIComponent(caseNo)}/sticker`)).sticker,
+    enabled,
+  })
+}
+
+/** "Add to docket" (0008 Decision 2): join the vendor's shared docket (GROUP) or start one of its own (OWN). */
+export function useAddToDocket(caseNo: string) {
+  return useCaseAction<{ mode: DocketKind; updatedAt: string }>(caseNo, (base, body) => api(`${base}/docket`, { method: 'POST', body }), {
+    otherCases: true,
+  })
+}
+
+/** "Take out of docket" (0008 Decision 10), while the docket is open. */
+export function useTakeOutOfDocket(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/docket`, { method: 'DELETE', body }), { otherCases: true })
 }
 
 /** All enquiries (open, postponed or cancelled): late first, then by time due. Paged with the API's cursor ("Show more"). */

@@ -40,6 +40,13 @@ export const DOCUMENT_PROBLEM_REASONS = [
   { code: "WRONG_DATES", name: "Wrong dates", sortOrder: 5 },
 ];
 
+/** How fast the embassy processes the application (docs/decisions/0009-visa-invoice.md): placeholders ⚠️ until Masti confirms. */
+export const PROCESSING_SPEEDS = [
+  { code: "NORMAL", name: "Normal", sortOrder: 1 },
+  { code: "EXPRESS", name: "Express", sortOrder: 2 },
+  { code: "SUPER_PRIORITY", name: "Super priority", sortOrder: 3 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -81,6 +88,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const reason of DOCUMENT_PROBLEM_REASONS) {
     await db.documentProblemReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  }
+  for (const speed of PROCESSING_SPEEDS) {
+    await db.processingSpeed.upsert({ where: { code: speed.code }, update: {}, create: speed });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });

@@ -14,7 +14,17 @@ import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { DEFAULT_FIRST_FOLLOW_UP, FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
+import {
+  DEFAULT_DOCKET,
+  DEFAULT_FIRST_FOLLOW_UP,
+  DEFAULT_INVOICE,
+  DEFAULT_STICKER,
+  DOCKET_KEY,
+  FIRST_FOLLOW_UP_KEY,
+  INVOICE_KEY,
+  STICKER_KEY,
+} from "../src/modules/visa/visa.settings";
+import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
 import {
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
@@ -58,7 +68,7 @@ async function main() {
   // System masters (docs/decisions/0005-system-masters.md): dummy until Masti sends B1/B2. Existing rows are kept.
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
-  console.log("Visa masters (France Tourist dummy), document problem reasons, the weekly Sunday off and holiday settings ready.");
+  console.log("Visa masters (France Tourist dummy), document problem reasons, processing speeds, the weekly Sunday off and holiday settings ready.");
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
   await seedEnquiryMasters(prisma);
@@ -67,7 +77,20 @@ async function main() {
     update: {},
     create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
   });
-  console.log("Enquiry sources, visa steps, follow-up and reason dropdowns, and visa follow-up timing ready.");
+  // Docket numbers and the parcel sticker's size (docs/decisions/0008-visa-docket-dispatch.md Decisions 5 and 7) ⚠️, the
+  // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, and Masti's own details.
+  for (const [key, value] of [
+    [DOCKET_KEY, DEFAULT_DOCKET],
+    [STICKER_KEY, DEFAULT_STICKER],
+    [INVOICE_KEY, DEFAULT_INVOICE],
+    [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],
+    [INVOICE_TERMS_KEY, DEFAULT_INVOICE_TERMS],
+  ] as const) {
+    await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
+  }
+  console.log(
+    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, the company details and the invoice terms ready.",
+  );
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
   if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {

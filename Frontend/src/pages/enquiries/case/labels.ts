@@ -15,6 +15,12 @@ export function dayMonth(iso: string): string {
   return DAY_MONTH.format(new Date(iso))
 }
 
+/** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
+export function passportTotal(current: number, old: number): string {
+  const label = `${current} ${current === 1 ? 'passport' : 'passports'}`
+  return old > 0 ? `${label} + ${old} old` : label
+}
+
 /** "Rakesh" from "RAKESH MEHTA": the tab and tile label. */
 export function firstName(name: string): string {
   const first = name.trim().split(/\s+/)[0] ?? name

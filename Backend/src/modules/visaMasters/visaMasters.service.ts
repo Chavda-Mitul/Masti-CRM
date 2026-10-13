@@ -11,6 +11,7 @@ import type {
   CreateCountryInput,
   CreateDocumentInput,
   CreateDocumentProblemReasonInput,
+  CreateProcessingSpeedInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
   CreateOfferingInput,
@@ -18,6 +19,7 @@ import type {
   UpdateCountryInput,
   UpdateDocumentInput,
   UpdateDocumentProblemReasonInput,
+  UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
   UpdateOfferingInput,
@@ -201,6 +203,35 @@ export async function updateDocumentProblemReason(id: number, input: UpdateDocum
     entityType: "DocumentProblemReason",
     entityId: id,
     write: (tx) => tx.documentProblemReason.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Processing speeds: Normal, Express… picked on a visa case's quote (docs/decisions/0009-visa-invoice.md)
+// ---------------------------------------------------------------------------
+
+export async function listProcessingSpeeds(active?: boolean) {
+  return prisma.processingSpeed.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createProcessingSpeed(input: CreateProcessingSpeedInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "processingSpeed.create", "ProcessingSpeed", (tx) => tx.processingSpeed.create({ data: input }));
+}
+
+export async function updateProcessingSpeed(id: number, input: UpdateProcessingSpeedInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.processingSpeed.findUnique({ where: { id } });
+  if (!before) throw notFound("Processing speed not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "processingSpeed.update",
+    entityType: "ProcessingSpeed",
+    entityId: id,
+    write: (tx) => tx.processingSpeed.update({ where: { id }, data: changes }),
   });
 }
 

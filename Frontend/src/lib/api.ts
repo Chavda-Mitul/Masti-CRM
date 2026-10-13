@@ -48,15 +48,20 @@ export async function api<T>(
 }
 
 /**
- * Uploads a PDF as the request body itself (not a form). The backend accepts application/pdf, like JSON, for
- * state-changing calls: no other site's form can send it (CSRF protection).
+ * Uploads a file as the request body itself (not a form). The backend accepts a PDF, a PNG or a JPEG this way, like
+ * JSON, for state-changing calls: no other site's form can send those types (CSRF protection).
  */
-export async function uploadPdf<T>(path: string, file: Blob): Promise<T> {
+export async function uploadFile<T>(path: string, file: Blob, contentType: string, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
+    method,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/pdf' },
+    headers: { 'Content-Type': contentType },
     body: file,
   })
   return parseResponse<T>(res)
+}
+
+/** A PDF as the request body (the visa case's saved file). */
+export async function uploadPdf<T>(path: string, file: Blob): Promise<T> {
+  return uploadFile<T>(path, file, 'application/pdf')
 }

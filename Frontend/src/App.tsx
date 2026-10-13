@@ -11,7 +11,9 @@ import { NewEnquiryPage } from './pages/enquiries/NewEnquiryPage'
 import { LoginPage } from './pages/LoginPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
+import { CompanyPage } from './pages/settings/company/CompanyPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
+import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
 import { TasksPage } from './pages/TasksPage'
@@ -51,6 +53,17 @@ export default function App() {
           </RequireAuth>
         }
       />
+      {/* Print pages: outside the app shell, so only the document prints. */}
+      <Route
+        path="/print/sticker/:caseNo"
+        element={
+          <RequireAuth>
+            <RequireDesktop>
+              <StickerPrintPage />
+            </RequireDesktop>
+          </RequireAuth>
+        }
+      />
       <Route
         element={
           <RequireAuth>
@@ -75,6 +88,7 @@ export default function App() {
           <Route path="masters/checklists" element={<ChecklistsPage />} />
           <Route path="masters/checklists/:offeringId" element={<ChecklistEditorPage />} />
           <Route path="masters/lists" element={<MasterListsPage />} />
+          <Route path="company" element={<CompanyPage />} />
           <Route
             path="users"
             element={

@@ -277,7 +277,13 @@ describe("intake dropdowns and settings", () => {
 
   it("lets only the Visa HOD or the Head change the follow-up timing, audited", async () => {
     const staff = await visaStaff();
-    expect((await staff.get("/api/visa/settings")).body.settings).toEqual({ firstFollowUp: { afterDays: 1, at: "11:00" }, finalFile: { maxMb: 50 } });
+    expect((await staff.get("/api/visa/settings")).body.settings).toEqual({
+      firstFollowUp: { afterDays: 1, at: "11:00" },
+      finalFile: { maxMb: 50 },
+      docket: { prefix: "D" },
+      sticker: { widthMm: 100, heightMm: 150 },
+      invoice: { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" },
+    });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);
 
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });

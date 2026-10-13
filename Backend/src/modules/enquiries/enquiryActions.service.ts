@@ -8,6 +8,7 @@ import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
 import { getVisaSettings } from "../visa/visa.settings";
+import { assertNotInOpenDocket } from "../visa/visaDocket.service";
 import type { CancelInput, LogFollowUpInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "./visibility";
 
@@ -128,6 +129,17 @@ export async function logFollowUp(caseNo: string, input: LogFollowUpInput, actor
   );
 }
 
+/**
+ * A visa case in an open docket must be taken out first (docs/decisions/0008-visa-docket-dispatch.md Decision 10).
+ * Checked after save's update has locked the case's row, so an "Add to docket" can't slip in between.
+ */
+function notInOpenDocket(enquiryId: string) {
+  return async (tx: Db) => {
+    await assertNotInOpenDocket(tx, enquiryId);
+    return {};
+  };
+}
+
 /** The client asked to wait: it comes back on the desk on the resume date (the office's next open day). */
 export async function postpone(caseNo: string, input: PostponeInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
@@ -146,6 +158,7 @@ export async function postpone(caseNo: string, input: PostponeInput, actor: Acto
     { status: "POSTPONED", reasonId: input.reasonId, resumeOn: toDbDate(input.resumeOn), dueAt },
     "enquiry.postpone",
     actor,
+    notInOpenDocket(enquiry.id),
   );
 }
 
@@ -155,7 +168,14 @@ export async function cancel(caseNo: string, input: CancelInput, actor: Actor) {
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status !== "OPEN" && enquiry.status !== "POSTPONED") throw conflict("This case is already closed.");
   await activeReason(input.reasonId, "CANCEL");
-  return save(enquiry, input.updatedAt, { status: "CANCELLED", reasonId: input.reasonId, resumeOn: null, dueAt: null }, "enquiry.cancel", actor);
+  return save(
+    enquiry,
+    input.updatedAt,
+    { status: "CANCELLED", reasonId: input.reasonId, resumeOn: null, dueAt: null },
+    "enquiry.cancel",
+    actor,
+    notInOpenDocket(enquiry.id),
+  );
 }
 
 /** Back from a postponement, before or on its date: it is due now. */

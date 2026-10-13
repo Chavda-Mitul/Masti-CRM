@@ -1,5 +1,11 @@
 # Visa Step 4 · Docket & dispatch: the plan and the hand-over
 
+> **Superseded 13 Oct 2026.** The §4 questions are answered in
+> [`docs/decisions/0008-visa-docket-dispatch.md`](../decisions/0008-visa-docket-dispatch.md), which wins where they
+> differ. The §6 slices are replaced by 0008 Decision 1's order, one component at a time: the Docket card → the
+> Sticker card → the invoice (0009) → the Dispatch card → e-visas. Keep this file for the sources (§1–2) and the
+> conventions (§7).
+
 Written 13 Oct 2026, after Step 3 was merged (PR #7, `86800ec` on `master`). This file is the starting point for a
 new session. It collects what we know, the questions to settle first, and a proposed way to build Step 4 in small
 slices. One decision is already made: the build order (Q-A, §3).

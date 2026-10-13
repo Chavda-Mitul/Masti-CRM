@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { optionalEmail, optionalMobile, optionalPersonName } from '../../clients/schemas'
+import { optionalEmail, optionalGstin, optionalMobile, optionalPan, optionalPersonName, panMatchesGstin } from '../../clients/schemas'
 
 // Form validation for the system masters. Mirrors Backend/src/modules/holidays/holidays.schemas.ts,
 // visaMasters/visaMasters.schemas.ts and vendors/vendors.schemas.ts, so mistakes show up before saving; the backend
@@ -66,6 +66,67 @@ export const holidaySettingsFormSchema = z.object({
 })
 
 export type HolidaySettingsFormValues = z.infer<typeof holidaySettingsFormSchema>
+
+const blankOk = (v: string) => v.trim() === ''
+const upperCompact = (v: string) => v.replace(/\s+/g, '').toUpperCase()
+
+/**
+ * Masti's details (Backend company.schemas.ts, the same limits). Every field is a string in the form; blank means "not
+ * set". The bank's fields go together: once one is filled in, the others it needs are too.
+ */
+export const companyDetailsFormSchema = z
+  .object({
+    name: required(100, 'Enter the company’s name.'),
+    address: required(300, 'Enter the address.'),
+    phone: required(30, 'Enter the phone number.'),
+    phone2: z.string().trim().max(30, '30 characters at most.'),
+    email: optionalEmail,
+    website: z
+      .string()
+      .refine(
+        (v) => blankOk(v) || /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')),
+        'Enter a website like www.example.com.',
+      ),
+    pan: optionalPan,
+    gstin: optionalGstin,
+    stateCode: z.string(),
+    accountName: z.string().trim().max(100, '100 characters at most.'),
+    accountNo: z.string().refine((v) => blankOk(v) || /^[0-9]{6,20}$/.test(v.replace(/\s+/g, '')), '6–20 digits.'),
+    bankName: z.string().trim().max(100, '100 characters at most.'),
+    branch: z.string().trim().max(100, '100 characters at most.'),
+    ifsc: z.string().refine((v) => blankOk(v) || /^[A-Z]{4}0[A-Z0-9]{6}$/.test(upperCompact(v)), 'Enter an 11-character IFSC, e.g. ICIC0000584.'),
+    swift: z.string().refine((v) => blankOk(v) || /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(upperCompact(v)), 'Enter an 8- or 11-character SWIFT code.'),
+  })
+  .superRefine((v, ctx) => {
+    panMatchesGstin(v, ctx)
+    const bank = ['accountName', 'accountNo', 'bankName', 'branch', 'ifsc', 'swift'] as const
+    if (bank.some((f) => v[f].trim() !== '')) {
+      for (const f of ['accountName', 'accountNo', 'bankName', 'branch', 'ifsc'] as const) {
+        if (v[f].trim() === '') ctx.addIssue({ code: 'custom', path: [f], message: 'Needed with the other bank details.' })
+      }
+    }
+  })
+
+export type CompanyDetailsFormValues = z.infer<typeof companyDetailsFormSchema>
+
+/** The invoice series and GST rate (Backend visa.schemas.ts invoiceSettingSchema, the same limits). */
+export const invoiceSettingFormSchema = z.object({
+  prefix: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{1,8}$/, 'Use 1–8 capital letters, e.g. MVI.'),
+  digits: z.number({ error: 'Enter a number.' }).int('Whole digits only.').min(4, '4 at least.').max(12, '12 at most.'),
+  startAt: z.number({ error: 'Enter a number.' }).int('A whole number.').min(1, '1 at least.').max(2_000_000_000),
+  gstRatePercent: z
+    .number({ error: 'Enter a rate.' })
+    .min(0, '0 at least.')
+    .max(28, '28 at most.')
+    .refine((r) => Math.abs(r * 100 - Math.round(r * 100)) < 1e-9, 'At most 2 decimals.'),
+  sac: z.string().trim().regex(/^\d{4,8}$/, '4–8 digits, e.g. 998559.'),
+})
+
+export type InvoiceSettingFormValues = z.infer<typeof invoiceSettingFormSchema>
 
 // ---------------------------------------------------------------------------
 // Small master lists

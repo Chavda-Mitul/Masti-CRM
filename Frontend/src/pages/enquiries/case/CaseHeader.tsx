@@ -29,14 +29,16 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   }
   if (c.status === 'CANCELLED') return <span className="chip chip-bad">Cancelled{c.reason && ` · ${c.reason.name}`}</span>
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
-  // Instead of the step's "Dispatched" ⚠️, which isn't true until Step 4 sends the docket.
+  // Instead of the step's "Dispatched" ⚠️, which isn't true until the docket is sent (0008 Decision 9).
+  if (c.stage.code === 'DISPATCH' && c.docket?.status === 'OPEN') return <span className="chip chip-ok">In docket {c.docket.docketNo}</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
 
 /**
- * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), then "File ready —
- * add to docket" (0007 Decision 9). The later steps show as "Soon" until Step 4 onwards is built.
+ * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
+ * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2). Dispatching
+ * the docket, and the later steps, show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -83,9 +85,21 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
+  if (c.stage.code === 'DISPATCH' && c.status === 'OPEN' && canAct && c.vendorNeeded && !c.docket) {
+    return (
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={() => document.getElementById('docket')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        Add to docket →
+      </button>
+    )
+  }
+  const label = c.stage.code === 'DISPATCH' && c.docket ? `Dispatch docket ${c.docket.docketNo}` : c.stage.nextStepLabel
   return (
     <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with a later step' : 'Only the case’s owner, its HOD and the Head can do this'}>
-      {c.stage.nextStepLabel} → {canAct && <span className="tag">Soon</span>}
+      {label} → {canAct && <span className="tag">Soon</span>}
     </button>
   )
 }

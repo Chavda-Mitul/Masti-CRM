@@ -4,13 +4,16 @@ import { HttpError } from "../../lib/httpError";
 import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
+  addToDocketSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  saveQuoteSchema,
   matureCaseSchema,
   setVendorSchema,
+  takeOutOfDocketSchema,
   updateApplicationSchema,
   updateCaseDocumentSchema,
   updateTripSchema,
@@ -18,7 +21,9 @@ import {
   updateVisaSettingsSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as docketService from "./visaDocket.service";
 import * as filePrepService from "./visaFilePrep.service";
+import * as quoteService from "./visaQuote.service";
 import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
@@ -112,6 +117,29 @@ router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   const body = setVendorSchema.parse(req.body);
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, saved whole. */
+router.put("/cases/:caseNo/quote", visaEdit, async (req, res) => {
+  const body = saveQuoteSchema.parse(req.body);
+  res.json({ case: await quoteService.saveQuote(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): join the vendor's docket (GROUP) or start one of its own (OWN). */
+router.post("/cases/:caseNo/docket", visaEdit, async (req, res) => {
+  const body = addToDocketSchema.parse(req.body);
+  res.json({ case: await docketService.addToDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The docket's parcel sticker (0008 Decision 5): anyone who can open the case can print it. */
+router.get("/cases/:caseNo/sticker", visaView, async (req, res) => {
+  res.json({ sticker: await docketService.docketSticker(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
+/** Take the case out of its docket, while the docket is open. */
+router.delete("/cases/:caseNo/docket", visaEdit, async (req, res) => {
+  const body = takeOutOfDocketSchema.parse(req.body);
+  res.json({ case: await docketService.takeOutOfDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

@@ -175,9 +175,15 @@ a.btn-primary:hover {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-input);
   padding: 0 12px;
+  /* Every field's text the same: 14px regular, ink. A select would otherwise take the bold of its label. */
   font-size: 14px;
+  font-weight: 400;
   background: var(--surface);
   color: var(--ink);
+}
+.input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 /* Our own chevron instead of the browser's arrow, which sits too close to the edge. Stroke is --text-muted. */
 .select {
@@ -412,7 +418,10 @@ a.btn-primary:hover {
   min-height: 64px;
   padding: 10px 12px;
   resize: vertical;
-  font: inherit;
+  /* The same text as the other fields, not the 13px bold of the label around it. */
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.45;
 }
 .check {

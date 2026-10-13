@@ -5,6 +5,7 @@ import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
 import { useFollowUpBadge, useToAssignCount } from '../pages/enquiries/queries'
 import { ErrorBoundary } from './ErrorBoundary'
+import { NavIcon } from './NavIcon'
 
 /** Sidebar layout from the approved demo. Modules not built yet are shown greyed out. */
 export function AppShell() {
@@ -45,10 +46,12 @@ export function AppShell() {
         </div>
 
         <NavLink to="/" end className="nav">
+          <NavIcon name="today" />
           Today
         </NavLink>
 
         <Link to="/enquiries" className={`nav${onEnquiries && !department && !onToAssign ? ' active' : ''}`}>
+          <NavIcon name="enquiries" />
           Enquiries
         </Link>
         {SELLING_DEPARTMENTS.map((code) => {
@@ -74,6 +77,7 @@ export function AppShell() {
         })}
 
         <NavLink to={followUpsTo} className="nav">
+          <NavIcon name="followUps" />
           Follow-ups
           {overdue > 0 && (
             <span className="nav-badge" title={`${overdue} overdue`} aria-label={`${overdue} overdue`}>
@@ -84,6 +88,7 @@ export function AppShell() {
         {/* HODs and the Head only: matured cases waiting for a processor. Cases should never sit idle. */}
         {assigns && (
           <Link to="/enquiries?status=to_assign" className={`nav${onToAssign ? ' active' : ''}`}>
+            <NavIcon name="toAssign" />
             To assign
             {waiting > 0 && (
               <span className="nav-badge" title={`${waiting} waiting for a processor`} aria-label={`${waiting} waiting for a processor`}>
@@ -93,9 +98,11 @@ export function AppShell() {
           </Link>
         )}
         <NavLink to="/clients" className="nav">
+          <NavIcon name="clients" />
           Clients
         </NavLink>
         <span className="nav nav-disabled">
+          <NavIcon name="accounts" />
           Accounts <span className="tag">Soon</span>
         </span>
 
@@ -103,6 +110,7 @@ export function AppShell() {
 
         {/* Field staff never reach the shell (RequireDesktop), so everyone here may open Settings → Masters. */}
         <NavLink to="/settings" className="nav">
+          <NavIcon name="settings" />
           Settings
         </NavLink>
 

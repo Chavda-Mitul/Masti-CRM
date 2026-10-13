@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { api } from '../../../lib/api'
+import { api, uploadFile } from '../../../lib/api'
 import { isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { enquiryKeys } from '../../enquiries/queries'
@@ -9,6 +9,7 @@ import type {
   Country,
   DocumentMaster,
   DocumentProblemReason,
+  ProcessingSpeed,
   EnquiryReason,
   EnquirySource,
   FollowUpOption,
@@ -17,6 +18,11 @@ import type {
   HolidayBody,
   HolidayFilter,
   HolidaySettings,
+  CompanyDetails,
+  CompanyImageKind,
+  CompanyView,
+  InvoiceSetting,
+  InvoiceTerms,
   HolidayTargetOptions,
   MasterResource,
   Offering,
@@ -91,6 +97,100 @@ export function useHolidaySettings() {
   })
 }
 
+const companyKeys = {
+  details: ['company', 'details'] as const,
+  terms: ['company', 'invoice-terms'] as const,
+  image: (kind: CompanyImageKind) => ['company', 'image', kind] as const,
+}
+
+/**
+ * Masti's own details, the current logo and signature, and what the first invoice still needs (0008 Decision 5, 0009
+ * Decision 8). Every office user reads them; the Head changes them.
+ */
+export function useCompanyDetails() {
+  return useQuery({
+    queryKey: companyKeys.details,
+    queryFn: () => api<CompanyView>('/company/details'),
+    staleTime: MASTER_STALE,
+  })
+}
+
+export function useUpdateCompanyDetails() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<CompanyDetails>) => api<CompanyView>('/company/details', { method: 'PUT', body }),
+    onSuccess: (view) => {
+      queryClient.setQueryData(companyKeys.details, view)
+      // Every docket's sticker shows the name, address and phone.
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.stickers })
+    },
+  })
+}
+
+/** The invoice's terms (0009 Decision 8), one per line. */
+export function useInvoiceTerms() {
+  return useQuery({
+    queryKey: companyKeys.terms,
+    queryFn: async () => (await api<{ terms: InvoiceTerms }>('/company/invoice-terms')).terms,
+    staleTime: MASTER_STALE,
+  })
+}
+
+export function useSaveInvoiceTerms() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: InvoiceTerms) => (await api<{ terms: InvoiceTerms }>('/company/invoice-terms', { method: 'PUT', body })).terms,
+    onSuccess: (terms) => queryClient.setQueryData(companyKeys.terms, terms),
+  })
+}
+
+/** A new logo or signature (the Head only): the image itself is the body. */
+export function useUploadCompanyImage(kind: CompanyImageKind) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => uploadFile<CompanyView>(`/company/images/${kind}`, file, file.type, 'PUT'),
+    onSuccess: (view) => {
+      queryClient.setQueryData(companyKeys.details, view)
+      void queryClient.invalidateQueries({ queryKey: companyKeys.image(kind) })
+    },
+  })
+}
+
+/** A short-lived link to the current logo or signature, for the preview. Refetched well before it expires. */
+export function useCompanyImageLink(kind: CompanyImageKind, enabled: boolean) {
+  return useQuery({
+    queryKey: companyKeys.image(kind),
+    queryFn: () => api<{ url: string; expiresAt: string }>(`/company/images/${kind}/link`),
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  })
+}
+
+const visaSettingsKey = ['visa', 'settings'] as const
+
+/** The visa settings; the Masters page shows the invoice series and GST rate (0009 Decisions 3 and 4). */
+export function useVisaInvoiceSetting() {
+  return useQuery({
+    queryKey: visaSettingsKey,
+    queryFn: async () => (await api<{ settings: { invoice: InvoiceSetting } }>('/visa/settings')).settings.invoice,
+    staleTime: MASTER_STALE,
+  })
+}
+
+/** The Visa HOD or the Head. The quotes' GST preview follows the rate, so open cases reload. */
+export function useSaveVisaInvoiceSetting() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (invoice: InvoiceSetting) =>
+      (await api<{ settings: { invoice: InvoiceSetting } }>('/visa/settings', { method: 'PUT', body: { invoice } })).settings.invoice,
+    onSuccess: (invoice) => {
+      queryClient.setQueryData(visaSettingsKey, invoice)
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+    },
+  })
+}
+
 export function useUpdateHolidaySettings() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -140,6 +240,7 @@ interface MasterRow {
   'enquiry-reasons': EnquiryReason
   vendors: Vendor
   'document-problem-reasons': DocumentProblemReason
+  'processing-speeds': ProcessingSpeed
 }
 
 /** The JSON key each list and save comes back under. */
@@ -154,6 +255,7 @@ const LIST_KEY = {
   'enquiry-reasons': 'reasons',
   vendors: 'vendors',
   'document-problem-reasons': 'problemReasons',
+  'processing-speeds': 'processingSpeeds',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -166,6 +268,7 @@ const ITEM_KEY = {
   'enquiry-reasons': 'reason',
   vendors: 'vendor',
   'document-problem-reasons': 'problemReason',
+  'processing-speeds': 'processingSpeed',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -203,6 +306,11 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       }
       // The document problems change nothing else: the case page reads this same list.
       if (resource === 'document-problem-reasons') return
+      // A case's quote shows its processing speed by name.
+      if (resource === 'processing-speeds') {
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+        return
+      }
       if (resource === 'enquiry-sources') {
         // The New enquiry form's "Came in through" chips.
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.sources })

@@ -81,6 +81,9 @@ model User {
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
+  docketsCreated     Docket[]           @relation("DocketCreatedBy")
+  quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
+  companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
 
   @@index([type, isActive])
 }
@@ -403,6 +406,7 @@ model Vendor {
   countries   VendorCountry[]
   /// The visa cases that picked it (0007 Decision 7). A vendor is never deleted, so they keep it.
   cases       VisaCase[]
+  dockets     Docket[]
 }
 
 /// The countries a vendor submits files for ("Mumbai · Schengen"). Replaced as a set when the vendor is edited.
@@ -414,6 +418,50 @@ model VendorCountry {
 
   @@id([vendorId, countryId])
   @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Dockets (docs/decisions/0008-visa-docket-dispatch.md): the parcel of visa files going to one vendor.
+// ---------------------------------------------------------------------------
+
+/// Code branches on it. DISPATCHED gets its columns (courier, AWB, who and when) with the Dispatch card.
+enum DocketStatus {
+  OPEN
+  DISPATCHED
+}
+
+/// "Several files in one" (GROUP: the vendor's shared docket) or "One file per docket" (OWN: one case, nobody joins).
+enum DocketKind {
+  GROUP
+  OWN
+}
+
+/// Hand-written in the migration: at most one OPEN GROUP docket per vendor (a partial unique index), and the
+/// number's format. An emptied open docket stays and is reused by the vendor's next case of the same kind.
+model Docket {
+  id          String       @id @default(uuid())
+  /// "D-2026-0001": the prefix is the setting visa.docket, the counter runs per calendar year (IST).
+  docketNo    String       @unique
+  vendorId    Int
+  kind        DocketKind
+  status      DocketStatus @default(OPEN)
+  /// When it started holding cases: "Open since 12 Oct, not sent yet". Reset when a case joins an empty docket.
+  openedAt    DateTime     @default(now()) @db.Timestamptz(3)
+  createdById String
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  vendor      Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  createdBy   User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cases       VisaCase[]
+
+  @@index([vendorId, status])
+  @@index([createdById])
+}
+
+/// The last docket number used per calendar year (IST), bumped in the docket's own transaction like CaseCounter.
+model DocketCounter {
+  year      Int @id
+  lastValue Int @default(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -813,16 +861,22 @@ model VisaCase {
   /// together (checked in the migration).
   fileReadyAt     DateTime?           @db.Timestamptz(3)
   fileReadyById   String?
+  /// The docket it goes to the vendor in (0008 Decision 2). Set by "Add to docket", cleared by "Take out" while the
+  /// docket is open.
+  docketId        String?
   enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
   fileReadyBy     User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  docket          Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
+  quote           VisaQuote?
 
   @@index([offeringId])
   @@index([vendorId])
   @@index([fileReadyById])
+  @@index([docketId])
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
@@ -844,6 +898,7 @@ model VisaCaseTraveller {
   visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents     VisaCaseDocument[]
+  quoteLine     VisaQuoteLine?
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])
@@ -877,6 +932,18 @@ enum ReceivedAs {
 enum DocumentCheck {
   CHECKED
   NEEDS_REPLACING
+}
+
+/// How fast the embassy processes the application: "Normal", "Express"… (docs/decisions/0009-visa-invoice.md Decision 6).
+/// Picked on the case's quote and printed on the invoice line. Edited by the Visa HOD or the Head.
+model ProcessingSpeed {
+  id        Int         @id @default(autoincrement())
+  /// NORMAL, EXPRESS… Never changes.
+  code      String      @unique
+  name      String
+  sortOrder Int         @default(0)
+  isActive  Boolean     @default(true)
+  quotes    VisaQuote[]
 }
 
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
@@ -931,4 +998,75 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// ---------------------------------------------------------------------------
+// The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the visa invoice will print. Money is in
+// paise, as integers. Editable until the invoice is raised.
+// ---------------------------------------------------------------------------
+
+/// A traveller's amount: one lump sum, or the embassy fee, VFS fee and other, itemised.
+enum QuoteForm {
+  LUMP_SUM
+  ITEMISED
+}
+
+/// One per visa case. Hand-written in the migration: the service charge is 0–10,00,00,000 paise.
+model VisaQuote {
+  enquiryId          String          @id
+  processingSpeedId  Int
+  /// Masti's own service (processing) charge for the case: the only part GST applies to (0009 Decision 3).
+  serviceChargePaise Int             @default(0)
+  updatedById        String
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  /// The quote's own optimistic-lock token: two people editing one quote can't overwrite each other.
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  visaCase           VisaCase        @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
+  processingSpeed    ProcessingSpeed @relation(fields: [processingSpeedId], references: [id], onDelete: Restrict)
+  updatedBy          User            @relation("VisaQuoteUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  lines              VisaQuoteLine[]
+
+  @@index([processingSpeedId])
+  @@index([updatedById])
+}
+
+/// One per traveller. Hand-written in the migration: the amounts match the form, and each is 0–10,00,00,000 paise.
+model VisaQuoteLine {
+  travellerId     String            @id
+  enquiryId       String
+  form            QuoteForm
+  lumpSumPaise    Int?
+  embassyFeePaise Int?
+  vfsFeePaise     Int?
+  otherFeePaise   Int?
+  traveller       VisaCaseTraveller @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  quote           VisaQuote         @relation(fields: [enquiryId], references: [enquiryId], onDelete: Cascade)
+
+  @@index([enquiryId])
+}
+
+// ---------------------------------------------------------------------------
+// Masti's logo and signature, printed on every invoice (docs/decisions/0009-visa-invoice.md Decision 8). Stored privately
+// in the document bucket. The newest of each kind is the current one; older ones are kept, never deleted.
+// ---------------------------------------------------------------------------
+
+enum CompanyImageKind {
+  LOGO
+  SIGNATURE
+}
+
+model CompanyImage {
+  id           String           @id @default(uuid())
+  kind         CompanyImageKind
+  /// company/<kind>/<uuid>.png|jpg in the bucket.
+  storageKey   String           @unique
+  /// image/png or image/jpeg.
+  contentType  String
+  sizeBytes    Int
+  uploadedById String
+  uploadedAt   DateTime         @default(now()) @db.Timestamptz(3)
+  uploadedBy   User             @relation("CompanyImageUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([kind, uploadedAt])
+  @@index([uploadedById])
 }
