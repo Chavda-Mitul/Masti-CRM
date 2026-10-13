@@ -81,6 +81,7 @@ model User {
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
+  docketsCreated     Docket[]           @relation("DocketCreatedBy")
 
   @@index([type, isActive])
 }
@@ -403,6 +404,7 @@ model Vendor {
   countries   VendorCountry[]
   /// The visa cases that picked it (0007 Decision 7). A vendor is never deleted, so they keep it.
   cases       VisaCase[]
+  dockets     Docket[]
 }
 
 /// The countries a vendor submits files for ("Mumbai · Schengen"). Replaced as a set when the vendor is edited.
@@ -414,6 +416,50 @@ model VendorCountry {
 
   @@id([vendorId, countryId])
   @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Dockets (docs/decisions/0008-visa-docket-dispatch.md): the parcel of visa files going to one vendor.
+// ---------------------------------------------------------------------------
+
+/// Code branches on it. DISPATCHED gets its columns (courier, AWB, who and when) with the Dispatch card.
+enum DocketStatus {
+  OPEN
+  DISPATCHED
+}
+
+/// "Several files in one" (GROUP: the vendor's shared docket) or "One file per docket" (OWN: one case, nobody joins).
+enum DocketKind {
+  GROUP
+  OWN
+}
+
+/// Hand-written in the migration: at most one OPEN GROUP docket per vendor (a partial unique index), and the
+/// number's format. An emptied open docket stays and is reused by the vendor's next case of the same kind.
+model Docket {
+  id          String       @id @default(uuid())
+  /// "D-2026-0001": the prefix is the setting visa.docket, the counter runs per calendar year (IST).
+  docketNo    String       @unique
+  vendorId    Int
+  kind        DocketKind
+  status      DocketStatus @default(OPEN)
+  /// When it started holding cases: "Open since 12 Oct, not sent yet". Reset when a case joins an empty docket.
+  openedAt    DateTime     @default(now()) @db.Timestamptz(3)
+  createdById String
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  vendor      Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  createdBy   User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cases       VisaCase[]
+
+  @@index([vendorId, status])
+  @@index([createdById])
+}
+
+/// The last docket number used per calendar year (IST), bumped in the docket's own transaction like CaseCounter.
+model DocketCounter {
+  year      Int @id
+  lastValue Int @default(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -813,16 +859,21 @@ model VisaCase {
   /// together (checked in the migration).
   fileReadyAt     DateTime?           @db.Timestamptz(3)
   fileReadyById   String?
+  /// The docket it goes to the vendor in (0008 Decision 2). Set by "Add to docket", cleared by "Take out" while the
+  /// docket is open.
+  docketId        String?
   enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
   fileReadyBy     User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  docket          Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
 
   @@index([offeringId])
   @@index([vendorId])
   @@index([fileReadyById])
+  @@index([docketId])
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking

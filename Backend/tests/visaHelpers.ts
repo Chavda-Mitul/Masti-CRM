@@ -2,13 +2,19 @@ import { expect } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { createUser, loginAs, prisma } from "./helpers";
 
-// Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts).
+// Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
+// Step 4 in visaDocket.test.ts).
 
 export type Agent = Awaited<ReturnType<typeof loginAs>>;
 
+/** A Visa EDIT user, created the first time it is asked for, so a test can make several cases. */
+async function visaEditor(name: string, email: string) {
+  return (await prisma.user.findUnique({ where: { email } })) ?? createUser({ name, email, departments: [{ code: "VISA", access: "EDIT" }] });
+}
+
 /** Aarti Patel, Visa staff with EDIT, logged in. */
 export async function visaStaff() {
-  await createUser({ name: "Aarti Patel", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+  await visaEditor("Aarti Patel", "aarti@masti.test");
   return loginAs("aarti@masti.test");
 }
 
@@ -35,11 +41,11 @@ export async function saveCase(agent: Agent, extra: Record<string, unknown> = {}
  * preparation, matured by Aarti and given to Neha Joshi (or still waiting for a processor). Set straight in the
  * database; maturity itself is tested in visaDocuments.test.ts.
  */
-export async function maturedCase({ assigned = true } = {}) {
+export async function maturedCase({ assigned = true, extra = {} as Record<string, unknown> } = {}) {
   const staff = await visaStaff();
-  const saved = await saveCase(staff);
+  const saved = await saveCase(staff, extra);
   const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
-  const neha = await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+  const neha = await visaEditor("Neha Joshi", "neha@masti.test");
   const now = new Date();
   const docs = await prisma.visaCaseDocument.findMany({ where: { traveller: { caseId: saved.id } } });
   for (const d of docs) {
@@ -60,10 +66,11 @@ export async function maturedCase({ assigned = true } = {}) {
 /**
  * A matured case (see maturedCase) with all of Step 3 done, straight in the database, ready for "File ready": every
  * paper that came in or was made Checked by Neha, an acknowledgement number and an appointment for each traveller, the
- * trip details, an active France vendor and a saved file (a row only; nothing is put in the bucket).
+ * trip details, an active France vendor (a new "Global Visa Services, Mumbai", or `vendorId`) and a saved file (a row
+ * only; nothing is put in the bucket). `extra` goes to the New enquiry form, e.g. another client's mobile and name.
  */
-export async function readyCase() {
-  const c = await maturedCase();
+export async function readyCase({ vendorId, extra }: { vendorId?: number; extra?: Record<string, unknown> } = {}) {
+  const c = await maturedCase({ extra });
   const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
   const now = new Date();
   await prisma.visaCaseDocument.updateMany({
@@ -78,7 +85,9 @@ export async function readyCase() {
     });
   }
   const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
-  const vendor = await prisma.vendor.create({ data: { name: "Global Visa Services", city: "Mumbai", countries: { create: [{ countryId: fr.id }] } } });
+  const vendor = vendorId
+    ? await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } })
+    : await prisma.vendor.create({ data: { name: "Global Visa Services", city: "Mumbai", countries: { create: [{ countryId: fr.id }] } } });
   await prisma.visaCase.update({
     where: { enquiryId: c.id },
     data: {
@@ -100,6 +109,20 @@ export async function readyCase() {
     },
   });
   return { ...c, vendor, file, travellers };
+}
+
+/**
+ * A ready case (see readyCase) already marked "File ready" by Neha, at Docket & dispatch: Step 4's starting point. Set
+ * straight in the database; "File ready" itself is tested in visaFileReady.test.ts.
+ */
+export async function dispatchCase(options: { vendorId?: number; extra?: Record<string, unknown> } = {}) {
+  const c = await readyCase(options);
+  const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+  const dispatch = await prisma.departmentStage.findFirstOrThrow({ where: { code: "DISPATCH" } });
+  const now = new Date();
+  await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: dispatch.id, dueAt: now } });
+  await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { fileReadyAt: now, fileReadyById: neha.id } });
+  return c;
 }
 
 /** Waits until another connection is blocked on a row lock: the request under test has reached the locked case. */

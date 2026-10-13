@@ -234,6 +234,64 @@
 .saved-file-vendor-note {
   margin: 0;
 }
+/* Step 4's docket (demo screen 09, 0008 Decision 2): the files going to one vendor in one parcel. */
+.docket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.docket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.docket-head .h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.docket-head .seg-btn button:disabled {
+  cursor: default;
+}
+/* A narrow phone scrolls the table inside the card, never the page. */
+.docket-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+}
+/* Cells wrap on a phone, so the passports stay in view; the case number and the counts never break. */
+.docket-table th,
+.docket-table .mono,
+.docket-table td:nth-child(2) {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .docket-table th,
+  .docket-table td {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+.docket-table tr.this-case td {
+  background: var(--dept-tint);
+}
+.docket-table tfoot td {
+  border-top: 1px solid var(--border-card);
+  border-bottom: 0;
+  font-weight: 700;
+}
+.docket-open-since {
+  margin: 0;
+  color: var(--warn);
+  font-size: 13px;
+  font-weight: 700;
+}
+.docket-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
 .trip-form .form-grid {

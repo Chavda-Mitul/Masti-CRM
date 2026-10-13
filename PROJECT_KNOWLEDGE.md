@@ -1667,6 +1667,7 @@ Masti CRM/
 - **E-visas** (Vendor needed off): a "Submitted online" button that needs the invoice and moves the case to Step 5.
 - **Not built (possible change requests):** sending a case back from Step 4 to File preparation, a Dockets list page, courier tracking.
 - **Still needed from Masti:** the fee sheet (B1), the invoice format and company details (M7/C5), when the invoice is raised (Q6/M6), the label printer, the SMTP account (A6).
+- **Built so far:** component 1, **the Docket card** (13 Oct 2026). A file-ready case is added to its vendor's shared docket (`D-2026-0001`) or sent on its own, and can be taken out while the docket is open. The table shows each file's passports and the totals. Postpone and cancel are refused while the case is in a docket. "Send on its own" is allowed while the vendor's shared docket is open (decided 13 Oct). Next: the Sticker card.
 
 **Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
 - **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.

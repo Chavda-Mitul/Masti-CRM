@@ -16,7 +16,7 @@ import { findOrCreateClientByMobile } from "../clients/clients.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
-import { FINAL_FILE_KEY, FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
+import { DOCKET_KEY, FINAL_FILE_KEY, FIRST_FOLLOW_UP_KEY, getVisaSettings } from "./visa.settings";
 import { toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
@@ -272,7 +272,7 @@ export async function getSettings() {
 
 /**
  * The Head or the Visa HOD. A follow-up timing change applies to enquiries saved after it; a file size limit to the next
- * upload. Only the keys sent and changed are written, each audited on its own.
+ * upload; a docket prefix to the next new docket. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -280,6 +280,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
   const changes = [
     { key: FIRST_FOLLOW_UP_KEY, before: before.firstFollowUp, after: input.firstFollowUp },
     { key: FINAL_FILE_KEY, before: before.finalFile, after: input.finalFile },
+    { key: DOCKET_KEY, before: before.docket, after: input.docket },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));
   if (changes.length === 0) return before;
   await prisma.$transaction(async (tx) => {

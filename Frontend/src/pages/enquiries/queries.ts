@@ -5,6 +5,7 @@ import { useToast } from '../../lib/toast'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
+  DocketKind,
   DocumentArrival,
   DocumentCheck,
   DocumentStatus,
@@ -62,7 +63,11 @@ const overlapping = new Set<string>()
  * pending) and the client's open cases may have changed with it. One that sends updatedAt ("Mark documents complete")
  * can meet a change by someone else (409 STALE): the case is reloaded, with a warning.
  */
-function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>) {
+function useCaseAction<Vars>(
+  caseNo: string,
+  request: (path: string, vars: Vars) => Promise<{ case: VisaCase }>,
+  { otherCases = false }: { otherCases?: boolean } = {},
+) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const base = `/visa/cases/${encodeURIComponent(caseNo)}`
@@ -82,6 +87,10 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
       else if (updated) queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
     },
     onSuccess: () => {
+      // A docket change shows on every case in that docket, not just this one.
+      if (otherCases) {
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases, predicate: (q) => q.queryKey[2] !== caseNo.toUpperCase() })
+      }
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
@@ -249,6 +258,18 @@ export function useMarkFileReady(caseNo: string) {
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
 export function useSetVendor(caseNo: string) {
   return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
+}
+
+/** "Add to docket" (0008 Decision 2): join the vendor's shared docket (GROUP) or start one of its own (OWN). */
+export function useAddToDocket(caseNo: string) {
+  return useCaseAction<{ mode: DocketKind; updatedAt: string }>(caseNo, (base, body) => api(`${base}/docket`, { method: 'POST', body }), {
+    otherCases: true,
+  })
+}
+
+/** "Take out of docket" (0008 Decision 10), while the docket is open. */
+export function useTakeOutOfDocket(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/docket`, { method: 'DELETE', body }), { otherCases: true })
 }
 
 /** All enquiries (open, postponed or cancelled): late first, then by time due. Paged with the API's cursor ("Show more"). */

@@ -1,7 +1,7 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
-- **Status:** decided (13 Oct 2026, project lead); not built yet. A "Built" note is added under each part as its
-  component lands.
+- **Status:** decided (13 Oct 2026, project lead). Component 1, the Docket card, is built (13 Oct 2026). A "Built"
+  note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
   - grouping ready cases into dockets, per vendor
@@ -62,16 +62,45 @@ plan mode, built, tested, checked in the browser and committed before the next o
 - **One open docket per vendor.** A docket stays **open** until it is dispatched.
 - **"Add to docket"** (the demo's "Several files in one", and today's practice) puts the case into its vendor's open
   docket, or starts one if there isn't one.
-- **"Send on its own"** ("One file per docket") starts a new docket holding just this case. That docket is the
-  vendor's open docket from then on; it doesn't hold two.
-  > *To settle in the Docket card's plan:* whether "Send on its own" is allowed while the vendor already has an open
-  > docket with other cases, and what happens to that docket. The simplest reading is that it is refused with "Take
-  > it out of docket D-… or dispatch that one first", or that the own docket is marked so others can't join it.
+- **"Send on its own"** ("One file per docket") starts a new docket holding just this case, marked as such: no other
+  case joins it. **Settled 13 Oct 2026 (project lead):** this is allowed while the vendor's shared docket is open, and
+  that docket is unaffected. So a vendor has at most **one shared open docket**, plus any number of single-case ones.
 - **One docket can hold cases for different countries,** as long as they go to the same vendor (the demo).
 - **Once dispatched, a docket is locked.** The vendor's next case starts a new one.
 - **A docket may stay open across days.** From the day after it was opened, the docket card shows an amber line
-  "Open since 12 Oct, not sent yet" ⚠️. No scheduler is needed: the page compares the docket's `createdAt` with today
+  "Open since 12 Oct, not sent yet" ⚠️. No scheduler is needed: the page compares the docket's `openedAt` with today
   (IST).
+
+**Built 13 Oct 2026** (component 1, the Docket card):
+
+- **API and data:**
+  - `POST /api/visa/cases/:caseNo/docket` with `{ mode: "GROUP" | "OWN", updatedAt }`, and
+    `DELETE /api/visa/cases/:caseNo/docket` with `{ updatedAt }`. Both return `{ case }`.
+  - Tables `Docket` (`kind` GROUP/OWN, `status` OPEN/DISPATCHED, `openedAt`) and `DocketCounter`, plus
+    `VisaCase.docketId` (migration `20261013110000_dockets`).
+  - The partial unique index `Docket_one_open_group_per_vendor` allows one shared open docket per vendor.
+    `prisma migrate diff` doesn't propose dropping it.
+  - Audited as `visa.docket.add` (after: `docketNo`, `kind`, `newDocket`) and `visa.docket.remove`, on the Enquiry,
+    with `clientId`.
+  - The case sends `docket { docketNo, kind, status, openedAt, vendor, cases, totalPassports, totalOldPassports }`.
+    While it isn't in one, it sends `openDocket { docketNo, caseCount }`, the vendor's shared docket it would join.
+- **Screen:**
+  - The **Docket card** sits at the top of the case page at Docket & dispatch, as in the demo. It has the switch, the
+    Case · Passports · Invoice table (the Invoice column says "Invoices come later" until 0009), the totals, the
+    amber "Open since" line, the rule copy, and **Add** / **Take out of docket**.
+  - The header chip says "In docket D-…". The next-step button says "Add to docket →" (it scrolls to the card), then
+    "Dispatch docket D-… →" with **Soon**.
+- **Settled while building:**
+  - **Locks:** the vendor, then the docket, then the case. Two adds for one vendor take turns on the vendor's row.
+  - **An emptied docket is reused** by the vendor's next case of the same kind, keeping its number, and its
+    `openedAt` restarts. A refused add rolls back, so no number is used up.
+  - **The case's `updatedAt` doesn't move,** like the Step 3 edits. A docket change refreshes the other cases in the
+    docket that are open in the browser.
+  - **A vendor switched off, or no longer covering the country, since "File ready"** blocks the add: "Global Visa
+    Services is switched off. Ask the Visa HOD to switch it back on." The vendor can't be changed at Step 4 (Step 3
+    is read-only). Changing it would need the send-back change request (Decision 10).
+  - **Other cases in the docket** show as plain text (number, family name, country, passports), not links, because
+    a processor may not be allowed to open another processor's case.
 
 ### 3. Who acts
 
@@ -91,6 +120,8 @@ plan mode, built, tested, checked in the browser and committed before the next o
 - **A row** shows "4 (+3 old)", or just "4".
 - **The total** (the docket card and the sticker) counts both: "7 passports + 3 old" ⚠️. The old part is left out
   when there are none. The vendor can check every booklet in the parcel.
+
+**Built 13 Oct 2026** on the Docket card (component 1). The sticker reuses the same counts.
 
 ### 5. The sticker
 
@@ -123,6 +154,9 @@ plan mode, built, tested, checked in the browser and committed before the next o
 - **A `DocketCounter` per calendar year (IST)**, bumped in the docket's own transaction, like `CaseCounter`.
 - **A number is used only when a docket is created.** An empty open docket keeps its number and is reused
   (Decision 10).
+
+**Built 13 Oct 2026:** the setting `visa.docket` (seeded, changed through `PUT /api/visa/settings` by the Visa HOD or
+the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCounter`.
 
 ### 8. The email to the vendor (Q1, second half)
 
@@ -177,6 +211,12 @@ plan mode, built, tested, checked in the browser and committed before the next o
   state.
 - **Sending a case back to File preparation** (a paper found wrong at the last minute) is **not built**. It isn't in
   the demo; flagged as a possible change request.
+
+**Built 13 Oct 2026** (component 1):
+- Taking a case out works as described.
+- Postpone and cancel check the docket inside their own transaction, after their update has locked the case's row,
+  so an add can't slip in between.
+- An emptied docket is reused as described in Decision 2's note.
 
 ### 11. E-visas (no vendor, no parcel)
 
@@ -240,7 +280,9 @@ One order everywhere: **the docket first, then its cases, in enquiry-id order.**
 - **Dispatch** locks the docket row (`SELECT … FOR UPDATE`), then each case.
 - **Add and take out** lock the docket first too. When adding to a new docket, the vendor's open docket is looked up
   and locked, or created, before the case is locked with `lockCase` (`src/modules/visa/caseLock.ts`).
-- Step 4 gets its own step rule in `caseLock.ts`, e.g. `DISPATCHING: { stages: ["DISPATCH"] }`.
+- Step 4 gets its own step rule in `caseLock.ts`: `DISPATCHING: { stages: ["DISPATCH"] }` (built).
+- **Built:** adding a case locks the vendor's row first, then the docket, then the case, so two adds for one vendor
+  take turns and never start two shared dockets.
 - The races are tested as in 0006 and 0007: hold one lock, and check that the other request waits and then sees the
   change.
 

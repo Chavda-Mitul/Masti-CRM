@@ -12,7 +12,7 @@ import { loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
 import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
-import { countTravellers, travellerLabel } from "./visaCase";
+import { countTravellers, familyName, travellerLabel } from "./visaCase";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -186,8 +186,7 @@ export async function finalFileLimit(caseNo: string, actor: Actor) {
 
 /** "VISA-2026-0001_Mehta_file.pdf" ⚠️ (demo screen 08): the case number and the client's last name, letters and digits only. */
 function finalFileName(caseNo: string, clientName: string) {
-  const last = clientName.trim().split(/\s+/).at(-1) ?? "";
-  const safe = last.normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+  const safe = familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
   return safe ? `${caseNo}_${safe}_file.pdf` : `${caseNo}_file.pdf`;
 }
 

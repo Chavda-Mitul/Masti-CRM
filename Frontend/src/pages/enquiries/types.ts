@@ -233,6 +233,36 @@ export interface CaseVendor {
   coversCountry: boolean
 }
 
+/** "Several files in one" (the vendor's shared docket) or "One file per docket" (0008 Decision 2). */
+export type DocketKind = 'GROUP' | 'OWN'
+
+/** One case in a docket: other cases show only this much (0008 Decision 4). */
+export interface DocketCase {
+  caseNo: string
+  /** "Mehta" */
+  family: string
+  /** "France" */
+  country: string
+  /** Current booklets, or one per traveller when nobody counted them */
+  passports: number
+  oldPassports: number
+  isThisCase: boolean
+}
+
+/** The docket a case goes to the vendor in (0008, Step 4). */
+export interface CaseDocket {
+  /** "D-2026-0001" */
+  docketNo: string
+  kind: DocketKind
+  status: 'OPEN' | 'DISPATCHED'
+  /** "Open since 12 Oct, not sent yet" from the next day on */
+  openedAt: string
+  vendor: { name: string; city: string }
+  cases: DocketCase[]
+  totalPassports: number
+  totalOldPassports: number
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -276,6 +306,10 @@ export interface VisaCase {
   /** "File ready — add to docket" (0007 Decision 9): Step 3 is done and read-only. */
   fileReadyAt: string | null
   fileReadyBy: PersonRef | null
+  /** Step 4: the docket this case is in (0008 Decision 2), or null. */
+  docket: CaseDocket | null
+  /** While it isn't in one: the vendor's shared open docket it would join, if that holds any files. */
+  openDocket: { docketNo: string; caseCount: number } | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

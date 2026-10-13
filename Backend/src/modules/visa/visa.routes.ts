@@ -4,6 +4,7 @@ import { HttpError } from "../../lib/httpError";
 import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
+  addToDocketSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   fileReadySchema,
@@ -11,6 +12,7 @@ import {
   linkTravellerSchema,
   matureCaseSchema,
   setVendorSchema,
+  takeOutOfDocketSchema,
   updateApplicationSchema,
   updateCaseDocumentSchema,
   updateTripSchema,
@@ -18,6 +20,7 @@ import {
   updateVisaSettingsSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as docketService from "./visaDocket.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as stepsService from "./visaSteps.service";
 
@@ -112,6 +115,18 @@ router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   const body = setVendorSchema.parse(req.body);
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): join the vendor's docket (GROUP) or start one of its own (OWN). */
+router.post("/cases/:caseNo/docket", visaEdit, async (req, res) => {
+  const body = addToDocketSchema.parse(req.body);
+  res.json({ case: await docketService.addToDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** Take the case out of its docket, while the docket is open. */
+router.delete("/cases/:caseNo/docket", visaEdit, async (req, res) => {
+  const body = takeOutOfDocketSchema.parse(req.body);
+  res.json({ case: await docketService.takeOutOfDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

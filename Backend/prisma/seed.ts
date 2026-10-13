@@ -14,7 +14,7 @@ import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { DEFAULT_FIRST_FOLLOW_UP, FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
+import { DEFAULT_DOCKET, DEFAULT_FIRST_FOLLOW_UP, DOCKET_KEY, FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
 import {
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
@@ -67,7 +67,9 @@ async function main() {
     update: {},
     create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
   });
-  console.log("Enquiry sources, visa steps, follow-up and reason dropdowns, and visa follow-up timing ready.");
+  // Docket numbers (docs/decisions/0008-visa-docket-dispatch.md Decision 7) ⚠️.
+  await prisma.setting.upsert({ where: { key: DOCKET_KEY }, update: {}, create: { key: DOCKET_KEY, value: DEFAULT_DOCKET } });
+  console.log("Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing and the docket prefix ready.");
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
   if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {

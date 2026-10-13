@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -20,7 +20,12 @@ export const finalFileSchema = z.object({
   maxMb: z.number().int().min(1).max(200),
 });
 
-export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema });
+/** Docket numbers, "D-2026-0001" (docs/decisions/0008-visa-docket-dispatch.md Decision 7): the prefix is letters only. */
+export const docketSettingSchema = z.object({
+  prefix: z.string().regex(/^[A-Z]{1,8}$/, "Use 1–8 capital letters, e.g. D."),
+});
+
+export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema, docket: docketSettingSchema });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
@@ -46,6 +51,7 @@ export const idempotencyKeySchema = z.string().trim().min(8).max(100).optional()
 
 export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
 export type FinalFileSetting = z.infer<typeof finalFileSchema>;
+export type DocketSetting = z.infer<typeof docketSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -163,3 +169,22 @@ export const setVendorSchema = z.object({
 });
 
 export type SetVendorInput = z.infer<typeof setVendorSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 4 (docs/decisions/0008-visa-docket-dispatch.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Add to docket" (Decision 2): GROUP joins the vendor's shared open docket ("Several files in one"), OWN starts a
+ * docket holding just this case ("One file per docket"). Sends the case's updatedAt, like "File ready".
+ */
+export const addToDocketSchema = z.object({
+  mode: z.enum(DocketKind, "Pick how this file goes."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Take out of docket" (Decision 10), while the docket is open. */
+export const takeOutOfDocketSchema = matureCaseSchema;
+
+export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
+export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;

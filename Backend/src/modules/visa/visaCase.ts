@@ -35,7 +35,38 @@ export const visaCaseInclude = {
       maturedBy: personSelect,
       fileReadyBy: personSelect,
       vendor: {
-        select: { id: true, name: true, city: true, isActive: true, contactName: true, mobile: true, countries: { select: { countryId: true } } },
+        select: {
+          id: true,
+          name: true,
+          city: true,
+          isActive: true,
+          contactName: true,
+          mobile: true,
+          countries: { select: { countryId: true } },
+          /** Its shared open docket (0008 Decision 2): "Add to docket" joins it. */
+          dockets: { where: { status: "OPEN", kind: "GROUP" }, select: { docketNo: true, _count: { select: { cases: true } } } },
+        },
+      },
+      /** Step 4 (0008 Decision 2): the docket this case goes in, with every case in it for the docket table. */
+      docket: {
+        select: {
+          docketNo: true,
+          kind: true,
+          status: true,
+          openedAt: true,
+          vendor: { select: { name: true, city: true } },
+          cases: {
+            orderBy: { enquiry: { caseNo: "asc" } },
+            select: {
+              enquiryId: true,
+              bookletsCurrent: true,
+              bookletsOld: true,
+              enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
+              offering: { select: { country: { select: { name: true } } } },
+              _count: { select: { travellers: true } },
+            },
+          },
+        },
       },
       travellers: {
         orderBy: { position: "asc" },
@@ -58,6 +89,11 @@ export function travellerLabel(t: { position: number; isChild: boolean }, adults
   return t.isChild ? `Child ${t.position - adults}` : `Adult ${t.position}`;
 }
 
+/** "Mehta" for "Rakesh Mehta": the client's last name, as the docket table and the saved file's name show it. */
+export function familyName(clientName: string | null) {
+  return clientName?.trim().split(/\s+/).at(-1) ?? "";
+}
+
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
@@ -72,9 +108,47 @@ export function travellersLabel(adults: number, children: number) {
 
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
 
+type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
+
 /** The case's vendor, and whether it still covers the case's country. */
-function vendorOf({ countries, ...vendor }: NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>, countryId: number) {
-  return { ...vendor, coversCountry: countries.some((c) => c.countryId === countryId) };
+function vendorOf(v: VendorRow, countryId: number) {
+  const { id, name, city, isActive, contactName, mobile } = v;
+  return { id, name, city, isActive, contactName, mobile, coversCountry: v.countries.some((c) => c.countryId === countryId) };
+}
+
+type DocketRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["docket"]>;
+
+/**
+ * The docket table (0008 Decision 4). Passports are the current booklets counted in Step 2, or one per traveller when
+ * nobody counted them; old passports go in the parcel too, so the totals count both. Other cases in the docket show
+ * only their number, family name, country and passports.
+ */
+function docketOf(d: DocketRow, enquiryId: string) {
+  const cases = d.cases.map((c) => ({
+    caseNo: c.enquiry.caseNo,
+    family: familyName(c.enquiry.client.name),
+    country: c.offering.country.name,
+    passports: c.bookletsCurrent ?? c._count.travellers,
+    oldPassports: c.bookletsOld ?? 0,
+    isThisCase: c.enquiryId === enquiryId,
+  }));
+  return {
+    docketNo: d.docketNo,
+    kind: d.kind,
+    status: d.status,
+    /** "Open since 12 Oct, not sent yet" from the next day on. */
+    openedAt: d.openedAt,
+    vendor: d.vendor,
+    cases,
+    totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
+    totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),
+  };
+}
+
+/** The vendor's shared open docket, while this case isn't in one: "Add to docket D-2026-0003 (2 cases)". */
+function openDocketOf(vendor: VendorRow | null) {
+  const open = vendor?.dockets[0];
+  return open && open._count.cases > 0 ? { docketNo: open.docketNo, caseCount: open._count.cases } : null;
 }
 
 /** The consent card (0006 Decision 5): flagged until the "I agree" link, which comes with WhatsApp, fills it. */
@@ -158,6 +232,9 @@ export function toVisaCaseDto(
     /** "File ready — add to docket" (Decision 9): Step 3 is done and read-only. */
     fileReadyAt: visa.fileReadyAt,
     fileReadyBy: visa.fileReadyBy,
+    /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
+    docket: visa.docket && docketOf(visa.docket, row.id),
+    openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
     travellers: visa.travellers.map((t) => {
       const member = t.member ? toMemberDto(t.member, today, clientSettings) : null;
       return {
