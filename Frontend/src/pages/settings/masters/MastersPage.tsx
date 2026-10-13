@@ -3,6 +3,7 @@ import { canViewVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { CompanyDetailsCard } from './CompanyDetailsCard'
+import { InvoiceNumberingCard } from './InvoiceNumberingCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { useMasterList, useOfferings } from './queries'
 
@@ -119,6 +120,8 @@ export function MastersPage() {
         )}
 
         <HolidaySettingsCard />
+
+        <InvoiceNumberingCard />
 
         <CompanyDetailsCard />
 

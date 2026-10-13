@@ -88,8 +88,9 @@ const updatedAt = z.iso.datetime("Reload and try again.");
 
 const upperNoSpaces = z.string().transform((s) => s.replace(/\s+/g, "").toUpperCase());
 
-const pan = upperNoSpaces.pipe(z.string().regex(PAN_PATTERN, "Enter a valid PAN, e.g. ABCDE1234F."));
-const gstin = upperNoSpaces.pipe(
+/** Shared with the company details (Masti's own PAN, GSTIN and state, docs/decisions/0009-visa-invoice.md). */
+export const pan = upperNoSpaces.pipe(z.string().regex(PAN_PATTERN, "Enter a valid PAN, e.g. ABCDE1234F."));
+export const gstin = upperNoSpaces.pipe(
   z
     .string()
     .regex(GSTIN_PATTERN, "Enter a valid 15-character GSTIN.")
@@ -98,7 +99,7 @@ const gstin = upperNoSpaces.pipe(
 const passportNumber = upperNoSpaces.pipe(
   z.string().regex(PASSPORT_PATTERN, "Enter the passport number as printed (6–12 letters and digits)."),
 );
-const stateCode = z.string().trim().refine((code) => STATE_CODES.has(code), "Pick a state from the list.");
+export const stateCode = z.string().trim().refine((code) => STATE_CODES.has(code), "Pick a state from the list.");
 const pincode = z.string().trim().regex(/^[1-9][0-9]{5}$/, "Enter a 6-digit PIN code.");
 const lookupId = z.number().int().positive();
 

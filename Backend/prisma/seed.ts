@@ -24,7 +24,7 @@ import {
   INVOICE_KEY,
   STICKER_KEY,
 } from "../src/modules/visa/visa.settings";
-import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS } from "../src/modules/company/company.settings";
+import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
 import {
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
@@ -84,11 +84,12 @@ async function main() {
     [STICKER_KEY, DEFAULT_STICKER],
     [INVOICE_KEY, DEFAULT_INVOICE],
     [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],
+    [INVOICE_TERMS_KEY, DEFAULT_INVOICE_TERMS],
   ] as const) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
   console.log(
-    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, and the company details ready.",
+    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, the company details and the invoice terms ready.",
   );
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.

@@ -1,6 +1,7 @@
 # 0009 · The visa invoice: the quote, the locked tax invoice and its PDF
 
-- **Status:** decided (13 Oct 2026, project lead). Component 1, the quote, is built (13 Oct 2026). One point is waiting for Masti's accountant
+- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the quote and the invoice settings, are built
+  (13 Oct 2026). One point is waiting for Masti's accountant
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** the price quoted on a visa case, and raising the visa tax invoice from it:
@@ -194,6 +195,44 @@ stops issuing visa invoices. An export to it can come later (Q26).
 **A snapshot is taken at raise time.** The client's name, address, state, GSTIN and PAN, and Masti's details, are
 copied onto the invoice. A later edit to the client or the company never changes an issued invoice.
 
+**Decided 13 Oct 2026 (project lead):**
+- **The Head types Masti's PAN, GSTIN, state and bank details in.** They start empty; nothing like a bank account
+  number is kept in the code or the seed.
+- **The settings live on the Masters page** (the Company details card grows), not in a new Settings tab.
+
+**Built 13 Oct 2026** (component 2, the invoice settings):
+
+- **API and data:**
+  - **`company.details`** gains the 24/7 phone, email, website, PAN, GSTIN, state code and `bank { accountName,
+    accountNo, bankName, branch, ifsc, swift }`. All are optional and start empty, so the existing row still reads.
+  - **The same checks as a client's:** the PAN, GSTIN (with its check character), state and IFSC formats. The GSTIN's
+    PAN and state must match; an empty PAN or state is filled in from the GSTIN.
+  - **`GET /api/company/details`** returns `{ details, images, missingForInvoice }`. `missingForInvoice` lists what the
+    first invoice still needs: PAN, GSTIN, State, Bank details, Logo, Signature. Component 3 refuses to raise an
+    invoice while it isn't empty.
+  - **`invoice.terms`:** a list of 1–10 lines, seeded ⚠️ with the five on Masti's current invoices, at
+    `GET/PUT /api/company/invoice-terms`.
+  - **The logo and signature:** the table `CompanyImage` (migration `20261013130000_company_images`), uploaded by the
+    Head with `PUT /api/company/images/logo|signature`. The body is the PNG or JPEG itself, at most 2 MB. It's
+    audited as `company.image.upload`. The newest is current; older ones are kept. Office users open them with
+    `GET /api/company/images/:kind/link`.
+  - **`src/lib/storage.ts`** gains `getObject`, for the invoice PDF to embed the images.
+  - **`src/middleware/requireJson.ts`** now takes PNG and JPEG uploads, and compares the exact media type (so
+    `application/jsonx` or `image/pngx` is refused).
+- **Screen (Settings → Masters):**
+  - **"Company details & invoice"**, a full-width card:
+    - Company, Tax and Bank sections; the Head edits
+    - the invoice terms, one per line
+    - logo and signature tiles with previews
+    - an amber "Needed before the first invoice" note
+    - everyone else reads it
+  - **"Invoice numbering & GST":** prefix, digits, **starting number**, GST rate and SAC, with a preview of the first
+    number (e.g. `MVI00001379`). The Visa HOD or the Head edits it.
+- **Settled while building:**
+  - **pdf-lib reads a Node `Buffer`'s whole backing memory,** and a small Buffer shares it with others. So an uploaded
+    image is handed to pdf-lib as a plain copy, both when it's checked at upload and later in the PDF.
+  - **The sticker's "From"** still prints only the name, address and phone, never the tax or bank details.
+
 ### 9. Never edited; corrections
 
 - **No edit route,** and **a database trigger refuses any UPDATE or DELETE** on an issued invoice and its lines, like
@@ -268,6 +307,7 @@ model InvoiceCounter { id Int @id @default(1); lastValue Int }   // one row; the
 2. **Invoice settings:**
    - the extended Company details card: fields, bank, terms
    - the logo and signature upload
+   **Built 13 Oct 2026,** with the Invoice numbering & GST card.
 3. **Raise the invoice:**
    - the readiness checks and the confirm step
    - number, snapshot, GST, lines

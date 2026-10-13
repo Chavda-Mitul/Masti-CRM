@@ -163,7 +163,9 @@ export async function docketSticker(caseNo: string, user: UserWithDepartments) {
   if (!row.visa.docket) throw conflict("This case isn't in a docket yet.");
 
   const docket = docketOf(row.visa.docket, row.id);
-  const [from, { sticker }] = await Promise.all([getCompanyDetails(), getVisaSettings()]);
+  const [company, { sticker }] = await Promise.all([getCompanyDetails(), getVisaSettings()]);
+  // The label prints only who it's from: never the tax or bank details.
+  const from = { name: company.name, address: company.address, phone: company.phone };
   return {
     docketNo: docket.docketNo,
     status: docket.status,

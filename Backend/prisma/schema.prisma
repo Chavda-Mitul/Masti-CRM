@@ -83,6 +83,7 @@ model User {
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
+  companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
 
   @@index([type, isActive])
 }
@@ -1042,4 +1043,30 @@ model VisaQuoteLine {
   quote           VisaQuote         @relation(fields: [enquiryId], references: [enquiryId], onDelete: Cascade)
 
   @@index([enquiryId])
+}
+
+// ---------------------------------------------------------------------------
+// Masti's logo and signature, printed on every invoice (docs/decisions/0009-visa-invoice.md Decision 8). Stored privately
+// in the document bucket. The newest of each kind is the current one; older ones are kept, never deleted.
+// ---------------------------------------------------------------------------
+
+enum CompanyImageKind {
+  LOGO
+  SIGNATURE
+}
+
+model CompanyImage {
+  id           String           @id @default(uuid())
+  kind         CompanyImageKind
+  /// company/<kind>/<uuid>.png|jpg in the bucket.
+  storageKey   String           @unique
+  /// image/png or image/jpeg.
+  contentType  String
+  sizeBytes    Int
+  uploadedById String
+  uploadedAt   DateTime         @default(now()) @db.Timestamptz(3)
+  uploadedBy   User             @relation("CompanyImageUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([kind, uploadedAt])
+  @@index([uploadedById])
 }

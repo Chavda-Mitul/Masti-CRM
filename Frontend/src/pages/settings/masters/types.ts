@@ -70,11 +70,63 @@ export interface HolidaySettings {
   newForDays: number
 }
 
-/** GET /api/company/details: Masti's own details, the "From" on the parcel sticker (0008 Decision 5). */
+/** Masti's bank account, printed on every invoice (0009 Decision 8). */
+export interface BankDetails {
+  accountName: string
+  accountNo: string
+  bankName: string
+  branch: string
+  ifsc: string
+  swift: string | null
+}
+
+/** Masti's own details: the "From" on the parcel sticker (0008 Decision 5) and the invoice's header (0009 Decision 8). */
 export interface CompanyDetails {
   name: string
   address: string
   phone: string
+  /** The 24/7 number */
+  phone2: string | null
+  email: string | null
+  /** "www.example.com" */
+  website: string | null
+  pan: string | null
+  gstin: string | null
+  /** GST state code, "24" for Gujarat */
+  stateCode: string | null
+  bank: BankDetails | null
+}
+
+export type CompanyImageKind = 'logo' | 'signature'
+
+/** The current logo or signature (the newest upload). */
+export interface CompanyImage {
+  contentType: 'image/png' | 'image/jpeg'
+  sizeBytes: number
+  uploadedAt: string
+  uploadedBy: { id: string; name: string }
+}
+
+/** GET /api/company/details */
+export interface CompanyView {
+  details: CompanyDetails
+  images: Record<CompanyImageKind, CompanyImage | null>
+  /** What the first invoice still needs: "PAN", "Bank details", "Logo"… */
+  missingForInvoice: string[]
+}
+
+/** GET /api/company/invoice-terms */
+export interface InvoiceTerms {
+  lines: string[]
+}
+
+/** The setting visa.invoice (0009 Decisions 3 and 4): Masti's number series and GST on the service charge. */
+export interface InvoiceSetting {
+  prefix: string
+  digits: number
+  startAt: number
+  gstRatePercent: number
+  sac: string
 }
 
 /** 409 DUPLICATE from the holidays API. */

@@ -60,8 +60,8 @@ const mobile = z.string().refine((v) => normaliseMobile(v) !== null, MOBILE_MESS
 export const optionalMobile = z.string().refine((v) => blank(v) || normaliseMobile(v) !== null, MOBILE_MESSAGE)
 export const optionalEmail = z.string().refine((v) => blank(v) || EMAIL_PATTERN.test(v.trim()), 'Enter a valid email address.')
 const optionalPincode = z.string().refine((v) => blank(v) || PINCODE_PATTERN.test(v.trim()), 'Enter a 6-digit PIN code.')
-const optionalPan = z.string().refine((v) => blank(v) || PAN_PATTERN.test(compact(v)), 'Enter a valid PAN, e.g. ABCDE1234F.')
-const optionalGstin = z.string().superRefine((value, ctx) => {
+export const optionalPan = z.string().refine((v) => blank(v) || PAN_PATTERN.test(compact(v)), 'Enter a valid PAN, e.g. ABCDE1234F.')
+export const optionalGstin = z.string().superRefine((value, ctx) => {
   const gstin = compact(value)
   if (!gstin) return
   if (!GSTIN_PATTERN.test(gstin)) ctx.addIssue({ code: 'custom', message: 'Enter a valid 15-character GSTIN.' })
@@ -107,7 +107,7 @@ function nameFitsKind(values: { kind: 'INDIVIDUAL' | 'CORPORATE'; name: string }
 }
 
 /** A GSTIN carries its holder's PAN in characters 3–12 (the backend refuses a mismatch). */
-function panMatchesGstin(values: { pan: string; gstin: string }, ctx: z.RefinementCtx) {
+export function panMatchesGstin(values: { pan: string; gstin: string }, ctx: z.RefinementCtx) {
   const pan = compact(values.pan)
   const gstin = compact(values.gstin)
   if (pan && GSTIN_PATTERN.test(gstin) && gstin.slice(2, 12) !== pan) {
@@ -115,13 +115,13 @@ function panMatchesGstin(values: { pan: string; gstin: string }, ctx: z.Refineme
   }
 }
 
-type GstState = { code: string; name: string }
+export type GstState = { code: string; name: string }
 
 /**
  * A GSTIN carries its holder's GST state in its first two digits (the backend refuses a different state).
  * The state decides the GST type on invoices, which are never edited.
  */
-function stateMatchesGstin(values: { stateCode: string; gstin: string }, ctx: z.RefinementCtx, states: GstState[]) {
+export function stateMatchesGstin(values: { stateCode: string; gstin: string }, ctx: z.RefinementCtx, states: GstState[]) {
   const gstin = compact(values.gstin)
   if (!values.stateCode || !GSTIN_PATTERN.test(gstin) || gstin.slice(0, 2) === values.stateCode) return
   const gstinState = states.find((s) => s.code === gstin.slice(0, 2))
