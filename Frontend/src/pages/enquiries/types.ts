@@ -263,6 +263,20 @@ export interface CaseDocket {
   totalOldPassports: number
 }
 
+/** GET /api/visa/cases/:caseNo/sticker: the parcel label (0008 Decision 5). */
+export interface DocketStickerData {
+  docketNo: string
+  status: 'OPEN' | 'DISPATCHED'
+  vendor: { name: string; city: string }
+  cases: { caseNo: string; passports: number; oldPassports: number }[]
+  totalPassports: number
+  totalOldPassports: number
+  /** Masti's details (the company.details setting) */
+  from: { name: string; address: string; phone: string }
+  /** The label size (the visa.sticker setting) */
+  size: { widthMm: number; heightMm: number }
+}
+
 export interface VisaCase {
   id: string
   caseNo: string

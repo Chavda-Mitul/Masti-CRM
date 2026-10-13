@@ -1,6 +1,7 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
-- **Status:** decided (13 Oct 2026, project lead). Component 1, the Docket card, is built (13 Oct 2026). A "Built"
+- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the Docket card and the Sticker card, are
+  built (13 Oct 2026). A "Built"
   note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
@@ -137,6 +138,50 @@ plan mode, built, tested, checked in the browser and committed before the next o
   address is stored yet, so a new setting holds the company's details (name, address, phone), edited by the Head and
   seeded with a ⚠️ placeholder. The visa invoice (0009) reuses it and adds what it needs (GSTIN and so on).
 
+**Masti's answers (13 Oct 2026, through the project lead):**
+- **Printer:** they have no particular label printer, so the size stays 100 × 150 mm, with a Code 128 barcode.
+- **Company details,** seeded as given:
+  - **Name:** MASTI TOUR AND TRAVEL
+  - **Address:** 301, Maitri, Opp. Canara Bank, Nr. Panchratna Tower, L.H. Road, Varachha, Surat-395006, (Guj.)
+    INDIA
+  - **Phone:** +91-93777-57580
+
+**Built 13 Oct 2026** (component 2, the Sticker card):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/sticker` (Visa VIEW, and the user must be able to open the case) returns the
+    docket number, the vendor, each case with its passports, the totals, `from` (the company's details) and `size`.
+    It reuses the Docket card's rows and counts, so the two never disagree.
+  - `409 "This case isn't in a docket yet."` when the case isn't in a docket.
+  - Printing isn't audited, because it changes nothing.
+  - The setting `company.details`: `GET /api/company/details` for every office user, and `PUT` for the Head only,
+    audited as `setting.update` (module `src/modules/company/`).
+  - The setting `visa.sticker` → `{ widthMm: 100, heightMm: 150 }` ⚠️, 50–300 mm each, changed through
+    `PUT /api/visa/settings`. Both settings are seeded.
+- **Screen:**
+  - The **Sticker card** sits under the Docket card while the case is in a docket. It shows the label scaled down and
+    a **Print sticker** button.
+  - Print sticker opens `/print/sticker/:caseNo` in a new tab, outside the app shell. The page holds only the label
+    at its real size, with an `@page` rule of the label's size and no margins, and opens the print dialog once the
+    barcode is drawn.
+  - The label shows:
+    - the company name and the docket number
+    - "To: vendor, city"
+    - each file with its passports ("VISA-2026-0002 (3 +2 old)")
+    - the total
+    - the barcode, with the number under it
+    - "From:" with Masti's name, address and phone
+  - A **Company details** card in Settings → Masters: the Head edits, everyone else reads.
+- **Settled while building:**
+  - **The barcode is `jsbarcode` 3.12.3, pinned exactly,** and drawn as SVG stretched to the label's millimetre box,
+    with the number printed underneath.
+  - **The label's heading uses the company name** from the setting ("MASTI TOUR AND TRAVEL"), not the demo's "MASTI
+    TRAVELS".
+  - **Who can print:** anyone who can open the case, view-only users included. A dispatched docket's label can be
+    printed again.
+  - **The print dialog opens on its own** only when the Sticker card opens the page (`?autoprint=1`). Opened any
+    other way, the page waits for **Print**.
+
 ### 6. The courier
 
 - **A `Courier` master** (rule 2: no free text), in Settings → Masters → Lists, edited by the Visa HOD or the Head.
@@ -235,7 +280,7 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 | `visa.docket` | `{ prefix: "D" }` ⚠️ |
 | `visa.vendorConfirm` | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | The sticker size | 100 × 150 mm ⚠️ |
-| The company's details (name, address, phone) | a placeholder ⚠️, until Masti gives theirs |
+| The company's details (name, address, phone) | Masti's own, given 13 Oct 2026 |
 | `Courier` | Blue Dart · DTDC · By hand (no AWB) ⚠️ |
 | The AWB format | capitals and digits, 4–30 ⚠️ |
 | The vendor email wording, the "Open since" and chip wording | ours or the demo's ⚠️ |

@@ -13,6 +13,26 @@ export const CASE_FOLLOW_UPS = 20;
 
 const personSelect = { select: { id: true, name: true } } as const;
 
+/** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
+export const docketSelect = {
+  docketNo: true,
+  kind: true,
+  status: true,
+  openedAt: true,
+  vendor: { select: { name: true, city: true } },
+  cases: {
+    orderBy: { enquiry: { caseNo: "asc" } },
+    select: {
+      enquiryId: true,
+      bookletsCurrent: true,
+      bookletsOld: true,
+      enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
+      offering: { select: { country: { select: { name: true } } } },
+      _count: { select: { travellers: true } },
+    },
+  },
+} satisfies Prisma.DocketSelect;
+
 export const visaCaseInclude = {
   department: { select: { code: true, name: true } },
   client: { select: { id: true, name: true, mobile: true } },
@@ -48,26 +68,7 @@ export const visaCaseInclude = {
         },
       },
       /** Step 4 (0008 Decision 2): the docket this case goes in, with every case in it for the docket table. */
-      docket: {
-        select: {
-          docketNo: true,
-          kind: true,
-          status: true,
-          openedAt: true,
-          vendor: { select: { name: true, city: true } },
-          cases: {
-            orderBy: { enquiry: { caseNo: "asc" } },
-            select: {
-              enquiryId: true,
-              bookletsCurrent: true,
-              bookletsOld: true,
-              enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
-              offering: { select: { country: { select: { name: true } } } },
-              _count: { select: { travellers: true } },
-            },
-          },
-        },
-      },
+      docket: { select: docketSelect },
       travellers: {
         orderBy: { position: "asc" },
         include: {
@@ -116,14 +117,14 @@ function vendorOf(v: VendorRow, countryId: number) {
   return { id, name, city, isActive, contactName, mobile, coversCountry: v.countries.some((c) => c.countryId === countryId) };
 }
 
-type DocketRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["docket"]>;
+type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
 
 /**
  * The docket table (0008 Decision 4). Passports are the current booklets counted in Step 2, or one per traveller when
  * nobody counted them; old passports go in the parcel too, so the totals count both. Other cases in the docket show
  * only their number, family name, country and passports.
  */
-function docketOf(d: DocketRow, enquiryId: string) {
+export function docketOf(d: DocketRow, enquiryId: string) {
   const cases = d.cases.map((c) => ({
     caseNo: c.enquiry.caseNo,
     family: familyName(c.enquiry.client.name),

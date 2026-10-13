@@ -25,7 +25,16 @@ export const docketSettingSchema = z.object({
   prefix: z.string().regex(/^[A-Z]{1,8}$/, "Use 1–8 capital letters, e.g. D."),
 });
 
-export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema, docket: docketSettingSchema });
+/** The parcel sticker's size in millimetres (0008 Decision 5): a 100 × 150 mm thermal label by default. */
+const stickerMm = z.number().int().min(50, "50 mm at least.").max(300, "300 mm at most.");
+export const stickerSettingSchema = z.object({ widthMm: stickerMm, heightMm: stickerMm });
+
+export const visaSettingsSchema = z.object({
+  firstFollowUp: firstFollowUpSchema,
+  finalFile: finalFileSchema,
+  docket: docketSettingSchema,
+  sticker: stickerSettingSchema,
+});
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
@@ -52,6 +61,7 @@ export const idempotencyKeySchema = z.string().trim().min(8).max(100).optional()
 export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
 export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type DocketSetting = z.infer<typeof docketSettingSchema>;
+export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;

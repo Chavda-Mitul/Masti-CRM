@@ -123,6 +123,11 @@ router.post("/cases/:caseNo/docket", visaEdit, async (req, res) => {
   res.json({ case: await docketService.addToDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
+/** The docket's parcel sticker (0008 Decision 5): anyone who can open the case can print it. */
+router.get("/cases/:caseNo/sticker", visaView, async (req, res) => {
+  res.json({ sticker: await docketService.docketSticker(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
 /** Take the case out of its docket, while the docket is open. */
 router.delete("/cases/:caseNo/docket", visaEdit, async (req, res) => {
   const body = takeOutOfDocketSchema.parse(req.body);

@@ -17,6 +17,7 @@ import type {
   HolidayBody,
   HolidayFilter,
   HolidaySettings,
+  CompanyDetails,
   HolidayTargetOptions,
   MasterResource,
   Offering,
@@ -88,6 +89,29 @@ export function useHolidaySettings() {
     queryKey: holidayKeys.settings,
     queryFn: async () => (await api<{ settings: HolidaySettings }>('/holidays/settings')).settings,
     staleTime: MASTER_STALE,
+  })
+}
+
+const companyKey = ['company', 'details'] as const
+
+/** Masti's own details (0008 Decision 5). Every office user reads them; the Head changes them. */
+export function useCompanyDetails() {
+  return useQuery({
+    queryKey: companyKey,
+    queryFn: async () => (await api<{ details: CompanyDetails }>('/company/details')).details,
+    staleTime: MASTER_STALE,
+  })
+}
+
+export function useUpdateCompanyDetails() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: Partial<CompanyDetails>) => (await api<{ details: CompanyDetails }>('/company/details', { method: 'PUT', body })).details,
+    onSuccess: (details) => {
+      queryClient.setQueryData(companyKey, details)
+      // Every docket's sticker shows them.
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.stickers })
+    },
   })
 }
 

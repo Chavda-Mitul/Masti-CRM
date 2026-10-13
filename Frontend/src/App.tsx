@@ -12,6 +12,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
+import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
 import { TasksPage } from './pages/TasksPage'
@@ -48,6 +49,17 @@ export default function App() {
             <RequireField>
               <TasksPage />
             </RequireField>
+          </RequireAuth>
+        }
+      />
+      {/* Print pages: outside the app shell, so only the document prints. */}
+      <Route
+        path="/print/sticker/:caseNo"
+        element={
+          <RequireAuth>
+            <RequireDesktop>
+              <StickerPrintPage />
+            </RequireDesktop>
           </RequireAuth>
         }
       />

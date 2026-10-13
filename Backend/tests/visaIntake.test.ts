@@ -281,6 +281,7 @@ describe("intake dropdowns and settings", () => {
       firstFollowUp: { afterDays: 1, at: "11:00" },
       finalFile: { maxMb: 50 },
       docket: { prefix: "D" },
+      sticker: { widthMm: 100, heightMm: 150 },
     });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);
 

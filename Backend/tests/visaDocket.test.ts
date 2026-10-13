@@ -432,3 +432,78 @@ describe("taking turns (locks: vendor, then docket, then case)", () => {
     await expect(prisma.docket.create({ data: { docketNo: "d-1", vendorId: c.vendor.id, kind: "OWN", createdById } })).rejects.toThrow();
   });
 });
+
+describe("the parcel sticker (Decision 5)", () => {
+  interface Sticker {
+    docketNo: string;
+    vendor: { name: string; city: string };
+    cases: { caseNo: string; passports: number; oldPassports: number }[];
+    totalPassports: number;
+    totalOldPassports: number;
+    from: { name: string; address: string; phone: string };
+    size: { widthMm: number; heightMm: number };
+  }
+  const sticker = (agent: Agent, caseNo: string) => agent.get(`/api/visa/cases/${caseNo}/sticker`);
+
+  it("lists the docket's cases with their passports, the totals, Masti's details and the label size", async () => {
+    const mehta = await dispatchCase();
+    const shah = await another(mehta, "98250 41235", "Sunil Shah");
+    await prisma.visaCase.update({ where: { enquiryId: shah.id }, data: { bookletsCurrent: 3, bookletsOld: 2 } });
+    const processor = await neha();
+    await add(processor, mehta.caseNo);
+    await add(processor, shah.caseNo);
+
+    const res = await sticker(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    expect(res.body.sticker as Sticker).toEqual({
+      docketNo: `D-${year}-0001`,
+      status: "OPEN",
+      vendor: { name: "Global Visa Services", city: "Mumbai" },
+      cases: [
+        { caseNo: mehta.caseNo, passports: 2, oldPassports: 0 },
+        { caseNo: shah.caseNo, passports: 3, oldPassports: 2 },
+      ],
+      totalPassports: 5,
+      totalOldPassports: 2,
+      from: {
+        name: "MASTI TOUR AND TRAVEL",
+        address: "301, Maitri, Opp. Canara Bank, Nr. Panchratna Tower, L.H. Road, Varachha, Surat-395006, (Guj.) INDIA",
+        phone: "+91-93777-57580",
+      },
+      size: { widthMm: 100, heightMm: 150 },
+    });
+
+    // A case taken out is no longer on the label.
+    await takeOut(processor, shah.caseNo);
+    expect(((await sticker(processor, mehta.caseNo)).body.sticker as Sticker).cases.map((c) => c.caseNo)).toEqual([mehta.caseNo]);
+  });
+
+  it("follows the company details and the size setting", async () => {
+    const c = await dispatchCase();
+    const { hod, head } = await hodHeadViewer();
+    await add(await neha(), c.caseNo);
+    expect((await head.put("/api/company/details").send({ phone: "+91-90000-00000" })).status).toBe(200);
+    expect((await hod.put("/api/visa/settings").send({ sticker: { widthMm: 40, heightMm: 150 } })).status).toBe(400);
+    expect((await hod.put("/api/visa/settings").send({ sticker: { widthMm: 100, heightMm: 400 } })).status).toBe(400);
+    expect((await hod.put("/api/visa/settings").send({ sticker: { widthMm: 102, heightMm: 152 } })).status).toBe(200);
+
+    const label = (await sticker(hod, c.caseNo)).body.sticker as Sticker;
+    expect(label.from.phone).toBe("+91-90000-00000");
+    expect(label.size).toEqual({ widthMm: 102, heightMm: 152 });
+  });
+
+  it("is for anyone who can open the case, and only once it is in a docket", async () => {
+    const c = await dispatchCase();
+    const { viewer } = await hodHeadViewer();
+    const processor = await neha();
+    const early = await sticker(processor, c.caseNo);
+    expect(early.status).toBe(409);
+    expect(early.body.message).toBe("This case isn't in a docket yet.");
+
+    await add(processor, c.caseNo);
+    expect((await sticker(viewer, c.caseNo)).status).toBe(200);
+    // Aarti is Visa staff, but the case is Neha's: she can't open it, so she can't print its label.
+    expect((await sticker(await loginAs("aarti@masti.test"), c.caseNo)).status).toBe(403);
+    expect((await sticker(processor, "VISA-2026-9999")).status).toBe(404);
+  });
+});

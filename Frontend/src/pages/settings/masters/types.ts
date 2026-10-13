@@ -70,6 +70,13 @@ export interface HolidaySettings {
   newForDays: number
 }
 
+/** GET /api/company/details: Masti's own details, the "From" on the parcel sticker (0008 Decision 5). */
+export interface CompanyDetails {
+  name: string
+  address: string
+  phone: string
+}
+
 /** 409 DUPLICATE from the holidays API. */
 export interface HolidayDuplicate {
   id: string

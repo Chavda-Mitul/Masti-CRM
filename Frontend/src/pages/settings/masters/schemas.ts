@@ -67,6 +67,15 @@ export const holidaySettingsFormSchema = z.object({
 
 export type HolidaySettingsFormValues = z.infer<typeof holidaySettingsFormSchema>
 
+/** Masti's details (Backend company.schemas.ts): the same limits. */
+export const companyDetailsFormSchema = z.object({
+  name: required(100, 'Enter the company’s name.'),
+  address: required(300, 'Enter the address.'),
+  phone: required(30, 'Enter the phone number.'),
+})
+
+export type CompanyDetailsFormValues = z.infer<typeof companyDetailsFormSchema>
+
 // ---------------------------------------------------------------------------
 // Small master lists
 // ---------------------------------------------------------------------------

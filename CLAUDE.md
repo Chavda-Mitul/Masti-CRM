@@ -65,7 +65,7 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 ## Working rules
 
 - **Before encoding a business rule,** check §17 (where sources disagree), §18 (open questions) and `QUESTIONS_TO_ASK.md` (the questions still waiting on answers). If it's unresolved, make it configurable and say so.
-- **Out-of-scope work:** a feature that isn't in the demo screens may be a paid change request. Flag it; don't build it quietly.
+- **Out-of-scope work:** a feature that isn't in the demo screens may be a paid change request. Flag it; don't build it quietly. Add it to [docs/change-requests.md](docs/change-requests.md).
 - **Testing:** test the money and rule logic (invoice immutability, refunds, follow-up caps, holiday-blocked dates, permissions).
 - **Keeping docs current:** when a decision is made, update `PROJECT_KNOWLEDGE.md` and `Masti-CRM-Handover/05_Open_Questions.md`.
 

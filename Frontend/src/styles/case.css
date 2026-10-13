@@ -292,6 +292,26 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Step 4's parcel sticker (0008 Decision 5): the label scaled down, then Print sticker. */
+.sticker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sticker-card .h2 {
+  margin: 0;
+}
+.sticker-preview {
+  max-width: 100%;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.sticker-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
 .trip-form .form-grid {

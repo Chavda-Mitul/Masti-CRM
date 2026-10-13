@@ -6,6 +6,7 @@ import type {
   ClientLookup,
   CreateVisaCaseBody,
   DocketKind,
+  DocketStickerData,
   DocumentArrival,
   DocumentCheck,
   DocumentStatus,
@@ -45,6 +46,9 @@ export const enquiryKeys = {
   lookup: (mobile: string) => ['enquiries', 'client-lookup', mobile] as const,
   cases: ['enquiries', 'case'] as const,
   case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
+  /** Every docket's label: a docket change on any case, or new company details, can change them. */
+  stickers: ['enquiries', 'sticker'] as const,
+  sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
 /** One visa case: the case page (Step 2 onwards). */
@@ -87,9 +91,10 @@ function useCaseAction<Vars>(
       else if (updated) queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
     },
     onSuccess: () => {
-      // A docket change shows on every case in that docket, not just this one.
+      // A docket change shows on every case in that docket, not just this one, and on its label.
       if (otherCases) {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases, predicate: (q) => q.queryKey[2] !== caseNo.toUpperCase() })
+        void queryClient.invalidateQueries({ queryKey: enquiryKeys.stickers })
       }
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
@@ -258,6 +263,15 @@ export function useMarkFileReady(caseNo: string) {
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
 export function useSetVendor(caseNo: string) {
   return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
+}
+
+/** The docket's parcel label (0008 Decision 5), once the case is in a docket. */
+export function useDocketSticker(caseNo: string, enabled = true) {
+  return useQuery({
+    queryKey: enquiryKeys.sticker(caseNo),
+    queryFn: async () => (await api<{ sticker: DocketStickerData }>(`/visa/cases/${encodeURIComponent(caseNo)}/sticker`)).sticker,
+    enabled,
+  })
 }
 
 /** "Add to docket" (0008 Decision 2): join the vendor's shared docket (GROUP) or start one of its own (OWN). */

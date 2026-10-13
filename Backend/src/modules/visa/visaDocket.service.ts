@@ -3,12 +3,15 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { istToday } from "../../lib/dates";
-import { conflict } from "../../lib/httpError";
-import type { Actor } from "../users/user";
+import { conflict, notFound } from "../../lib/httpError";
+import { getCompanyDetails } from "../company/company.settings";
+import { assertCanSeeEnquiry } from "../enquiries/visibility";
+import type { Actor, UserWithDepartments } from "../users/user";
 import { DISPATCHING, loadCase, lockCase } from "./caseLock";
 import type { AddToDocketInput, TakeOutOfDocketInput } from "./visa.schemas";
 import { formatCaseNo, getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
+import { docketOf, docketSelect } from "./visaCase";
 
 // Visa Step 4, the Docket card (docs/decisions/0008-visa-docket-dispatch.md Decisions 2, 3, 7 and 10): a file-ready case
 // joins its vendor's docket, or is taken out again while the docket is open. Dispatch comes with the Dispatch card.
@@ -143,6 +146,34 @@ export async function takeOutOfDocket(caseNo: string, input: TakeOutOfDocketInpu
     );
   });
   return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * The parcel sticker (Decision 5): the docket's number, the vendor, each case with its passports and the totals (the
+ * same counts as the Docket card), Masti's details for "From", and the label size. Anyone who can open the case can
+ * print it, a dispatched docket too (a reprint). Printing changes nothing, so it isn't audited.
+ */
+export async function docketSticker(caseNo: string, user: UserWithDepartments) {
+  const row = await prisma.enquiry.findUnique({
+    where: { caseNo: caseNo.toUpperCase() },
+    select: { id: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docket: { select: docketSelect } } } },
+  });
+  if (!row?.visa) throw notFound("Case not found.");
+  assertCanSeeEnquiry(user, row);
+  if (!row.visa.docket) throw conflict("This case isn't in a docket yet.");
+
+  const docket = docketOf(row.visa.docket, row.id);
+  const [from, { sticker }] = await Promise.all([getCompanyDetails(), getVisaSettings()]);
+  return {
+    docketNo: docket.docketNo,
+    status: docket.status,
+    vendor: docket.vendor,
+    cases: docket.cases.map(({ caseNo, passports, oldPassports }) => ({ caseNo, passports, oldPassports })),
+    totalPassports: docket.totalPassports,
+    totalOldPassports: docket.totalOldPassports,
+    from,
+    size: sticker,
+  };
 }
 
 /**

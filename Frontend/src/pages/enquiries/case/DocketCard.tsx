@@ -6,7 +6,7 @@ import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useAddToDocket, useTakeOutOfDocket } from '../queries'
 import type { CaseDocket, DocketKind, VisaCase } from '../types'
-import { dayMonth } from './labels'
+import { dayMonth, passportTotal } from './labels'
 
 /** The demo's two-way switch ⚠️ (screen 09). */
 const KIND_LABEL: Record<DocketKind, string> = { OWN: 'One file per docket', GROUP: 'Several files in one' }
@@ -14,11 +14,6 @@ const KIND_LABEL: Record<DocketKind, string> = { OWN: 'One file per docket', GRO
 /** "4", or "4 (+3 old)" */
 const passports = (current: number, old: number) => (old > 0 ? `${current} (+${old} old)` : String(current))
 
-/** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
-function totalLabel(d: CaseDocket) {
-  const current = `${d.totalPassports} ${d.totalPassports === 1 ? 'passport' : 'passports'}`
-  return d.totalOldPassports > 0 ? `${current} + ${d.totalOldPassports} old` : current
-}
 
 /** "Mehta · France" */
 const caseLabel = (r: CaseDocket['cases'][number]) => [r.family, r.country].filter(Boolean).join(' · ')
@@ -114,7 +109,7 @@ export function DocketCard({ visaCase: c }: { visaCase: VisaCase }) {
                   <td>
                     {d.cases.length} {d.cases.length === 1 ? 'file' : 'files'}
                   </td>
-                  <td colSpan={2}>{totalLabel(d)}</td>
+                  <td colSpan={2}>{passportTotal(d.totalPassports, d.totalOldPassports)}</td>
                 </tr>
               </tfoot>
             </table>
