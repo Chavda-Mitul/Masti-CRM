@@ -169,12 +169,12 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
 
   return (
     <div className="saved-file-vendor">
-      <div className="kv">
-        <span className="muted">Vendor</span>
-        {editable ? (
+      {editable ? (
+        // Label above, full width: like the other pickers on the case (the demo shows only the read-only row).
+        <label className="field">
+          <span className="lbl">Vendor the file goes to</span>
           <select
             className="select"
-            aria-label="Vendor"
             value={picked?.id ?? ''}
             disabled={vendors.isPending || save.isPending}
             onChange={(e) => pick(e.target.value)}
@@ -192,14 +192,19 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
               </option>
             ))}
           </select>
-        ) : picked ? (
-          <strong className="saved-file-vendor-name">
-            {vendorLabel(picked)} {!picked.isActive ? switchedOffChip : !picked.coversCountry && notCoveringChip(c.country.name)}
-          </strong>
-        ) : (
-          <span className="muted">Not picked yet</span>
-        )}
-      </div>
+        </label>
+      ) : (
+        <div className="kv">
+          <span className="muted">Vendor</span>
+          {picked ? (
+            <strong className="saved-file-vendor-name">
+              {vendorLabel(picked)} {!picked.isActive ? switchedOffChip : !picked.coversCountry && notCoveringChip(c.country.name)}
+            </strong>
+          ) : (
+            <span className="muted">Not picked yet</span>
+          )}
+        </div>
+      )}
       {picked && <VendorContact vendor={picked} />}
       {editable && picked && !picked.isActive && (
         <p className="small saved-file-vendor-note">{switchedOffChip} Pick an active vendor before the file is ready.</p>

@@ -225,11 +225,7 @@
   border-top: 1px solid var(--divider);
 }
 .saved-file-vendor .kv {
-  gap: 12px;
-}
-.saved-file-vendor .select {
-  flex: 0 1 300px;
-  min-width: 0;
+  align-items: baseline;
 }
 .saved-file-vendor-name {
   text-align: right;
