@@ -132,7 +132,9 @@ stops issuing visa invoices. An export to it can come later (Q26).
 - **The embassy, VFS and other amounts carry no GST** (passed on).
 - **A quote with no service charge gets no tax line,** like Masti's lump-sum invoice today.
 - ⚠️ **Masti's accountant must confirm** the GST treatment, including lump sums with no service charge. We build what
-  their current invoices show; we aren't tax advisers.
+  their current invoices show; we aren't tax advisers. Asked as M36 in `QUESTIONS_TO_ASK.md`. **Until they answer
+  (13 Oct 2026, project lead): 18% on the service charge only,** which is the setting's value, so a different answer
+  changes the setting, not the code.
 - **Rounding:** the tax is worked out in paise and rounded to the nearest paisa. CGST and SGST are each half of the
   total tax; if it doesn't split evenly, the odd paisa goes to CGST. The amount in words is in Indian numbering
   ("Four Thousand Rupees").
@@ -142,6 +144,9 @@ stops issuing visa invoices. An export to it can come later (Q26).
 - **Continue Masti's own:** prefix `MVI` ⚠️ + 8 digits ⚠️, **never restarting** by year.
 - **Settings:** the prefix, the digit count and the **starting number.** At go-live the Head sets it to follow
   straight on from Masti's last voucher.
+- **Until handover (13 Oct 2026, project lead):** the series starts at **MVI00000001** (`startAt: 1`). At handover the
+  starting number is set to Masti's last voucher + 1, which is higher, so the counter jumps forward. Test invoices
+  stay in a test database, never in Masti's live one.
 - **A single counter row,** bumped in the invoice's own transaction (like `CaseCounter`). A refused or failed raise
   rolls back, so no number is skipped.
 - This **replaces the 9 Oct 2026 decision** that the series was "our choice".
@@ -287,7 +292,8 @@ copied onto the invoice. A later edit to the client or the company never changes
   **Step 5**, in their own record.
 - ❓ **Open: correcting a wrong invoice before dispatch.** This is a question for Masti's accountant. One option is
   for the Visa HOD to cancel it with a reason (kept on record, number used) and re-raise; the other is a credit note
-  only. **Until it's answered, a raised invoice can't be undone,** so the confirm step (Decision 5) matters.
+  only. **Until it's answered, a raised invoice can't be undone,** so the confirm step (Decision 5) matters. Asked as
+  M36 in `QUESTIONS_TO_ASK.md`.
 
 ### 10. Not in this record
 
@@ -391,8 +397,10 @@ Then 0008's Dispatch card, with the invoice check.
 
 ## Still needed from Masti
 
-- **Their accountant:** confirm GST on the service charge only, the lump sum with no tax line, and how a wrong invoice
-  is corrected before dispatch (Decision 9).
-- **The last `MVI` number** before go-live (the starting number).
-- **The logo and signature artwork** (or the Head uploads them).
+- **Their accountant (M36):** confirm GST on the service charge only, the lump sum with no tax line, and how a wrong
+  invoice is corrected before dispatch (Decision 9). Until then: 18% on the service charge only.
+- **The last `MVI` number** before go-live (the starting number). Until handover the series starts at 1.
+- ~~The logo and signature artwork~~: **received 13 Oct 2026.** Upload-ready copies (trimmed, print size, under the
+  2 MB limit) are in `Masti-CRM-Handover/references/branding/` (gitignored: the signature is never committed). The
+  Head uploads them in Settings → Company & invoice.
 - **Confirm "NORMAL"** in the line description (processing speed?).
