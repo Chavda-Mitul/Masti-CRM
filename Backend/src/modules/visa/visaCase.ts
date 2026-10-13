@@ -45,6 +45,21 @@ export const visaCaseInclude = {
   /** The current final file (0007 Decision 8): the newest upload. Older ones are counted, not loaded. */
   files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
   _count: { select: { files: { where: { kind: "FINAL_FILE" } } } },
+  /** The tax invoice (0009), once raised. */
+  invoice: {
+    select: {
+      invoiceNo: true,
+      issuedOn: true,
+      issuedAt: true,
+      issuedBy: personSelect,
+      taxType: true,
+      cgstPaise: true,
+      sgstPaise: true,
+      igstPaise: true,
+      totalPaise: true,
+      file: { select: { id: true, fileName: true } },
+    },
+  },
   followUps: {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: CASE_FOLLOW_UPS,
@@ -271,6 +286,17 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** The locked tax invoice (0009), or null until it is raised. */
+    invoice: row.invoice && {
+      invoiceNo: row.invoice.invoiceNo,
+      issuedOn: fromDbDate(row.invoice.issuedOn),
+      issuedAt: row.invoice.issuedAt,
+      issuedBy: row.invoice.issuedBy,
+      taxType: row.invoice.taxType,
+      gstPaise: row.invoice.cgstPaise + row.invoice.sgstPaise + row.invoice.igstPaise,
+      totalPaise: row.invoice.totalPaise,
+      file: row.invoice.file,
+    },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */

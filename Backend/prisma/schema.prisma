@@ -84,6 +84,7 @@ model User {
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
   companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
+  invoicesIssued     Invoice[]          @relation("InvoiceIssuedBy")
 
   @@index([type, isActive])
 }
@@ -761,6 +762,7 @@ model Enquiry {
   visa           VisaCase?
   followUps      FollowUp[]
   files          CaseFile[]
+  invoice        Invoice?
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -771,6 +773,8 @@ model Enquiry {
 enum CaseFileKind {
   /// The visa file as it went to the vendor, one PDF (docs/decisions/0007-visa-file-prep.md Decision 8).
   FINAL_FILE
+  /// The case's tax invoice, as raised (docs/decisions/0009-visa-invoice.md Decision 7). Never regenerated.
+  INVOICE
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -789,6 +793,7 @@ model CaseFile {
   uploadedAt   DateTime     @default(now()) @db.Timestamptz(3)
   enquiry      Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   uploadedBy   User         @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  invoice      Invoice?
 
   @@index([enquiryId, kind, uploadedAt])
 }
@@ -899,6 +904,7 @@ model VisaCaseTraveller {
   member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents     VisaCaseDocument[]
   quoteLine     VisaQuoteLine?
+  invoiceLines  InvoiceLine[]
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])
@@ -1069,4 +1075,87 @@ model CompanyImage {
 
   @@index([kind, uploadedAt])
   @@index([uploadedById])
+}
+
+// ---------------------------------------------------------------------------
+// The visa tax invoice (docs/decisions/0009-visa-invoice.md): copied from the case's quote and never edited. Triggers in
+// the migration refuse any UPDATE or DELETE of an invoice or its lines; corrections come with Step 5 (credit note,
+// the one additional invoice).
+// ---------------------------------------------------------------------------
+
+/**
+ * CGST + SGST when the client is in Masti's state (place of supply), IGST otherwise (0009 Decision 3).
+ */
+enum InvoiceTaxType {
+  INTRA_STATE
+  INTER_STATE
+}
+
+/// Hand-written in the migration: the totals add up, the tax matches the type, amounts are never negative, and the
+/// row can't be changed or deleted.
+model Invoice {
+  id                 String         @id @default(uuid())
+  /// "MVI00001379": Masti's own series continues (0009 Decision 4).
+  invoiceNo          String         @unique
+  /// One invoice per case (0009 Decision 6).
+  enquiryId          String         @unique
+  /// The date printed on it (IST).
+  issuedOn           DateTime       @db.Date
+  issuedAt           DateTime       @default(now()) @db.Timestamptz(3)
+  /// "Prepared by".
+  issuedById         String
+  /// Snapshots at raise time, so a later edit to the client, Masti's details or the terms never changes an invoice.
+  client             Json
+  company            Json
+  terms              Json
+  /// The client's GST state code.
+  placeOfSupply      String         @db.Char(2)
+  taxType            InvoiceTaxType
+  sac                String
+  /// 1800 = 18%.
+  gstRateBp          Int
+  processingSpeed    String
+  /// The travellers' amounts together (passed on, no GST).
+  grossPaise         Int
+  serviceChargePaise Int
+  cgstPaise          Int
+  sgstPaise          Int
+  igstPaise          Int
+  totalPaise         Int
+  /// The PDF as raised.
+  fileId             String         @unique
+  enquiry            Enquiry        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  issuedBy           User           @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
+  file               CaseFile       @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  lines              InvoiceLine[]
+
+  @@index([issuedById])
+}
+
+/// One traveller on the invoice, copied from the quote. Hand-written: the amounts match the form; can't be changed.
+model InvoiceLine {
+  invoiceId       String
+  /// 1, 2, 3… (printed 001, 002…).
+  position        Int
+  travellerId     String
+  name            String
+  /// "FRANCE(TOURIST)(NORMAL)(SINGLE)": country, visa type, processing speed, entry.
+  description     String
+  form            QuoteForm
+  lumpSumPaise    Int?
+  embassyFeePaise Int?
+  vfsFeePaise     Int?
+  otherFeePaise   Int?
+  totalPaise      Int
+  invoice         Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  traveller       VisaCaseTraveller @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+
+  @@id([invoiceId, position])
+  @@index([travellerId])
+}
+
+/// The last invoice number used: one row (id 1), bumped in the invoice's own transaction.
+model InvoiceCounter {
+  id        Int @id @default(1)
+  lastValue Int
 }

@@ -306,6 +306,42 @@ export interface CaseQuote {
   updatedBy: PersonRef
 }
 
+/** The case's locked tax invoice (docs/decisions/0009-visa-invoice.md), once raised. */
+export interface CaseInvoice {
+  /** "MVI00001379" */
+  invoiceNo: string
+  /** YYYY-MM-DD (IST) */
+  issuedOn: string
+  issuedAt: string
+  issuedBy: PersonRef
+  taxType: InvoiceTaxType
+  gstPaise: number
+  totalPaise: number
+  /** The PDF as raised: open it like any case file. */
+  file: { id: string; fileName: string }
+}
+
+export type InvoiceTaxType = 'INTRA_STATE' | 'INTER_STATE'
+
+export type InvoiceBlockerKind = 'QUOTE' | 'TRAVELLERS' | 'CLIENT' | 'COMPANY' | 'NOT_ENGLISH'
+
+/** GET /api/visa/cases/:caseNo/invoice/check: what blocks raising it, or what it will say. */
+export interface InvoiceCheck {
+  blockers: { kind: InvoiceBlockerKind; label: string; items: string[] }[]
+  alreadyRaised: string | null
+  preview: {
+    invoiceNo: string
+    gstRatePercent: number
+    taxType: InvoiceTaxType
+    grossPaise: number
+    serviceChargePaise: number
+    cgstPaise: number
+    sgstPaise: number
+    igstPaise: number
+    totalPaise: number
+  } | null
+}
+
 /** PUT /api/visa/cases/:caseNo/quote */
 export interface SaveQuoteBody {
   processingSpeedId: number
@@ -368,6 +404,8 @@ export interface VisaCase {
   gstRatePercent: number
   /** The price (0009), or null until someone enters it */
   quote: CaseQuote | null
+  /** The locked tax invoice (0009), or null until it is raised */
+  invoice: CaseInvoice | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

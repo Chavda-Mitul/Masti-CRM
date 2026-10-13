@@ -299,6 +299,41 @@
 .money-total {
   border-top: 1px solid var(--divider);
 }
+/* The locked invoice (0009), above the quote it was raised from. */
+.money-invoice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--fill-muted);
+}
+.money-invoice-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+}
+.money-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.invoice-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.invoice-summary .kv {
+  font-size: 14px;
+}
+.invoice-total {
+  border-top: 1px solid var(--divider);
+}
 /* The dialog: a fixed header, the travellers scrolling in the middle, and the totals pinned at the bottom. */
 .quote-dialog {
   width: min(760px, calc(100% - 32px));

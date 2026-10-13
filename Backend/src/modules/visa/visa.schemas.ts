@@ -248,3 +248,13 @@ export const saveQuoteSchema = z.object({
 });
 
 export type SaveQuoteInput = z.infer<typeof saveQuoteSchema>;
+
+/**
+ * Raising the invoice (docs/decisions/0009-visa-invoice.md): the quote's updatedAt as the dialog showed it, so an
+ * invoice is never made from amounts nobody saw.
+ */
+export const raiseInvoiceSchema = z.object({
+  quoteUpdatedAt: z.iso.datetime("Reload and try again."),
+});
+
+export type RaiseInvoiceInput = z.infer<typeof raiseInvoiceSchema>;

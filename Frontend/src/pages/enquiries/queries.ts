@@ -7,6 +7,7 @@ import type {
   CreateVisaCaseBody,
   DocketKind,
   DocketStickerData,
+  InvoiceCheck,
   SaveQuoteBody,
   DocumentArrival,
   DocumentCheck,
@@ -49,6 +50,7 @@ export const enquiryKeys = {
   case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
+  invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
@@ -269,6 +271,22 @@ export function useSetVendor(caseNo: string) {
 /** The quote (0009 Decision 2): saved whole. A save that missed someone else's (409 STALE) reloads the case. */
 export function useSaveQuote(caseNo: string) {
   return useCaseAction<SaveQuoteBody>(caseNo, (base, body) => api(`${base}/quote`, { method: 'PUT', body }))
+}
+
+/** What stands in the way of raising the invoice, or what it will say (0009). Always fresh: it opens a dialog. */
+export function useInvoiceCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.invoiceCheck(caseNo),
+    queryFn: () => api<InvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/invoice/check`),
+    staleTime: 0,
+  })
+}
+
+/** Raises the locked tax invoice from the quote the dialog showed (0009). */
+export function useRaiseInvoice(caseNo: string) {
+  return useCaseAction<{ quoteUpdatedAt: string }>(caseNo, (base, body) => api(`${base}/invoice`, { method: 'POST', body }), {
+    otherCases: true,
+  })
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */

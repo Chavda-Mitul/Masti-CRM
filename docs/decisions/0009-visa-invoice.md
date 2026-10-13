@@ -1,6 +1,7 @@
 # 0009 · The visa invoice: the quote, the locked tax invoice and its PDF
 
-- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the quote and the invoice settings, are built
+- **Status:** decided (13 Oct 2026, project lead). Components 1–3, the quote, the invoice settings and raising the
+  invoice, are built
   (13 Oct 2026). One point is waiting for Masti's accountant
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
@@ -173,6 +174,49 @@ stops issuing visa invoices. An export to it can come later (Q26).
   later.
 - **Upload first, then commit,** as with the saved file. If the PDF can't be stored, the invoice isn't raised and its
   number is rolled back.
+- **Fonts (decided 13 Oct 2026, project lead):** the free **Noto Sans** (Regular and Bold, SIL Open Font Licence) is
+  embedded, for the ₹ sign. Invoices are in English: **a name the font can't print (Gujarati letters, for example)
+  blocks raising** with "Enter these in English letters".
+
+**Built 13 Oct 2026** (component 3, raising the invoice):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/invoice/check` returns `{ blockers, alreadyRaised, preview }` for anyone who can
+    open the case. Each blocker is grouped by kind: `QUOTE`, `TRAVELLERS` (unnamed), `CLIENT` (the readiness setting,
+    plus the state), `COMPANY` (Decision 8's list) and `NOT_ENGLISH`.
+  - `POST /api/visa/cases/:caseNo/invoice` with `{ quoteUpdatedAt }`, for the case owner, the Visa HOD or the Head,
+    from Enquiry to Docket & dispatch. It's refused with 409 `INVOICE_BLOCKED` `{ blockers }`, 409 STALE if the quote
+    changed since the dialog, or 409 if already raised.
+  - Tables `Invoice` (snapshots of the client, Masti and the terms; place of supply; tax type; the totals in paise),
+    `InvoiceLine` and `InvoiceCounter`, plus `CaseFileKind.INVOICE` (migration `20261013140000_invoices`).
+  - **Triggers refuse any UPDATE or DELETE of an invoice or its lines.** CHECKs make the total add up, the tax match its
+    type, and the line amounts match the form.
+  - **The number:** `GREATEST(last + 1, startAt)`, bumped in the invoice's transaction. A refused raise uses no number;
+    raising the starting number jumps forward; lowering it reuses nothing.
+  - Audited as `visa.invoice.raise`. The PDF opens through the existing `/files/:fileId/link`, audited as
+    `visa.file.open`. A raised invoice freezes the quote ("Invoice MVI… is raised, so the quote can't change").
+- **The PDF** (`src/modules/visa/invoicePdf.ts`) is A4, in Masti's layout:
+  - the orange band; the address and contacts; the logo
+  - PAN | GSTIN; the To block; the TAX INVOICE box with the number and date
+  - the traveller table: fee columns when any line is itemised, otherwise just Service and Total
+  - Gross total, processing charges, GST; the total and the balance; the amount in words
+    (`src/lib/amountInWords.ts`, Indian numbering)
+  - the GST table (CGST/SGST or IGST); the bank details; the terms
+  - "for MASTI TOUR AND TRAVEL" with the signature; "Prepared by"
+  - Many travellers flow onto more pages.
+- **Screen:** "Money on this case" gains **Raise invoice** once the quote is complete. The confirm dialog lists the
+  blockers with links to fix them, or shows each amount, the GST split, the total and the number it will get, with a
+  warning that it can never be edited. Once raised, the panel shows "**MVI… · locked**", the total, who raised it, and
+  **Open invoice**.
+- **Settled while building:**
+  - **The whole font is embedded, not a subset:** pdf-lib's subsetting dropped most of Noto Sans's glyphs (the text
+    extracted but didn't show). Each invoice is about 630 KB.
+  - **The line's entry type** is left out until the trip details give it (e.g. at the Enquiry step:
+    `FRANCE(TOURIST)(NORMAL)`).
+  - **The client's state is always needed,** whatever the readiness setting says, because it decides CGST + SGST or
+    IGST.
+  - **A long amount in words wraps** within its half of the total row. The client's mobile prints as
+    "+91 98250 41237".
 
 ### 8. What it prints: the settings
 
@@ -316,6 +360,7 @@ model InvoiceCounter { id Int @id @default(1); lastValue Int }   // one row; the
    - the PDF, made and stored
    - the immutability trigger
    - the Invoice card / "Money on this case"
+   **Built 13 Oct 2026.**
 4. **The Docket card's Invoice column:** "MVI… · locked" or "Raise invoice first".
 
 Then 0008's Dispatch card, with the invoice check.

@@ -10,6 +10,7 @@ import {
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  raiseInvoiceSchema,
   saveQuoteSchema,
   matureCaseSchema,
   setVendorSchema,
@@ -23,6 +24,7 @@ import {
 import * as visaService from "./visa.service";
 import * as docketService from "./visaDocket.service";
 import * as filePrepService from "./visaFilePrep.service";
+import * as invoiceService from "./visaInvoice.service";
 import * as quoteService from "./visaQuote.service";
 import * as stepsService from "./visaSteps.service";
 
@@ -117,6 +119,17 @@ router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   const body = setVendorSchema.parse(req.body);
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** What stands in the way of raising the invoice, or what it will say (0009). Anyone who can open the case. */
+router.get("/cases/:caseNo/invoice/check", visaView, async (req, res) => {
+  res.json(await invoiceService.invoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/** Raises the locked tax invoice from the quote: 409 INVOICE_BLOCKED with details.blockers while anything is missing. */
+router.post("/cases/:caseNo/invoice", visaEdit, async (req, res) => {
+  const body = raiseInvoiceSchema.parse(req.body);
+  res.json({ case: await invoiceService.raiseInvoice(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, saved whole. */

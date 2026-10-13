@@ -25,6 +25,12 @@ async function currentImage(kind: CompanyImageKind) {
   });
 }
 
+/** The current logo and signature, with where they are stored: the invoice PDF embeds them. */
+export async function currentCompanyImages() {
+  const [logo, signature] = await Promise.all([currentImage("LOGO"), currentImage("SIGNATURE")]);
+  return { logo, signature };
+}
+
 const imageView = (image: Awaited<ReturnType<typeof currentImage>>) =>
   image && { contentType: image.contentType, sizeBytes: image.sizeBytes, uploadedAt: image.uploadedAt, uploadedBy: image.uploadedBy };
 
