@@ -1653,6 +1653,21 @@ Masti CRM/
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
+**Decided 13 Oct 2026 (project lead), for Visa Step 4 (Docket & dispatch).** The design is `docs/decisions/0008-visa-docket-dispatch.md` (decided; not built yet).
+- **Build order:** dockets and the sticker first, then the visa invoice in its own record (0009), then dispatch, always with the invoice check. No file can leave without its invoice (rule 3).
+- **One component at a time:** the Docket card → the Sticker card → the invoice (0009) → the Dispatch card → e-visas. Each is planned, built, tested, checked in the browser and committed before the next starts.
+- **Q1 answered for our side (confirm with Vimal):** one open docket per vendor. "Add to docket" joins it or starts one; "Send on its own" starts a docket with just that case. A docket may stay open over days; from the next day it shows "Open since …, not sent yet". **One email per docket, sent at dispatch** (no scheduler), listing the docket, courier, AWB and each case. Sent through SMTP (`src/lib/email.ts`; Mailpit locally); a failure doesn't undo the dispatch and offers "Send again". The vendor's email becomes required to dispatch.
+- **Who:** add or take out a case: its processor, the Visa HOD, the Head. Dispatch: the Visa HOD, the Head, or a processor with a case in the docket.
+- **Passports:** current booklets (or the traveller count) plus old booklets shown separately ("4 (+3 old)"); the total counts both ("7 passports + 3 old"). ⚠️ Our recommendation counted only current ones.
+- **Couriers:** a master list (Blue Dart, DTDC, By hand ⚠️), each with "AWB needed". The AWB is typed in.
+- **The sticker:** printed from the browser, 100 × 150 mm ⚠️ (a setting), a Code 128 barcode, the demo's contents, **plus Masti's return address** (not in the demo; a company-details setting the invoice will reuse).
+- **Docket numbers:** `D-2026-0001`, the prefix a setting, the counter per calendar year.
+- **Dispatch moves every case to Step 5 · At vendor,** due the next open office day at 11:00 ⚠️ ("Confirm vendor got it"). The chip reads "File ready · to dispatch" → "In docket D-…" → "Dispatched · D-…".
+- **Before dispatch:** a case can be taken out of an open docket; postpone or cancel is refused while it's in one; an empty docket is reused.
+- **E-visas** (Vendor needed off): a "Submitted online" button that needs the invoice and moves the case to Step 5.
+- **Not built (possible change requests):** sending a case back from Step 4 to File preparation, a Dockets list page, courier tracking.
+- **Still needed from Masti:** the fee sheet (B1), the invoice format and company details (M7/C5), when the invoice is raised (Q6/M6), the label printer, the SMTP account (A6).
+
 **Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
 - **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.
 - **Pending (not built in Step 3):** the covering letter (formats to come from the project lead, M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
@@ -1666,7 +1681,7 @@ Masti CRM/
   - the two switches, in the checklist editor
   - the vendor on the case (13 Oct): picked at the bottom of the saved-file card, as in the demo, from the active vendors covering the country; a vendor switched off later, or no longer covering the country, stays on the case, flagged, and blocks "File ready"
   - **"File ready — add to docket" (13 Oct): Step 3 is complete.** It lists what's missing, refuses a case with no processor, then moves the case to Docket & dispatch with its processor ("File ready · to dispatch") and leaves Step 3 read-only.
-  - Next: Step 4, docket and dispatch (0008). A developer guide to Step 3 is in `docs/features/visa-file-preparation.md`.
+  - Next: Step 4, docket and dispatch (0008, decided 13 Oct 2026). A developer guide to Step 3 is in `docs/features/visa-file-preparation.md`.
 - **The processor re-ticks every paper** after maturity. A bad paper is flagged "Needs replacing" with a reason from a master list, and the processor handles it; the case stays with them. ⚠️ Beyond the demo screens; the project lead is telling Vimal and Shivanshu.
 - **The saved file stays one scanned PDF per case; no per-paper uploads** (12 Oct 2026, after slice 2). One auto-feeder scan keeps the team fast, it is what the demo shows, and the per-paper structure already lives in the ticks and checks. The final PDF can't feed passport autofill anyway: it arrives after the application form is filled. **If passport reading (Q13) or the vault (Q37) is confirmed,** it gets one photo-page scan per person, captured in Step 2, kept on the member (reused while the passport is valid) and stored with the same S3 code. It needs Vimal's yes and a DPDP decision (how long it's kept, who opens it) first. The reasoning is in `docs/decisions/0007-visa-file-prep.md`, *Settled after slice 2*.
 
@@ -1684,7 +1699,7 @@ Masti CRM/
 - **Document storage is open again: an S3 bucket or Drive**, decided later (changes golden rule 4, which assumed Drive/OneDrive links only). Step 2 is built without storing files; don't build anything that assumes links only.
 - **WhatsApp templates:** we draft them in **English** and show the client; they go to Meta after the client approves. Replaces waiting for Vimal's wording (Q8/M1).
 - **Invoice number series:** our choice, kept as a setting (not hard-coded). M7's "continue the current series" is dropped.
-- **Docket and dispatch (Q1):** the project lead takes it to the client. Not built yet.
+- **Docket and dispatch (Q1):** the project lead takes it to the client. Not built yet. *(13 Oct 2026: our answer is in the Visa Step 4 block above and 0008.)*
 - **Payment/advance (S1):** not a blocker.
 
 **Decided 8 Oct 2026 (project lead), for the client master.** Details are in §10.1; the design is `docs/decisions/0004-client-master.md`.
@@ -1702,12 +1717,12 @@ Masti CRM/
 
 | # | Question | Who | Blocks |
 |---|---|---|---|
-| 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? | Y→C | 1 |
+| 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? **13 Oct:** one open docket per vendor ("Send on its own" for a single file), one email per docket at dispatch (0008); confirm with Vimal | Y→C | 1 |
 | 2 | ~~Follow-up team split~~ **Answered 8 Oct:** the assigned Visa employee follows up (confirm with Vimal) | C | 1 |
 | 3 | Collection boy's device: phone or tablet; web app or WhatsApp-only jobs? | Y→C | 1 |
 | 4 | Click-to-login: how it works, which portals it supports | Y | 1 |
 | 5 | ~~Reminder schedule~~ **Answered 8 Oct:** an admin setting, seeded 2 days / 11:00 | C | 1 |
-| 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? | C | 1 |
+| 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** still open; the invoice gets its own record (0009) and is required before dispatch (0008) | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
 | 8 | WhatsApp message step list and wording (urgent: Meta approval). **8 Oct:** placeholder text until then; still needed | C | 1 |
 | 9 | Consent wording (passport-transit risk, booking-before-visa risk) | C | 1 |
