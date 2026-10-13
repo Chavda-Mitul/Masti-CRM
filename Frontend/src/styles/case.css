@@ -273,6 +273,15 @@
     padding-right: 10px;
   }
 }
+/* "Raise invoice first →" on the case's own row: the amber chip, pressable. */
+.docket-raise {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.docket-raise:hover {
+  text-decoration: underline;
+}
 .docket-table tr.this-case td {
   background: var(--dept-tint);
 }

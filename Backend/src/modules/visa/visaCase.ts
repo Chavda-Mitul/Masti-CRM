@@ -27,7 +27,7 @@ export const docketSelect = {
       enquiryId: true,
       bookletsCurrent: true,
       bookletsOld: true,
-      enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
+      enquiry: { select: { caseNo: true, client: { select: { name: true } }, invoice: { select: { invoiceNo: true } } } },
       offering: { select: { country: { select: { name: true } } } },
       _count: { select: { travellers: true } },
     },
@@ -142,7 +142,8 @@ type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
 /**
  * The docket table (0008 Decision 4). Passports are the current booklets counted in Step 2, or one per traveller when
  * nobody counted them; old passports go in the parcel too, so the totals count both. Other cases in the docket show
- * only their number, family name, country and passports.
+ * only their number, family name, country, passports and invoice number (0009 component 4: no file leaves without its
+ * invoice), never their amounts.
  */
 export function docketOf(d: DocketRow, enquiryId: string) {
   const cases = d.cases.map((c) => ({
@@ -151,6 +152,8 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     country: c.offering.country.name,
     passports: c.bookletsCurrent ?? c._count.travellers,
     oldPassports: c.bookletsOld ?? 0,
+    /** "MVI00000001 · locked", or null: "Raise invoice first" */
+    invoiceNo: c.enquiry.invoice?.invoiceNo ?? null,
     isThisCase: c.enquiryId === enquiryId,
   }));
   return {

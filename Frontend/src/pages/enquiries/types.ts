@@ -246,6 +246,8 @@ export interface DocketCase {
   /** Current booklets, or one per traveller when nobody counted them */
   passports: number
   oldPassports: number
+  /** "MVI00000001", or null until the case's invoice is raised (0009) */
+  invoiceNo: string | null
   isThisCase: boolean
 }
 

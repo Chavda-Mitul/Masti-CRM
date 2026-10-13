@@ -1,7 +1,7 @@
 # 0009 · The visa invoice: the quote, the locked tax invoice and its PDF
 
-- **Status:** decided (13 Oct 2026, project lead). Components 1–3, the quote, the invoice settings and raising the
-  invoice, are built
+- **Status:** decided (13 Oct 2026, project lead). All four components (the quote, the invoice settings, raising the
+  invoice and the Docket card's Invoice column) are built
   (13 Oct 2026). Masti answered M36 the same day: GST as built (Decision 3), and every correction is a credit note
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
@@ -371,7 +371,12 @@ model InvoiceCounter { id Int @id @default(1); lastValue Int }   // one row; the
    - the immutability trigger
    - the Invoice card / "Money on this case"
    **Built 13 Oct 2026.**
-4. **The Docket card's Invoice column:** "MVI… · locked" or "Raise invoice first".
+4. **The Docket card's Invoice column:** "MVI… · locked" or "Raise invoice first". **Built 13 Oct 2026:**
+   - each docket row in the case sends `invoiceNo` (null until raised): only the number for another case, never its
+     amounts. The sticker doesn't print it.
+   - the column shows a green "**MVI00000001** · locked" chip, or an amber "Raise invoice first", as in the demo
+   - on the case's own row, whoever can act on it gets "Raise invoice first →", which scrolls to Money on this case
+   - raising an invoice refreshes the other cases in the docket that are open in the browser (as a docket change does)
 
 Then 0008's Dispatch card, with the invoice check.
 

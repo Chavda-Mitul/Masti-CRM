@@ -7,7 +7,7 @@ import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { dispatchCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // Raising the visa tax invoice (docs/decisions/0009-visa-invoice.md): from the quote, numbered in Masti's series, GST
 // on the service charge, a stored PDF, and never edited.
@@ -30,6 +30,7 @@ interface CaseDto {
   travellers: { id: string }[];
   quote: { updatedAt: string; totalPaise: number } | null;
   invoice: { invoiceNo: string; taxType: string; gstPaise: number; totalPaise: number; file: { id: string; fileName: string } } | null;
+  docket: { cases: { caseNo: string; invoiceNo: string | null }[] } | null;
 }
 const load = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case as CaseDto;
 
@@ -54,12 +55,21 @@ async function mastiReady() {
 async function invoiceableCase({ state = "24", mobile = "98250 41234", clientName = "Rakesh Mehta", service = 50_000 } = {}) {
   const staff = await visaStaff();
   const saved = await saveCase(staff, { mobile, clientName });
+  return { ...saved, staff, ...(await makeInvoiceable(staff, saved, { state, clientName, service })) };
+}
+
+/** Completes any case's client, names its two travellers and enters invoiceableCase's quote, as `agent`. */
+async function makeInvoiceable(
+  agent: Agent,
+  saved: { id: string; caseNo: string; client: { id: string } },
+  { state = "24", clientName = "Rakesh Mehta", service = 50_000 } = {},
+) {
   await prisma.client.update({ where: { id: saved.client.id }, data: { addressLine: "12, Test Society", city: "Surat", stateCode: state } });
   const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: saved.id }, orderBy: { position: "asc" } });
   await prisma.visaCaseTraveller.update({ where: { id: travellers[0]!.id }, data: { name: clientName } });
   await prisma.visaCaseTraveller.update({ where: { id: travellers[1]!.id }, data: { name: "Aarav Test" } });
   const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
-  const quote = await staff.put(`/api/visa/cases/${saved.caseNo}/quote`).send({
+  const quote = await agent.put(`/api/visa/cases/${saved.caseNo}/quote`).send({
     processingSpeedId: speed.id,
     serviceChargePaise: service,
     lines: [
@@ -69,7 +79,7 @@ async function invoiceableCase({ state = "24", mobile = "98250 41234", clientNam
     updatedAt: null,
   });
   expect(quote.status).toBe(200);
-  return { ...saved, staff, travellers };
+  return { travellers };
 }
 
 async function raise(agent: Agent, caseNo: string, quoteUpdatedAt?: string) {
@@ -245,6 +255,35 @@ describe("who and when", () => {
     const atVendor = await prisma.departmentStage.findFirstOrThrow({ where: { code: "AT_VENDOR" } });
     await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: atVendor.id } });
     expect((await raise(c.staff, c.caseNo)).status).toBe(409);
+  });
+});
+
+describe("the Docket card's Invoice column (component 4)", () => {
+  it("shows each case's invoice number, or none yet, on every case in the docket; never on the sticker", async () => {
+    await mastiReady();
+    const mehta = await dispatchCase();
+    const shah = await dispatchCase({ vendorId: mehta.vendor.id, extra: { mobile: "98250 41235", clientName: "Sunil Shah" } });
+    const neha = await loginAs("neha@masti.test");
+    for (const c of [mehta, shah]) {
+      const { updatedAt } = await load(neha, c.caseNo);
+      expect((await neha.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "GROUP", updatedAt })).status).toBe(200);
+    }
+    const column = async (caseNo: string) => (await load(neha, caseNo)).docket!.cases.map((r) => [r.caseNo, r.invoiceNo]);
+    expect(await column(mehta.caseNo)).toEqual([
+      [mehta.caseNo, null],
+      [shah.caseNo, null],
+    ]);
+
+    await makeInvoiceable(neha, mehta);
+    expect((await raise(neha, mehta.caseNo)).status).toBe(200);
+    for (const c of [mehta, shah]) {
+      expect(await column(c.caseNo)).toEqual([
+        [mehta.caseNo, "MVI00000001"],
+        [shah.caseNo, null],
+      ]);
+    }
+    const label = (await neha.get(`/api/visa/cases/${shah.caseNo}/sticker`)).body.sticker as { cases: object[] };
+    expect(label.cases[0]).not.toHaveProperty("invoiceNo");
   });
 });
 

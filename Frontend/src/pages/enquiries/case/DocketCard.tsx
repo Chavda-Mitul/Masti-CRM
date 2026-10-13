@@ -19,11 +19,35 @@ const passports = (current: number, old: number) => (old > 0 ? `${current} (+${o
 const caseLabel = (r: CaseDocket['cases'][number]) => [r.family, r.country].filter(Boolean).join(' · ')
 
 /**
+ * The Invoice column (demo screen 09 ⚠️, docs/decisions/0009-visa-invoice.md component 4): the case's locked invoice, or
+ * "Raise invoice first". On this case's own row, whoever can act on it jumps to Money on this case to raise it.
+ */
+function InvoiceCell({ row, canRaise }: { row: CaseDocket['cases'][number]; canRaise: boolean }) {
+  if (row.invoiceNo)
+    return (
+      <span className="chip chip-ok chip-sm">
+        <span className="mono">{row.invoiceNo}</span> · locked
+      </span>
+    )
+  if (row.isThisCase && canRaise)
+    return (
+      <button
+        type="button"
+        className="chip chip-warn chip-sm docket-raise"
+        onClick={() => document.getElementById('money')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        Raise invoice first →
+      </button>
+    )
+  return <span className="chip chip-warn chip-sm">Raise invoice first</span>
+}
+
+/**
  * The docket (demo screen 09 ⚠️, docs/decisions/0008-visa-docket-dispatch.md Decisions 2, 4 and 10): at Docket & dispatch
  * the processor, the HOD or the Head adds the file to its vendor's shared docket ("Several files in one") or sends it in
  * a docket of its own ("One file per docket"), and can take it out again until the docket is dispatched. The table shows
- * every file in the docket, with its passports. Invoices and the dispatch itself come later. E-visas (no vendor) have no
- * docket.
+ * every file in the docket, with its passports and its invoice. The dispatch itself comes later. E-visas (no vendor)
+ * have no docket.
  */
 export function DocketCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -100,7 +124,9 @@ export function DocketCard({ visaCase: c }: { visaCase: VisaCase }) {
                       {caseLabel(r) && ` · ${caseLabel(r)}`}
                     </td>
                     <td>{passports(r.passports, r.oldPassports)}</td>
-                    <td className="muted small">Invoices come later</td>
+                    <td>
+                      <InvoiceCell row={r} canRaise={canAct} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

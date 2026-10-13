@@ -29,7 +29,7 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const canEdit = canAct && !invoice
 
   return (
-    <div className="rail-section money-section">
+    <div className="rail-section money-section" id="money">
       <div className="lbl">Money on this case</div>
       {invoice && (
         <div className="money-invoice">

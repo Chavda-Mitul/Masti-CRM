@@ -87,7 +87,8 @@ plan mode, built, tested, checked in the browser and committed before the next o
     While it isn't in one, it sends `openDocket { docketNo, caseCount }`, the vendor's shared docket it would join.
 - **Screen:**
   - The **Docket card** sits at the top of the case page at Docket & dispatch, as in the demo. It has the switch, the
-    Case · Passports · Invoice table (the Invoice column says "Invoices come later" until 0009), the totals, the
+    Case · Passports · Invoice table (the Invoice column shows "MVI… · locked" or "Raise invoice first" since 0009
+    component 4), the totals, the
     amber "Open since" line, the rule copy, and **Add** / **Take out of docket**.
   - The header chip says "In docket D-…". The next-step button says "Add to docket →" (it scrolls to the card), then
     "Dispatch docket D-… →" with **Soon**.
