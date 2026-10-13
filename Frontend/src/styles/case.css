@@ -301,16 +301,35 @@
 .sticker-card .h2 {
   margin: 0;
 }
+/* The label and its summary side by side, centred together; stacked (still centred) on a narrow card. */
+.sticker-card-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
 .sticker-preview {
+  flex: none;
   max-width: 100%;
   overflow: hidden;
   box-shadow: var(--shadow-card);
 }
-.sticker-card-actions {
+.sticker-card-side {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1 1 220px;
+  max-width: 300px;
+}
+.sticker-card-side > div {
+  align-self: stretch;
+}
+.sticker-card-summary {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */

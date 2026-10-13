@@ -2,6 +2,7 @@ import { errorText } from '../../../lib/apiErrors'
 import { useDocketSticker } from '../queries'
 import type { VisaCase } from '../types'
 import { DocketSticker } from './DocketSticker'
+import { passportTotal } from './labels'
 
 /** The preview's size against the real label. */
 const PREVIEW_SCALE = 0.62
@@ -24,7 +25,7 @@ export function StickerCard({ visaCase: c }: { visaCase: VisaCase }) {
       {sticker.isPending && <p className="muted small">Loading…</p>}
       {sticker.isError && <div className="alert alert-bad">{errorText(sticker.error) ?? 'Couldn’t load the sticker.'}</div>}
       {s && (
-        <>
+        <div className="sticker-card-body">
           <div
             className="sticker-preview"
             style={{ width: `${s.size.widthMm * PREVIEW_SCALE}mm`, height: `${s.size.heightMm * PREVIEW_SCALE}mm` }}
@@ -34,15 +35,34 @@ export function StickerCard({ visaCase: c }: { visaCase: VisaCase }) {
               <DocketSticker sticker={s} />
             </div>
           </div>
-          <div className="sticker-card-actions">
-            <button type="button" className="btn btn-sm" onClick={print}>
+          <div className="sticker-card-side">
+            <p className="sticker-card-summary">
+              Docket <span className="mono">{s.docketNo}</span> · to {s.vendor.name}, {s.vendor.city}
+            </p>
+            <div>
+              <div className="kv">
+                <span>Files</span>
+                <strong>{s.cases.length}</strong>
+              </div>
+              <div className="kv">
+                <span>Passports</span>
+                <strong>{passportTotal(s.totalPassports, s.totalOldPassports)}</strong>
+              </div>
+              <div className="kv">
+                <span>Label</span>
+                <strong>
+                  {s.size.widthMm} × {s.size.heightMm} mm
+                </strong>
+              </div>
+            </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={print}>
               Print sticker
             </button>
-            <span className="muted small">
-              {s.size.widthMm} × {s.size.heightMm} mm label
-            </span>
+            <p className="muted small" style={{ margin: 0 }}>
+              Opens the label on its own and starts printing. Pick the label printer, or A4 at actual size (100%).
+            </p>
           </div>
-        </>
+        </div>
       )}
     </section>
   )
