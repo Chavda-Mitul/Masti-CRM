@@ -59,6 +59,8 @@ function toChecklistDto(offering: ChecklistRow) {
       country: { ...offering.country, label: countryLabel(offering.country) },
       visaType: offering.visaType,
       isActive: offering.isActive,
+      appointmentNeeded: offering.appointmentNeeded,
+      vendorNeeded: offering.vendorNeeded,
       updatedAt: offering.updatedAt,
     },
     items,

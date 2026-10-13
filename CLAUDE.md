@@ -25,7 +25,7 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 | Where | Commands |
 |---|---|
-| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test`, `npm run typecheck`, `npm run build` |
+| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket), `npm run typecheck`, `npm run build` |
 | `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
 
 Make new migrations with `prisma migrate diff` and remove its proposed `DROP INDEX "HolidayTarget_unique"` (hand-written SQL that must stay). `npm run db:migrate` (`prisma migrate dev`) stops at a prompt over that index and holds the migration lock.

@@ -1,16 +1,24 @@
 import { Router } from "express";
 import { z } from "zod";
+import { HttpError } from "../../lib/httpError";
+import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import {
+  checkCaseDocumentSchema,
   createVisaCaseSchema,
+  fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
   matureCaseSchema,
+  setVendorSchema,
+  updateApplicationSchema,
   updateCaseDocumentSchema,
+  updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as filePrepService from "./visaFilePrep.service";
 import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
@@ -66,10 +74,65 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
   res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
+/** Trip details: travelling out, coming back, the entry type and the hotel stay (Documents or File preparation). */
+router.patch("/cases/:caseNo/trip", visaEdit, async (req, res) => {
+  const body = updateTripSchema.parse(req.body);
+  res.json({ case: await stepsService.updateTrip(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
 /** "Mark documents complete": the case moves to File preparation, unowned, for the HOD to give to a processor. */
 router.post("/cases/:caseNo/mature", visaEdit, async (req, res) => {
   const body = matureCaseSchema.parse(req.body);
   res.json({ case: await stepsService.mature(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+// Step 3 (docs/decisions/0007-visa-file-prep.md). The service also requires the case's owner, its HOD or the Head.
+
+/** The processor's check of one paper: Checked, Needs replacing (with a reason), or back to "to check". */
+router.patch("/cases/:caseNo/documents/:documentId/check", visaEdit, async (req, res) => {
+  const body = checkCaseDocumentSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await filePrepService.checkDocument(caseNo, idParam.parse(req.params.documentId), body, actorOf(req)) });
+});
+
+/** One traveller's acknowledgement number and appointment, from the government portal. */
+router.patch("/cases/:caseNo/travellers/:travellerId/application", visaEdit, async (req, res) => {
+  const body = updateApplicationSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await filePrepService.updateApplication(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/** "File ready — add to docket": 409 NOT_READY with details.missing until Step 3 is complete. */
+router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
+  const body = fileReadySchema.parse(req.body);
+  res.json({ case: await filePrepService.markFileReady(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The case's vendor, from the active vendors covering its country; null clears it. */
+router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
+  const body = setVendorSchema.parse(req.body);
+  res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * Upload the final file: the PDF itself is the body (Content-Type: application/pdf), not a form. The case and the size
+ * limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/files/final", visaEdit, async (req, res) => {
+  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+    throw new HttpError(415, "Upload the file as a PDF.");
+  }
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await filePrepService.finalFileLimit(caseNo, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await filePrepService.uploadFinalFile(caseNo, bytes, actor) });
+});
+
+/** A short-lived link that opens one of the case's files ({ url, expiresAt }). Opening is audited. */
+router.get("/cases/:caseNo/files/:fileId/link", visaView, async (req, res) => {
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json(await filePrepService.openCaseFile(caseNo, idParam.parse(req.params.fileId), actorOf(req)));
 });
 
 router.get("/settings", visaView, async (_req, res) => {

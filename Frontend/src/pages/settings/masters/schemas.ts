@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { optionalEmail, optionalMobile, optionalPersonName } from '../../clients/schemas'
 
-// Form validation for the system masters. Mirrors Backend/src/modules/holidays/holidays.schemas.ts and
-// visaMasters/visaMasters.schemas.ts, so mistakes show up before saving; the backend checks everything again.
+// Form validation for the system masters. Mirrors Backend/src/modules/holidays/holidays.schemas.ts,
+// visaMasters/visaMasters.schemas.ts and vendors/vendors.schemas.ts, so mistakes show up before saving; the backend
+// checks everything again.
 // Backend/tests/frontendRules.test.ts fails if these limits drift from the backend's.
 
 /** A dated holiday covers at most this many days. */
@@ -10,6 +12,8 @@ export const MAX_RANGE_DAYS = 60
 export const MAX_TARGETS = 10
 /** At most this many lines on a checklist. */
 export const MAX_CHECKLIST_ITEMS = 60
+/** At most this many countries per vendor. */
+export const MAX_VENDOR_COUNTRIES = 50
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -132,6 +136,32 @@ export const embassyFormSchema = z.object({
   sortOrder,
 })
 export type EmbassyFormValues = z.infer<typeof embassyFormSchema>
+
+/** Why a paper needs replacing in Step 3 (Backend visaMasters.schemas.ts createDocumentProblemReasonSchema). */
+export const documentProblemFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. NOT_SIGNED.'),
+  name: required(80, 'Enter what is wrong, e.g. Not signed.'),
+  sortOrder,
+})
+export type DocumentProblemFormValues = z.infer<typeof documentProblemFormSchema>
+
+/** A visa submission agent (Backend/src/modules/vendors/vendors.schemas.ts). Contact details use the client forms' rules. */
+export const vendorFormSchema = z.object({
+  name: required(120, 'Enter the vendor’s name.'),
+  city: required(80, 'Enter the city.'),
+  countryIds: z
+    .array(z.string())
+    .min(1, 'Pick at least one country.')
+    .max(MAX_VENDOR_COUNTRIES, `Pick at most ${MAX_VENDOR_COUNTRIES} countries.`),
+  contactName: optionalPersonName(120),
+  mobile: optionalMobile,
+  email: optionalEmail,
+})
+export type VendorFormValues = z.infer<typeof vendorFormSchema>
 
 export const documentFormSchema = z.object({
   code: z

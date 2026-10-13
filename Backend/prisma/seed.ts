@@ -58,7 +58,7 @@ async function main() {
   // System masters (docs/decisions/0005-system-masters.md): dummy until Masti sends B1/B2. Existing rows are kept.
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
-  console.log("Visa masters (France Tourist dummy), the weekly Sunday off and holiday settings ready.");
+  console.log("Visa masters (France Tourist dummy), document problem reasons, the weekly Sunday off and holiday settings ready.");
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
   await seedEnquiryMasters(prisma);

@@ -31,6 +31,15 @@ export const DOCUMENTS = [
   { code: "TRAVEL_INSURANCE", name: "Travel insurance", detail: null, sortOrder: 14 },
 ];
 
+/** Why a paper needs replacing (docs/decisions/0007-visa-file-prep.md Decision 3): placeholders ⚠️ until Masti sends its list. */
+export const DOCUMENT_PROBLEM_REASONS = [
+  { code: "WRONG_PHOTO_SIZE", name: "Wrong photo size", sortOrder: 1 },
+  { code: "NOT_SIGNED", name: "Not signed", sortOrder: 2 },
+  { code: "EXPIRED", name: "Expired", sortOrder: 3 },
+  { code: "COPY_NOT_CLEAR", name: "Copy not clear", sortOrder: 4 },
+  { code: "WRONG_DATES", name: "Wrong dates", sortOrder: 5 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -69,6 +78,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const document of DOCUMENTS) {
     await db.documentMaster.upsert({ where: { code: document.code }, update: {}, create: document });
+  }
+  for (const reason of DOCUMENT_PROBLEM_REASONS) {
+    await db.documentProblemReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });

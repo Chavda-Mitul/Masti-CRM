@@ -3,6 +3,7 @@ import { addMonths, istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { holdCaseLock, saveCase, untilWaitingOnLock, visaStaff, type Agent } from "./visaHelpers";
 
 // Visa Step 2 (docs/decisions/0006-visa-documents.md). Who may open a case is tested in enquiries.test.ts.
 
@@ -11,30 +12,6 @@ beforeEach(async () => {
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
 });
-
-type Agent = Awaited<ReturnType<typeof loginAs>>;
-
-async function visaStaff() {
-  await createUser({ name: "Aarti Patel", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
-  return loginAs("aarti@masti.test");
-}
-
-/** France Tourist for one adult and one child, saved by `agent`. */
-async function saveCase(agent: Agent) {
-  const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
-  const offering = await prisma.visaOffering.findFirstOrThrow({ where: { countryId: fr.id } });
-  const res = await agent.post("/api/visa/cases").send({
-    mobile: "98250 41234",
-    clientName: "Rakesh Mehta",
-    sourceCode: "WHATSAPP",
-    offeringId: offering.id,
-    adults: 1,
-    children: 1,
-    travelMonth: addMonths(istToday(), 2).slice(0, 7),
-  });
-  expect(res.status).toBe(201);
-  return res.body.case as { id: string; caseNo: string; client: { id: string } };
-}
 
 describe("the case page", () => {
   it("shows a fresh case: its steps, unnamed travellers, nothing ticked and no follow-ups", async () => {
@@ -508,35 +485,6 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       const processor = await loginAs("neha@masti.test");
       expect(await load(processor, c.caseNo)).toMatchObject({ stage: { code: "FILE_PREPARATION" }, owner: { name: "Neha" }, maturedBy: { name: "Aarti Patel" } });
     });
-
-    /** Waits until another connection is blocked on a row lock: the request under test has reached the locked case. */
-    async function untilWaitingOnLock() {
-      for (let i = 0; i < 200; i++) {
-        const [row] = await prisma.$queryRaw<{ n: bigint }[]>`
-          SELECT count(*) AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`;
-        if (Number(row!.n) > 0) return;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      throw new Error("Nothing waited on the case's lock.");
-    }
-
-    /** A transaction that locks the case, does `work` and holds the lock until release(): an in-flight Step 2 change. */
-    function holdCaseLock(enquiryId: string, work: (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => Promise<unknown>) {
-      let release!: () => void;
-      let locked!: () => void;
-      const held = new Promise<void>((resolve) => (release = resolve));
-      const ready = new Promise<void>((resolve) => (locked = resolve));
-      const done = prisma.$transaction(
-        async (tx) => {
-          await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${enquiryId} FOR UPDATE`;
-          await work(tx);
-          locked();
-          await held;
-        },
-        { timeout: 15_000 },
-      );
-      return { ready, release, done };
-    }
 
     it("doesn't mature a case while a paper is being un-ticked: it waits, then sees the paper pending", async () => {
       const staff = await visaStaff();

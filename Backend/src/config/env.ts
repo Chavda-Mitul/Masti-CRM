@@ -28,6 +28,17 @@ const envSchema = z.object({
   // Send the session cookie over HTTPS only. "auto" = only in production.
   // Set "false" only if the CRM is served over plain HTTP (e.g. inside the office network); the browser drops a secure cookie there and login fails.
   COOKIE_SECURE: z.enum(["auto", "true", "false"]).default("auto"),
+  // S3-compatible document storage (CLAUDE.md rule 4): MinIO locally, AWS S3 or Cloudflare R2 in production. The bucket
+  // is private; files are opened through pre-signed links that point at S3_ENDPOINT, so staff browsers must reach it.
+  S3_ENDPOINT: z.preprocess((v) => (v === "" ? undefined : v), z.url().optional()),
+  S3_REGION: z.string().min(1).default("us-east-1"),
+  S3_BUCKET: z.string().min(1),
+  S3_ACCESS_KEY_ID: z.string().min(1),
+  S3_SECRET_ACCESS_KEY: z.string().min(1),
+  // MinIO needs path-style URLs (http://host:9000/bucket/key); AWS and R2 don't.
+  S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // How long a pre-signed link to a document works. ⚠️ 5 minutes.
+  S3_PRESIGN_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 });
 
 const parsed = envSchema.safeParse(process.env);

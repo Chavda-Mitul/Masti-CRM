@@ -54,10 +54,11 @@ const MOBILE_MESSAGE = 'Enter a valid 10-digit Indian mobile number.'
 const blank = (value: string) => value.trim() === ''
 
 const text = (max: number) => z.string().trim().max(max, `Keep it under ${max} characters.`)
-const optionalPersonName = (max: number) => text(max).refine((v) => v === '' || isPersonName(v), PERSON_NAME_MESSAGE)
+/** Shared with other forms that take a contact person, mobile or email (e.g. Settings → Masters → Vendors). */
+export const optionalPersonName = (max: number) => text(max).refine((v) => v === '' || isPersonName(v), PERSON_NAME_MESSAGE)
 const mobile = z.string().refine((v) => normaliseMobile(v) !== null, MOBILE_MESSAGE)
-const optionalMobile = z.string().refine((v) => blank(v) || normaliseMobile(v) !== null, MOBILE_MESSAGE)
-const optionalEmail = z.string().refine((v) => blank(v) || EMAIL_PATTERN.test(v.trim()), 'Enter a valid email address.')
+export const optionalMobile = z.string().refine((v) => blank(v) || normaliseMobile(v) !== null, MOBILE_MESSAGE)
+export const optionalEmail = z.string().refine((v) => blank(v) || EMAIL_PATTERN.test(v.trim()), 'Enter a valid email address.')
 const optionalPincode = z.string().refine((v) => blank(v) || PINCODE_PATTERN.test(v.trim()), 'Enter a 6-digit PIN code.')
 const optionalPan = z.string().refine((v) => blank(v) || PAN_PATTERN.test(compact(v)), 'Enter a valid PAN, e.g. ABCDE1234F.')
 const optionalGstin = z.string().superRefine((value, ctx) => {

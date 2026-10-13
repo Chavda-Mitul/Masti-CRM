@@ -126,7 +126,19 @@ export interface CreateVisaCaseBody {
 export type DocumentRequirement = 'ORIGINAL' | 'XEROX_OK' | 'ARRANGED_BY_US'
 export type DocumentStatus = 'PENDING' | 'RECEIVED' | 'MADE' | 'NOT_NEEDED'
 export type ReceivedAs = 'ORIGINAL' | 'XEROX'
+/** The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3). */
+export type DocumentCheck = 'CHECKED' | 'NEEDS_REPLACING'
 export type DocumentArrival = 'CLIENT_BRINGS' | 'COLLECTION_BOY'
+export type EntryType = 'SINGLE' | 'DOUBLE' | 'MULTIPLE'
+
+/** Trip details (0007 Decision 4). Dates are YYYY-MM-DD; the duration is worked out from them. */
+export interface CaseTrip {
+  departOn: string | null
+  returnOn: string | null
+  entryType: EntryType | null
+  /** The hotel's name and city. */
+  hotelStay: string | null
+}
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
 
 /** A traveller's copy of a checklist line (copied at intake, so master edits never change an open case). */
@@ -142,6 +154,23 @@ export interface CaseDocument {
   receivedAs: ReceivedAs | null
   receivedAt: string | null
   receivedBy: PersonRef | null
+  /** Step 3: null until the processor checks it. */
+  check: DocumentCheck | null
+  /** Why it needs replacing, from Settings → Masters → Document problems. */
+  checkReason: { id: number; name: string } | null
+  checkedAt: string | null
+  checkedBy: PersonRef | null
+}
+
+/** A file kept in the private document store (0007 Decision 8). It opens through a short-lived link. */
+export interface CaseFile {
+  id: string
+  /** "VISA-2026-0001_Mehta_file.pdf" */
+  fileName: string
+  sizeBytes: number
+  pageCount: number
+  uploadedAt: string
+  uploadedBy: PersonRef
 }
 
 /** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
@@ -165,12 +194,18 @@ export interface CaseTraveller {
     passportStatus: PassportStatus | null
   } | null
   consent: CaseConsent
+  /** Step 3, from the government portal (0007 Decision 5). */
+  ackNo: string | null
+  appointmentAt: string | null
   documents: CaseDocument[]
   /** In or made */
   done: number
   /** Everything not marked "Not needed" */
   need: number
   pendingCount: number
+  /** Step 3: papers the processor has checked, and papers flagged to be replaced. */
+  checked: number
+  needsReplacing: number
 }
 
 export interface CaseFollowUp {
@@ -185,6 +220,19 @@ export interface CaseFollowUp {
 }
 
 /** GET /api/visa/cases/:caseNo (Backend/src/modules/visa/visaCase.ts). */
+/** The case's vendor. isActive false: switched off since it was picked, so "File ready" will ask for another. */
+export interface CaseVendor {
+  id: number
+  name: string
+  city: string
+  isActive: boolean
+  contactName: string | null
+  /** +91XXXXXXXXXX */
+  mobile: string | null
+  /** false when the case's country was taken off the vendor after it was picked: "File ready" asks for another. */
+  coversCountry: boolean
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -203,16 +251,31 @@ export interface VisaCase {
   origin: EnquiryOrigin
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }
+  /** The visa's switches (0007 Decision 6), read live: what "File ready" asks for. */
+  appointmentNeeded: boolean
+  vendorNeeded: boolean
   adults: number
   children: number
   travelMonth: string
   travelDate: string | null
+  trip: CaseTrip
   owner: PersonRef | null
   dueAt: string | null
   arrival: DocumentArrival | null
   booklets: { current: number | null; old: number | null }
   maturedAt: string | null
   maturedBy: PersonRef | null
+  /** Step 3's saved file, kept as proof: the current upload, or null. */
+  finalFile: CaseFile | null
+  /** Every upload of the final file, the current one included; older ones are kept. */
+  finalFileCopies: number
+  /** The largest PDF the server accepts (setting visa.finalFile). */
+  finalFileMaxMb: number
+  /** The submission agent picked during File preparation (0007 Decision 7), or null. */
+  vendor: CaseVendor | null
+  /** "File ready — add to docket" (0007 Decision 9): Step 3 is done and read-only. */
+  fileReadyAt: string | null
+  fileReadyBy: PersonRef | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]
@@ -251,6 +314,23 @@ export interface FollowUpDesk {
 
 /** GET /api/enquiries/follow-ups/badge: the sidebar's red number. ALL for an HOD (their departments) and the Head (everyone). */
 /** What still stands between a case and maturity (409 NOT_READY from "Mark documents complete"). */
+export type TripField = 'departOn' | 'returnOn' | 'entryType'
+
+/** What "File ready" still needs (409 NOT_READY details.missing, 0007 Decision 9). */
+export interface FileReadyMissing {
+  /** Papers that came in or were made, not checked yet or needing replacing, by traveller */
+  papers: { traveller: string; toCheck: string[]; needsReplacing: string[] }[]
+  /** Travellers without an acknowledgement number */
+  ackNo: string[]
+  /** Travellers without an appointment (empty when the visa needs none) */
+  appointment: string[]
+  /** No saved file yet */
+  finalFile: boolean
+  /** null when fine, or when the visa needs no vendor */
+  vendor: 'NONE' | 'SWITCHED_OFF' | 'NOT_COVERING' | null
+  trip: TripField[]
+}
+
 export interface MaturityMissing {
   /** Travellers not yet linked to a family member: "Child 1" */
   unnamed: string[]

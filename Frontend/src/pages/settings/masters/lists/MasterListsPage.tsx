@@ -4,11 +4,13 @@ import { canEditEmbassies, canEditEnquiryMasters, canEditVisaMasters, canViewVis
 import type { User } from '../../../../auth/types'
 import { useMe } from '../../../../auth/useAuth'
 import { CountriesTable } from './CountriesTable'
+import { DocumentProblemsTable } from './DocumentProblemsTable'
 import { DocumentsTable } from './DocumentsTable'
 import { EmbassiesTable } from './EmbassiesTable'
 import { EnquiryReasonsTable } from './EnquiryReasonsTable'
 import { EnquirySourcesTable } from './EnquirySourcesTable'
 import { FollowUpOptionsTable } from './FollowUpOptionsTable'
+import { VendorsTable } from './VendorsTable'
 import { VisaTypesTable } from './VisaTypesTable'
 
 type ListTab =
@@ -16,10 +18,12 @@ type ListTab =
   | 'visa-types'
   | 'embassies'
   | 'documents'
+  | 'document-problem-reasons'
   | 'enquiry-sources'
   | 'follow-up-outcomes'
   | 'follow-up-next-steps'
   | 'enquiry-reasons'
+  | 'vendors'
 
 /** `visa`: read with Visa access, changed by the Visa HOD or the Head. `shared`: every department's, changed by any HOD. */
 const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User) => boolean; editors: string }[] = [
@@ -27,14 +31,23 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'visa-types', label: 'Visa types', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'embassies', label: 'Embassies & visa centres', visa: false, canEdit: canEditEmbassies, editors: 'the Head and HODs' },
   { value: 'documents', label: 'Documents', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
+  {
+    value: 'document-problem-reasons',
+    label: 'Document problems',
+    visa: true,
+    canEdit: canEditVisaMasters,
+    editors: 'the Head and the Visa HOD',
+  },
   { value: 'enquiry-sources', label: 'Enquiry sources', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
+  { value: 'vendors', label: 'Vendors', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
 ]
 
 /**
- * The small master lists, one tab each (?tab=…). Countries, visa types, documents and enquiry sources are the Visa department's;
+ * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources and
+ * vendors are the Visa department's;
  * embassies and the follow-up and reason dropdowns are shared by every department (changed by any HOD).
  */
 export function MasterListsPage() {
@@ -89,11 +102,13 @@ export function MasterListsPage() {
       {tab === 'visa-types' && <VisaTypesTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'embassies' && <EmbassiesTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'documents' && <DocumentsTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'document-problem-reasons' && <DocumentProblemsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'enquiry-sources' && <EnquirySourcesTable canEdit={canEdit} showInactive={showInactive} />}
       {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps') && (
         <FollowUpOptionsTable key={tab} resource={tab} canEdit={canEdit} showInactive={showInactive} />
       )}
       {tab === 'enquiry-reasons' && <EnquiryReasonsTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'vendors' && <VendorsTable canEdit={canEdit} showInactive={showInactive} />}
     </>
   )
 }

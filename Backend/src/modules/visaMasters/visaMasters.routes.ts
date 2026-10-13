@@ -4,6 +4,7 @@ import { actorOf, requireAuth, requireDepartment, requirePasswordChanged, requir
 import * as checklistsService from "./checklists.service";
 import {
   createCountrySchema,
+  createDocumentProblemReasonSchema,
   createDocumentSchema,
   createEmbassySchema,
   createEnquirySourceSchema,
@@ -13,6 +14,7 @@ import {
   listQuerySchema,
   replaceChecklistSchema,
   updateCountrySchema,
+  updateDocumentProblemReasonSchema,
   updateDocumentSchema,
   updateEmbassySchema,
   updateEnquirySourceSchema,
@@ -86,6 +88,20 @@ router.post("/documents", visaEdit, async (req, res) => {
 router.patch("/documents/:id", visaEdit, async (req, res) => {
   const body = updateDocumentSchema.parse(req.body);
   res.json({ document: await mastersService.updateDocument(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Document problems: why a paper needs replacing in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3)
+router.get("/document-problem-reasons", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ problemReasons: await mastersService.listDocumentProblemReasons(active) });
+});
+router.post("/document-problem-reasons", visaEdit, async (req, res) => {
+  const body = createDocumentProblemReasonSchema.parse(req.body);
+  res.status(201).json({ problemReason: await mastersService.createDocumentProblemReason(body, actorOf(req)) });
+});
+router.patch("/document-problem-reasons/:id", visaEdit, async (req, res) => {
+  const body = updateDocumentProblemReasonSchema.parse(req.body);
+  res.json({ problemReason: await mastersService.updateDocumentProblemReason(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

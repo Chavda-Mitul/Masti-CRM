@@ -6,7 +6,7 @@ import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { useMasterList, useOfferings } from './queries'
 
 /** Masters on the demo that aren't built yet. Shown greyed out, like Phase-2 items in the sidebar. */
-const NOT_BUILT = ['Reminder rules', 'Vendors', 'Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
+const NOT_BUILT = ['Reminder rules', 'Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
 
 /**
  * Settings → Masters & holiday calendar (demo screen 29): "The lists and rules the rest of the system reads from."
@@ -20,11 +20,13 @@ export function MastersPage() {
   const countries = useMasterList('countries', visa)
   const visaTypes = useMasterList('visa-types', visa)
   const documents = useMasterList('documents', visa)
+  const problems = useMasterList('document-problem-reasons', visa)
   const sources = useMasterList('enquiry-sources', visa)
   const embassies = useMasterList('embassies')
   const outcomes = useMasterList('follow-up-outcomes')
   const nextSteps = useMasterList('follow-up-next-steps')
   const reasons = useMasterList('enquiry-reasons')
+  const vendors = useMasterList('vendors', visa)
 
   const active = (rows: { isActive: boolean }[] | undefined) => (rows ? String(rows.filter((r) => r.isActive).length) : '…')
 
@@ -71,6 +73,10 @@ export function MastersPage() {
                 <span>Documents</span>
                 <strong>{active(documents.data)}</strong>
               </Link>
+              <Link className="kv-line" to="/settings/masters/lists?tab=document-problem-reasons">
+                <span>Document problems</span>
+                <strong>{active(problems.data)}</strong>
+              </Link>
               <Link className="kv-line" to="/settings/masters/lists?tab=enquiry-sources">
                 <span>Enquiry sources</span>
                 <strong>{active(sources.data)}</strong>
@@ -99,6 +105,17 @@ export function MastersPage() {
             <strong>{active(reasons.data)}</strong>
           </Link>
         </section>
+
+        {visa && (
+          <section className="card pad master-card">
+            <h2 className="h2">Vendors</h2>
+            <p className="muted small">Visa submission agents and the countries they cover. Staff can only pick active vendors; only the Head and the Visa HOD add them.</p>
+            <Link className="kv-line" to="/settings/masters/lists?tab=vendors">
+              <span>Active vendors</span>
+              <strong>{active(vendors.data)}</strong>
+            </Link>
+          </section>
+        )}
 
         <HolidaySettingsCard />
 

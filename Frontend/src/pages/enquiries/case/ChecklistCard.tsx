@@ -6,12 +6,37 @@ import { formatDateTime, formatMonthYear } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { MemberFormDrawer } from '../../clients/MemberFormDrawer'
 import { useClient, useClientOptions } from '../../clients/queries'
-import { useLinkTraveller, useUpdateCaseDocument } from '../queries'
+import { useCheckCaseDocument, useLinkTraveller, useUpdateCaseDocument } from '../queries'
 import type { CaseDocument, CaseTraveller, ReceivedAs, VisaCase } from '../types'
 import { REQUIREMENT_LABEL, travellerTab } from './labels'
+import { NeedsReplacingDialog } from './NeedsReplacingDialog'
 
 /** The steps where the checklist can still change; after maturity it is the processor's (0006 Decision 8). */
 const COLLECTING = ['ENQUIRY', 'DOCUMENTS']
+
+/** "In · 3 Oct, 4:12 pm · by Aarti": the receipt, shown on hover once the Check column takes the Status column's place. */
+function receiptTitle(doc: CaseDocument) {
+  if (doc.status !== 'RECEIVED' && doc.status !== 'MADE') return undefined
+  const by = doc.receivedBy ? ` · by ${doc.receivedBy.name}` : ''
+  return `${doc.status === 'MADE' ? 'Made' : 'In'} · ${formatDateTime(doc.receivedAt)}${by}`
+}
+
+/** "Checked · 12 Oct, 4:12 pm · by Neha Joshi" */
+function checkTitle(doc: CaseDocument) {
+  if (!doc.check) return undefined
+  const what = doc.check === 'CHECKED' ? 'Checked' : 'Flagged'
+  return `${what} · ${formatDateTime(doc.checkedAt)}${doc.checkedBy ? ` · by ${doc.checkedBy.name}` : ''}`
+}
+
+/** The processor's check (Step 3): To check / Checked / Needs replacing · reason. */
+function CheckChip({ doc }: { doc: CaseDocument }) {
+  if (doc.status === 'NOT_NEEDED') return <span className="muted">—</span>
+  if (doc.check === 'CHECKED') return <span className="chip chip-ok chip-sm">Checked</span>
+  if (doc.check === 'NEEDS_REPLACING') {
+    return <span className="chip chip-bad chip-sm">Needs replacing · {doc.checkReason?.name ?? '—'}</span>
+  }
+  return <span className="chip chip-warn chip-sm">To check</span>
+}
 
 /** Pending / "In · 3 Oct, 4:12 pm" / "Made · …" / Not needed. */
 function StatusChip({ doc }: { doc: CaseDocument }) {
@@ -30,14 +55,19 @@ function StatusChip({ doc }: { doc: CaseDocument }) {
 /**
  * The per-traveller checklist (demo screen 07, §10.4): copied at intake from Masters, ticked as each paper is scanned in
  * the office (0006 Decisions 2 and 3). The case's owner, its HOD and the Head can change it while documents are collected.
+ * After maturity the processor checks each paper again: Checked, or Needs replacing with a reason (0007 Decision 3).
+ * The Check column then takes the Status column's place, since every paper is in by then.
  */
 export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const [selected, setSelected] = useState(c.travellers[0]?.id)
   const traveller = c.travellers.find((t) => t.id === selected) ?? c.travellers[0]
   if (!traveller) return null
-  const editable =
-    !!me && c.status === 'OPEN' && COLLECTING.includes(c.stage.code) && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const canAct = !!me && c.status === 'OPEN' && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const editable = canAct && COLLECTING.includes(c.stage.code)
+  const showChecks = !!c.maturedAt
+  const canCheck = canAct && c.stage.code === 'FILE_PREPARATION'
+  const who = traveller.name ?? traveller.label
 
   return (
     <section className="card pad">
@@ -45,14 +75,21 @@ export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
         <div>
           <h2 className="h2">Document checklist</h2>
           <p className="muted small" style={{ margin: '2px 0 0' }}>
-            Tick each paper as it is scanned at the office — original or xerox.
+            {!showChecks
+              ? 'Tick each paper as it is scanned at the office — original or xerox.'
+              : canCheck
+                ? 'Check each paper again before the file is made. Flag a bad one with what’s wrong.'
+                : 'The processor checks each paper again before the file is made.'}
           </p>
         </div>
         <div className="checklist-count">
           <strong>
-            {traveller.done} / {traveller.need}
+            {showChecks ? traveller.checked : traveller.done} / {showChecks ? traveller.done : traveller.need}
           </strong>
-          <div className="muted small">for {traveller.name ?? traveller.label}</div>
+          <div className="muted small">{showChecks ? `checked for ${who}` : `for ${who}`}</div>
+          {showChecks && traveller.needsReplacing > 0 && (
+            <div className="small check-flagged">{traveller.needsReplacing} to replace</div>
+          )}
         </div>
       </div>
 
@@ -78,6 +115,12 @@ export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
               >
                 {label.name}
                 {label.detail && <span> · {label.detail}</span>}
+                {showChecks && t.needsReplacing > 0 && (
+                  <b className="chip chip-bad chip-sm tab-flag">
+                    {t.needsReplacing}
+                    <span className="sr-only"> to replace</span>
+                  </b>
+                )}
               </button>
             )
           })}
@@ -87,21 +130,25 @@ export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
       <TravellerIdentity key={traveller.id} visaCase={c} traveller={traveller} editable={editable} />
 
       <div
-        className={`checklist${editable ? ' editable' : ''}`}
+        className={`checklist${editable ? ' editable' : ''}${showChecks ? ' checking' : ''}`}
         role="table"
-        aria-label={`Documents for ${traveller.name ?? traveller.label}`}
+        aria-label={`Documents for ${who}`}
       >
         <div className="checklist-row head" role="row">
           <span role="columnheader" aria-label="Done" />
           <span role="columnheader">Document</span>
           <span role="columnheader">We need</span>
           <span role="columnheader">Came in as</span>
-          <span role="columnheader">Status</span>
+          <span role="columnheader">{showChecks ? 'Check' : 'Status'}</span>
           {editable && <span role="columnheader" aria-label="Actions" />}
         </div>
-        {traveller.documents.map((d) => (
-          <DocumentRow key={d.id} caseNo={c.caseNo} doc={d} editable={editable} />
-        ))}
+        {traveller.documents.map((d) =>
+          showChecks ? (
+            <CheckRow key={d.id} caseNo={c.caseNo} doc={d} canCheck={canCheck} travellerName={who} />
+          ) : (
+            <DocumentRow key={d.id} caseNo={c.caseNo} doc={d} editable={editable} />
+          ),
+        )}
       </div>
 
       <p className="checklist-foot">
@@ -326,5 +373,101 @@ function DocumentRow({ caseNo, doc: d, editable }: { caseNo: string; doc: CaseDo
         </span>
       )}
     </div>
+  )
+}
+
+/**
+ * A paper after maturity (0007 Decision 3). Step 2's receipt is read-only here, with its time on hover. The processor
+ * (or the HOD or the Head) marks it Checked, pressing again to undo, or flags it Needs replacing with a reason.
+ */
+function CheckRow({
+  caseNo,
+  doc: d,
+  canCheck,
+  travellerName,
+}: {
+  caseNo: string
+  doc: CaseDocument
+  canCheck: boolean
+  travellerName: string
+}) {
+  const toast = useToast()
+  const check = useCheckCaseDocument(caseNo)
+  const [flagging, setFlagging] = useState(false)
+  const arranged = d.requirement === 'ARRANGED_BY_US'
+  const done = d.status === 'RECEIVED' || d.status === 'MADE'
+  const checked = d.check === 'CHECKED'
+  const needs = d.check === 'NEEDS_REPLACING'
+  const busy = check.isPending
+
+  const toggleChecked = () =>
+    check.mutate(
+      { documentId: d.id, check: checked ? null : 'CHECKED' },
+      { onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t save that check. Please try again.' }) },
+    )
+
+  return (
+    <>
+      <div className={`checklist-row${d.status === 'NOT_NEEDED' ? ' off' : ''}${busy ? ' busy' : ''}`} role="row">
+        <span role="cell">
+          <span className={`tick${done ? ' on' : ''}`} aria-label={done ? 'In' : 'Not needed'}>
+            {done ? '✓' : ''}
+          </span>
+        </span>
+        <span role="cell">
+          <span className="doc-name">
+            {d.name}
+            {d.quantity > 1 && ` (${d.quantity})`}
+          </span>
+          {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+        </span>
+        <span role="cell" className="small">
+          {REQUIREMENT_LABEL[d.requirement]}
+        </span>
+        <span role="cell" className="small" title={receiptTitle(d)}>
+          {arranged ? (
+            <span className="muted">{d.status === 'MADE' ? 'Made by us' : '—'}</span>
+          ) : d.receivedAs === 'ORIGINAL' ? (
+            'Original'
+          ) : d.receivedAs === 'XEROX' ? (
+            'Xerox'
+          ) : (
+            <span className="muted">Not needed</span>
+          )}
+        </span>
+        <span role="cell" className="check-cell" title={checkTitle(d)}>
+          {canCheck && done ? (
+            <>
+              <span className="check-actions">
+                <button
+                  type="button"
+                  className={`btn-mini${checked ? ' on-ok' : ''}`}
+                  aria-pressed={checked}
+                  aria-label={`Checked: ${d.name}`}
+                  disabled={busy}
+                  onClick={toggleChecked}
+                >
+                  ✓ Checked
+                </button>
+                <button
+                  type="button"
+                  className={`btn-mini${needs ? ' on-bad' : ''}`}
+                  aria-pressed={needs}
+                  aria-label={`Needs replacing: ${d.name}`}
+                  disabled={busy}
+                  onClick={() => setFlagging(true)}
+                >
+                  Needs replacing…
+                </button>
+              </span>
+              {needs && <span className="check-flagged small">{d.checkReason?.name}</span>}
+            </>
+          ) : (
+            <CheckChip doc={d} />
+          )}
+        </span>
+      </div>
+      {flagging && <NeedsReplacingDialog caseNo={caseNo} doc={d} travellerName={travellerName} onClose={() => setFlagging(false)} />}
+    </>
   )
 }

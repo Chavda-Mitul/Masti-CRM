@@ -1,12 +1,14 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
   DocumentArrival,
+  DocumentCheck,
   DocumentStatus,
+  EntryType,
   EnquiryListFilters,
   EnquiryListPage,
   EnquirySourceOption,
@@ -52,6 +54,9 @@ export function useVisaCase(caseNo: string) {
   })
 }
 
+/** Cases that had several actions running at once: the last to finish reloads the case rather than trusting its answer. */
+const overlapping = new Set<string>()
+
 /**
  * A case action returns the whole case: it replaces the page's copy. The list (its stage), the follow-up desk (documents
  * pending) and the client's open cases may have changed with it. One that sends updatedAt ("Mark documents complete")
@@ -61,10 +66,22 @@ function useCaseAction<Vars>(caseNo: string, request: (path: string, vars: Vars)
   const queryClient = useQueryClient()
   const toast = useToast()
   const base = `/visa/cases/${encodeURIComponent(caseNo)}`
+  const mutationKey = ['case-action', caseNo.toUpperCase()]
   return useMutation({
+    mutationKey,
     mutationFn: async (vars: Vars) => (await request(base, vars)).case,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
+    onSettled: (updated) => {
+      // Ticking down a list sends several changes at once, and their answers can come back out of order: an older
+      // answer must not overwrite a newer one. While others are still running an answer is held back, and the last one
+      // to finish reloads the case instead.
+      if (queryClient.isMutating({ mutationKey }) > 1) {
+        overlapping.add(mutationKey[1]!)
+        return
+      }
+      if (overlapping.delete(mutationKey[1]!)) void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(caseNo) })
+      else if (updated) queryClient.setQueryData(enquiryKeys.case(caseNo), updated)
+    },
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
@@ -165,11 +182,73 @@ export function useUpdateCaseDocument(caseNo: string) {
   )
 }
 
+/**
+ * The processor's check of one paper in Step 3: Checked, Needs replacing (with a reason from the list), or null for
+ * "to check". Like ticks, it waits its turn on the case and doesn't make anyone's page stale.
+ */
+export function useCheckCaseDocument(caseNo: string) {
+  return useCaseAction<{ documentId: string; check: DocumentCheck | null; reasonId?: number }>(caseNo, (base, { documentId, ...body }) =>
+    api(`${base}/documents/${documentId}/check`, { method: 'PATCH', body }),
+  )
+}
+
+/** Uploads the final file (one PDF). A newer upload becomes the current one; older ones are kept. */
+export function useUploadFinalFile(caseNo: string) {
+  return useCaseAction<{ file: File }>(caseNo, (base, { file }) => uploadPdf(`${base}/files/final`, file))
+}
+
+/**
+ * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
+ * click itself, so popup blockers allow it, and pointed at the file once the link arrives.
+ */
+export function useOpenCaseFile(caseNo: string) {
+  const toast = useToast()
+  return (fileId: string) => {
+    const tab = window.open('', '_blank')
+    if (tab) tab.opener = null
+    api<{ url: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
+      .then(({ url }) => {
+        if (tab) tab.location.href = url
+        else window.location.href = url
+      })
+      .catch((err: unknown) => {
+        tab?.close()
+        toast({ tone: 'bad', message: err instanceof Error ? err.message : 'Couldn’t open the file. Please try again.' })
+      })
+  }
+}
+
 /** Names a traveller: links the client's family member. */
 export function useLinkTraveller(caseNo: string) {
   return useCaseAction<{ travellerId: string; memberId: string }>(caseNo, (base, { travellerId, memberId }) =>
     api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body: { memberId } }),
   )
+}
+
+/** Trip details: only the fields that changed; null clears one. */
+export function useUpdateTrip(caseNo: string) {
+  return useCaseAction<{ departOn?: string | null; returnOn?: string | null; entryType?: EntryType | null; hotelStay?: string | null }>(
+    caseNo,
+    (base, body) => api(`${base}/trip`, { method: 'PATCH', body }),
+  )
+}
+
+/** One traveller's acknowledgement number and appointment (a day and a time in India); null clears either. */
+export function useUpdateApplication(caseNo: string) {
+  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null }>(
+    caseNo,
+    (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/application`, { method: 'PATCH', body }),
+  )
+}
+
+/** "File ready — add to docket" (0007 Decision 9): 409 NOT_READY lists what Step 3 still lacks. */
+export function useMarkFileReady(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/file-ready`, { method: 'POST', body }))
+}
+
+/** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
+export function useSetVendor(caseNo: string) {
+  return useCaseAction<{ vendorId: number | null }>(caseNo, (base, body) => api(`${base}/vendor`, { method: 'PUT', body }))
 }
 
 /** All enquiries (open, postponed or cancelled): late first, then by time due. Paged with the API's cursor ("Show more"). */

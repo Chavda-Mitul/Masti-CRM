@@ -10,19 +10,22 @@ import { assertCanEditEmbassies, assertCanEditVisaMasters } from "./access";
 import type {
   CreateCountryInput,
   CreateDocumentInput,
+  CreateDocumentProblemReasonInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
   CreateOfferingInput,
   CreateVisaTypeInput,
   UpdateCountryInput,
   UpdateDocumentInput,
+  UpdateDocumentProblemReasonInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
   UpdateOfferingInput,
   UpdateVisaTypeInput,
 } from "./visaMasters.schemas";
 
-// Countries, visa types, embassies, documents and offerings (docs/decisions/0005-system-masters.md §6).
+// Countries, visa types, embassies, documents and offerings (docs/decisions/0005-system-masters.md §6), and the reasons
+// a paper needs replacing (docs/decisions/0007-visa-file-prep.md Decision 3).
 // Masters are switched off (isActive), never deleted, so reports and old cases keep their names.
 // Codes never change once created. Every change is audited with before/after of the changed fields.
 
@@ -171,6 +174,37 @@ export async function updateDocument(id: number, input: UpdateDocumentInput, act
 }
 
 // ---------------------------------------------------------------------------
+// Document problems: why a paper needs replacing (Step 3)
+// ---------------------------------------------------------------------------
+
+export async function listDocumentProblemReasons(active?: boolean) {
+  return prisma.documentProblemReason.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createDocumentProblemReason(input: CreateDocumentProblemReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "documentProblemReason.create", "DocumentProblemReason", (tx) =>
+    tx.documentProblemReason.create({ data: input }),
+  );
+}
+
+export async function updateDocumentProblemReason(id: number, input: UpdateDocumentProblemReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.documentProblemReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "documentProblemReason.update",
+    entityType: "DocumentProblemReason",
+    entityId: id,
+    write: (tx) => tx.documentProblemReason.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Enquiry sources ("Came in through")
 // Shared by every department, but edited like the visa masters (the Head or the Visa HOD) until another
 // department's intake exists (0003, refreshed 9 Oct 2026).
@@ -222,6 +256,8 @@ function toOfferingDto(o: OfferingRow & { _count?: { checklist: number } }) {
     country: o.country,
     visaType: o.visaType,
     isActive: o.isActive,
+    appointmentNeeded: o.appointmentNeeded,
+    vendorNeeded: o.vendorNeeded,
     ...(o._count ? { checklistCount: o._count.checklist } : {}),
     updatedAt: o.updatedAt,
   };
@@ -271,7 +307,7 @@ export async function updateOffering(id: number, input: UpdateOfferingInput, act
   assertCanEditVisaMasters(actor.user);
   const before = await prisma.visaOffering.findUnique({ where: { id } });
   if (!before) throw notFound("Visa offering not found.");
-  const changes = onlyChanged(input, before);
+  const changes = onlyChanged(definedOnly(input), before);
   await saveChanges({
     before,
     changes,

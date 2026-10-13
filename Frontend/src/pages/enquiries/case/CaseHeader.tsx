@@ -6,6 +6,7 @@ import { formatDate, formatMonthYear, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
+import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
@@ -28,18 +29,21 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   }
   if (c.status === 'CANCELLED') return <span className="chip chip-bad">Cancelled{c.reason && ` · ${c.reason.name}`}</span>
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
+  // Instead of the step's "Dispatched" ⚠️, which isn't true until Step 4 sends the docket.
+  if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
 
 /**
- * The step's own button: "Start collecting documents", then "Mark documents complete" (0006 Decision 8). The later
- * steps show as "Soon" until Step 3 onwards is built.
+ * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), then "File ready —
+ * add to docket" (0007 Decision 9). The later steps show as "Soon" until Step 4 onwards is built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const toast = useToast()
   const start = useStartDocuments(c.caseNo)
   const [maturing, setMaturing] = useState(false)
+  const [finishing, setFinishing] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -66,6 +70,16 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.nextStepLabel} →
         </button>
         {maturing && <MatureDialog visaCase={c} onClose={() => setMaturing(false)} />}
+      </>
+    )
+  }
+  if (c.stage.code === 'FILE_PREPARATION' && c.status === 'OPEN' && canAct) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setFinishing(true)}>
+          {c.stage.nextStepLabel} →
+        </button>
+        {finishing && <FileReadyDialog visaCase={c} onClose={() => setFinishing(false)} />}
       </>
     )
   }

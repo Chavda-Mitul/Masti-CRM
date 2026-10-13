@@ -137,7 +137,6 @@ export function UsersPage() {
                           {u.name} {u.id === me?.id && <span className="muted">(you)</span>}
                         </div>
                         <div style={{ display: 'flex', gap: 6, marginTop: 3 }}>
-                          {u.type === 'HEAD' && <span className="chip chip-info">Head</span>}
                           {u.type === 'FIELD' && <span className="chip chip-muted">Field staff</span>}
                           {u.mustChangePassword && <span className="chip chip-warn">Temporary password</span>}
                         </div>
@@ -154,7 +153,12 @@ export function UsersPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {u.type === 'HEAD' && <span className="muted">All departments</span>}
+                      {u.type === 'HEAD' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                          <span className="chip chip-info">Head</span>
+                          <span className="muted">All departments</span>
+                        </div>
+                      )}
                       {u.type === 'FIELD' && <span className="muted">Jobs assigned to them</span>}
                       {u.departments.map((d) => {
                         const s = departmentStyle(d.code)

@@ -114,6 +114,26 @@ export interface Embassy {
   country: { id: number; code: string; name: string; zone: string | null }
 }
 
+/**
+ * A visa submission agent (docs/decisions/0007-visa-file-prep.md Decision 7). Only the Visa HOD or the Head adds one,
+ * and adding approves it. Switched off, never deleted.
+ */
+export interface Vendor {
+  id: number
+  kind: 'VISA_AGENT'
+  name: string
+  city: string
+  contactName: string | null
+  /** +91XXXXXXXXXX */
+  mobile: string | null
+  email: string | null
+  isActive: boolean
+  /** The countries it submits files for, by name. */
+  countries: { id: number; code: string; name: string; zone: string | null }[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface DocumentMaster {
   id: number
   code: string
@@ -130,6 +150,9 @@ export interface Offering {
   country: { id: number; code: string; name: string; zone: string | null; isActive: boolean }
   visaType: { id: number; code: string; name: string; isActive: boolean }
   isActive: boolean
+  /** What "File ready" asks for (0007 Decision 6): both on by default, off for e-visas. */
+  appointmentNeeded: boolean
+  vendorNeeded: boolean
   checklistCount?: number
   updatedAt: string
 }
@@ -154,6 +177,8 @@ export interface Checklist {
     country: { id: number; code: string; name: string; zone: string | null; isActive: boolean; label: string }
     visaType: { id: number; code: string; name: string; isActive: boolean }
     isActive: boolean
+    appointmentNeeded: boolean
+    vendorNeeded: boolean
     updatedAt: string
   }
   items: ChecklistItem[]
@@ -188,6 +213,15 @@ export interface FollowUpOption {
   isActive: boolean
 }
 
+/** Why a paper needs replacing in Step 3: "Not signed", "Wrong photo size"… (0007 Decision 3). */
+export interface DocumentProblemReason {
+  id: number
+  code: string
+  name: string
+  sortOrder: number
+  isActive: boolean
+}
+
 export type EnquiryReasonKind = 'POSTPONE' | 'CANCEL'
 
 /** Why a case was postponed or cancelled. The kind never changes. */
@@ -205,3 +239,5 @@ export type MasterResource =
   | 'follow-up-outcomes'
   | 'follow-up-next-steps'
   | 'enquiry-reasons'
+  | 'vendors'
+  | 'document-problem-reasons'

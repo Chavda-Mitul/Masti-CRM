@@ -144,6 +144,157 @@
 .checklist.editable .checklist-row {
   grid-template-columns: 34px minmax(0, 1fr) 100px 170px 150px 104px;
 }
+/* After maturity the Check column takes the Status column's place, wide enough for the processor's two buttons. */
+.checklist.checking .checklist-row {
+  grid-template-columns: 34px minmax(0, 1fr) 100px 100px 236px;
+}
+.check-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.check-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.btn-mini.on-ok {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.btn-mini.on-bad {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.check-flagged {
+  color: var(--bad);
+  font-weight: 700;
+}
+.traveller-tabs button .tab-flag {
+  margin-left: 6px;
+  height: 20px;
+  padding: 0 7px;
+  opacity: 1;
+  font-weight: 800;
+}
+/* Step 3's banner: "Matured 6 Oct — All documents are in…" (demo screen 08). */
+.matured-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+.matured-banner .chip {
+  background: var(--surface);
+}
+.matured-banner strong {
+  font-weight: 800;
+}
+/* Step 3's saved file, kept as proof (demo screen 08). */
+.saved-file {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.saved-file .kv {
+  border-bottom: 0;
+  padding: 0;
+}
+.saved-file-name {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.saved-file-meta {
+  margin: -4px 0 0;
+}
+.saved-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* The vendor the file goes to (0007 Decision 7): the last row of the card, as in the demo. */
+.saved-file-vendor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+.saved-file-vendor .kv {
+  align-items: baseline;
+}
+.saved-file-vendor-name {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.saved-file-vendor-note {
+  margin: 0;
+}
+/* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
+/* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
+.trip-form .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(max(220px, calc((100% - 14px) / 2)), 1fr));
+}
+.trip-duration {
+  padding: 9px 0;
+  font-size: 14px;
+}
+.trip-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.application {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.application-scroll {
+  overflow-x: auto;
+}
+.application-table th,
+.application-table td {
+  padding: 10px 8px;
+}
+.application-table th {
+  background: none;
+}
+.application-table th:first-child,
+.application-table td:first-child {
+  padding-left: 0;
+}
+.application-table th:last-child,
+.application-table td:last-child {
+  padding-right: 0;
+}
+.application-table tbody tr:hover {
+  background: none;
+}
+.application-table .field-error {
+  display: block;
+  margin-top: 4px;
+}
+.ack-input {
+  width: 100%;
+  min-width: 180px;
+}
+.appointment-inputs {
+  display: flex;
+  gap: 6px;
+}
+.appointment-inputs .input {
+  min-width: 0;
+}
+.application-save {
+  width: 1%;
+  white-space: nowrap;
+}
 /* A not-needed paper fades, but its "Needed" button stays readable so it can be undone. */
 .checklist-row.off > :not(.row-action) {
   opacity: 0.45;
@@ -209,7 +360,8 @@
 }
 @media (max-width: 760px) {
   .checklist-row,
-  .checklist.editable .checklist-row {
+  .checklist.editable .checklist-row,
+  .checklist.checking .checklist-row {
     grid-template-columns: 34px minmax(0, 1fr);
   }
   .row-action {
@@ -405,4 +557,9 @@ button.tick:focus-visible {
 }
 .missing-list li + li {
   margin-top: 2px;
+}
+/* "File ready" can list every paper of a large family: scroll inside the dialog rather than past the screen. */
+.file-ready-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }

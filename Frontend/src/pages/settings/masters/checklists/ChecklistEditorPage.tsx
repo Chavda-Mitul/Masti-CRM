@@ -84,6 +84,7 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
   const offerings = useOfferings()
   const replace = useReplaceChecklist(offeringId)
   const setActive = useSaveOffering()
+  const setSwitch = useSaveOffering()
 
   const form = useForm<ChecklistFormValues>({
     resolver: zodResolver(checklistFormSchema),
@@ -188,6 +189,22 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
           </button>
         )}
       </div>
+
+      <FileReadySwitches
+        offering={checklist.offering}
+        canEdit={canEdit}
+        disabled={dirty || setSwitch.isPending}
+        onFlip={(key, label) => {
+          const on = !checklist.offering[key]
+          setSwitch.mutate(
+            { id: offeringId, body: key === 'appointmentNeeded' ? { appointmentNeeded: on } : { vendorNeeded: on } },
+            {
+              onSuccess: () => toast({ tone: 'ok', message: `${label} ${on ? 'switched on' : 'switched off'}.` }),
+              onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Could not change it.' }),
+            },
+          )
+        }}
+      />
 
       {stale && (
         <div className="alert alert-warn stale-bar" role="alert">
@@ -370,5 +387,47 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
         />
       )}
     </form>
+  )
+}
+
+type FileReadySwitch = 'appointmentNeeded' | 'vendorNeeded'
+
+const SWITCHES: { key: FileReadySwitch; label: string; detail: string }[] = [
+  { key: 'appointmentNeeded', label: 'Appointment needed', detail: 'every traveller needs a portal appointment' },
+  { key: 'vendorNeeded', label: 'Vendor needed', detail: 'a vendor must be picked' },
+]
+
+/**
+ * What "File ready" asks for on this visa (docs/decisions/0007-visa-file-prep.md Decision 6). Both are on by default
+ * and off for e-visas. They save on click and are read live, so open cases follow straight away. Like "Switch off this
+ * visa", they wait while the checklist has unsaved changes: saving one reloads the editor.
+ */
+function FileReadySwitches({
+  offering,
+  canEdit,
+  disabled,
+  onFlip,
+}: {
+  offering: Checklist['offering']
+  canEdit: boolean
+  disabled: boolean
+  onFlip: (key: FileReadySwitch, label: string) => void
+}) {
+  return (
+    <section className="card pad file-ready-switches">
+      <h2 className="h2">Before the file is ready</h2>
+      <p className="muted small" style={{ margin: 0 }}>
+        What “File ready” asks for on this visa. Untick both for an e-visa. Open cases follow straight away.
+      </p>
+      {SWITCHES.map((s) => (
+        <label key={s.key} className="check">
+          <input type="checkbox" checked={offering[s.key]} disabled={!canEdit || disabled} onChange={() => onFlip(s.key, s.label)} />
+          <span>
+            {s.label} <span className="muted small">— {s.detail}</span>
+          </span>
+        </label>
+      ))}
+      {canEdit && disabled && <span className="hint">Save or discard your checklist changes first.</span>}
+    </section>
   )
 }

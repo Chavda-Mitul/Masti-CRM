@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentArrival, DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -15,7 +15,12 @@ export const firstFollowUpSchema = z.object({
   at: hhmm,
 });
 
-export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema });
+/** The largest final file (one PDF) a case can keep (docs/decisions/0007-visa-file-prep.md Decision 8). */
+export const finalFileSchema = z.object({
+  maxMb: z.number().int().min(1).max(200),
+});
+
+export const visaSettingsSchema = z.object({ firstFollowUp: firstFollowUpSchema, finalFile: finalFileSchema });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
@@ -40,6 +45,7 @@ export const createVisaCaseSchema = z
 export const idempotencyKeySchema = z.string().trim().min(8).max(100).optional();
 
 export type FirstFollowUp = z.infer<typeof firstFollowUpSchema>;
+export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -80,3 +86,80 @@ export const matureCaseSchema = z.object({
 });
 
 export type MatureCaseInput = z.infer<typeof matureCaseSchema>;
+
+/** "File ready — add to docket" (0007 Decision 9) sends the case's updatedAt, like maturity. */
+export const fileReadySchema = matureCaseSchema;
+
+export type FileReadyInput = z.infer<typeof fileReadySchema>;
+
+// ---------------------------------------------------------------------------
+// Step 3 (docs/decisions/0007-visa-file-prep.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The processor's check of one paper (Decision 3): Checked, or Needs replacing with a reason from the master list;
+ * null sets it back to "to check". The reason is ignored unless the paper needs replacing.
+ */
+export const checkCaseDocumentSchema = z
+  .object({
+    check: z.enum(DocumentCheck).nullable(),
+    reasonId: z.number().int().positive().nullish(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.check === "NEEDS_REPLACING" && v.reasonId == null) {
+      ctx.addIssue({ code: "custom", path: ["reasonId"], message: "Pick what's wrong with it." });
+    }
+  });
+
+export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;
+
+const blankToNull = (value: unknown) => (typeof value === "string" && value.trim() === "" ? null : value);
+const somethingToChange = (v: object) => Object.values(v).some((value) => value !== undefined);
+
+/**
+ * Trip details (Decision 4). Each field is optional (only what changed is sent) and null clears it. The service checks
+ * the dates against today and against each other, on the values as stored.
+ */
+export const updateTripSchema = z
+  .object({
+    departOn: z.iso.date("Use a valid date.").nullable().optional(),
+    returnOn: z.iso.date("Use a valid date.").nullable().optional(),
+    entryType: z.enum(EntryType).nullable().optional(),
+    /** The hotel's name and city: data for the forms, so short text is allowed here (not a reason or a status). */
+    hotelStay: z.preprocess(blankToNull, z.string().trim().max(200, "200 characters at most.").nullable()).optional(),
+  })
+  .refine(somethingToChange, { message: "Nothing to change." });
+
+export type UpdateTripInput = z.infer<typeof updateTripSchema>;
+
+/** "fra1 mu2026 0648" is FRA1MU20260648: spaces go, letters become capitals. Blank clears it. */
+const ackNo = z.preprocess(
+  (value) => (typeof value === "string" ? value.replace(/\s+/g, "").toUpperCase() || null : value),
+  z.string().regex(/^[A-Z0-9]{4,40}$/, "Capitals and digits only, 4–40 characters.").nullable(),
+);
+
+/**
+ * One traveller's portal details (Decision 5): the acknowledgement number, and the appointment as a day and a time in
+ * India (as follow-ups are sent). null clears either.
+ */
+export const updateApplicationSchema = z
+  .object({
+    ackNo: ackNo.optional(),
+    appointment: z
+      .object({
+        on: z.iso.date("Pick the day."),
+        at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick the time."),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine(somethingToChange, { message: "Nothing to change." });
+
+export type UpdateApplicationInput = z.infer<typeof updateApplicationSchema>;
+
+/** The case's vendor (Decision 7), from the active vendors covering its country. null clears the pick. */
+export const setVendorSchema = z.object({
+  vendorId: z.number("Pick a vendor.").int().positive("Pick a vendor.").nullable(),
+});
+
+export type SetVendorInput = z.infer<typeof setVendorSchema>;

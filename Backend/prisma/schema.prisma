@@ -76,8 +76,11 @@ model User {
   enquiriesOwned     Enquiry[]          @relation("EnquiryOwner")
   enquiriesCreated   Enquiry[]          @relation("EnquiryCreatedBy")
   documentsReceived  VisaCaseDocument[] @relation("DocumentReceivedBy")
+  documentsChecked   VisaCaseDocument[] @relation("DocumentCheckedBy")
   followUpsLogged    FollowUp[]         @relation("FollowUpBy")
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
+  visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
+  caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
 
   @@index([type, isActive])
 }
@@ -344,6 +347,7 @@ model Country {
   offerings      VisaOffering[]
   embassies      Embassy[]
   holidayTargets HolidayTarget[]
+  vendors        VendorCountry[]
 }
 
 model VisaType {
@@ -369,6 +373,46 @@ model Embassy {
   country        Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
   holidayTargets HolidayTarget[]
 
+  @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Vendors (docs/decisions/0007-visa-file-prep.md Decision 7). Only the Visa HOD or the Head adds one, and adding
+// approves it. Switched off, never deleted: a case that picked a vendor keeps it.
+// ---------------------------------------------------------------------------
+
+/// Visa submission agents now; hotel vendors join with Hotels (Stage 2).
+enum VendorKind {
+  VISA_AGENT
+}
+
+/// Unique (kind, lower(name), lower(city)), and name and city not blank: hand-written in the migration.
+model Vendor {
+  id          Int             @id @default(autoincrement())
+  kind        VendorKind      @default(VISA_AGENT)
+  name        String /// "Global Visa Services"
+  city        String /// "Mumbai"
+  contactName String?
+  /// +91XXXXXXXXXX (src/lib/contact.ts).
+  mobile      String?
+  /// Lowercased. Step 4's dispatch email will need it.
+  email       String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  countries   VendorCountry[]
+  /// The visa cases that picked it (0007 Decision 7). A vendor is never deleted, so they keep it.
+  cases       VisaCase[]
+}
+
+/// The countries a vendor submits files for ("Mumbai · Schengen"). Replaced as a set when the vendor is edited.
+model VendorCountry {
+  vendorId  Int
+  countryId Int
+  vendor    Vendor  @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@id([vendorId, countryId])
   @@index([countryId])
 }
 
@@ -451,17 +495,21 @@ model HolidayTarget {
 
 /// A visa Masti processes: country × visa type. The checklist (and, later, fees) hang off it.
 model VisaOffering {
-  id         Int                 @id @default(autoincrement())
-  countryId  Int
-  visaTypeId Int
-  isActive   Boolean             @default(true)
-  createdAt  DateTime            @default(now()) @db.Timestamptz(3)
+  id                Int                 @id @default(autoincrement())
+  countryId         Int
+  visaTypeId        Int
+  isActive          Boolean             @default(true)
+  /// "File ready" asks every traveller for a portal appointment (0007 Decision 6). Off for e-visas. Read live.
+  appointmentNeeded Boolean             @default(true)
+  /// "File ready" asks for a vendor (0007 Decision 6). Off for e-visas. Read live.
+  vendorNeeded      Boolean             @default(true)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
   /// Bumped when the checklist is replaced: the optimistic-lock token for PUT …/checklist.
-  updatedAt  DateTime            @updatedAt @db.Timestamptz(3)
-  country    Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
-  visaType   VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
-  checklist  VisaChecklistItem[]
-  cases      VisaCase[]
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+  country           Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  visaType          VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  checklist         VisaChecklistItem[]
+  cases             VisaCase[]
 
   @@unique([countryId, visaTypeId])
 }
@@ -664,11 +712,37 @@ model Enquiry {
   reason         EnquiryReason?  @relation(fields: [reasonId], references: [id], onDelete: Restrict)
   visa           VisaCase?
   followUps      FollowUp[]
+  files          CaseFile[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
   @@index([ownerId, status, dueAt])
   @@index([clientId])
+}
+
+enum CaseFileKind {
+  /// The visa file as it went to the vendor, one PDF (docs/decisions/0007-visa-file-prep.md Decision 8).
+  FINAL_FILE
+}
+
+/// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
+/// same kind becomes the current one, and the older ones stay as proof.
+model CaseFile {
+  id           String       @id @default(uuid())
+  enquiryId    String
+  kind         CaseFileKind
+  /// cases/<enquiryId>/final/<uuid>.pdf: no two uploads ever share a key.
+  storageKey   String       @unique
+  /// The name it opens and saves under: VISA-2026-0001_Mehta_file.pdf.
+  fileName     String
+  sizeBytes    Int
+  pageCount    Int
+  uploadedById String
+  uploadedAt   DateTime     @default(now()) @db.Timestamptz(3)
+  enquiry      Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  uploadedBy   User         @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([enquiryId, kind, uploadedAt])
 }
 
 /// A logged follow-up: What happened → Next step → When (0006 Decision 6). Append-only. Logging one sets the
@@ -700,9 +774,16 @@ enum DocumentArrival {
   COLLECTION_BOY
 }
 
+/// The visa's entries (0007 Decision 4). The visa rules fix these, and the forms will branch on them.
+enum EntryType {
+  SINGLE
+  DOUBLE
+  MULTIPLE
+}
+
 /// Traveller counts come from the VisaCaseTraveller rows.
 /// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
-/// booklet counts are 0–50.
+/// booklet counts are 0–50; returnOn is not before departOn; hotelStay is 1–200 characters.
 model VisaCase {
   enquiryId       String              @id
   offeringId      Int
@@ -715,31 +796,54 @@ model VisaCase {
   /// Step 2: passports received (current + old). Checked again at handover.
   bookletsCurrent Int?                @db.SmallInt
   bookletsOld     Int?                @db.SmallInt
+  /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
+  /// travelDate. "File ready" needs departOn, returnOn and entryType.
+  departOn        DateTime?           @db.Date
+  returnOn        DateTime?           @db.Date
+  entryType       EntryType?
+  /// The hotel's name and city, for the forms: data, not a reason or a status.
+  hotelStay       String?
+  /// The submission agent, picked during File preparation from the active vendors covering the case's country
+  /// (0007 Decision 7). Switched off later, it stays here; "File ready" then asks for an active one.
+  vendorId        Int?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
   maturedAt       DateTime?           @db.Timestamptz(3)
   maturedById     String?
+  /// "File ready — add to docket" (0007 Decision 9): Step 3 is done and the case moved to Docket & dispatch. Both set
+  /// together (checked in the migration).
+  fileReadyAt     DateTime?           @db.Timestamptz(3)
+  fileReadyById   String?
   enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  fileReadyBy     User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
+  vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   travellers      VisaCaseTraveller[]
 
   @@index([offeringId])
+  @@index([vendorId])
+  @@index([fileReadyById])
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
 /// the client's family member (0006 Decision 3), which brings the passport and the consent.
 model VisaCaseTraveller {
-  id        String             @id @default(uuid())
-  caseId    String
+  id            String             @id @default(uuid())
+  caseId        String
   /// 1, 2, 3… Adults first, then children.
-  position  Int
-  isChild   Boolean
+  position      Int
+  isChild       Boolean
   /// Passport name, copied from the member when linked: what the case was filed under.
-  name      String?
-  memberId  String?
-  visaCase  VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
-  member    ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  documents VisaCaseDocument[]
+  name          String?
+  memberId      String?
+  /// From the government portal, typed in at File preparation (0007 Decision 5). Capitals and digits, 4–40 (checked
+  /// in the migration).
+  ackNo         String?
+  /// The portal appointment, entered as a day and a time in India.
+  appointmentAt DateTime?          @db.Timestamptz(3)
+  visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  documents     VisaCaseDocument[]
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])
@@ -769,27 +873,51 @@ enum ReceivedAs {
   XEROX
 }
 
+/// The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3).
+enum DocumentCheck {
+  CHECKED
+  NEEDS_REPLACING
+}
+
+/// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
+model DocumentProblemReason {
+  id        Int                @id @default(autoincrement())
+  /// NOT_SIGNED, EXPIRED… Never changes.
+  code      String             @unique
+  name      String
+  sortOrder Int                @default(0)
+  isActive  Boolean            @default(true)
+  documents VisaCaseDocument[]
+}
+
 /// A traveller's copy of a checklist line. The name, detail, requirement, quantity and note are copied,
 /// so editing the master never changes an open case.
 model VisaCaseDocument {
-  id           String              @id @default(uuid())
-  travellerId  String
+  id            String                 @id @default(uuid())
+  travellerId   String
   /// Kept for reports ("which document is pending most often").
-  documentId   Int
-  name         String
-  detail       String?
-  requirement  DocumentRequirement
-  quantity     Int                 @default(1) @db.SmallInt
-  note         String?
-  sortOrder    Int
-  status       DocumentStatus      @default(PENDING)
+  documentId    Int
+  name          String
+  detail        String?
+  requirement   DocumentRequirement
+  quantity      Int                    @default(1) @db.SmallInt
+  note          String?
+  sortOrder     Int
+  status        DocumentStatus         @default(PENDING)
   // Filled in Step 2, when the paper is scanned in the office:
-  receivedAs   ReceivedAs?
-  receivedAt   DateTime?           @db.Timestamptz(3)
-  receivedById String?
-  traveller    VisaCaseTraveller   @relation(fields: [travellerId], references: [id], onDelete: Restrict)
-  document     DocumentMaster      @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  receivedBy   User?               @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAs    ReceivedAs?
+  receivedAt    DateTime?              @db.Timestamptz(3)
+  receivedById  String?
+  // Filled in Step 3, when the processor checks the paper. A reason exactly when it needs replacing (hand-written CHECKs).
+  check         DocumentCheck?
+  checkReasonId Int?
+  checkedAt     DateTime?              @db.Timestamptz(3)
+  checkedById   String?
+  traveller     VisaCaseTraveller      @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  document      DocumentMaster         @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  receivedBy    User?                  @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  checkReason   DocumentProblemReason? @relation(fields: [checkReasonId], references: [id], onDelete: Restrict)
+  checkedBy     User?                  @relation("DocumentCheckedBy", fields: [checkedById], references: [id], onDelete: Restrict)
 
   @@unique([travellerId, documentId])
   @@index([documentId, status])

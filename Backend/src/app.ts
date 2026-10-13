@@ -14,6 +14,7 @@ import enquiryMasterRoutes from "./modules/enquiryMasters/enquiryMasters.routes"
 import healthRoutes from "./modules/health/health.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import userRoutes from "./modules/users/users.routes";
+import vendorRoutes from "./modules/vendors/vendors.routes";
 import visaRoutes from "./modules/visa/visa.routes";
 import visaMasterRoutes from "./modules/visaMasters/visaMasters.routes";
 
@@ -36,6 +37,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/masters", visaMasterRoutes);
 app.use("/api/masters", enquiryMasterRoutes);
+app.use("/api/masters", vendorRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/visa", visaRoutes);
 
