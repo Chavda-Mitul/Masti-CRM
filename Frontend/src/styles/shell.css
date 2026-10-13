@@ -69,6 +69,10 @@
   background: var(--primary);
   color: #fff;
 }
+/* The sidebar's line icons (components/NavIcon.tsx): the label's colour, never squeezed. */
+.nav-icon {
+  flex-shrink: 0;
+}
 .nav-sub {
   height: 35px;
   padding-left: 24px;
