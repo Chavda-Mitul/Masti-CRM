@@ -63,6 +63,7 @@ describe("the case's vendor (Decision 7)", () => {
       isActive: true,
       contactName: "Sanjay Rao",
       mobile: "+919820012345",
+      email: null,
       coversCountry: true,
     });
     // A field on the case, like the checks: nobody's open page goes stale.

@@ -14,6 +14,14 @@ export function can(user: User, departmentCode: string, access: Access): boolean
   return access === 'VIEW' || membership.access === 'EDIT'
 }
 
+/**
+ * Dispatching a docket (0008 Decision 3): Visa EDIT, and the Visa HOD, the Head, or a processor who owns at least one
+ * case in it.
+ */
+export function canDispatchDocket(user: User, ownerIds: (string | null)[]): boolean {
+  return can(user, 'VISA', 'EDIT') && (isHodOf(user, 'VISA') || ownerIds.includes(user.id))
+}
+
 /** Clients are shared by every department: EDIT in any of them (or being Head) lets you change them. */
 export function canEditClients(user: User): boolean {
   if (user.type === 'HEAD') return user.isActive

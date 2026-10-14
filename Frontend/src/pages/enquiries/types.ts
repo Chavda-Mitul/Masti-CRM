@@ -229,6 +229,8 @@ export interface CaseVendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
+  /** Where the dispatch email goes (0008 Decision 8): needed to dispatch */
+  email: string | null
   /** false when the case's country was taken off the vendor after it was picked: "File ready" asks for another. */
   coversCountry: boolean
 }
@@ -248,6 +250,8 @@ export interface DocketCase {
   oldPassports: number
   /** "MVI00000001", or null until the case's invoice is raised (0009) */
   invoiceNo: string | null
+  /** Who may dispatch (0008 Decision 3): a processor who owns at least one case in the docket */
+  ownerId: string | null
   isThisCase: boolean
 }
 
@@ -260,9 +264,27 @@ export interface CaseDocket {
   /** "Open since 12 Oct, not sent yet" from the next day on */
   openedAt: string
   vendor: { name: string; city: string }
+  /** Set when dispatched (0008 Decision 9): the courier, its slip number (null for one with none), who and when */
+  courier: { name: string; awbNeeded: boolean } | null
+  awbNo: string | null
+  dispatchedAt: string | null
+  dispatchedBy: PersonRef | null
   cases: DocketCase[]
   totalPassports: number
   totalOldPassports: number
+}
+
+export type DispatchBlockerKind = 'INVOICE' | 'VENDOR_OFF' | 'VENDOR_EMAIL'
+
+/** GET /api/visa/cases/:caseNo/dispatch/check (0008 Decision 9): what blocks dispatch, and when the cases come back due. */
+export interface DispatchCheck {
+  docketNo: string
+  alreadyDispatched: boolean
+  canDispatch: boolean
+  blockers: { kind: DispatchBlockerKind; label: string; items: string[] }[]
+  vendor: { name: string; city: string; email: string | null }
+  /** The next open office day at 11:00 ⚠️: "Confirm vendor got it" */
+  confirmAt: string
 }
 
 /** GET /api/visa/cases/:caseNo/sticker: the parcel label (0008 Decision 5). */

@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { canActOnCase } from '../../../auth/permissions'
+import { canActOnCase, canDispatchDocket } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDate, formatMonthYear, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
+import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
 import { MatureDialog } from './MatureDialog'
@@ -32,13 +33,15 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   // Instead of the step's "Dispatched" ⚠️, which isn't true until the docket is sent (0008 Decision 9).
   if (c.stage.code === 'DISPATCH' && c.docket?.status === 'OPEN') return <span className="chip chip-ok">In docket {c.docket.docketNo}</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
+  // On the way to the vendor until Step 5's "Vendor got it" (the seeded "Submitted" comes with it).
+  if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
 
 /**
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
- * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2). Dispatching
- * the docket, and the later steps, show as "Soon" until they are built.
+ * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
+ * docket" (0008 Decision 9). The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -46,6 +49,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const start = useStartDocuments(c.caseNo)
   const [maturing, setMaturing] = useState(false)
   const [finishing, setFinishing] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -96,7 +100,25 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </button>
     )
   }
-  const label = c.stage.code === 'DISPATCH' && c.docket ? `Dispatch docket ${c.docket.docketNo}` : c.stage.nextStepLabel
+  const d = c.docket
+  if (c.stage.code === 'DISPATCH' && c.status === 'OPEN' && d?.status === 'OPEN') {
+    const allowed = !!me && canDispatchDocket(me, d.cases.map((r) => r.ownerId))
+    return (
+      <>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!allowed}
+          title={allowed ? undefined : 'Only the Visa HOD, the Head or a processor with a file in this docket can dispatch it'}
+          onClick={() => setDispatching(true)}
+        >
+          Dispatch docket {d.docketNo} →
+        </button>
+        {dispatching && <DispatchDialog visaCase={c} onClose={() => setDispatching(false)} />}
+      </>
+    )
+  }
+  const label = c.stage.nextStepLabel
   return (
     <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with a later step' : 'Only the case’s owner, its HOD and the Head can do this'}>
       {label} → {canAct && <span className="tag">Soon</span>}

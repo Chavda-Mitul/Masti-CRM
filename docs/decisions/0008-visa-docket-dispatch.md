@@ -1,7 +1,7 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
-- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the Docket card and the Sticker card, are
-  built (13 Oct 2026). A "Built"
+- **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
+  courier list and dispatch (14 Oct 2026, components 4a and 4b). Next: the vendor email (4c), then e-visas. A "Built"
   note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
@@ -254,6 +254,48 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 | `DISPATCH`, in an open docket | "In docket D-2026-0001" |
 | `AT_VENDOR`, the vendor hasn't confirmed | "Dispatched · D-2026-0001" (the board's "Dispatched" column) |
 | `AT_VENDOR`, confirmed | the seeded "Submitted" (Step 5) |
+
+**Built 14 Oct 2026** (component 4b, dispatch; the vendor email follows in 4c):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/dispatch/check` (anyone who can open the case) returns `{ docketNo,
+    alreadyDispatched, canDispatch, blockers, vendor { name, city, email }, confirmAt }`. Each blocker is grouped by
+    kind: `INVOICE` (the files without one), `VENDOR_OFF`, `VENDOR_EMAIL`.
+  - `POST /api/visa/cases/:caseNo/dispatch` with `{ courierId, awbNo?, caseNos }` returns `{ case }`. It's refused with:
+    - 409 `DISPATCH_BLOCKED { blockers }`
+    - 409 STALE when `caseNos` isn't the docket's files any more
+    - 409 when it's already dispatched
+    - 400 on `courierId` (switched off) or `awbNo` (missing, malformed, wrong length, or given for a courier with none)
+  - Docket columns `courierId`, `awbNo`, `dispatchedAt`, `dispatchedById` (migration `20261014110000_dispatch`), with
+    CHECKs: all of them set when DISPATCHED, none (and no slip) while OPEN; the slip is capitals and digits.
+  - Settings ⚠️ (no screen yet, changed through `PUT /api/visa/settings` like `visa.docket`):
+    - `visa.vendorConfirm` → `{ afterDays: 1, at: "11:00" }`
+    - `visa.awb` → `{ minLength: 4, maxLength: 30 }`
+  - Audited as `visa.docket.dispatch`: once per case (on the Enquiry, with `clientId`, before/after stage and `dueAt`)
+    and once on the Docket (the courier, slip, files and vendor).
+  - The case's `docket` gains `courier`, `awbNo`, `dispatchedAt`, `dispatchedBy`, and each row its `ownerId`; the
+    case's `vendor` gains `email`.
+- **Screen:**
+  - The header button **Dispatch docket D-… →** opens a confirm dialog with:
+    - the vendor and its email
+    - each file with its passports and invoice
+    - what blocks it (with a link to Vendors), or the courier and the slip number (shown only when the courier has
+      one)
+    - when the files come back due ("Thu 15 Oct, 11:00")
+  - The button is off, with the reason, for anyone else.
+  - A **Dispatch** card beside the Sticker card (as in the demo):
+    - before dispatch: "Invoices 2 of 3 raised", the vendor's email (or "None yet"), "Courier: picked at dispatch"
+    - after: "Blue Dart · slip 50218834", who and when, and "Thu 15 Oct, 11:00 · Neha: Confirm vendor got it"
+  - After dispatch the chip reads **Dispatched · D-…**. The Docket, Dispatch and Sticker cards stay, read-only, until
+    Step 5 has its own.
+- **Settled while building:**
+  - **The routes hang off the case** (`/cases/:caseNo/dispatch`), like every other Step 4 route, not
+    `/dockets/:docketNo/…`. The answer is that case, and the others in the docket that are open in the browser
+    refresh.
+  - **The cases are locked by hand,** in id order, after the vendor and the docket. `lockCase` would require the
+    dispatcher to be able to act on every case, but Decision 3 lets a processor who owns one of them send the docket.
+  - **A file with no invoice is refused before any lock,** so there is no "invoice raised meanwhile" race. A change to
+    a case meanwhile (its row is locked) is seen and refused.
 
 ### 10. Changing your mind before dispatch
 

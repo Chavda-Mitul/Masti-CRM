@@ -1,0 +1,211 @@
+import { prisma, type Db } from "../../config/prisma";
+import { audit } from "../../lib/audit";
+import { staleError } from "../../lib/changes";
+import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
+import { conflict, fieldError, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { isHodOf } from "../auth/permissions";
+import { assertCanSeeEnquiry } from "../enquiries/visibility";
+import { nextOpenDay } from "../holidays/blockedDays";
+import type { Actor, UserWithDepartments } from "../users/user";
+import { visaStage } from "./caseLock";
+import type { DispatchDocketInput } from "./visa.schemas";
+import { getVisaCaseById } from "./visa.service";
+import { getVisaSettings } from "./visa.settings";
+
+// Visa Step 4, dispatch (docs/decisions/0008-visa-docket-dispatch.md Decisions 3, 6 and 9): one press sends every case in
+// the docket to the vendor. Refused until every case has its locked invoice (golden rule 3), the vendor is active and has
+// an email, and the courier (and its slip number, when it has one) is given. Every case moves to Step 5 · At vendor,
+// due on its processor's desk the next open office day at 11:00 ⚠️: "Confirm vendor got it".
+//
+// Locks, in the same order as add and take-out: the vendor, then the docket, then its cases in id order. The cases are
+// locked by hand, not with lockCase: a processor who owns only one case in the docket may still dispatch it.
+
+const VISA = "VISA";
+
+/** The docket with what dispatch checks: its vendor, and each case's step, owner and invoice. */
+async function gather(db: Db, docketId: string) {
+  return db.docket.findUniqueOrThrow({
+    where: { id: docketId },
+    select: {
+      id: true,
+      docketNo: true,
+      status: true,
+      vendor: { select: { id: true, name: true, city: true, isActive: true, email: true } },
+      cases: {
+        orderBy: { enquiryId: "asc" },
+        select: {
+          enquiryId: true,
+          enquiry: {
+            select: {
+              caseNo: true,
+              status: true,
+              ownerId: true,
+              clientId: true,
+              departmentId: true,
+              dueAt: true,
+              stage: { select: { code: true } },
+              invoice: { select: { invoiceNo: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+type Gathered = Awaited<ReturnType<typeof gather>>;
+
+export type DispatchBlockerKind = "INVOICE" | "VENDOR_OFF" | "VENDOR_EMAIL";
+export interface DispatchBlocker {
+  kind: DispatchBlockerKind;
+  label: string;
+  items: string[];
+}
+
+/** What stands in the way of dispatch (Decision 9), in the order to fix it. */
+function blockersOf(g: Gathered): DispatchBlocker[] {
+  const blockers: DispatchBlocker[] = [];
+  const noInvoice = g.cases.filter((c) => !c.enquiry.invoice).map((c) => c.enquiry.caseNo);
+  if (noInvoice.length) blockers.push({ kind: "INVOICE", label: "Raise the invoice on every file first: no file leaves without it.", items: noInvoice });
+  if (!g.vendor.isActive) {
+    blockers.push({ kind: "VENDOR_OFF", label: `${g.vendor.name} is switched off. Ask the Visa HOD to switch it back on.`, items: [] });
+  }
+  if (!g.vendor.email) blockers.push({ kind: "VENDOR_EMAIL", label: `Add an email for ${g.vendor.name} in Vendors first.`, items: [] });
+  return blockers;
+}
+
+/** Decision 3: the Visa HOD, the Head, or a processor who owns at least one case in the docket. */
+function canDispatch(user: UserWithDepartments, g: Gathered) {
+  return isHodOf(user, VISA) || g.cases.some((c) => c.enquiry.ownerId === user.id);
+}
+
+/** When the cases are due back on their processors' desks: the next open office day, afterDays on, at `at` (IST). */
+async function confirmAtOf(db: Db) {
+  const { vendorConfirm } = await getVisaSettings(db);
+  const day = await nextOpenDay(addDays(istToday(), vendorConfirm.afterDays), { office: true }, db);
+  return istDateTimeToUtc(day, vendorConfirm.at);
+}
+
+/** The case the request came from, and its docket: anyone who can open the case. */
+async function caseAndDocket(caseNo: string, user: UserWithDepartments) {
+  const row = await prisma.enquiry.findUnique({
+    where: { caseNo: caseNo.toUpperCase() },
+    select: { id: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docketId: true } } },
+  });
+  if (!row?.visa) throw notFound("Case not found.");
+  assertCanSeeEnquiry(user, row);
+  if (!row.visa.docketId) throw conflict("This case isn't in a docket yet.");
+  return { enquiryId: row.id, docketId: row.visa.docketId };
+}
+
+/** The dialog's first look (Decision 9): what blocks dispatch, the vendor it goes to, and when the cases come back due. */
+export async function dispatchCheck(caseNo: string, user: UserWithDepartments) {
+  const { docketId } = await caseAndDocket(caseNo, user);
+  const g = await gather(prisma, docketId);
+  return {
+    docketNo: g.docketNo,
+    alreadyDispatched: g.status !== "OPEN",
+    canDispatch: canDispatch(user, g),
+    blockers: blockersOf(g),
+    vendor: { name: g.vendor.name, city: g.vendor.city, email: g.vendor.email },
+    confirmAt: await confirmAtOf(prisma),
+  };
+}
+
+/** The courier and its slip number (Decision 6): an active courier; a slip only, and always, when it has one. */
+async function checkCourier(db: Db, input: DispatchDocketInput) {
+  const courier = await db.courier.findUnique({ where: { id: input.courierId } });
+  if (!courier?.isActive) throw fieldError("courierId", "Pick an active courier.");
+  const awbNo = input.awbNo ?? null;
+  if (!courier.awbNeeded) {
+    if (awbNo) throw fieldError("awbNo", `${courier.name} has no slip number. Leave it empty.`);
+    return { courier, awbNo: null };
+  }
+  const { awb } = await getVisaSettings(db);
+  if (!awbNo) throw fieldError("awbNo", "Enter the slip (AWB) number.");
+  if (awbNo.length < awb.minLength || awbNo.length > awb.maxLength) {
+    throw fieldError("awbNo", `The slip number is ${awb.minLength}–${awb.maxLength} letters and digits.`);
+  }
+  return { courier, awbNo };
+}
+
+/** Every refusal, checked once before the locks and again under them. */
+function assertCanSend(g: Gathered, input: DispatchDocketInput, actor: Actor) {
+  if (g.status !== "OPEN") throw conflict(`Docket ${g.docketNo} has already been dispatched.`);
+  if (!canDispatch(actor.user, g)) {
+    throw forbidden("Only the Visa HOD, the Head or a processor with a file in this docket can dispatch it.");
+  }
+  // The files the dialog showed: one added or taken out since makes the dialog stale.
+  const shown = [...new Set(input.caseNos)].sort();
+  const now = g.cases.map((c) => c.enquiry.caseNo).sort();
+  if (shown.length !== now.length || shown.some((caseNo, i) => caseNo !== now[i])) throw staleError("docket");
+  for (const c of g.cases) {
+    if (c.enquiry.status !== "OPEN" || c.enquiry.stage.code !== "DISPATCH") {
+      throw conflict(`${c.enquiry.caseNo} isn't waiting for dispatch any more. Reload and try again.`);
+    }
+  }
+  const blockers = blockersOf(g);
+  if (blockers.length) throw new HttpError(409, "The docket can't be dispatched yet.", { code: "DISPATCH_BLOCKED", blockers });
+}
+
+/**
+ * "Dispatch docket" (Decision 9). In one transaction: every case moves to At vendor, due the next open office day at
+ * 11:00 on its owner's desk; the docket is stamped with the courier, the slip number, who and when; and each case and
+ * the docket get an audit row. Step 4 is read-only for those cases afterwards.
+ */
+export async function dispatchDocket(caseNo: string, input: DispatchDocketInput, actor: Actor) {
+  const { enquiryId, docketId } = await caseAndDocket(caseNo, actor.user);
+  const pre = await gather(prisma, docketId);
+  assertCanSend(pre, input, actor);
+  await checkCourier(prisma, input);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Vendor" WHERE "id" = ${pre.vendor.id} FOR UPDATE`;
+    await tx.$queryRaw`SELECT "id" FROM "Docket" WHERE "id" = ${docketId} FOR UPDATE`;
+    // Taking a case out locks the docket first, so the list can't change now; adding waits too.
+    for (const c of (await gather(tx, docketId)).cases) {
+      await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${c.enquiryId} FOR UPDATE`;
+    }
+    const g = await gather(tx, docketId);
+    assertCanSend(g, input, actor);
+    const { courier, awbNo } = await checkCourier(tx, input);
+
+    const confirmAt = await confirmAtOf(tx);
+    const dispatchedAt = new Date();
+    const atVendor = await visaStage(tx, g.cases[0]!.enquiry.departmentId, "AT_VENDOR");
+    const sent = { docketNo: g.docketNo, courier: courier.name, awbNo };
+    for (const c of g.cases) {
+      await tx.enquiry.update({ where: { id: c.enquiryId }, data: { stageId: atVendor.id, dueAt: confirmAt } });
+      await audit(
+        {
+          actorId: actor.user.id,
+          action: "visa.docket.dispatch",
+          entityType: "Enquiry",
+          entityId: c.enquiryId,
+          clientId: c.enquiry.clientId,
+          before: { stage: "DISPATCH", dueAt: c.enquiry.dueAt },
+          after: { stage: "AT_VENDOR", dueAt: confirmAt, ...sent },
+          ip: actor.ip,
+        },
+        tx,
+      );
+    }
+    await tx.docket.update({
+      where: { id: docketId },
+      data: { status: "DISPATCHED", courierId: courier.id, awbNo, dispatchedAt, dispatchedById: actor.user.id },
+    });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.docket.dispatch",
+        entityType: "Docket",
+        entityId: docketId,
+        before: { status: "OPEN" },
+        after: { status: "DISPATCHED", ...sent, cases: g.cases.map((c) => c.enquiry.caseNo).sort(), vendor: g.vendor.name },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiryId);
+}

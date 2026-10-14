@@ -82,6 +82,7 @@ model User {
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
+  docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
   quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
   companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
   invoicesIssued     Invoice[]          @relation("InvoiceIssuedBy")
@@ -440,23 +441,33 @@ enum DocketKind {
 /// Hand-written in the migration: at most one OPEN GROUP docket per vendor (a partial unique index), and the
 /// number's format. An emptied open docket stays and is reused by the vendor's next case of the same kind.
 model Docket {
-  id          String       @id @default(uuid())
+  id             String       @id @default(uuid())
   /// "D-2026-0001": the prefix is the setting visa.docket, the counter runs per calendar year (IST).
-  docketNo    String       @unique
-  vendorId    Int
-  kind        DocketKind
-  status      DocketStatus @default(OPEN)
+  docketNo       String       @unique
+  vendorId       Int
+  kind           DocketKind
+  status         DocketStatus @default(OPEN)
   /// When it started holding cases: "Open since 12 Oct, not sent yet". Reset when a case joins an empty docket.
-  openedAt    DateTime     @default(now()) @db.Timestamptz(3)
-  createdById String
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
-  vendor      Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  createdBy   User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  cases       VisaCase[]
+  openedAt       DateTime     @default(now()) @db.Timestamptz(3)
+  createdById    String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  /// Dispatch (0008 Decision 9): all set together when the docket is DISPATCHED, none while it is OPEN (a CHECK).
+  courierId      Int?
+  /// The courier's slip number, typed in: capitals and digits (the setting visa.awb). Null for "By hand".
+  awbNo          String?
+  dispatchedAt   DateTime?    @db.Timestamptz(3)
+  dispatchedById String?
+  vendor         Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  createdBy      User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  courier        Courier?     @relation(fields: [courierId], references: [id], onDelete: Restrict)
+  dispatchedBy   User?        @relation("DocketDispatchedBy", fields: [dispatchedById], references: [id], onDelete: Restrict)
+  cases          VisaCase[]
 
   @@index([vendorId, status])
   @@index([createdById])
+  @@index([courierId])
+  @@index([dispatchedById])
 }
 
 /// The last docket number used per calendar year (IST), bumped in the docket's own transaction like CaseCounter.
@@ -955,14 +966,15 @@ model ProcessingSpeed {
 /// How a docket goes to the vendor: "Blue Dart", "DTDC", "By hand (no AWB)" (docs/decisions/0008-visa-docket-dispatch.md
 /// Decision 6). Picked at dispatch. Edited by the Visa HOD or the Head; switched off, never deleted.
 model Courier {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   /// BLUE_DART, BY_HAND… Never changes.
-  code      String  @unique
+  code      String   @unique
   name      String
   /// Off for "By hand": no slip (AWB) number is asked for.
-  awbNeeded Boolean @default(true)
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  awbNeeded Boolean  @default(true)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  dockets   Docket[]
 }
 
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.

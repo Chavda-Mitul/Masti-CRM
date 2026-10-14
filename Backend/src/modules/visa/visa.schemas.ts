@@ -45,12 +45,25 @@ export const invoiceSettingSchema = z.object({
   sac: z.string().regex(/^\d{4,8}$/, "4–8 digits, e.g. 998559."),
 });
 
+/**
+ * When the processor confirms the vendor got the docket (0008 Decision 9): the next open office day, afterDays after
+ * dispatch, at `at` (IST). The demo's "Tomorrow 11:00".
+ */
+export const vendorConfirmSchema = firstFollowUpSchema;
+
+/** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */
+export const awbSettingSchema = z
+  .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
+  .refine((s) => s.minLength <= s.maxLength, { message: "The shortest can't be longer than the longest.", path: ["minLength"] });
+
 export const visaSettingsSchema = z.object({
   firstFollowUp: firstFollowUpSchema,
   finalFile: finalFileSchema,
   docket: docketSettingSchema,
   sticker: stickerSettingSchema,
   invoice: invoiceSettingSchema,
+  vendorConfirm: vendorConfirmSchema,
+  awb: awbSettingSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
@@ -80,6 +93,8 @@ export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type DocketSetting = z.infer<typeof docketSettingSchema>;
 export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
+export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
+export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -216,6 +231,24 @@ export const takeOutOfDocketSchema = matureCaseSchema;
 
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
+
+/**
+ * "Dispatch docket" (Decision 9): the courier, its slip number when it needs one (spaces dropped, made capitals; the
+ * length rule is the setting visa.awb), and the case numbers the dialog showed, so a file added or taken out meanwhile
+ * makes it stale.
+ */
+export const dispatchDocketSchema = z.object({
+  courierId: z.number("Pick the courier.").int().positive("Pick the courier."),
+  awbNo: z
+    .string()
+    .transform((s) => s.replace(/\s+/g, "").toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]*$/, "Use only letters and digits."))
+    .transform((s) => s || null)
+    .nullish(),
+  caseNos: z.array(z.string().trim().toUpperCase().min(1).max(40)).min(1).max(200),
+});
+
+export type DispatchDocketInput = z.infer<typeof dispatchDocketSchema>;
 
 // ---------------------------------------------------------------------------
 // The quote (docs/decisions/0009-visa-invoice.md Decision 2). Money is in paise, as integers.

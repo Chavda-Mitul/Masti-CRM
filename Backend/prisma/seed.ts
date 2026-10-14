@@ -15,14 +15,18 @@ import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import {
+  AWB_KEY,
+  DEFAULT_AWB,
   DEFAULT_DOCKET,
   DEFAULT_FIRST_FOLLOW_UP,
   DEFAULT_INVOICE,
   DEFAULT_STICKER,
+  DEFAULT_VENDOR_CONFIRM,
   DOCKET_KEY,
   FIRST_FOLLOW_UP_KEY,
   INVOICE_KEY,
   STICKER_KEY,
+  VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
 import {
@@ -78,11 +82,14 @@ async function main() {
     create: { key: FIRST_FOLLOW_UP_KEY, value: DEFAULT_FIRST_FOLLOW_UP },
   });
   // Docket numbers and the parcel sticker's size (docs/decisions/0008-visa-docket-dispatch.md Decisions 5 and 7) ⚠️, the
-  // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, and Masti's own details.
+  // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, the vendor-confirm timing and slip-number
+  // lengths (0008 Decisions 6 and 9) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
     [INVOICE_KEY, DEFAULT_INVOICE],
+    [VENDOR_CONFIRM_KEY, DEFAULT_VENDOR_CONFIRM],
+    [AWB_KEY, DEFAULT_AWB],
     [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],
     [INVOICE_TERMS_KEY, DEFAULT_INVOICE_TERMS],
   ] as const) {

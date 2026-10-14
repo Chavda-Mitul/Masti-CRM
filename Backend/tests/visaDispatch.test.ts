@@ -1,0 +1,318 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { addDays, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
+import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { dispatchCase, makeInvoiceable, mastiReady, untilWaitingOnLock, holdCaseLock, type Agent } from "./visaHelpers";
+
+// Visa Step 4, dispatch (docs/decisions/0008-visa-docket-dispatch.md Decisions 3, 6 and 9): one press sends every case in
+// the docket to the vendor, only once every case has its locked invoice and the vendor can take it.
+
+beforeEach(async () => {
+  await resetDb();
+  await seedVisaMasters(prisma);
+  await seedEnquiryMasters(prisma);
+});
+
+interface CaseDto {
+  updatedAt: string;
+  dueAt: string;
+  stage: { code: string };
+  owner: { id: string; name: string } | null;
+  quote: { updatedAt: string } | null;
+  docket: {
+    docketNo: string;
+    status: string;
+    courier: { name: string; awbNeeded: boolean } | null;
+    awbNo: string | null;
+    dispatchedAt: string | null;
+    dispatchedBy: { name: string } | null;
+    cases: { caseNo: string; ownerId: string | null; invoiceNo: string | null }[];
+  } | null;
+}
+type Case = Awaited<ReturnType<typeof dispatchCase>>;
+
+const neha = () => loginAs("neha@masti.test");
+const load = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case as CaseDto;
+const courierId = async (code: string) => (await prisma.courier.findUniqueOrThrow({ where: { code } })).id;
+const check = (agent: Agent, caseNo: string) => agent.get(`/api/visa/cases/${caseNo}/dispatch/check`);
+
+async function add(agent: Agent, caseNo: string) {
+  const { updatedAt } = await load(agent, caseNo);
+  const res = await agent.post(`/api/visa/cases/${caseNo}/docket`).send({ mode: "GROUP", updatedAt });
+  expect(res.status).toBe(200);
+}
+
+async function raise(agent: Agent, c: Case) {
+  await makeInvoiceable(agent, c);
+  const quoteUpdatedAt = (await load(agent, c.caseNo)).quote!.updatedAt;
+  expect((await agent.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt })).status).toBe(200);
+}
+
+/** Presses Dispatch with the files the page shows (or `caseNos`), by Blue Dart unless told otherwise. */
+async function dispatch(agent: Agent, caseNo: string, body: { courierId?: number | undefined; awbNo?: string | null; caseNos?: string[] } = {}) {
+  const caseNos = body.caseNos ?? (await load(agent, caseNo)).docket!.cases.map((r) => r.caseNo);
+  return agent.post(`/api/visa/cases/${caseNo}/dispatch`).send({ courierId: await courierId("BLUE_DART"), awbNo: "1234 5678", ...body, caseNos });
+}
+
+/**
+ * Mehta and Shah, both Neha's, in Global Visa Services' docket. `ready` gives the vendor an email and raises both
+ * invoices, so the docket can go.
+ */
+async function docketOfTwo({ ready = true } = {}) {
+  await mastiReady();
+  const mehta = await dispatchCase();
+  const shah = await dispatchCase({ vendorId: mehta.vendor.id, extra: { mobile: "98250 41235", clientName: "Sunil Shah" } });
+  const processor = await neha();
+  await add(processor, mehta.caseNo);
+  await add(processor, shah.caseNo);
+  if (ready) {
+    await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { email: "ops@globalvisa.test" } });
+    await raise(processor, mehta);
+    await raise(processor, shah);
+  }
+  return { mehta, shah, processor };
+}
+
+describe("Dispatch (Decision 9)", () => {
+  it("sends every case to At vendor, due the next open office day at 11:00, and stamps the docket", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    // Tomorrow is an office holiday, so the vendor check moves to the day after.
+    const today = istToday();
+    await prisma.holiday.create({
+      data: { name: "Office closed", startDate: toDbDate(addDays(today, 1)), endDate: toDbDate(addDays(today, 1)), targets: { create: [{ kind: "MASTI_OFFICE" }] } },
+    });
+    const due = istDateTimeToUtc(addDays(today, 2), "11:00").toISOString();
+
+    const before = await check(processor, mehta.caseNo);
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({ blockers: [], canDispatch: true, alreadyDispatched: false, confirmAt: due });
+    expect(before.body.vendor).toEqual({ name: "Global Visa Services", city: "Mumbai", email: "ops@globalvisa.test" });
+
+    const res = await dispatch(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    const c = res.body.case as CaseDto;
+    expect(c.stage.code).toBe("AT_VENDOR");
+    expect(c.dueAt).toBe(due);
+    expect(c.owner!.name).toBe("Neha Joshi");
+    expect(c.docket).toMatchObject({ status: "DISPATCHED", courier: { name: "Blue Dart", awbNeeded: true }, awbNo: "12345678", dispatchedBy: { name: "Neha Joshi" } });
+
+    const other = await load(processor, shah.caseNo);
+    expect([other.stage.code, other.dueAt, other.docket!.status]).toEqual(["AT_VENDOR", due, "DISPATCHED"]);
+    expect(await prisma.auditLog.count({ where: { action: "visa.docket.dispatch", entityType: "Enquiry" } })).toBe(2);
+    const docketRow = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.docket.dispatch", entityType: "Docket" } });
+    expect(docketRow.after).toMatchObject({ status: "DISPATCHED", courier: "Blue Dart", awbNo: "12345678", cases: [mehta.caseNo, shah.caseNo] });
+  });
+
+  it("follows the vendor-confirm setting, and By hand needs no slip number", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    expect((await hod.put("/api/visa/settings").send({ vendorConfirm: { afterDays: 3, at: "10:30" } })).status).toBe(200);
+
+    const res = await dispatch(processor, mehta.caseNo, { courierId: await courierId("BY_HAND"), awbNo: null });
+    expect(res.status).toBe(200);
+    const c = res.body.case as CaseDto;
+    expect(c.dueAt).toBe(istDateTimeToUtc(addDays(istToday(), 3), "10:30").toISOString());
+    expect(c.docket).toMatchObject({ courier: { name: "By hand (no AWB)", awbNeeded: false }, awbNo: null });
+  });
+
+  it("leaves Step 4 read-only: no taking out, no quote change; the vendor's next case starts a new docket; the sticker still prints", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    expect((await dispatch(processor, mehta.caseNo)).status).toBe(200);
+
+    const { updatedAt } = await load(processor, mehta.caseNo);
+    expect((await processor.delete(`/api/visa/cases/${mehta.caseNo}/docket`).send({ updatedAt })).status).toBe(409);
+    const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
+    const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: shah.id } });
+    const quoteSeen = (await load(processor, shah.caseNo)).quote!.updatedAt;
+    const quote = await processor.put(`/api/visa/cases/${shah.caseNo}/quote`).send({
+      processingSpeedId: speed.id,
+      serviceChargePaise: 0,
+      lines: travellers.map((t) => ({ travellerId: t.id, form: "LUMP_SUM", lumpSumPaise: 100 })),
+      updatedAt: quoteSeen,
+    });
+    expect(quote.status).toBe(409);
+    expect(quote.body.message).toMatch(/gone to the vendor/);
+    expect((await dispatch(processor, mehta.caseNo)).body.message).toMatch(/already been dispatched/);
+
+    const next = await dispatchCase({ vendorId: mehta.vendor.id, extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" } });
+    await add(processor, next.caseNo);
+    expect((await load(processor, next.caseNo)).docket).toMatchObject({ status: "OPEN", cases: [{ caseNo: next.caseNo }] });
+    expect((await load(processor, next.caseNo)).docket!.docketNo).not.toBe((await load(processor, mehta.caseNo)).docket!.docketNo);
+
+    expect((await processor.get(`/api/visa/cases/${mehta.caseNo}/sticker`)).status).toBe(200);
+  });
+});
+
+describe("what is refused", () => {
+  it("a file without its invoice, a vendor with no email or switched off: 409 with what to fix", async () => {
+    const { mehta, shah, processor } = await docketOfTwo({ ready: false });
+    const blocked = await dispatch(processor, mehta.caseNo);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.details.code).toBe("DISPATCH_BLOCKED");
+    expect(blocked.body.details.blockers).toEqual([
+      { kind: "INVOICE", label: expect.stringMatching(/invoice/), items: [mehta.caseNo, shah.caseNo] },
+      { kind: "VENDOR_EMAIL", label: "Add an email for Global Visa Services in Vendors first.", items: [] },
+    ]);
+    expect((await check(processor, mehta.caseNo)).body.blockers).toHaveLength(2);
+
+    await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { email: "ops@globalvisa.test", isActive: false } });
+    await raise(processor, mehta);
+    const one = await dispatch(processor, mehta.caseNo);
+    expect(one.body.details.blockers.map((b: { kind: string; items: string[] }) => [b.kind, b.items])).toEqual([
+      ["INVOICE", [shah.caseNo]],
+      ["VENDOR_OFF", []],
+    ]);
+    expect(await prisma.docket.count({ where: { status: "DISPATCHED" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: "visa.docket.dispatch" } })).toBe(0);
+  });
+
+  it("no courier, a switched-off courier, a missing, malformed or wrong-length slip, a slip for By hand", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const field = async (body: Parameters<typeof dispatch>[2]) => {
+      const res = await dispatch(processor, mehta.caseNo, body);
+      expect(res.status).toBe(400);
+      return Object.keys(res.body.issues ?? {});
+    };
+    expect(await field({ courierId: undefined })).toEqual(["courierId"]);
+    await prisma.courier.update({ where: { code: "DTDC" }, data: { isActive: false } });
+    expect(await field({ courierId: await courierId("DTDC") })).toEqual(["courierId"]);
+    expect(await field({ awbNo: null })).toEqual(["awbNo"]);
+    expect(await field({ awbNo: "AB-123" })).toEqual(["awbNo"]);
+    expect(await field({ awbNo: "123" })).toEqual(["awbNo"]);
+    expect(await field({ awbNo: "1".repeat(31) })).toEqual(["awbNo"]);
+    expect(await field({ courierId: await courierId("BY_HAND"), awbNo: "12345678" })).toEqual(["awbNo"]);
+    expect(await prisma.docket.count({ where: { status: "DISPATCHED" } })).toBe(0);
+  });
+
+  it("a stale page: a file added or taken out since the dialog opened", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const res = await dispatch(processor, mehta.caseNo, { caseNos: [mehta.caseNo] });
+    expect(res.status).toBe(409);
+    expect(res.body.details.code).toBe("STALE");
+  });
+});
+
+describe("who may dispatch (Decision 3)", () => {
+  it("the Visa HOD, the Head, and a processor who owns one case in it; not other staff, view-only users or other departments", async () => {
+    const { mehta, shah } = await docketOfTwo();
+    const kiran = await createUser({ name: "Kiran", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    await createUser({ name: "Hetal", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const [other, viewer, holidays] = [await loginAs("kiran@masti.test"), await loginAs("meena@masti.test"), await loginAs("hetal@masti.test")];
+    const hod = await loginAs("riya@masti.test");
+    const caseNos = [mehta.caseNo, shah.caseNo];
+
+    expect((await dispatch(other, mehta.caseNo, { caseNos })).status).toBe(403);
+    expect((await dispatch(viewer, mehta.caseNo, { caseNos })).status).toBe(403);
+    expect((await dispatch(holidays, mehta.caseNo, { caseNos })).status).toBe(403);
+    expect((await check(hod, mehta.caseNo)).body.canDispatch).toBe(true);
+
+    // Kiran owns Shah's case only: still allowed to send the whole docket.
+    await prisma.enquiry.update({ where: { id: shah.id }, data: { ownerId: kiran.id } });
+    expect((await check(other, shah.caseNo)).body.canDispatch).toBe(true);
+    const res = await dispatch(other, shah.caseNo, { caseNos });
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).docket!.dispatchedBy!.name).toBe("Kiran");
+    expect((await load(hod, mehta.caseNo)).owner!.name).toBe("Neha Joshi");
+  });
+
+  it("the Head may", async () => {
+    const { mehta } = await docketOfTwo();
+    const head = await loginAs("vimal@masti.test");
+    expect((await dispatch(head, mehta.caseNo)).status).toBe(200);
+  });
+});
+
+describe("taking turns (locks: vendor, then docket, then its cases)", () => {
+  /** Holds the docket's row, doing `work` first, until release(): an add, a take-out or a dispatch in flight. */
+  function holdDocket(docketNo: string, work: (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => Promise<unknown>) {
+    let release!: () => void;
+    let locked!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const ready = new Promise<void>((resolve) => (locked = resolve));
+    const done = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "Docket" WHERE "docketNo" = ${docketNo} FOR UPDATE`;
+        await work(tx);
+        locked();
+        await held;
+      },
+      { timeout: 15_000 },
+    );
+    return { ready, release, done };
+  }
+
+  it("a dispatch that waited behind a take-out is refused as stale, and sends nothing", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+    const takeOut = holdDocket(docketNo, (tx) => tx.visaCase.update({ where: { enquiryId: shah.id }, data: { docketId: null } }));
+    await takeOut.ready;
+    const sent = dispatch(processor, mehta.caseNo, { caseNos: [mehta.caseNo, shah.caseNo] }).then((r) => r);
+    try {
+      await untilWaitingOnLock();
+    } finally {
+      takeOut.release();
+    }
+    await takeOut.done;
+    const res = await sent;
+    expect(res.status).toBe(409);
+    expect(res.body.details.code).toBe("STALE");
+    expect(await prisma.docket.count({ where: { status: "DISPATCHED" } })).toBe(0);
+  });
+
+  it("a take-out that waited behind a dispatch is refused", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+    const { updatedAt } = await load(processor, mehta.caseNo);
+    const blueDart = await courierId("BLUE_DART");
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    const sending = holdDocket(docketNo, (tx) =>
+      tx.docket.update({ where: { docketNo }, data: { status: "DISPATCHED", courierId: blueDart, awbNo: "12345678", dispatchedAt: new Date(), dispatchedById: neha.id } }),
+    );
+    await sending.ready;
+    const takeOut = processor.delete(`/api/visa/cases/${mehta.caseNo}/docket`).send({ updatedAt }).then((r) => r);
+    try {
+      await untilWaitingOnLock();
+    } finally {
+      sending.release();
+    }
+    await sending.done;
+    const res = await takeOut;
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/dispatched/);
+    expect((await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: mehta.id } })).docketId).not.toBeNull();
+  });
+
+  it("a dispatch that waited behind a change to one of its cases sees it", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    const atVendor = await prisma.departmentStage.findFirstOrThrow({ where: { code: "AT_VENDOR" } });
+    const change = holdCaseLock(shah.id, (tx) => tx.enquiry.update({ where: { id: shah.id }, data: { stageId: atVendor.id } }));
+    await change.ready;
+    const sent = dispatch(processor, mehta.caseNo, { caseNos: [mehta.caseNo, shah.caseNo] }).then((r) => r);
+    try {
+      await untilWaitingOnLock();
+    } finally {
+      change.release();
+    }
+    await change.done;
+    const res = await sent;
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(new RegExp(`${shah.caseNo} isn't waiting for dispatch`));
+    expect((await prisma.enquiry.findUniqueOrThrow({ where: { id: mehta.id }, include: { stage: true } })).stage.code).toBe("DISPATCH");
+  });
+});
+
+describe("the database", () => {
+  it("refuses a dispatched docket without who, when and the courier, and a lowercase slip number", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+    await expect(prisma.docket.update({ where: { docketNo }, data: { status: "DISPATCHED" } })).rejects.toThrow();
+    await expect(prisma.docket.update({ where: { docketNo }, data: { awbNo: "12345678" } })).rejects.toThrow();
+    const res = await dispatch(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    await expect(prisma.docket.update({ where: { docketNo }, data: { awbNo: "abc123" } })).rejects.toThrow();
+  });
+});

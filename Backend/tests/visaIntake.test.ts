@@ -283,6 +283,8 @@ describe("intake dropdowns and settings", () => {
       docket: { prefix: "D" },
       sticker: { widthMm: 100, heightMm: 150 },
       invoice: { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" },
+      vendorConfirm: { afterDays: 1, at: "11:00" },
+      awb: { minLength: 4, maxLength: 30 },
     });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);
 

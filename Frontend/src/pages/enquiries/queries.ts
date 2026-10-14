@@ -7,6 +7,7 @@ import type {
   CreateVisaCaseBody,
   DocketKind,
   DocketStickerData,
+  DispatchCheck,
   InvoiceCheck,
   SaveQuoteBody,
   DocumentArrival,
@@ -51,6 +52,7 @@ export const enquiryKeys = {
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
+  dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
@@ -287,6 +289,24 @@ export function useRaiseInvoice(caseNo: string) {
   return useCaseAction<{ quoteUpdatedAt: string }>(caseNo, (base, body) => api(`${base}/invoice`, { method: 'POST', body }), {
     otherCases: true,
   })
+}
+
+/** What stands in the way of dispatching the docket, and when its cases come back due (0008). Fresh: it opens a dialog. */
+export function useDispatchCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.dispatchCheck(caseNo),
+    queryFn: () => api<DispatchCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/dispatch/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Dispatch docket" (0008 Decision 9): every case in the docket moves on, so the other cases' pages refresh too. */
+export function useDispatchDocket(caseNo: string) {
+  return useCaseAction<{ courierId: number; awbNo: string | null; caseNos: string[] }>(
+    caseNo,
+    (base, body) => api(`${base}/dispatch`, { method: 'POST', body }),
+    { otherCases: true },
+  )
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */

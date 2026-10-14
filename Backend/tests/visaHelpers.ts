@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
 import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
@@ -152,4 +153,51 @@ export function holdCaseLock(enquiryId: string, work: (tx: Parameters<Parameters
     { timeout: 15_000 },
   );
   return { ready, release, done };
+}
+
+// The visa invoice (docs/decisions/0009-visa-invoice.md): what raising one needs, shared with the dispatch tests.
+
+export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+export const PAN = "ABCDE1234F";
+export function gstinFor(pan: string, state = "24") {
+  const first14 = `${state}${pan}1Z`;
+  return first14 + [..."0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((c) => gstinChecksumOk(first14 + c));
+}
+
+/** Masti's details, logo and signature, filled in by the Head: what the first invoice needs. */
+export async function mastiReady() {
+  await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+  const head = await loginAs("vimal@masti.test");
+  const details = await head.put("/api/company/details").send({
+    gstin: gstinFor(PAN),
+    bank: { accountName: "Test Travels", accountNo: "123456789012", bankName: "Test Bank", branch: "Varachha", ifsc: "TEST0000123" },
+  });
+  expect(details.body.missingForInvoice).toEqual(["Logo", "Signature"]);
+  await head.put("/api/company/images/logo").set("Content-Type", "image/png").send(PNG);
+  await head.put("/api/company/images/signature").set("Content-Type", "image/png").send(PNG);
+  return head;
+}
+
+/** Completes any case's client, names its two travellers and enters a quote (the adult itemised 500 + 800 + 2,110, the child a lump sum of 2,000, a service charge of 500), as `agent`. */
+export async function makeInvoiceable(
+  agent: Agent,
+  saved: { id: string; caseNo: string; client: { id: string } },
+  { state = "24", clientName = "Rakesh Mehta", service = 50_000 } = {},
+) {
+  await prisma.client.update({ where: { id: saved.client.id }, data: { addressLine: "12, Test Society", city: "Surat", stateCode: state } });
+  const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: saved.id }, orderBy: { position: "asc" } });
+  await prisma.visaCaseTraveller.update({ where: { id: travellers[0]!.id }, data: { name: clientName } });
+  await prisma.visaCaseTraveller.update({ where: { id: travellers[1]!.id }, data: { name: "Aarav Test" } });
+  const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
+  const quote = await agent.put(`/api/visa/cases/${saved.caseNo}/quote`).send({
+    processingSpeedId: speed.id,
+    serviceChargePaise: service,
+    lines: [
+      { travellerId: travellers[0]!.id, form: "ITEMISED", embassyFeePaise: 50_000, vfsFeePaise: 80_000, otherFeePaise: 211_000 },
+      { travellerId: travellers[1]!.id, form: "LUMP_SUM", lumpSumPaise: 200_000 },
+    ],
+    updatedAt: null,
+  });
+  expect(quote.status).toBe(200);
+  return { travellers };
 }

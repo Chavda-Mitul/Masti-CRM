@@ -7,6 +7,7 @@ import {
   addToDocketSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
+  dispatchDocketSchema,
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
@@ -23,6 +24,7 @@ import {
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as docketService from "./visaDocket.service";
+import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as quoteService from "./visaQuote.service";
@@ -153,6 +155,20 @@ router.get("/cases/:caseNo/sticker", visaView, async (req, res) => {
 router.delete("/cases/:caseNo/docket", visaEdit, async (req, res) => {
   const body = takeOutOfDocketSchema.parse(req.body);
   res.json({ case: await docketService.takeOutOfDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** What stands in the way of dispatching the case's docket, the vendor it goes to, and when it comes back due (0008). */
+router.get("/cases/:caseNo/dispatch/check", visaView, async (req, res) => {
+  res.json(await dispatchService.dispatchCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/**
+ * Dispatch the case's docket (0008 Decision 9): every case in it goes to the vendor at once. 409 DISPATCH_BLOCKED with
+ * details.blockers while a file has no invoice or the vendor can't take it.
+ */
+router.post("/cases/:caseNo/dispatch", visaEdit, async (req, res) => {
+  const body = dispatchDocketSchema.parse(req.body);
+  res.json({ case: await dispatchService.dispatchDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

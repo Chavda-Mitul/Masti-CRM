@@ -21,13 +21,18 @@ export const docketSelect = {
   status: true,
   openedAt: true,
   vendor: { select: { name: true, city: true } },
+  /** Dispatch (0008 Decision 9): set together when the docket is sent. */
+  courier: { select: { name: true, awbNeeded: true } },
+  awbNo: true,
+  dispatchedAt: true,
+  dispatchedBy: personSelect,
   cases: {
     orderBy: { enquiry: { caseNo: "asc" } },
     select: {
       enquiryId: true,
       bookletsCurrent: true,
       bookletsOld: true,
-      enquiry: { select: { caseNo: true, client: { select: { name: true } }, invoice: { select: { invoiceNo: true } } } },
+      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoice: { select: { invoiceNo: true } } } },
       offering: { select: { country: { select: { name: true } } } },
       _count: { select: { travellers: true } },
     },
@@ -78,6 +83,7 @@ export const visaCaseInclude = {
           isActive: true,
           contactName: true,
           mobile: true,
+          email: true,
           countries: { select: { countryId: true } },
           /** Its shared open docket (0008 Decision 2): "Add to docket" joins it. */
           dockets: { where: { status: "OPEN", kind: "GROUP" }, select: { docketNo: true, _count: { select: { cases: true } } } },
@@ -133,8 +139,8 @@ type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
 
 /** The case's vendor, and whether it still covers the case's country. */
 function vendorOf(v: VendorRow, countryId: number) {
-  const { id, name, city, isActive, contactName, mobile } = v;
-  return { id, name, city, isActive, contactName, mobile, coversCountry: v.countries.some((c) => c.countryId === countryId) };
+  const { id, name, city, isActive, contactName, mobile, email } = v;
+  return { id, name, city, isActive, contactName, mobile, email, coversCountry: v.countries.some((c) => c.countryId === countryId) };
 }
 
 type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
@@ -154,6 +160,8 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     oldPassports: c.bookletsOld ?? 0,
     /** "MVI00000001 · locked", or null: "Raise invoice first" */
     invoiceNo: c.enquiry.invoice?.invoiceNo ?? null,
+    /** Who may dispatch (Decision 3): a processor who owns at least one case in the docket. */
+    ownerId: c.enquiry.ownerId,
     isThisCase: c.enquiryId === enquiryId,
   }));
   return {
@@ -163,6 +171,11 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     /** "Open since 12 Oct, not sent yet" from the next day on. */
     openedAt: d.openedAt,
     vendor: d.vendor,
+    /** null until dispatched; then the courier, its slip number (null for one with none), who and when. */
+    courier: d.courier,
+    awbNo: d.awbNo,
+    dispatchedAt: d.dispatchedAt,
+    dispatchedBy: d.dispatchedBy,
     cases,
     totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
     totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),

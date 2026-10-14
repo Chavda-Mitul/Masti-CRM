@@ -3,11 +3,10 @@ import { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addMonths, istToday, toDbDate } from "../src/lib/dates";
 import { bucket, getObject, s3 } from "../src/lib/storage";
-import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // Raising the visa tax invoice (docs/decisions/0009-visa-invoice.md): from the quote, numbered in Masti's series, GST
 // on the service charge, a stored PDF, and never edited.
@@ -18,13 +17,6 @@ beforeEach(async () => {
   await seedEnquiryMasters(prisma);
 });
 
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
-const PAN = "ABCDE1234F";
-function gstinFor(pan: string, state = "24") {
-  const first14 = `${state}${pan}1Z`;
-  return first14 + [..."0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((c) => gstinChecksumOk(first14 + c));
-}
-
 interface CaseDto {
   updatedAt: string;
   travellers: { id: string }[];
@@ -34,20 +26,6 @@ interface CaseDto {
 }
 const load = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case as CaseDto;
 
-/** Masti's details, logo and signature, filled in by the Head: what the first invoice needs. */
-async function mastiReady() {
-  await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
-  const head = await loginAs("vimal@masti.test");
-  const details = await head.put("/api/company/details").send({
-    gstin: gstinFor(PAN),
-    bank: { accountName: "Test Travels", accountNo: "123456789012", bankName: "Test Bank", branch: "Varachha", ifsc: "TEST0000123" },
-  });
-  expect(details.body.missingForInvoice).toEqual(["Logo", "Signature"]);
-  await head.put("/api/company/images/logo").set("Content-Type", "image/png").send(PNG);
-  await head.put("/api/company/images/signature").set("Content-Type", "image/png").send(PNG);
-  return head;
-}
-
 /**
  * A case at the Enquiry step, Aarti's, ready to invoice: its client complete (in `state`), both travellers named, and
  * a quote: the adult itemised (500 + 800 + 2,110), the child a lump sum of 2,000, and a service charge of 500.
@@ -56,30 +34,6 @@ async function invoiceableCase({ state = "24", mobile = "98250 41234", clientNam
   const staff = await visaStaff();
   const saved = await saveCase(staff, { mobile, clientName });
   return { ...saved, staff, ...(await makeInvoiceable(staff, saved, { state, clientName, service })) };
-}
-
-/** Completes any case's client, names its two travellers and enters invoiceableCase's quote, as `agent`. */
-async function makeInvoiceable(
-  agent: Agent,
-  saved: { id: string; caseNo: string; client: { id: string } },
-  { state = "24", clientName = "Rakesh Mehta", service = 50_000 } = {},
-) {
-  await prisma.client.update({ where: { id: saved.client.id }, data: { addressLine: "12, Test Society", city: "Surat", stateCode: state } });
-  const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: saved.id }, orderBy: { position: "asc" } });
-  await prisma.visaCaseTraveller.update({ where: { id: travellers[0]!.id }, data: { name: clientName } });
-  await prisma.visaCaseTraveller.update({ where: { id: travellers[1]!.id }, data: { name: "Aarav Test" } });
-  const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
-  const quote = await agent.put(`/api/visa/cases/${saved.caseNo}/quote`).send({
-    processingSpeedId: speed.id,
-    serviceChargePaise: service,
-    lines: [
-      { travellerId: travellers[0]!.id, form: "ITEMISED", embassyFeePaise: 50_000, vfsFeePaise: 80_000, otherFeePaise: 211_000 },
-      { travellerId: travellers[1]!.id, form: "LUMP_SUM", lumpSumPaise: 200_000 },
-    ],
-    updatedAt: null,
-  });
-  expect(quote.status).toBe(200);
-  return { travellers };
 }
 
 async function raise(agent: Agent, caseNo: string, quoteUpdatedAt?: string) {
