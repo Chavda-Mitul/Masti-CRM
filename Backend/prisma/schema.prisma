@@ -952,6 +952,19 @@ model ProcessingSpeed {
   quotes    VisaQuote[]
 }
 
+/// How a docket goes to the vendor: "Blue Dart", "DTDC", "By hand (no AWB)" (docs/decisions/0008-visa-docket-dispatch.md
+/// Decision 6). Picked at dispatch. Edited by the Visa HOD or the Head; switched off, never deleted.
+model Courier {
+  id        Int     @id @default(autoincrement())
+  /// BLUE_DART, BY_HAND… Never changes.
+  code      String  @unique
+  name      String
+  /// Off for "By hand": no slip (AWB) number is asked for.
+  awbNeeded Boolean @default(true)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
 model DocumentProblemReason {
   id        Int                @id @default(autoincrement())

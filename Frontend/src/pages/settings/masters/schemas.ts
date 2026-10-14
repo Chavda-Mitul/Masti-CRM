@@ -165,6 +165,18 @@ export const enquirySourceFormSchema = z.object({
 })
 export type EnquirySourceFormValues = z.infer<typeof enquirySourceFormSchema>
 
+export const courierFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. BLUE_DART.'),
+  name: required(80, 'Enter the courier.'),
+  sortOrder,
+  awbNeeded: z.boolean(),
+})
+export type CourierFormValues = z.infer<typeof courierFormSchema>
+
 const optionCode = z
   .string()
   .trim()

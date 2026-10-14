@@ -275,6 +275,12 @@ export interface FollowUpOption {
 /** How fast the embassy processes the application: "Normal", "Express"… (0009). Picked on the quote. */
 export type ProcessingSpeed = FollowUpOption
 
+/** How a docket goes to the vendor: "Blue Dart", "By hand (no AWB)"… (0008 Decision 6). Picked at dispatch. */
+export interface Courier extends FollowUpOption {
+  /** Off for "By hand": no slip (AWB) number is asked for */
+  awbNeeded: boolean
+}
+
 /** Why a paper needs replacing in Step 3: "Not signed", "Wrong photo size"… (0007 Decision 3). */
 export interface DocumentProblemReason {
   id: number
@@ -304,3 +310,4 @@ export type MasterResource =
   | 'vendors'
   | 'document-problem-reasons'
   | 'processing-speeds'
+  | 'couriers'

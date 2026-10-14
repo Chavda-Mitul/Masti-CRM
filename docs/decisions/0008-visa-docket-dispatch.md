@@ -193,6 +193,14 @@ plan mode, built, tested, checked in the browser and committed before the next o
   capitals; then it must be capitals and digits, 4–30 characters ⚠️.
 - Built with the Dispatch card.
 
+**Built 14 Oct 2026** (component 4a, the courier list):
+- Table `Courier` (`code`, `name`, `awbNeeded`, `sortOrder`, `isActive`; migration `20261014100000_couriers`, with the
+  code format CHECK).
+- `GET/POST/PATCH /api/masters/couriers`: Visa staff read; the Visa HOD or the Head edits. Audited as
+  `courier.create` / `courier.update`.
+- Seeded ⚠️ with Blue Dart, DTDC and "By hand (no AWB)" (`awbNeeded` off).
+- Settings → Masters → Lists → **Couriers**, with a "Slip (AWB) number: Needed / Not asked for" column.
+
 ### 7. The docket number
 
 - **`D-2026-0001`**, the same pattern as case numbers (§17 #21).

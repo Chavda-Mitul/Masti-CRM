@@ -47,6 +47,13 @@ export const PROCESSING_SPEEDS = [
   { code: "SUPER_PRIORITY", name: "Super priority", sortOrder: 3 },
 ];
 
+/** How a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6): placeholders ⚠️. */
+export const COURIERS = [
+  { code: "BLUE_DART", name: "Blue Dart", awbNeeded: true, sortOrder: 1 },
+  { code: "DTDC", name: "DTDC", awbNeeded: true, sortOrder: 2 },
+  { code: "BY_HAND", name: "By hand (no AWB)", awbNeeded: false, sortOrder: 3 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -91,6 +98,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const speed of PROCESSING_SPEEDS) {
     await db.processingSpeed.upsert({ where: { code: speed.code }, update: {}, create: speed });
+  }
+  for (const courier of COURIERS) {
+    await db.courier.upsert({ where: { code: courier.code }, update: {}, create: courier });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });
