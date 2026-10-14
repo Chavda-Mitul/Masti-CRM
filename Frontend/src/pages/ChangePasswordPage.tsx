@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useChangePassword, useLogout, useMe } from '../auth/useAuth'
 import { ApiError } from '../lib/api'
+import { PasswordInput } from '../components/PasswordInput'
 import '../styles/auth.css'
 
 const MIN_LENGTH = 8
@@ -48,9 +49,7 @@ export function ChangePasswordPage() {
           {!forced && (
             <label className="field">
               Current password
-              <input
-                className="input"
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrent(e.target.value)}
@@ -59,9 +58,7 @@ export function ChangePasswordPage() {
           )}
           <label className="field">
             New password
-            <input
-              className="input"
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={newPassword}
               onChange={(e) => setNew(e.target.value)}
@@ -70,9 +67,7 @@ export function ChangePasswordPage() {
           </label>
           <label className="field">
             New password again
-            <input
-              className="input"
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
