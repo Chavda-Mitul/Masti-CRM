@@ -309,6 +309,11 @@ export function useDispatchDocket(caseNo: string) {
   )
 }
 
+/** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, after a failed send. */
+export function useResendDocketEmail(caseNo: string) {
+  return useCaseAction<void>(caseNo, (base) => api(`${base}/dispatch/email`, { method: 'POST', body: {} }), { otherCases: true })
+}
+
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */
 export function useDocketSticker(caseNo: string, enabled = true) {
   return useQuery({

@@ -267,6 +267,8 @@ export interface CaseDocket {
   /** Set when dispatched (0008 Decision 9): the courier, its slip number (null for one with none), who and when */
   courier: { name: string; awbNeeded: boolean } | null
   awbNo: string | null
+  /** The email to the vendor (0008 Decision 8), once dispatched: when and to whom it went, or why not */
+  email: { sentAt: string | null; to: string | null; error: string | null } | null
   dispatchedAt: string | null
   dispatchedBy: PersonRef | null
   cases: DocketCase[]

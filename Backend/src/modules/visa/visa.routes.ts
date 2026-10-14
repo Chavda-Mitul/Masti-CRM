@@ -171,6 +171,11 @@ router.post("/cases/:caseNo/dispatch", visaEdit, async (req, res) => {
   res.json({ case: await dispatchService.dispatchDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
+/** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, while it hasn't gone. */
+router.post("/cases/:caseNo/dispatch/email", visaEdit, async (req, res) => {
+  res.json({ case: await dispatchService.resendVendorEmail(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
+});
+
 /**
  * Upload the final file: the PDF itself is the body (Content-Type: application/pdf), not a form. The case and the size
  * limit are checked before the body is read.

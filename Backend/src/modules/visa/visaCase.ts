@@ -26,6 +26,10 @@ export const docketSelect = {
   awbNo: true,
   dispatchedAt: true,
   dispatchedBy: personSelect,
+  /** The email to the vendor (Decision 8): sent, or why not. */
+  vendorEmailSentAt: true,
+  vendorEmailTo: true,
+  vendorEmailError: true,
   cases: {
     orderBy: { enquiry: { caseNo: "asc" } },
     select: {
@@ -176,6 +180,8 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     awbNo: d.awbNo,
     dispatchedAt: d.dispatchedAt,
     dispatchedBy: d.dispatchedBy,
+    /** null until dispatched; then when and to whom it went, or why it didn't ("Send again"). */
+    email: d.status === "DISPATCHED" ? { sentAt: d.vendorEmailSentAt, to: d.vendorEmailTo, error: d.vendorEmailError } : null,
     cases,
     totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
     totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),

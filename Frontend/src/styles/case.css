@@ -351,6 +351,16 @@
 .dispatch-warn {
   color: var(--warn);
 }
+.dispatch-bad {
+  color: var(--bad);
+}
+.dispatch-email-failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 /* The Dispatch card is short beside the sticker: each keeps its own height. */
 .dispatch-pair {
   align-items: start;

@@ -1,4 +1,4 @@
-# Local development services: the database and S3-compatible document storage.
+# Local development services: the database, S3-compatible document storage, and a mail catcher.
 # Credentials come from Backend/.env and must match DATABASE_URL and the S3_* settings. Production runs on Masti's own
 # server with AWS S3 or Cloudflare R2, not this file.
 #
@@ -49,6 +49,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # Catches every email the CRM sends (docs/decisions/0008-visa-docket-dispatch.md Decision 8): nothing leaves the
+  # machine. Point SMTP_HOST/SMTP_PORT at it (localhost:1025); read the mail at http://localhost:8025. Production sends
+  # through Masti's own SMTP account instead. Tests clear it before each run.
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
 
 volumes:
   masti_crm_pgdata:

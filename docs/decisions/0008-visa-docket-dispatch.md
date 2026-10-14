@@ -1,7 +1,7 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
 - **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
-  courier list and dispatch (14 Oct 2026, components 4a and 4b). Next: the vendor email (4c), then e-visas. A "Built"
+  courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c). Next: e-visas. A "Built"
   note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
@@ -229,6 +229,29 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
   an email for Global Visa Services in Vendors first."
 - Built with the Dispatch card.
 
+**Built 14 Oct 2026** (component 4c, the vendor email):
+- **`src/lib/email.ts`** sends through nodemailer 10.0.12 (pinned), configured by `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM` in `.env`. With no `SMTP_HOST` nothing is sent: "Email
+  isn't set up yet."
+- **Mailpit** (`axllent/mailpit:v1.31.3`) in `docker-compose.yml`: SMTP on 1025, the web view on 8025. The tests point
+  at it (`vitest.config.mts` refuses any other SMTP host), clear it at the start, and read the mail back.
+- **Docket columns** `vendorEmailSentAt`, `vendorEmailTo`, `vendorEmailError` (migration `20261014120000_docket_email`),
+  with a CHECK: sent means when and to whom, with no error, and only once dispatched.
+- **After the dispatch commits,** the email is sent under the docket's lock: when and to whom, or the error, is recorded
+  and audited as `visa.docket.email` (`{ sent, to }` or `{ sent: false, error }`). A failure never undoes the dispatch.
+- **`POST /api/visa/cases/:caseNo/dispatch/email`** ("Send again") is for whoever may dispatch, only once the docket is
+  dispatched and while its email hasn't gone. Once sent, it's refused, so the vendor never gets it twice.
+- **The email** (wording ⚠️ ours, for Masti to approve):
+  - subject "Docket D-2026-0001 · 2 files · MASTI TOUR AND TRAVEL"
+  - "Sent by: DTDC, slip X74411902"
+  - a table of each file with its travellers, country and passports ("3 + 2 old"), and the totals
+  - Masti's name and phone; Reply-To is the company email when there is one
+  - plain text and HTML
+- **The Dispatch card** shows "Email to vendor: Sent with the docket list · 14 Oct, 11:12 am", or "Not sent" with the
+  error and **Send again**.
+- **Still needed from Masti (A6):** the SMTP account the CRM sends from. Until then, production shows "Email isn't set
+  up yet" after each dispatch.
+
 ### 9. Dispatch, and where it leaves the case
 
 - **Refused unless:**
@@ -255,7 +278,7 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 | `AT_VENDOR`, the vendor hasn't confirmed | "Dispatched · D-2026-0001" (the board's "Dispatched" column) |
 | `AT_VENDOR`, confirmed | the seeded "Submitted" (Step 5) |
 
-**Built 14 Oct 2026** (component 4b, dispatch; the vendor email follows in 4c):
+**Built 14 Oct 2026** (component 4b, dispatch; the vendor email came with 4c, under Decision 8):
 
 - **API and data:**
   - `GET /api/visa/cases/:caseNo/dispatch/check` (anyone who can open the case) returns `{ docketNo,

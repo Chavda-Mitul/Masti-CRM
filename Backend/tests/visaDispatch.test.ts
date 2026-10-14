@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -8,11 +8,43 @@ import { dispatchCase, makeInvoiceable, mastiReady, untilWaitingOnLock, holdCase
 // Visa Step 4, dispatch (docs/decisions/0008-visa-docket-dispatch.md Decisions 3, 6 and 9): one press sends every case in
 // the docket to the vendor, only once every case has its locked invoice and the vendor can take it.
 
+/** The email goes to Mailpit for real, unless a test asks the next sends to fail ("Connection refused"). */
+const failures = vi.hoisted(() => ({ next: 0 }));
+vi.mock("../src/lib/email", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/lib/email")>();
+  return {
+    ...real,
+    sendEmail: async (email: Parameters<typeof real.sendEmail>[0]) => {
+      if (failures.next > 0) {
+        failures.next--;
+        throw new Error("Connection refused");
+      }
+      return real.sendEmail(email);
+    },
+  };
+});
+
+const mailpit = process.env.MAILPIT_URL as string;
+
 beforeEach(async () => {
+  failures.next = 0;
   await resetDb();
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
+  await fetch(`${mailpit}/api/v1/messages`, { method: "DELETE" });
 });
+
+interface Mail {
+  ID: string;
+  Subject: string;
+  To: { Address: string }[];
+}
+/** Every email Mailpit caught, with the first one's text. */
+async function inbox() {
+  const { messages } = (await (await fetch(`${mailpit}/api/v1/messages`)).json()) as { messages: Mail[] };
+  const first = messages[0] && ((await (await fetch(`${mailpit}/api/v1/message/${messages[0].ID}`)).json()) as { Text: string; HTML: string });
+  return { messages, text: first?.Text ?? "", html: first?.HTML ?? "" };
+}
 
 interface CaseDto {
   updatedAt: string;
@@ -25,6 +57,7 @@ interface CaseDto {
     status: string;
     courier: { name: string; awbNeeded: boolean } | null;
     awbNo: string | null;
+    email: { sentAt: string | null; to: string | null; error: string | null } | null;
     dispatchedAt: string | null;
     dispatchedBy: { name: string } | null;
     cases: { caseNo: string; ownerId: string | null; invoiceNo: string | null }[];
@@ -43,8 +76,8 @@ async function add(agent: Agent, caseNo: string) {
   expect(res.status).toBe(200);
 }
 
-async function raise(agent: Agent, c: Case) {
-  await makeInvoiceable(agent, c);
+async function raise(agent: Agent, c: Case, clientName = "Rakesh Mehta") {
+  await makeInvoiceable(agent, c, { clientName });
   const quoteUpdatedAt = (await load(agent, c.caseNo)).quote!.updatedAt;
   expect((await agent.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt })).status).toBe(200);
 }
@@ -69,7 +102,7 @@ async function docketOfTwo({ ready = true } = {}) {
   if (ready) {
     await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { email: "ops@globalvisa.test" } });
     await raise(processor, mehta);
-    await raise(processor, shah);
+    await raise(processor, shah, "Sunil Shah");
   }
   return { mehta, shah, processor };
 }
@@ -305,6 +338,67 @@ describe("taking turns (locks: vendor, then docket, then its cases)", () => {
   });
 });
 
+describe("the email to the vendor (Decision 8)", () => {
+  it("goes once the docket is dispatched: the docket, the courier and slip, and each file's travellers, country and passports", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    await prisma.visaCase.update({ where: { enquiryId: shah.id }, data: { bookletsCurrent: 3, bookletsOld: 2 } });
+    expect((await load(processor, mehta.caseNo)).docket!.email).toBeNull();
+
+    const res = await dispatch(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    const { docketNo, email } = (res.body.case as CaseDto).docket!;
+    expect(email).toMatchObject({ to: "ops@globalvisa.test", error: null });
+    expect(email!.sentAt).not.toBeNull();
+
+    const { messages, text, html } = await inbox();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.To.map((t) => t.Address)).toEqual(["ops@globalvisa.test"]);
+    expect(messages[0]!.Subject).toBe(`Docket ${docketNo} · 2 files · MASTI TOUR AND TRAVEL`);
+    expect(text).toContain("Sent by: Blue Dart, slip 12345678");
+    expect(text).toContain(`${mehta.caseNo} · France · 2 passports · Rakesh Mehta, Aarav Test`);
+    expect(text).toContain(`${shah.caseNo} · France · 3 + 2 old passports · Sunil Shah, Aarav Test`);
+    expect(text).toContain("5 + 2 old passports");
+    expect(html).toContain("<table");
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.docket.email" } })).toMatchObject({
+      entityType: "Docket",
+      after: { sent: true, to: "ops@globalvisa.test" },
+    });
+  });
+
+  it("a failed send never undoes the dispatch; Send again sends it, once", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    failures.next = 1;
+    const res = await dispatch(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    const c = res.body.case as CaseDto;
+    expect(c.stage.code).toBe("AT_VENDOR");
+    expect(c.docket!.email).toEqual({ sentAt: null, to: null, error: "Connection refused" });
+    expect((await inbox()).messages).toHaveLength(0);
+    expect(await prisma.auditLog.count({ where: { action: "visa.docket.email", after: { path: ["sent"], equals: false } } })).toBe(1);
+
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    const viewer = await loginAs("meena@masti.test");
+    expect((await viewer.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({})).status).toBe(403);
+
+    const again = await processor.post(`/api/visa/cases/${shah.caseNo}/dispatch/email`).send({});
+    expect(again.status).toBe(200);
+    expect((again.body.case as CaseDto).docket!.email).toMatchObject({ to: "ops@globalvisa.test", error: null });
+    expect((await inbox()).messages).toHaveLength(1);
+
+    const twice = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});
+    expect(twice.status).toBe(409);
+    expect(twice.body.message).toMatch(/already gone to ops@globalvisa.test/);
+    expect((await inbox()).messages).toHaveLength(1);
+  });
+
+  it("isn't sent before dispatch", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const res = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});
+    expect(res.status).toBe(409);
+    expect((await inbox()).messages).toHaveLength(0);
+  });
+});
+
 describe("the database", () => {
   it("refuses a dispatched docket without who, when and the courier, and a lowercase slip number", async () => {
     const { mehta, processor } = await docketOfTwo();
@@ -314,5 +408,8 @@ describe("the database", () => {
     const res = await dispatch(processor, mehta.caseNo);
     expect(res.status).toBe(200);
     await expect(prisma.docket.update({ where: { docketNo }, data: { awbNo: "abc123" } })).rejects.toThrow();
+    // Sent means when and to whom, and no error.
+    await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailTo: null } })).rejects.toThrow();
+    await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailError: "x" } })).rejects.toThrow();
   });
 });

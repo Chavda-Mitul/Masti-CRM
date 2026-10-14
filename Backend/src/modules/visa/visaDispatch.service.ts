@@ -2,12 +2,15 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { staleError } from "../../lib/changes";
 import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
+import { sendEmail } from "../../lib/email";
 import { conflict, fieldError, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { getCompanyDetails } from "../company/company.settings";
 import { isHodOf } from "../auth/permissions";
 import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { visaStage } from "./caseLock";
+import { docketEmail } from "./docketEmail";
 import type { DispatchDocketInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -16,6 +19,9 @@ import { getVisaSettings } from "./visa.settings";
 // the docket to the vendor. Refused until every case has its locked invoice (golden rule 3), the vendor is active and has
 // an email, and the courier (and its slip number, when it has one) is given. Every case moves to Step 5 · At vendor,
 // due on its processor's desk the next open office day at 11:00 ⚠️: "Confirm vendor got it".
+//
+// The email to the vendor (Decision 8) goes after the dispatch commits, never inside it: a failure is recorded on the
+// docket and never undoes the dispatch; "Send again" retries it.
 //
 // Locks, in the same order as add and take-out: the vendor, then the docket, then its cases in id order. The cases are
 // locked by hand, not with lockCase: a processor who owns only one case in the docket may still dispatch it.
@@ -65,7 +71,7 @@ export interface DispatchBlocker {
 /** What stands in the way of dispatch (Decision 9), in the order to fix it. */
 function blockersOf(g: Gathered): DispatchBlocker[] {
   const blockers: DispatchBlocker[] = [];
-  const noInvoice = g.cases.filter((c) => !c.enquiry.invoice).map((c) => c.enquiry.caseNo);
+  const noInvoice = g.cases.filter((c) => !c.enquiry.invoice).map((c) => c.enquiry.caseNo).sort();
   if (noInvoice.length) blockers.push({ kind: "INVOICE", label: "Raise the invoice on every file first: no file leaves without it.", items: noInvoice });
   if (!g.vendor.isActive) {
     blockers.push({ kind: "VENDOR_OFF", label: `${g.vendor.name} is switched off. Ask the Visa HOD to switch it back on.`, items: [] });
@@ -207,5 +213,104 @@ export async function dispatchDocket(caseNo: string, input: DispatchDocketInput,
       tx,
     );
   });
+  // The dispatch is saved: even a failure to record the email's outcome must not turn it into an error.
+  await sendVendorEmail(docketId, actor).catch((err: unknown) => console.error("Docket email after dispatch failed:", err));
+  return getVisaCaseById(enquiryId);
+}
+
+/** Room for the SMTP timeouts in src/lib/email.ts while the docket's row is held. */
+const EMAIL_TRANSACTION_MS = 60_000;
+
+/**
+ * Sends the docket's email to its vendor, once (Decision 8). Under the docket's lock, so two presses of "Send again"
+ * can't both send. Records when and to whom it went, or why not, and audits either; never throws for a failed send.
+ */
+async function sendVendorEmail(docketId: string, actor: Actor) {
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Docket" WHERE "id" = ${docketId} FOR UPDATE`;
+      const d = await tx.docket.findUniqueOrThrow({
+        where: { id: docketId },
+        select: {
+          docketNo: true,
+          status: true,
+          awbNo: true,
+          vendorEmailSentAt: true,
+          courier: { select: { name: true } },
+          vendor: { select: { name: true, email: true } },
+          cases: {
+            orderBy: { enquiry: { caseNo: "asc" } },
+            select: {
+              bookletsCurrent: true,
+              bookletsOld: true,
+              enquiry: { select: { caseNo: true } },
+              offering: { select: { country: { select: { name: true } } } },
+              travellers: { orderBy: { position: "asc" }, select: { name: true, member: { select: { name: true } } } },
+            },
+          },
+        },
+      });
+      if (d.status !== "DISPATCHED" || d.vendorEmailSentAt) return;
+
+      const to = d.vendor.email;
+      let error: string | null = null;
+      if (!to) error = `${d.vendor.name} has no email. Add one in Vendors, then Send again.`;
+      else {
+        const company = await getCompanyDetails(tx);
+        const email = docketEmail({
+          docketNo: d.docketNo,
+          vendor: { name: d.vendor.name, email: to },
+          courier: d.courier!.name,
+          awbNo: d.awbNo,
+          files: d.cases.map((c) => ({
+            caseNo: c.enquiry.caseNo,
+            travellers: c.travellers.map((t, i) => t.member?.name ?? t.name ?? `Traveller ${i + 1}`),
+            country: c.offering.country.name,
+            passports: c.bookletsCurrent ?? c.travellers.length,
+            oldPassports: c.bookletsOld ?? 0,
+          })),
+          company: { name: company.name, phone: company.phone, email: company.email },
+        });
+        try {
+          await sendEmail(email);
+        } catch (err) {
+          error = (err instanceof Error && err.message ? err.message : "The email couldn't be sent.").slice(0, 500);
+        }
+      }
+
+      await tx.docket.update({
+        where: { id: docketId },
+        data: error ? { vendorEmailError: error } : { vendorEmailSentAt: new Date(), vendorEmailTo: to, vendorEmailError: null },
+      });
+      await audit(
+        {
+          actorId: actor.user.id,
+          action: "visa.docket.email",
+          entityType: "Docket",
+          entityId: docketId,
+          after: error ? { sent: false, error } : { sent: true, to },
+          ip: actor.ip,
+        },
+        tx,
+      );
+    },
+    { timeout: EMAIL_TRANSACTION_MS },
+  );
+}
+
+/**
+ * "Send again" (Decision 8): for whoever may dispatch the docket, once it is dispatched and only while its email
+ * hasn't gone, so the vendor never gets it twice.
+ */
+export async function resendVendorEmail(caseNo: string, actor: Actor) {
+  const { enquiryId, docketId } = await caseAndDocket(caseNo, actor.user);
+  const g = await gather(prisma, docketId);
+  if (!canDispatch(actor.user, g)) {
+    throw forbidden("Only the Visa HOD, the Head or a processor with a file in this docket can send its email.");
+  }
+  const d = await prisma.docket.findUniqueOrThrow({ where: { id: docketId }, select: { status: true, vendorEmailSentAt: true, vendorEmailTo: true } });
+  if (d.status !== "DISPATCHED") throw conflict(`Docket ${g.docketNo} hasn't been dispatched yet.`);
+  if (d.vendorEmailSentAt) throw conflict(`The email for docket ${g.docketNo} has already gone to ${d.vendorEmailTo}.`);
+  await sendVendorEmail(docketId, actor);
   return getVisaCaseById(enquiryId);
 }

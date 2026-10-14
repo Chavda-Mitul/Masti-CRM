@@ -39,6 +39,17 @@ const envSchema = z.object({
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   // How long a pre-signed link to a document works. ⚠️ 5 minutes.
   S3_PRESIGN_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  // Outgoing email (the dispatch email to the vendor, 0008 Decision 8), through src/lib/email.ts only. Masti's own SMTP
+  // account in production (A6); Mailpit from docker compose locally (localhost:1025). With no SMTP_HOST nothing is sent
+  // and the dispatch card says "Email isn't set up yet".
+  SMTP_HOST: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  // "true" for implicit TLS (usually port 465); "false" upgrades with STARTTLS when the server offers it.
+  SMTP_SECURE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  SMTP_USER: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PASSWORD: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // The sender, e.g. "MASTI TOUR AND TRAVEL <crm@example.com>".
+  SMTP_FROM: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);
