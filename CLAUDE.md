@@ -68,6 +68,7 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 - **Out-of-scope work:** a feature that isn't in the demo screens may be a paid change request. Flag it; don't build it quietly. Add it to [docs/change-requests.md](docs/change-requests.md).
 - **Testing:** test the money and rule logic (invoice immutability, refunds, follow-up caps, holiday-blocked dates, permissions).
 - **Keeping docs current:** when a decision is made, update `PROJECT_KNOWLEDGE.md` and `Masti-CRM-Handover/05_Open_Questions.md`.
+- **We're still in development: no patches for old data.** There is no live data before go-live, so change things properly. A rule that becomes required is required in the database too (`NOT NULL`, a CHECK). Write no backfills, legacy fallbacks, "saved before this change" warnings or code paths for rows that the new rule forbids. Reset or reseed the dev database instead (`npx prisma migrate reset`, then `npm run db:seed`), and say so when a migration needs it.
 
 ## Agent skills
 
