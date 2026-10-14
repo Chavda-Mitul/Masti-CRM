@@ -60,7 +60,7 @@ export function VisaCasePage() {
         <div className="case-col">
           <DocketCard visaCase={c} />
           {c.docket && (
-            <div className="case-pair dispatch-pair">
+            <div className="case-pair">
               <DispatchCard visaCase={c} />
               <StickerCard visaCase={c} />
             </div>

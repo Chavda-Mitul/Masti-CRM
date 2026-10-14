@@ -2,15 +2,14 @@ import { errorText } from '../../../lib/apiErrors'
 import { useDocketSticker } from '../queries'
 import type { VisaCase } from '../types'
 import { DocketSticker } from './DocketSticker'
-import { passportTotal } from './labels'
 
-/** The preview's size against the real label. */
-const PREVIEW_SCALE = 0.62
+/** The preview's size against the real label: small enough to sit beside the Dispatch card, as in the demo. */
+const PREVIEW_SCALE = 0.42
 
 /**
  * "Sticker" (demo screen 09 ⚠️, docs/decisions/0008-visa-docket-dispatch.md Decision 5): the docket's parcel label,
  * scaled down, and Print sticker, which opens the label alone in a new tab at its real size and starts printing.
- * Anyone who can open the case can print it, a dispatched docket's too.
+ * Anyone who can open the case can print it, a dispatched docket's too. The files and passports are on the Docket card.
  */
 export function StickerCard({ visaCase: c }: { visaCase: VisaCase }) {
   const sticker = useDocketSticker(c.caseNo, !!c.docket)
@@ -36,25 +35,9 @@ export function StickerCard({ visaCase: c }: { visaCase: VisaCase }) {
             </div>
           </div>
           <div className="sticker-card-side">
-            <p className="sticker-card-summary">
-              Docket <span className="mono">{s.docketNo}</span> · to {s.vendor.name}, {s.vendor.city}
+            <p className="sticker-card-size">
+              {s.size.widthMm} × {s.size.heightMm} mm label
             </p>
-            <div>
-              <div className="kv">
-                <span>Files</span>
-                <strong>{s.cases.length}</strong>
-              </div>
-              <div className="kv">
-                <span>Passports</span>
-                <strong>{passportTotal(s.totalPassports, s.totalOldPassports)}</strong>
-              </div>
-              <div className="kv">
-                <span>Label</span>
-                <strong>
-                  {s.size.widthMm} × {s.size.heightMm} mm
-                </strong>
-              </div>
-            </div>
             <button type="button" className="btn btn-primary btn-sm" onClick={print}>
               Print sticker
             </button>

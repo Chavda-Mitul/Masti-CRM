@@ -361,10 +361,6 @@
   gap: 10px;
   flex-wrap: wrap;
 }
-/* The Dispatch card is short beside the sticker: each keeps its own height. */
-.dispatch-pair {
-  align-items: start;
-}
 .dispatch-card .kv {
   font-size: 13.5px;
   gap: 12px;
@@ -586,12 +582,11 @@
 .sticker-card .h2 {
   margin: 0;
 }
-/* The label and its summary side by side, centred together; stacked (still centred) on a narrow card. */
+/* The small label and its Print button side by side; stacked on a narrow card. */
 .sticker-card-body {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 32px;
+  align-items: flex-start;
+  gap: 20px;
   flex-wrap: wrap;
 }
 .sticker-preview {
@@ -605,16 +600,12 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
-  flex: 1 1 220px;
-  max-width: 300px;
+  flex: 1 1 160px;
+  min-width: 0;
 }
-.sticker-card-side > div {
-  align-self: stretch;
-}
-.sticker-card-summary {
+.sticker-card-size {
   margin: 0;
   font-weight: 700;
-  overflow-wrap: anywhere;
 }
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */
