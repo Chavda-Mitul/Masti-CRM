@@ -222,7 +222,10 @@ export const documentProblemFormSchema = z.object({
 })
 export type DocumentProblemFormValues = z.infer<typeof documentProblemFormSchema>
 
-/** A visa submission agent (Backend/src/modules/vendors/vendors.schemas.ts). Contact details use the client forms' rules. */
+/**
+ * A visa submission agent (Backend/src/modules/vendors/vendors.schemas.ts). Contact details use the client forms' rules.
+ * The email is required: the dispatch email goes to it (0008 Decision 8).
+ */
 export const vendorFormSchema = z.object({
   name: required(120, 'Enter the vendor’s name.'),
   city: required(80, 'Enter the city.'),
@@ -232,7 +235,7 @@ export const vendorFormSchema = z.object({
     .max(MAX_VENDOR_COUNTRIES, `Pick at most ${MAX_VENDOR_COUNTRIES} countries.`),
   contactName: optionalPersonName(120),
   mobile: optionalMobile,
-  email: optionalEmail,
+  email: optionalEmail.refine((v) => v.trim() !== '', 'Enter the vendor’s email: the dispatch email goes to it.'),
 })
 export type VendorFormValues = z.infer<typeof vendorFormSchema>
 

@@ -61,7 +61,7 @@ async function gather(db: Db, docketId: string) {
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
-export type DispatchBlockerKind = "INVOICE" | "VENDOR_OFF" | "VENDOR_EMAIL";
+export type DispatchBlockerKind = "INVOICE" | "VENDOR_OFF";
 export interface DispatchBlocker {
   kind: DispatchBlockerKind;
   label: string;
@@ -76,7 +76,6 @@ function blockersOf(g: Gathered): DispatchBlocker[] {
   if (!g.vendor.isActive) {
     blockers.push({ kind: "VENDOR_OFF", label: `${g.vendor.name} is switched off. Ask the Visa HOD to switch it back on.`, items: [] });
   }
-  if (!g.vendor.email) blockers.push({ kind: "VENDOR_EMAIL", label: `Add an email for ${g.vendor.name} in Vendors first.`, items: [] });
   return blockers;
 }
 
@@ -253,29 +252,26 @@ async function sendVendorEmail(docketId: string, actor: Actor) {
       if (d.status !== "DISPATCHED" || d.vendorEmailSentAt) return;
 
       const to = d.vendor.email;
+      const company = await getCompanyDetails(tx);
+      const email = docketEmail({
+        docketNo: d.docketNo,
+        vendor: { name: d.vendor.name, email: to },
+        courier: d.courier!.name,
+        awbNo: d.awbNo,
+        files: d.cases.map((c) => ({
+          caseNo: c.enquiry.caseNo,
+          travellers: c.travellers.map((t, i) => t.member?.name ?? t.name ?? `Traveller ${i + 1}`),
+          country: c.offering.country.name,
+          passports: c.bookletsCurrent ?? c.travellers.length,
+          oldPassports: c.bookletsOld ?? 0,
+        })),
+        company: { name: company.name, phone: company.phone, email: company.email },
+      });
       let error: string | null = null;
-      if (!to) error = `${d.vendor.name} has no email. Add one in Vendors, then Send again.`;
-      else {
-        const company = await getCompanyDetails(tx);
-        const email = docketEmail({
-          docketNo: d.docketNo,
-          vendor: { name: d.vendor.name, email: to },
-          courier: d.courier!.name,
-          awbNo: d.awbNo,
-          files: d.cases.map((c) => ({
-            caseNo: c.enquiry.caseNo,
-            travellers: c.travellers.map((t, i) => t.member?.name ?? t.name ?? `Traveller ${i + 1}`),
-            country: c.offering.country.name,
-            passports: c.bookletsCurrent ?? c.travellers.length,
-            oldPassports: c.bookletsOld ?? 0,
-          })),
-          company: { name: company.name, phone: company.phone, email: company.email },
-        });
-        try {
-          await sendEmail(email);
-        } catch (err) {
-          error = (err instanceof Error && err.message ? err.message : "The email couldn't be sent.").slice(0, 500);
-        }
+      try {
+        await sendEmail(email);
+      } catch (err) {
+        error = (err instanceof Error && err.message ? err.message : "The email couldn't be sent.").slice(0, 500);
       }
 
       await tx.docket.update({

@@ -13,7 +13,7 @@ const passports = (current: number, old: number) => (old > 0 ? `${current} (+${o
 
 /** Where each kind of blocker is fixed. A file's invoice is raised on its own case page. */
 function fixLink(kind: DispatchCheck['blockers'][number]['kind']) {
-  if (kind === 'VENDOR_OFF' || kind === 'VENDOR_EMAIL') return <Link to="/settings/masters/lists?tab=vendors">Open Vendors</Link>
+  if (kind === 'VENDOR_OFF') return <Link to="/settings/masters/lists?tab=vendors">Open Vendors</Link>
   return null
 }
 
@@ -81,8 +81,7 @@ export function DispatchDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
           <>
             {v && (
               <p className="muted small" style={{ margin: 0 }}>
-                To <strong>{v.name}</strong>, {v.city}
-                {v.email && <> · {v.email}</>}
+                To <strong>{v.name}</strong>, {v.city} · {v.email}
               </p>
             )}
             <div className="dispatch-files">

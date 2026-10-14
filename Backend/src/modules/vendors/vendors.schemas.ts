@@ -14,6 +14,17 @@ const clearable = <T extends z.ZodType>(schema: T) => z.preprocess(blankToNull, 
 const text = (max: number) => z.string().trim().min(1, "This can't be empty.").max(max, `Keep it under ${max} characters.`);
 const personName = (max: number) => text(max).regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE);
 
+/**
+ * The dispatch email goes here (docs/decisions/0008-visa-docket-dispatch.md Decision 8), so every vendor has one: required
+ * when adding, and it can be changed but not cleared (decided 14 Oct 2026, project lead). Its format is checked in the
+ * service; the database requires it too.
+ */
+const vendorEmail = z
+  .string("Enter the vendor's email: the dispatch email goes to it.")
+  .trim()
+  .min(1, "Enter the vendor's email: the dispatch email goes to it.")
+  .max(200, "Keep it under 200 characters.");
+
 const countryIds = z
   .array(z.number().int().positive())
   .min(1, "Pick at least one country.")
@@ -32,7 +43,7 @@ export const createVendorSchema = z.object({
   countryIds,
   contactName: clearable(personName(120)),
   mobile: clearable(z.string().trim().max(30)),
-  email: clearable(z.string().trim().max(200)),
+  email: vendorEmail,
   isActive: z.boolean().default(true),
 });
 
@@ -42,7 +53,7 @@ export const updateVendorSchema = z.object({
   countryIds: countryIds.optional(),
   contactName: clearable(personName(120)),
   mobile: clearable(z.string().trim().max(30)),
-  email: clearable(z.string().trim().max(200)),
+  email: vendorEmail.optional(),
   isActive: z.boolean().optional(),
 });
 

@@ -225,8 +225,10 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 - **Sent after the dispatch transaction commits,** never inside it. The docket records the time it was sent, or the
   error.
 - **A failure never undoes the dispatch.** The Dispatch card shows the error and a **Send again** button.
-- **The vendor's email becomes required to dispatch** (0007 open point C). Without it, dispatch is refused with "Add
-  an email for Global Visa Services in Vendors first."
+- **Every vendor has an email** (0007 open point C). **Decided 14 Oct 2026 (project lead):** required in the vendor
+  master, when adding and editing (it can be changed, never cleared), and `NOT NULL` in the database (migration
+  `20261014130000_vendor_email_required`), so dispatch never meets a vendor without one. The form's placeholder is
+  `name@company.com`.
 - Built with the Dispatch card.
 
 **Built 14 Oct 2026** (component 4c, the vendor email):
@@ -283,7 +285,7 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 - **API and data:**
   - `GET /api/visa/cases/:caseNo/dispatch/check` (anyone who can open the case) returns `{ docketNo,
     alreadyDispatched, canDispatch, blockers, vendor { name, city, email }, confirmAt }`. Each blocker is grouped by
-    kind: `INVOICE` (the files without one), `VENDOR_OFF`, `VENDOR_EMAIL`.
+    kind: `INVOICE` (the files without one) or `VENDOR_OFF`. (Every vendor has an email; see Decision 8.)
   - `POST /api/visa/cases/:caseNo/dispatch` with `{ courierId, awbNo?, caseNos }` returns `{ case }`. It's refused with:
     - 409 `DISPATCH_BLOCKED { blockers }`
     - 409 STALE when `caseNos` isn't the docket's files any more
@@ -307,7 +309,7 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
     - when the files come back due ("Thu 15 Oct, 11:00")
   - The button is off, with the reason, for anyone else.
   - A **Dispatch** card beside the Sticker card (as in the demo):
-    - before dispatch: "Invoices 2 of 3 raised", the vendor's email (or "None yet"), "Courier: picked at dispatch"
+    - before dispatch: "Invoices 2 of 3 raised", where the email will go, "Courier: picked at dispatch"
     - after: "Blue Dart · slip 50218834", who and when, and "Thu 15 Oct, 11:00 · Neha: Confirm vendor got it"
   - After dispatch the chip reads **Dispatched · D-…**. The Docket, Dispatch and Sticker cards stay, read-only, until
     Step 5 has its own.

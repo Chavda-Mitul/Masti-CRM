@@ -88,10 +88,7 @@ async function dispatch(agent: Agent, caseNo: string, body: { courierId?: number
   return agent.post(`/api/visa/cases/${caseNo}/dispatch`).send({ courierId: await courierId("BLUE_DART"), awbNo: "1234 5678", ...body, caseNos });
 }
 
-/**
- * Mehta and Shah, both Neha's, in Global Visa Services' docket. `ready` gives the vendor an email and raises both
- * invoices, so the docket can go.
- */
+/** Mehta and Shah, both Neha's, in Global Visa Services' docket. `ready` raises both invoices, so the docket can go. */
 async function docketOfTwo({ ready = true } = {}) {
   await mastiReady();
   const mehta = await dispatchCase();
@@ -100,7 +97,6 @@ async function docketOfTwo({ ready = true } = {}) {
   await add(processor, mehta.caseNo);
   await add(processor, shah.caseNo);
   if (ready) {
-    await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { email: "ops@globalvisa.test" } });
     await raise(processor, mehta);
     await raise(processor, shah, "Sunil Shah");
   }
@@ -179,18 +175,17 @@ describe("Dispatch (Decision 9)", () => {
 });
 
 describe("what is refused", () => {
-  it("a file without its invoice, a vendor with no email or switched off: 409 with what to fix", async () => {
+  it("a file without its invoice, or a switched-off vendor: 409 with what to fix", async () => {
     const { mehta, shah, processor } = await docketOfTwo({ ready: false });
     const blocked = await dispatch(processor, mehta.caseNo);
     expect(blocked.status).toBe(409);
     expect(blocked.body.details.code).toBe("DISPATCH_BLOCKED");
     expect(blocked.body.details.blockers).toEqual([
       { kind: "INVOICE", label: expect.stringMatching(/invoice/), items: [mehta.caseNo, shah.caseNo] },
-      { kind: "VENDOR_EMAIL", label: "Add an email for Global Visa Services in Vendors first.", items: [] },
     ]);
-    expect((await check(processor, mehta.caseNo)).body.blockers).toHaveLength(2);
+    expect((await check(processor, mehta.caseNo)).body.blockers).toHaveLength(1);
 
-    await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { email: "ops@globalvisa.test", isActive: false } });
+    await prisma.vendor.update({ where: { id: mehta.vendor.id }, data: { isActive: false } });
     await raise(processor, mehta);
     const one = await dispatch(processor, mehta.caseNo);
     expect(one.body.details.blockers.map((b: { kind: string; items: string[] }) => [b.kind, b.items])).toEqual([

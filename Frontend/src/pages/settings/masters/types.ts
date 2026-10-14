@@ -185,7 +185,8 @@ export interface Vendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
-  email: string | null
+  /** Where the dispatch email goes (0008 Decision 8): every vendor has one */
+  email: string
   isActive: boolean
   /** The countries it submits files for, by name. */
   countries: { id: number; code: string; name: string; zone: string | null }[]

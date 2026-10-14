@@ -1,4 +1,3 @@
-import { Link } from 'react-router'
 import { canDispatchDocket } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
@@ -10,7 +9,7 @@ import { dayTime, firstName } from './labels'
 
 /**
  * "Dispatch" (demo screen 09 ⚠️, docs/decisions/0008-visa-docket-dispatch.md Decisions 6, 8 and 9), beside the Sticker
- * card. Before dispatch: what the docket still needs (every file's invoice, the vendor's email). After: the courier and
+ * card. Before dispatch: whether every file has its invoice, and where the email will go. After: the courier and
  * its slip, who sent it and when, the email to the vendor (or why it failed, with Send again), and when this file comes
  * back due: "Confirm vendor got it". "Dispatch docket" itself is the header's button.
  */
@@ -100,13 +99,7 @@ export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
         </div>
         <div className="kv">
           <span>Email to vendor</span>
-          {c.vendor.email ? (
-            <strong>{c.vendor.email}</strong>
-          ) : (
-            <strong className="dispatch-warn">
-              None yet · <Link to="/settings/masters/lists?tab=vendors">Vendors</Link>
-            </strong>
-          )}
+          <strong>{c.vendor.email}</strong>
         </div>
         <div className="kv">
           <span>Courier</span>
@@ -114,9 +107,9 @@ export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
         </div>
       </div>
       <p className="muted small" style={{ margin: 0 }}>
-        {allInvoiced && c.vendor.email
+        {allInvoiced
           ? `Ready. Dispatch docket ${d.docketNo} from the button at the top.`
-          : `The docket can go once every file has its invoice and ${c.vendor.name} has an email.`}
+          : 'The docket can go once every file has its invoice.'}
       </p>
     </section>
   )

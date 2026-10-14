@@ -88,7 +88,9 @@ export async function readyCase({ vendorId, extra }: { vendorId?: number; extra?
   const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
   const vendor = vendorId
     ? await prisma.vendor.findUniqueOrThrow({ where: { id: vendorId } })
-    : await prisma.vendor.create({ data: { name: "Global Visa Services", city: "Mumbai", countries: { create: [{ countryId: fr.id }] } } });
+    : await prisma.vendor.create({
+        data: { name: "Global Visa Services", city: "Mumbai", email: "ops@globalvisa.test", countries: { create: [{ countryId: fr.id }] } },
+      });
   await prisma.visaCase.update({
     where: { enquiryId: c.id },
     data: {

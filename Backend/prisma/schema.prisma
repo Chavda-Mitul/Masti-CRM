@@ -400,8 +400,8 @@ model Vendor {
   contactName String?
   /// +91XXXXXXXXXX (src/lib/contact.ts).
   mobile      String?
-  /// Lowercased. Step 4's dispatch email will need it.
-  email       String?
+  /// Lowercased. Required: Step 4's dispatch email goes to it (0008 Decision 8).
+  email       String
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime        @updatedAt @db.Timestamptz(3)

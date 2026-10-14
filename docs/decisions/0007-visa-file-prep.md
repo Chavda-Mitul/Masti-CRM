@@ -212,7 +212,7 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
 | Countries covered | At least one, picked from the country master |
 | Contact person | Optional |
 | Mobile | Optional; cleaned with `src/lib/contact.ts` |
-| Email | Optional for now; Step 4's dispatch email will need it *(open point C)* |
+| Email | Required (decided 14 Oct 2026, project lead): Step 4's dispatch email goes to it *(open point C)* |
 | Active | Switched off, never deleted |
 
 - **One vendor per kind, name and city,** ignoring case.
@@ -497,7 +497,7 @@ The six points we proposed, and what was decided:
 | --- | --- | --- | --- |
 | A | Trip details not required for "File ready" | Nothing reads them yet | **Changed: required.** Travelling out, coming back and the entry type must be in before "File ready", or processors will forget them and the covering letter will break later. Hotel stay stays optional. |
 | B | Hotel stay is short text (name and city) | The forms need the real hotel, which no dropdown can list | Accepted |
-| C | A vendor's email is optional for now | Step 4's dispatch email will make it required then | Accepted |
+| C | A vendor's email is optional for now | Step 4's dispatch email will make it required then | Accepted; **closed 14 Oct 2026:** required in the vendor master and the database |
 | D | An appointment can't be in the past when entered | Catches typos; a past appointment means the date is wrong | Accepted |
 | E | The PDF goes through our API, not straight to the bucket | No CORS setup, the same on MinIO/S3/R2, and the server checks the file | Accepted |
 | F | The file can be replaced only during File preparation | After "File ready" it is what went to the vendor | Accepted |

@@ -229,8 +229,8 @@ export interface CaseVendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
-  /** Where the dispatch email goes (0008 Decision 8): needed to dispatch */
-  email: string | null
+  /** Where the dispatch email goes (0008 Decision 8) */
+  email: string
   /** false when the case's country was taken off the vendor after it was picked: "File ready" asks for another. */
   coversCountry: boolean
 }
@@ -276,7 +276,7 @@ export interface CaseDocket {
   totalOldPassports: number
 }
 
-export type DispatchBlockerKind = 'INVOICE' | 'VENDOR_OFF' | 'VENDOR_EMAIL'
+export type DispatchBlockerKind = 'INVOICE' | 'VENDOR_OFF'
 
 /** GET /api/visa/cases/:caseNo/dispatch/check (0008 Decision 9): what blocks dispatch, and when the cases come back due. */
 export interface DispatchCheck {
@@ -284,7 +284,7 @@ export interface DispatchCheck {
   alreadyDispatched: boolean
   canDispatch: boolean
   blockers: { kind: DispatchBlockerKind; label: string; items: string[] }[]
-  vendor: { name: string; city: string; email: string | null }
+  vendor: { name: string; city: string; email: string }
   /** The next open office day at 11:00 ⚠️: "Confirm vendor got it" */
   confirmAt: string
 }
