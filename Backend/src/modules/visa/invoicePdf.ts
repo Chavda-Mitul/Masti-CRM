@@ -156,18 +156,26 @@ function draw(pen: Pen, text: string, x: number, y: number, { size = 9, bold = f
   pen.page.drawText(text, { x: left, y: A4.height - y - size, size, font, color });
 }
 
-/** Words wrapped to `width`, one string per line. */
+/** Words wrapped to `width`, one string per line. A word too wide for a line on its own (a long web address) is broken. */
 function wrap(font: PDFFont, text: string, size: number, width: number): string[] {
+  const fits = (s: string) => font.widthOfTextAtSize(s, size) <= width;
   const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
     let line = "";
     for (const word of paragraph.split(/\s+/).filter(Boolean)) {
       const next = line ? `${line} ${word}` : word;
-      if (line && font.widthOfTextAtSize(next, size) > width) {
-        lines.push(line);
-        line = word;
-      } else {
+      if (fits(next)) {
         line = next;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = word;
+      while (!fits(line)) {
+        const chars = [...line];
+        let n = 1;
+        while (n < chars.length && fits(chars.slice(0, n + 1).join(""))) n++;
+        lines.push(chars.slice(0, n).join(""));
+        line = chars.slice(n).join("");
       }
     }
     if (line) lines.push(line);
@@ -175,10 +183,13 @@ function wrap(font: PDFFont, text: string, size: number, width: number): string[
   return lines;
 }
 
+/** Line spacing, as a share of the text's size. */
+const LEADING = 1.35;
+
 /** Draws wrapped text from the pen's line and moves the pen below it. */
 function para(pen: Pen, text: string, x: number, width: number, options: TextOptions & { gap?: number } = {}) {
   const size = options.size ?? 9;
-  const leading = size * 1.35;
+  const leading = size * LEADING;
   for (const line of wrap(options.bold ? pen.bold : pen.regular, text, size, width)) {
     draw(pen, line, x, pen.y, options);
     pen.y += leading;
@@ -392,12 +403,15 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
     pen.y += 10;
   }
 
-  // --- The terms.
-  room(pen, 24 + view.terms.length * 11);
+  // --- The terms, with their heading, on one page: the room kept is what they take once wrapped. The most the setting
+  // allows (10 terms of 200 characters) is well under a page.
+  const terms = view.terms.map((term) => `# ${term}`);
+  const termLines = terms.reduce((n, term) => n + wrap(pen.regular, term, 8, 330).length, 0);
+  room(pen, 14 + termLines * 8 * LEADING + 6);
   draw(pen, "Terms :", MARGIN, pen.y, { size: 9, bold: true });
   draw(pen, "E. & O. E.", RIGHT, pen.y, { size: 9, align: "right" });
   pen.y += 14;
-  for (const term of view.terms) para(pen, `# ${term}`, MARGIN, 330, { size: 8 });
+  for (const term of terms) para(pen, term, MARGIN, 330, { size: 8 });
   pen.y += 6;
 
   // --- Signatures, and who prepared it.

@@ -232,6 +232,12 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - the GST table (CGST/SGST or IGST); the bank details; the terms
   - "for MASTI TOUR AND TRAVEL" with the signature; "Prepared by"
   - Many travellers flow onto more pages.
+  - **The terms keep the room they really take** (15 Oct 2026, from a review of PR #9). They're wrapped first, and
+    the heading and every term move to a new page together when they don't fit. Before, about one line was kept per
+    term. The longest terms the setting allows (10 of 200 characters, 3 lines each) then ran off page 1 once 4–10
+    travellers filled it, and the PDF was locked without them. A word too wide for its line (a long web address) is
+    broken across lines instead of running off the right edge. `tests/invoicePdf.test.ts` checks that every line stays
+    inside the margins.
 - **Screen:** "Money on this case" gains **Raise invoice** once the quote is complete. The confirm dialog lists the
   blockers with links to fix them, or shows each amount, the GST split, the total and the number it will get, with a
   warning that it can never be edited. Once raised, the panel shows "**MVI… · locked**", the total, who raised it, and
