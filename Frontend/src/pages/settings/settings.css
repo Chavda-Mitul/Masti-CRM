@@ -213,6 +213,10 @@ a.kv-line:hover {
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
+/* Many lists: the tabs wrap onto a second row rather than push the page sideways. */
+.list-tools .kind-toggle {
+  flex-wrap: wrap;
+}
 
 /* Checklist editor */
 .checklist-editor {
