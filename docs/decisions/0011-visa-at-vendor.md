@@ -163,19 +163,41 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
-- **Proposed ⚠️, settled in component 3's plan:**
-  - its own number series (a prefix setting, like `MVI`)
-  - a reason from a master list (Recall, Wrong amount…), never free text
-  - amounts taken from the invoice's lines, never more than was invoiced
-  - a stored PDF, locked like the invoice (the trigger and no edit route)
-- **Open with Masti (M37):** after a credit note cancels a wrong invoice, is the correct invoice the file's one
-  additional invoice, or a new invoice that doesn't count?
+- **Masti's answer (15 Oct 2026, through the project lead):** a wrong invoice is never changed; it's corrected with a
+  credit note. Masti has **no system today:** the CRM is their first. So there's no credit-note format to match and no
+  series to continue.
+
+**Decided 15 Oct 2026 (project lead):**
+- **The corrected invoice is a replacement** (answers M37). After a credit note cancels a wrong invoice, a fresh invoice
+  is raised from the corrected quote. It doesn't use up the file's one additional invoice, which stays free for extra
+  charges such as an urgent fee.
+- **A credit note can be whole or part.**
+  - A correction cancels the whole invoice.
+  - A recall gives back part of it: the embassy fee, or more if the HOD allows (Decision 6).
+  - The total credited on an invoice can never be more than was invoiced.
+- **GST.** A credit note that cancels a whole invoice reverses everything on it, **including its exact GST**, so the
+  accountant's tax reports come back to zero. A part credit note carries **no GST**: the embassy and VFS fees it
+  returns had none. If an HOD's larger refund includes the service charge, its GST is still not touched ⚠️ (for the
+  accountant to confirm, M38).
+- **Its own number series,** since Masti has none: `MCN` + 8 digits ⚠️, starting at 1, as settings like the
+  invoice's.
+- **The PDF** follows our invoice's layout, since there's no format to copy. It's stored and locked like the invoice
+  (a trigger, and no edit route).
+
+**Proposed ⚠️, settled in component 3's plan:**
+- a reason from a master list the Visa HOD edits (Wrong amount, Wrong client details, Client cancelled, Recall…), never
+  free text
+- amounts taken from the invoice's own lines
+- who may issue one: the case's processor, the Visa HOD or the Head for a correction; only the HOD for a recall that
+  returns more than the embassy fee (Decision 6)
 
 ### 6. Recall: take the file back
 
 - **The credit note covers the embassy fee only by default:** the embassy fee lines of the invoice. VFS, the service
-  charge and the courier both ways are kept. A lump-sum invoice has no embassy fee line, so how it's handled is settled
-  in component 4's plan.
+  charge and the courier both ways are kept.
+- **A lump-sum invoice.** **Decided 15 Oct 2026 (project lead):** a lump sum has no embassy fee line, so nothing goes
+  back by default. The Visa HOD enters the refund, up to the travellers' amounts: the same "Change refund (HOD)"
+  power.
 - **Only the Visa HOD (or the Head) can return more, case by case** ("Change refund (HOD)"). The override can only
   increase the refund. The reason comes from a master list.
 - **Where the case goes.** **Decided 15 Oct 2026 (project lead):** to **Step 7 · Passport back**, marked **Recalled**,
@@ -219,7 +241,7 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 
 ## Still needed from Masti
 
-- **M37:** a corrected invoice after a credit note: the one additional invoice, or a new one?
 - **M38 (accountant):** is GST charged on an additional charge (urgent fee, photos), or are some pass-through fees?
+  And when an HOD's refund on a recall includes the service charge, should its GST be reversed?
 - **M39:** the e-visa flow at Step 5, and the timings: due at the appointment after "Vendor got it", reminded the day
   before the collection date.
