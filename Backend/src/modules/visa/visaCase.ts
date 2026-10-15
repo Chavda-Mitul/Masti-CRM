@@ -91,6 +91,7 @@ export const visaCaseInclude = {
       offering: { include: offeringInclude },
       maturedBy: personSelect,
       fileReadyBy: personSelect,
+      submittedOnlineBy: personSelect,
       vendor: {
         select: {
           id: true,
@@ -328,6 +329,8 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
+    submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
     /** The locked tax invoice (0009), or null until it is raised. */
     invoice: row.invoice && {
       invoiceNo: row.invoice.invoiceNo,

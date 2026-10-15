@@ -289,6 +289,13 @@ export interface DispatchCheck {
   confirmAt: string
 }
 
+/** GET /api/visa/cases/:caseNo/submit-online/check (0008 Decision 11): what blocks an e-visa, and when it comes back due. */
+export interface SubmitOnlineCheck {
+  blockers: DispatchCheck['blockers']
+  /** The next open office day at 11:00 ⚠️: "Check the portal" */
+  dueAt: string
+}
+
 /** GET /api/visa/cases/:caseNo/sticker: the parcel label (0008 Decision 5). */
 export interface DocketStickerData {
   docketNo: string
@@ -428,6 +435,8 @@ export interface VisaCase {
   docket: CaseDocket | null
   /** While it isn't in one: the vendor's shared open docket it would join, if that holds any files. */
   openDocket: { docketNo: string; caseCount: number } | null
+  /** An e-visa's "Submitted online" (0008 Decision 11): who and when, instead of a docket. */
+  submittedOnline: { at: string; by: PersonRef | null } | null
   /** GST on the service charge (the setting visa.invoice), for a quote being entered */
   gstRatePercent: number
   /** The price (0009), or null until someone enters it */

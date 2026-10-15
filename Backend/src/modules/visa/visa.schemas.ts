@@ -51,6 +51,12 @@ export const invoiceSettingSchema = z.object({
  */
 export const vendorConfirmSchema = firstFollowUpSchema;
 
+/**
+ * When an e-visa comes back to its processor to check the portal (0008 Decision 11): the next open office day, afterDays
+ * after "Submitted online", at `at` (IST). Its own setting, so it changes apart from the vendor confirmation.
+ */
+export const onlineCheckSchema = firstFollowUpSchema;
+
 /** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */
 export const awbSettingSchema = z
   .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
@@ -88,6 +94,7 @@ export const visaSettingsSchema = z.object({
   sticker: stickerSettingSchema,
   invoice: invoiceSettingSchema,
   vendorConfirm: vendorConfirmSchema,
+  onlineCheck: onlineCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
 });
@@ -120,6 +127,7 @@ export type DocketSetting = z.infer<typeof docketSettingSchema>;
 export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
 export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
+export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
@@ -256,8 +264,12 @@ export const addToDocketSchema = z.object({
 /** "Take out of docket" (Decision 10), while the docket is open. */
 export const takeOutOfDocketSchema = matureCaseSchema;
 
+/** "Submitted online" (Decision 11), for an e-visa: sends the case's updatedAt, like "Add to docket". */
+export const submitOnlineSchema = matureCaseSchema;
+
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
+export type SubmitOnlineInput = z.infer<typeof submitOnlineSchema>;
 
 /**
  * "Dispatch docket" (Decision 9): the courier, its slip number when it needs one (spaces dropped, made capitals; the

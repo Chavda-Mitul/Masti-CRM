@@ -11,6 +11,7 @@ import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
+import { SubmitOnlineDialog } from './SubmitOnlineDialog'
 
 /** "2 adults, 1 child" */
 function travellers(adults: number, children: number) {
@@ -32,6 +33,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
   // Instead of the step's "Dispatched" ⚠️, which isn't true until the docket is sent (0008 Decision 9).
   if (c.stage.code === 'DISPATCH' && c.docket?.status === 'OPEN') return <span className="chip chip-ok">In docket {c.docket.docketNo}</span>
+  // An e-visa has no docket: it goes in on the portal (0008 Decision 11). Once in, the step's own "Submitted" ⚠️.
+  if (c.stage.code === 'DISPATCH' && c.fileReadyAt && !c.vendorNeeded) return <span className="chip chip-ok">File ready · to submit online</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
   // On the way to the vendor until Step 5's "Vendor got it" (the seeded "Submitted" comes with it).
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
@@ -41,7 +44,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
 /**
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
- * docket" (0008 Decision 9). The later steps show as "Soon" until they are built.
+ * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). The later steps show as
+ * "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -50,6 +54,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [maturing, setMaturing] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const [dispatching, setDispatching] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -86,6 +91,16 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.nextStepLabel} →
         </button>
         {finishing && <FileReadyDialog visaCase={c} onClose={() => setFinishing(false)} />}
+      </>
+    )
+  }
+  if (c.stage.code === 'DISPATCH' && c.status === 'OPEN' && canAct && !c.vendorNeeded && !c.docket) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setSubmitting(true)}>
+          Submitted online →
+        </button>
+        {submitting && <SubmitOnlineDialog visaCase={c} onClose={() => setSubmitting(false)} />}
       </>
     )
   }

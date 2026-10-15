@@ -1,8 +1,8 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
 - **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
-  courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c). Next: e-visas. A "Built"
-  note is added under each part as its component lands.
+  courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c); e-visas, "Submitted online" (15 Oct 2026,
+  component 5). Step 4 is complete. A "Built" note sits under each part.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
   - grouping ready cases into dockets, per vendor
@@ -370,12 +370,55 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 - There is no docket, sticker or vendor email.
 - Built last, as its own small component.
 
+**Decided 15 Oct 2026 (project lead):**
+- **When the case is due back:** a setting of its own, `visa.onlineCheck` → `{ afterDays: 1, at: "11:00" }` ⚠️, seeded
+  like the vendor confirmation but changed apart from it.
+- **Where it sits:** a header button that opens a confirm dialog, and a small card in the Docket card's place.
+
+**Built 15 Oct 2026** (component 5):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/submit-online/check` (anyone who can open the case) returns `{ blockers, dueAt }`.
+    The only blocker is `INVOICE`.
+  - `POST /api/visa/cases/:caseNo/submit-online` with `{ updatedAt }` returns `{ case }`. It's for whoever can act on
+    the case (`lockCase` with `DISPATCHING`), and refused with:
+    - 409 `SUBMIT_BLOCKED { blockers }` without the invoice
+    - 409 "This visa needs a vendor: add it to a docket." while Vendor needed is on
+    - 409 "Take it out of docket D-… first." when the switch was turned off after the case joined a docket
+    - 409 STALE on an old `updatedAt`; the usual step, postponed and closed refusals
+  - **In one transaction:** the case moves to `AT_VENDOR`, with `dueAt` the next open office day, `afterDays` on, at
+    `at` (IST). `VisaCase.submittedOnlineAt` / `submittedOnlineById` are stamped (migration
+    `20261015110000_submitted_online`).
+  - **Database CHECKs:** who and when are set together; a case is never both in a docket and submitted online; only a
+    file-ready case is submitted.
+  - **Audited** as `visa.submittedOnline` on the Enquiry, with `clientId`, before/after the stage and `dueAt`, and the
+    invoice number.
+  - The case sends `submittedOnline { at, by }`.
+  - The setting `visa.onlineCheck` is seeded and changed through `PUT /api/visa/settings`, like `visa.vendorConfirm`.
+    The two share `dueOnOfficeDay` in `visa.settings.ts`.
+- **Screen:**
+  - At Docket & dispatch an e-visa's chip reads **"File ready · to submit online"** ⚠️, and the header button is
+    **Submitted online →**.
+  - **The dialog:**
+    - what's missing, with a jump to Money on this case to raise the invoice
+    - or the locked invoice and "The case moves to At vendor, due back on Neha's desk Fri 16 Oct, 11:00 to check the
+      portal."
+  - **A Submit online card** stands where the Docket card would be. Before: "This visa needs no vendor: no docket,
+    sticker or courier." and the invoice ("MVI… · locked" or "Raise invoice first →"). After: who submitted it and when,
+    the invoice, and "Fri 16 Oct, 11:00 · Neha: Check the portal".
+  - After submission, the chip is the step's own "Submitted" ⚠️.
+- **Settled while building:**
+  - **The Docket card still shows a case that is in a docket** when Vendor needed was switched off later, so it can be
+    taken out and then submitted online.
+  - **A vendor picked anyway** in Step 3 (allowed when not needed) stays on the case, unused.
+
 ### 12. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | `visa.docket` | `{ prefix: "D" }` ⚠️ |
 | `visa.vendorConfirm` | `{ afterDays: 1, at: "11:00" }` ⚠️ |
+| `visa.onlineCheck` (e-visas, Decision 11) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | The sticker size | 100 × 150 mm ⚠️ |
 | The company's details (name, address, phone) | Masti's own, given 13 Oct 2026 |
 | `Courier` | Blue Dart · DTDC · By hand (no AWB) ⚠️ |
@@ -438,7 +481,7 @@ One order everywhere: **the docket first, then its cases, in enquiry-id order.**
 | `POST /api/visa/dockets/:docketNo/dispatch` | `{ courierId, awbNo?, updatedAt }` | Dispatch card |
 | `POST /api/visa/dockets/:docketNo/email` | Send again | Dispatch card |
 | `GET/POST/PATCH /api/masters/couriers` | The courier master | Dispatch card |
-| `POST /api/visa/cases/:caseNo/submitted-online` | E-visas | E-visas |
+| `POST /api/visa/cases/:caseNo/submit-online` | E-visas (built with a `GET …/submit-online/check`) | E-visas |
 
 Routes follow 0007: `requireAuth → requirePasswordChanged → requireUserType("HEAD","OFFICE")` and Visa EDIT; the
 service checks Decision 3. Every change is audited with `clientId` on case rows (`visa.docket.add`,

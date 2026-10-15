@@ -80,6 +80,7 @@ model User {
   followUpsLogged    FollowUp[]         @relation("FollowUpBy")
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
+  visaCasesOnline    VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
@@ -857,45 +858,50 @@ enum EntryType {
 /// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
 /// booklet counts are 0–50; returnOn is not before departOn; hotelStay is 1–200 characters.
 model VisaCase {
-  enquiryId       String              @id
-  offeringId      Int
+  enquiryId           String              @id
+  offeringId          Int
   /// The month they plan to travel, stored as the 1st (M9).
-  travelMonth     DateTime            @db.Date
+  travelMonth         DateTime            @db.Date
   /// The exact date, if the client knows it at intake.
-  travelDate      DateTime?           @db.Date
+  travelDate          DateTime?           @db.Date
   /// Step 2: "Client brings them" or "Send collection boy".
-  arrival         DocumentArrival?
+  arrival             DocumentArrival?
   /// Step 2: passports received (current + old). Checked again at handover.
-  bookletsCurrent Int?                @db.SmallInt
-  bookletsOld     Int?                @db.SmallInt
+  bookletsCurrent     Int?                @db.SmallInt
+  bookletsOld         Int?                @db.SmallInt
   /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
   /// travelDate. "File ready" needs departOn, returnOn and entryType.
-  departOn        DateTime?           @db.Date
-  returnOn        DateTime?           @db.Date
-  entryType       EntryType?
+  departOn            DateTime?           @db.Date
+  returnOn            DateTime?           @db.Date
+  entryType           EntryType?
   /// The hotel's name and city, for the forms: data, not a reason or a status.
-  hotelStay       String?
+  hotelStay           String?
   /// The submission agent, picked during File preparation from the active vendors covering the case's country
   /// (0007 Decision 7). Switched off later, it stays here; "File ready" then asks for an active one.
-  vendorId        Int?
+  vendorId            Int?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
-  maturedAt       DateTime?           @db.Timestamptz(3)
-  maturedById     String?
+  maturedAt           DateTime?           @db.Timestamptz(3)
+  maturedById         String?
   /// "File ready — add to docket" (0007 Decision 9): Step 3 is done and the case moved to Docket & dispatch. Both set
   /// together (checked in the migration).
-  fileReadyAt     DateTime?           @db.Timestamptz(3)
-  fileReadyById   String?
+  fileReadyAt         DateTime?           @db.Timestamptz(3)
+  fileReadyById       String?
   /// The docket it goes to the vendor in (0008 Decision 2). Set by "Add to docket", cleared by "Take out" while the
   /// docket is open.
-  docketId        String?
-  enquiry         Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  offering        VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  maturedBy       User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
-  fileReadyBy     User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
-  vendor          Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  docket          Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
-  travellers      VisaCaseTraveller[]
-  quote           VisaQuote?
+  docketId            String?
+  /// "Submitted online" (0008 Decision 11): an e-visa (Vendor needed off) went in on the portal, with no docket, and the
+  /// case moved to At vendor. Both set together, and never with a docket (checked in the migration).
+  submittedOnlineAt   DateTime?           @db.Timestamptz(3)
+  submittedOnlineById String?
+  enquiry             Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  offering            VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  maturedBy           User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  fileReadyBy         User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
+  submittedOnlineBy   User?               @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
+  vendor              Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  docket              Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
+  travellers          VisaCaseTraveller[]
+  quote               VisaQuote?
 
   @@index([offeringId])
   @@index([vendorId])

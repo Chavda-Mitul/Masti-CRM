@@ -1,19 +1,17 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit, auditMany } from "../../lib/audit";
 import { staleError } from "../../lib/changes";
-import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { sendEmail } from "../../lib/email";
 import { conflict, fieldError, forbidden, HttpError } from "../../lib/httpError";
 import { getCompanyDetails } from "../company/company.settings";
 import { isHodOf } from "../auth/permissions";
-import { nextOpenDay } from "../holidays/blockedDays";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, visaStage } from "./caseLock";
 import { emailSending } from "./visaCase";
 import { docketEmail } from "./docketEmail";
 import type { DispatchDocketInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
-import { getVisaSettings } from "./visa.settings";
+import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 
 // Visa Step 4, dispatch (docs/decisions/0008-visa-docket-dispatch.md Decisions 3, 6 and 9): one press sends every case in
 // the docket to the vendor. Refused until every case has its locked invoice (golden rule 3), the vendor is active and has
@@ -86,9 +84,7 @@ function canDispatch(user: UserWithDepartments, g: Gathered) {
 
 /** When the cases are due back on their processors' desks: the next open office day, afterDays on, at `at` (IST). */
 async function confirmAtOf(db: Db) {
-  const { vendorConfirm } = await getVisaSettings(db);
-  const day = await nextOpenDay(addDays(istToday(), vendorConfirm.afterDays), { office: true }, db);
-  return istDateTimeToUtc(day, vendorConfirm.at);
+  return dueOnOfficeDay((await getVisaSettings(db)).vendorConfirm, db);
 }
 
 /** The case the request came from, and its docket: anyone who can open the case. */

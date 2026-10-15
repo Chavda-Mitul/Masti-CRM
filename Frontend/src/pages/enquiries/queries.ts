@@ -9,6 +9,7 @@ import type {
   DocketStickerData,
   DispatchCheck,
   InvoiceCheck,
+  SubmitOnlineCheck,
   InvoiceTaxType,
   SaveQuoteBody,
   DocumentArrival,
@@ -54,6 +55,7 @@ export const enquiryKeys = {
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
+  submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
@@ -314,6 +316,20 @@ export function useDispatchDocket(caseNo: string) {
 /** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, after a failed send. */
 export function useResendDocketEmail(caseNo: string) {
   return useCaseAction<void>(caseNo, (base) => api(`${base}/dispatch/email`, { method: 'POST', body: {} }), { otherCases: true })
+}
+
+/** What blocks an e-visa's "Submitted online" (0008 Decision 11), and when it comes back due to check the portal. */
+export function useSubmitOnlineCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.submitOnlineCheck(caseNo),
+    queryFn: () => api<SubmitOnlineCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/submit-online/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Submitted online" (0008 Decision 11): an e-visa moves to At vendor, with no docket. */
+export function useSubmitOnline(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/submit-online`, { method: 'POST', body }))
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */
