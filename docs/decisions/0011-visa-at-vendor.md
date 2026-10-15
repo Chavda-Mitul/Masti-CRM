@@ -2,7 +2,7 @@
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
   it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2); correcting a wrong invoice with a credit
-  note and its replacement (15 Oct 2026, components 3a–3c). A "Built" note is added under each part as its component lands.
+  note and its replacement (15 Oct 2026, components 3a–3c); recall (15 Oct 2026, components 4a–4b). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -261,6 +261,58 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
   and it closes after the normal handover. The passports are still in transit back to the office and must be counted
   in and handed back formally, so the chain of custody is kept. Until Steps 7–8 are built, a recalled case waits there.
 
+**Decided 15 Oct 2026 (project lead), while planning component 4:**
+- **When:** any time at At vendor, before or after the vendor submits the file at the embassy (an application can
+  still be withdrawn). Not once the decision is recorded.
+- **The reason:** a **recall-reasons list** the HOD edits (Embassy taking too long, Client cancelled the trip,
+  Documents changed ⚠️), so reports can count why files come back. The credit note's own reason is always "Recall".
+- **"Change refund (HOD)":** per traveller, up to what that traveller was charged (embassy, VFS, other). **Never
+  Masti's service charge**, so the part credit note carries no GST, and M38(b) doesn't arise.
+- **After the recall:** due the next office day at 11:00 ⚠️ (`visa.recallReturn`), to chase the vendor for the papers.
+
+**Built 15 Oct 2026** (component 4, in two steps):
+
+- **4a, the recall-reasons list** (`b868c7f`):
+  - Table `RecallReason`, with the code CHECK (migration `20261015170000_recall_reasons`).
+  - Seeded ⚠️: Embassy taking too long, Client cancelled the trip, Documents changed.
+  - `GET/POST/PATCH /api/masters/recall-reasons`: Visa staff read; the Visa HOD or the Head edit.
+  - Settings → Masters → Lists → **Recall reasons**.
+- **4b, the recall:**
+  - `GET /api/visa/cases/:caseNo/recall/check` returns:
+    - each traveller's line, with what they were charged and the default refund
+    - the default total, `canChangeRefund`, the next credit-note number, `dueAt`, and the blockers
+  - `POST /api/visa/cases/:caseNo/recall` with `{ invoiceNo, reasonId, refunds?, updatedAt }`. It's for whoever can
+    act on the case, at At vendor (`WITH_VENDOR`). Refused with:
+    - 409 for an e-visa
+    - 409 with no standing invoice (cancelled, no replacement yet)
+    - 409 `RECALL_CHANGED` for another invoice; STALE; postponed; any other step
+    - 400 under `reasonId` for a switched-off reason
+    - 403 when `refunds` goes above the default and the user isn't the Visa HOD or the Head
+    - 400 under `refunds` below the default, above what a traveller was charged, or for an unknown traveller
+    - 409 `RECALL_BLOCKED` while Masti's details can't be printed, when something goes back
+  - **In one transaction under the case lock:**
+    - the case moves to **Passport back**, due the next open office day at 11:00 ⚠️
+    - `VisaCase.recalledAt`, `recalledById` and `recallReasonId` are stamped (migration `20261015180000_recall`;
+      CHECKs: set together, only for a docket file)
+    - if anything goes back, a **PART credit note** is issued: reason "Recall", printed "Recall · Embassy taking too
+      long"; one `LUMP_SUM` line per traveller with a refund; no service charge or GST
+    - audited as `visa.recall` (the reason, the refunds, `changedByHod`, the credit note) and `visa.creditNote.issue`
+  - **Nothing goes back** (every traveller a lump sum, no HOD change): no credit note, and the case still moves.
+  - **Whole and part notes share one path** (`issueCreditNote` and `withCreditNoteNumber` in
+    `visaCreditNote.service.ts`).
+  - **The database refuses more than invoiced:** the credit-note trigger now also stops the notes on an invoice going
+    past its total. So an invoice that a recall gave part of can't be cancelled whole, and the service says so.
+  - **The case** sends `recall { at, by, reason, creditNote }`, and the invoice's `partCredits`.
+  - **Screen:**
+    - At At vendor, a **Take the file back (recall)** card (demo screen 10): the embassy fee that goes back, what's
+      kept, "Only an HOD can return more", and **Take the file back**.
+    - **The dialog:** each traveller's refund and the total; **Change refund (HOD)** for the Visa HOD or the Head,
+      which makes each refund editable; the reason; and when it's due back.
+    - **Afterwards:** the chip reads **"Recalled · Embassy taking too long"**, the card shows when, why and the credit
+      note, and Money on this case lists "MCN… gave back ₹500.00 · Recall".
+    - The step chips show Decision **skipped** (struck through), not done, and "Cancel with a credit note" is hidden
+      once a recall gave part of the invoice back.
+
 ### 7. The additional invoice
 
 - **At most one per file** ("1 of 1 used"). Its number follows the invoice's: `MVI00001379-A` ⚠️ (settled in component
@@ -286,6 +338,8 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 | `visa.collectionCheck` (the collection reminder) | `{ daysBefore: 1, at: "11:00" }` ⚠️ |
 | The file number format | capitals, digits, "-" and "/", 3–40 ⚠️ (in the code and a CHECK) |
 | `visa.creditNote` (the credit-note series) | `{ prefix: "MCN", digits: 8, startAt: 1 }` ⚠️ |
+| `visa.recallReturn` (after a recall) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
+| The recall reasons | Embassy taking too long · Client cancelled the trip · Documents changed ⚠️ |
 | The credit-note reasons | Wrong amount · Wrong client details · Wrong traveller details · Client cancelled · Recall ⚠️ |
 | The extra-charges list, with "GST applies" | Urgent submission, Photos ⚠️ (component 5) |
 | The chip wording ("With vendor · papers checked", "Submitted · …") | ours or the demo's ⚠️ |

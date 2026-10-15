@@ -13,6 +13,7 @@ import type {
   CreateDocumentProblemReasonInput,
   CreateCourierInput,
   CreateCreditNoteReasonInput,
+  CreateRecallReasonInput,
   CreateProcessingSpeedInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
@@ -23,6 +24,7 @@ import type {
   UpdateDocumentProblemReasonInput,
   UpdateCourierInput,
   UpdateCreditNoteReasonInput,
+  UpdateRecallReasonInput,
   UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
@@ -294,6 +296,35 @@ export async function updateCreditNoteReason(id: number, input: UpdateCreditNote
     entityType: "CreditNoteReason",
     entityId: id,
     write: (tx) => tx.creditNoteReason.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Recall reasons (docs/decisions/0011-visa-at-vendor.md Decision 6)
+// ---------------------------------------------------------------------------
+
+export async function listRecallReasons(active?: boolean) {
+  return prisma.recallReason.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createRecallReason(input: CreateRecallReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "recallReason.create", "RecallReason", (tx) => tx.recallReason.create({ data: input }));
+}
+
+export async function updateRecallReason(id: number, input: UpdateRecallReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.recallReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Recall reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "recallReason.update",
+    entityType: "RecallReason",
+    entityId: id,
+    write: (tx) => tx.recallReason.update({ where: { id }, data: changes }),
   });
 }
 

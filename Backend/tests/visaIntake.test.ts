@@ -287,6 +287,7 @@ describe("intake dropdowns and settings", () => {
       vendorConfirm: { afterDays: 1, at: "11:00" },
       onlineCheck: { afterDays: 1, at: "11:00" },
       submissionCheck: { afterDays: 1, at: "11:00" },
+      recallReturn: { afterDays: 1, at: "11:00" },
       collectionCheck: { daysBefore: 1, at: "11:00" },
       awb: { minLength: 4, maxLength: 30 },
       docketEmail: {

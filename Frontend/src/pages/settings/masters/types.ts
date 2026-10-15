@@ -286,6 +286,9 @@ export type ProcessingSpeed = FollowUpOption
 /** Why a credit note is issued: "Wrong amount", "Recall"… (0011 Decision 5). Picked when an invoice is cancelled. */
 export type CreditNoteReason = FollowUpOption
 
+/** Why a file is taken back from the vendor: "Embassy taking too long"… (0011 Decision 6). Picked at the recall. */
+export type RecallReason = FollowUpOption
+
 export interface Courier extends FollowUpOption {
   /** Off for "By hand": no slip (AWB) number is asked for */
   awbNeeded: boolean
@@ -322,3 +325,4 @@ export type MasterResource =
   | 'processing-speeds'
   | 'couriers'
   | 'credit-note-reasons'
+  | 'recall-reasons'

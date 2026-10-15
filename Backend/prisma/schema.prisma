@@ -83,6 +83,7 @@ model User {
   visaCasesOnline    VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
   visaCasesReceived  VisaCase[]         @relation("VisaCaseVendorReceivedBy")
   visaCasesSubmitted VisaCase[]         @relation("VisaCaseSubmittedBy")
+  visaCasesRecalled  VisaCase[]         @relation("VisaCaseRecalledBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
@@ -914,6 +915,11 @@ model VisaCase {
   collectionOn        DateTime?           @db.Date
   submittedAt         DateTime?           @db.Timestamptz(3)
   submittedById       String?
+  /// "Take the file back" (0011 Decision 6): recalled from the vendor, why and by whom; the case then goes to Passport
+  /// back. All three set together, and only for a file sent in a docket (checked in the migration).
+  recalledAt          DateTime?           @db.Timestamptz(3)
+  recalledById        String?
+  recallReasonId      Int?
   enquiry             Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering            VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy           User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
@@ -921,6 +927,8 @@ model VisaCase {
   submittedOnlineBy   User?               @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
   vendorReceivedBy    User?               @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
   submittedBy         User?               @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  recalledBy          User?               @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
+  recallReason        RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
   embassy             Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor              Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket              Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
@@ -1026,6 +1034,19 @@ model CreditNoteReason {
   sortOrder   Int          @default(0)
   isActive    Boolean      @default(true)
   creditNotes CreditNote[]
+}
+
+/// Why a file is taken back from the vendor: "Embassy taking too long", "Client cancelled the trip"…
+/// (docs/decisions/0011-visa-at-vendor.md Decision 6). Never free text. Edited by the Visa HOD or the Head; switched off,
+/// never deleted.
+model RecallReason {
+  id        Int        @id @default(autoincrement())
+  /// EMBASSY_DELAY… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  visaCases VisaCase[]
 }
 
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.

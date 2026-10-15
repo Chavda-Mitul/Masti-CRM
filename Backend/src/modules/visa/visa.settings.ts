@@ -13,6 +13,7 @@ import {
   docketEmailSettingSchema,
   onlineCheckSchema,
   submissionCheckSchema,
+  recallReturnSchema,
   collectionCheckSchema,
   type AwbSetting,
   type CollectionCheckSetting,
@@ -25,6 +26,7 @@ import {
   type OnlineCheckSetting,
   type StickerSetting,
   type SubmissionCheckSetting,
+  type RecallReturnSetting,
   type VendorConfirmSetting,
   type VisaSettings,
 } from "./visa.schemas";
@@ -41,6 +43,7 @@ export const CREDIT_NOTE_KEY = "visa.creditNote";
 export const VENDOR_CONFIRM_KEY = "visa.vendorConfirm";
 export const ONLINE_CHECK_KEY = "visa.onlineCheck";
 export const SUBMISSION_CHECK_KEY = "visa.submissionCheck";
+export const RECALL_RETURN_KEY = "visa.recallReturn";
 export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
@@ -75,6 +78,9 @@ export const DEFAULT_ONLINE_CHECK: OnlineCheckSetting = { afterDays: 1, at: "11:
 /** ⚠️ 0011 Decision 2: with no appointment to wait for, the file number is asked for the next office day at 11:00. */
 export const DEFAULT_SUBMISSION_CHECK: SubmissionCheckSetting = { afterDays: 1, at: "11:00" };
 
+/** ⚠️ 0011 Decision 6: after a recall, the processor chases the vendor for the papers the next office day at 11:00. */
+export const DEFAULT_RECALL_RETURN: RecallReturnSetting = { afterDays: 1, at: "11:00" };
+
 /** ⚠️ 0011 Decision 4 and §10.9: reminded the office day before the expected collection date, at 11:00. */
 export const DEFAULT_COLLECTION_CHECK: CollectionCheckSetting = { daysBefore: 1, at: "11:00" };
 
@@ -91,8 +97,8 @@ export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
 
 /**
  * When a case comes back due on its processor's desk after a step: the next open office day (skipping Sundays and
- * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation, the e-visa portal check and the
- * file number.
+ * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation, the e-visa portal check, the
+ * file number and a recalled file's papers.
  */
 export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma) {
   const day = await nextOpenDay(addDays(istToday(), timing.afterDays), { office: true }, db);
@@ -111,7 +117,7 @@ export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: num
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -123,6 +129,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const vendorConfirm = vendorConfirmSchema.safeParse(value(VENDOR_CONFIRM_KEY));
   const onlineCheck = onlineCheckSchema.safeParse(value(ONLINE_CHECK_KEY));
   const submissionCheck = submissionCheckSchema.safeParse(value(SUBMISSION_CHECK_KEY));
+  const recallReturn = recallReturnSchema.safeParse(value(RECALL_RETURN_KEY));
   const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
@@ -136,6 +143,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     vendorConfirm: vendorConfirm.success ? vendorConfirm.data : DEFAULT_VENDOR_CONFIRM,
     onlineCheck: onlineCheck.success ? onlineCheck.data : DEFAULT_ONLINE_CHECK,
     submissionCheck: submissionCheck.success ? submissionCheck.data : DEFAULT_SUBMISSION_CHECK,
+    recallReturn: recallReturn.success ? recallReturn.data : DEFAULT_RECALL_RETURN,
     collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,

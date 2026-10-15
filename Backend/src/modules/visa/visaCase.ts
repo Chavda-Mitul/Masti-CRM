@@ -95,14 +95,15 @@ export const visaCaseInclude = {
       igstPaise: true,
       totalPaise: true,
       file: { select: { id: true, fileName: true } },
-      /** The credit note that cancelled it, if one did (0011 Decision 5). */
+      /** Its credit notes (0011 Decisions 5 and 6): the WHOLE one that cancelled it, and any PART ones (a recall). */
       creditNotes: {
-        where: { kind: "WHOLE" },
+        orderBy: { issuedAt: "asc" },
         select: {
+          kind: true,
           creditNoteNo: true,
           issuedOn: true,
           issuedBy: personSelect,
-          reason: { select: { name: true } },
+          reason: { select: { code: true, name: true } },
           totalPaise: true,
           file: { select: { id: true, fileName: true } },
         },
@@ -123,6 +124,8 @@ export const visaCaseInclude = {
       vendorReceivedBy: personSelect,
       submittedBy: personSelect,
       embassy: { select: { id: true, name: true, city: true } },
+      recalledBy: personSelect,
+      recallReason: { select: { name: true } },
       vendor: {
         select: {
           id: true,
@@ -272,7 +275,15 @@ type InvoiceRow = VisaCaseRow["invoices"][number];
 
 /** One invoice for the case page: its totals and PDF, what it replaced, and the credit note that cancelled it. */
 function invoiceOf(inv: InvoiceRow) {
-  const note = inv.creditNotes[0];
+  const note = inv.creditNotes.find((n) => n.kind === "WHOLE");
+  const plain = (n: InvoiceRow["creditNotes"][number]) => ({
+    creditNoteNo: n.creditNoteNo,
+    issuedOn: fromDbDate(n.issuedOn),
+    issuedBy: n.issuedBy,
+    reason: n.reason.name,
+    totalPaise: n.totalPaise,
+    file: n.file,
+  });
   return {
     invoiceNo: inv.invoiceNo,
     issuedOn: fromDbDate(inv.issuedOn),
@@ -285,7 +296,9 @@ function invoiceOf(inv: InvoiceRow) {
     /** The cancelled invoice this one replaces (0011 Decision 5). */
     replaces: inv.replaces?.invoiceNo ?? null,
     /** Cancelled by a WHOLE credit note (0011 Decision 5): it no longer counts as the case's invoice. */
-    cancelled: note ? { ...note, issuedOn: fromDbDate(note.issuedOn), reason: note.reason.name } : null,
+    cancelled: note ? plain(note) : null,
+    /** What PART credit notes gave back on it (a recall, 0011 Decision 6); it still stands. */
+    partCredits: inv.creditNotes.filter((n) => n.kind === "PART").map(plain),
   };
 }
 
@@ -400,6 +413,16 @@ export function toVisaCaseDto(
     invoice: row.invoices[0] ? invoiceOf(row.invoices[0]) : null,
     /** The earlier invoices of the chain, each cancelled and replaced, newest first. */
     earlierInvoices: row.invoices.slice(1).map(invoiceOf),
+    /** "Take the file back" (0011 Decision 6): who, when, why, and the credit note that gave the embassy fee back. */
+    recall: visa.recalledAt && {
+      at: visa.recalledAt,
+      by: visa.recalledBy,
+      reason: visa.recallReason!.name,
+      creditNote: (() => {
+        const n = row.invoices.flatMap((i) => i.creditNotes).find((c) => c.kind === "PART" && c.reason.code === "RECALL");
+        return n ? { creditNoteNo: n.creditNoteNo, totalPaise: n.totalPaise, file: n.file } : null;
+      })(),
+    },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */

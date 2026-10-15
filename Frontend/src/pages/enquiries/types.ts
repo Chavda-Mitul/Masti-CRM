@@ -361,6 +361,14 @@ export interface CaseInvoice {
   file: { id: string; fileName: string }
   /** The cancelled invoice this one replaces (0011 Decision 5), or null for the case's first. */
   replaces: string | null
+  /** What PART credit notes gave back on it (a recall, 0011 Decision 6); it still stands. */
+  partCredits: {
+    creditNoteNo: string
+    issuedOn: string
+    reason: string
+    totalPaise: number
+    file: { id: string; fileName: string }
+  }[]
   /** The WHOLE credit note that cancelled it (0011 Decision 5): it no longer counts as the case's invoice. */
   cancelled: {
     creditNoteNo: string
@@ -371,6 +379,28 @@ export interface CaseInvoice {
     totalPaise: number
     file: { id: string; fileName: string }
   } | null
+}
+
+/** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
+export interface RecallCheck {
+  invoiceNo: string
+  lines: {
+    /** The invoice's line, 1, 2, 3… */
+    position: number
+    name: string
+    form: 'LUMP_SUM' | 'ITEMISED'
+    embassyFeePaise: number | null
+    /** What the traveller was charged: the most that can go back */
+    chargedPaise: number
+    /** The embassy fee, or nothing on a lump sum */
+    defaultRefundPaise: number
+  }[]
+  defaultTotalPaise: number
+  /** The Visa HOD or the Head: "Change refund (HOD)" */
+  canChangeRefund: boolean
+  creditNoteNo: string
+  dueAt: string
+  blockers: { kind: string; label: string; items: string[] }[]
 }
 
 /** GET /api/visa/cases/:caseNo/invoice/cancel/check (0011 Decision 5): what cancelling it gives back, and what blocks it. */
@@ -494,6 +524,13 @@ export interface VisaCase {
   invoice: CaseInvoice | null
   /** The earlier invoices of the chain, each cancelled and replaced, newest first (0011 Decision 5) */
   earlierInvoices: CaseInvoice[]
+  /** "Take the file back" (0011 Decision 6): who, when, why, and the credit note that gave the embassy fee back */
+  recall: {
+    at: string
+    by: PersonRef | null
+    reason: string
+    creditNote: { creditNoteNo: string; totalPaise: number; file: { id: string; fileName: string } } | null
+  } | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

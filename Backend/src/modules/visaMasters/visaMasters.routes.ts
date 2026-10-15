@@ -11,6 +11,7 @@ import {
   createOfferingSchema,
   createCourierSchema,
   createCreditNoteReasonSchema,
+  createRecallReasonSchema,
   createProcessingSpeedSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
@@ -24,6 +25,7 @@ import {
   updateOfferingSchema,
   updateCourierSchema,
   updateCreditNoteReasonSchema,
+  updateRecallReasonSchema,
   updateProcessingSpeedSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
@@ -150,6 +152,20 @@ router.post("/credit-note-reasons", visaEdit, async (req, res) => {
 router.patch("/credit-note-reasons/:id", visaEdit, async (req, res) => {
   const body = updateCreditNoteReasonSchema.parse(req.body);
   res.json({ creditNoteReason: await mastersService.updateCreditNoteReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Recall reasons (docs/decisions/0011-visa-at-vendor.md Decision 6)
+router.get("/recall-reasons", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ recallReasons: await mastersService.listRecallReasons(active) });
+});
+router.post("/recall-reasons", visaEdit, async (req, res) => {
+  const body = createRecallReasonSchema.parse(req.body);
+  res.status(201).json({ recallReason: await mastersService.createRecallReason(body, actorOf(req)) });
+});
+router.patch("/recall-reasons/:id", visaEdit, async (req, res) => {
+  const body = updateRecallReasonSchema.parse(req.body);
+  res.json({ recallReason: await mastersService.updateRecallReason(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

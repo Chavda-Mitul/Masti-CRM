@@ -63,6 +63,13 @@ export const CREDIT_NOTE_REASONS = [
   { code: "RECALL", name: "Recall", sortOrder: 5 },
 ];
 
+/** Why a file is taken back from the vendor (docs/decisions/0011-visa-at-vendor.md Decision 6): ours, for Masti ⚠️. */
+export const RECALL_REASONS = [
+  { code: "EMBASSY_DELAY", name: "Embassy taking too long", sortOrder: 1 },
+  { code: "CLIENT_CANCELLED_TRIP", name: "Client cancelled the trip", sortOrder: 2 },
+  { code: "DOCUMENTS_CHANGED", name: "Documents changed", sortOrder: 3 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -113,6 +120,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const reason of CREDIT_NOTE_REASONS) {
     await db.creditNoteReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  }
+  for (const reason of RECALL_REASONS) {
+    await db.recallReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });
