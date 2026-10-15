@@ -19,7 +19,7 @@ import App from './App'
 import { ME_KEY } from './auth/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './components/Toast'
-import { ApiError } from './lib/api'
+import { ApiError, retryWhileUnreachable } from './lib/api'
 
 // If any request comes back 401 (session ended, user deactivated), mark the user as signed out.
 // The route guards then send them to the login page.
@@ -36,7 +36,8 @@ const queryClient = new QueryClient({
     },
   }),
   defaultOptions: {
-    queries: { refetchOnWindowFocus: true, retry: (count, error) => !(error instanceof ApiError) && count < 2 },
+    // Saves (mutations) keep TanStack's default of no retry, so nothing is saved twice.
+    queries: { refetchOnWindowFocus: true, retry: retryWhileUnreachable },
   },
 })
 
