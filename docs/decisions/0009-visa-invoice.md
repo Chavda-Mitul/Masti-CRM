@@ -92,6 +92,11 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - Hand-written CHECKs:
     - every amount is 0 to ₹10,00,000 (a sanity limit)
     - the amounts match the form: a lump sum has only `lumpSumPaise`; itemised has the three fees (0 allowed)
+  - **The whole quote is at most ₹1,00,00,000 before GST** (`MAX_QUOTE_PAISE`, a sanity limit; added 15 Oct 2026 from a
+    code review). The invoice's totals are INTEGER paise (at most about ₹2.14 crore). Sixty travellers at ₹10,00,000
+    each could otherwise save a quote whose invoice then failed with a server error. With GST at most 28% on the
+    service charge, a quote under the limit always fits. It's checked when saving (400 on `lines`), not in the
+    database, because the total spans the lines.
   - Audited as `visa.quote.save` on the Enquiry, with `clientId`; before and after are the whole quote.
   - The case sends `quote { processingSpeed, serviceChargePaise, lines (each with totalPaise), travellersPaise,
     gstRatePercent, gstPaise, totalPaise, complete, updatedAt, updatedBy }`, plus `gstRatePercent` for a quote not yet

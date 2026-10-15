@@ -257,6 +257,12 @@ export type DispatchDocketInput = z.infer<typeof dispatchDocketSchema>;
 /** ₹10,00,000 per amount: a sanity limit, not a business rule (checked in the database too). */
 export const MAX_AMOUNT_PAISE = 100_000_000;
 
+/**
+ * ₹1,00,00,000 for the travellers' amounts and the service charge together: a sanity limit, not a business rule. With
+ * GST (at most 28%) on the service charge, the invoice's total then always fits its column (an INTEGER, ₹2.14 crore).
+ */
+export const MAX_QUOTE_PAISE = 1_000_000_000;
+
 const paise = z
   .number("Enter an amount.")
   .int("Whole paise only.")
@@ -273,20 +279,27 @@ const quoteLineSchema = z.discriminatedUnion("form", [
  * Saving the whole quote. `updatedAt` is the quote's own token: null for a new quote, else the quote's updatedAt as the
  * page loaded it (a change by someone else in between is a 409 STALE).
  */
-export const saveQuoteSchema = z.object({
-  processingSpeedId: z.number("Pick the processing speed.").int().positive("Pick the processing speed."),
-  serviceChargePaise: paise,
-  lines: z.array(quoteLineSchema).min(1, "Give every traveller an amount.").max(MAX_ADULTS + MAX_CHILDREN),
-  updatedAt: z.iso.datetime("Reload and try again.").nullable(),
-});
+export const saveQuoteSchema = z
+  .object({
+    processingSpeedId: z.number("Pick the processing speed.").int().positive("Pick the processing speed."),
+    serviceChargePaise: paise,
+    lines: z.array(quoteLineSchema).min(1, "Give every traveller an amount.").max(MAX_ADULTS + MAX_CHILDREN),
+    updatedAt: z.iso.datetime("Reload and try again.").nullable(),
+  })
+  .refine(
+    (q) =>
+      q.lines.reduce((sum, l) => sum + (l.form === "LUMP_SUM" ? l.lumpSumPaise : l.embassyFeePaise + l.vfsFeePaise + l.otherFeePaise), 0) +
+        q.serviceChargePaise <=
+      MAX_QUOTE_PAISE,
+    { path: ["lines"], message: "The quote comes to more than ₹1,00,00,000 before GST." },
+  );
 
 export type SaveQuoteInput = z.infer<typeof saveQuoteSchema>;
 
 /**
- * Raising the invoice (docs/decisions/0009-visa-invoice.md): the quote's updatedAt as the dialog showed it, so an
- * invoice is never made from amounts nobody saw.
+ * Raising the invoice (docs/decisions/0009-visa-invoice.md): what the dialog showed, sent back (the quote's updatedAt,
+ * the GST rate, the tax type and the total), so an invoice is never made from amounts nobody saw.
  */
-/** What the Raise dialog showed, sent back: an invoice is never made from a quote, tax or total nobody saw. */
 export const raiseInvoiceSchema = z.object({
   quoteUpdatedAt: z.iso.datetime("Reload and try again."),
   taxType: z.enum(InvoiceTaxType, "Reload and try again."),
