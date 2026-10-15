@@ -27,6 +27,7 @@ import {
   ONLINE_CHECK_KEY,
   STICKER_KEY,
   SUBMISSION_CHECK_KEY,
+  COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
 import { toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
@@ -286,8 +287,8 @@ export async function getSettings() {
  * The Head or the Visa HOD. A follow-up timing change applies to enquiries saved after it; a file size limit to the next
  * upload; a docket prefix to the next new docket; a sticker size to the next print; the GST rate to the quotes' preview
  * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch; the portal
- * check's timing to the next "Submitted online"; the file-number check's to the next "Vendor got it"; the vendor email's
- * wording to the next email. Only the keys sent and changed are written, each audited on its own.
+ * check's timing to the next "Submitted online"; the file-number check's to the next "Vendor got it"; the collection
+ * reminder's to the next save of a collection date; the vendor email's wording to the next email. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -301,6 +302,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: VENDOR_CONFIRM_KEY, before: before.vendorConfirm, after: input.vendorConfirm },
     { key: ONLINE_CHECK_KEY, before: before.onlineCheck, after: input.onlineCheck },
     { key: SUBMISSION_CHECK_KEY, before: before.submissionCheck, after: input.submissionCheck },
+    { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));

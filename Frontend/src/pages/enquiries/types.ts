@@ -446,6 +446,15 @@ export interface VisaCase {
   submittedOnline: { at: string; by: PersonRef | null } | null
   /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
   vendorReceived: { at: string; by: PersonRef | null } | null
+  /** "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy and the collection date. */
+  submission: {
+    vendorFileNo: string
+    embassy: { id: number; name: string; city: string }
+    /** YYYY-MM-DD */
+    collectionOn: string
+    at: string
+    by: PersonRef | null
+  } | null
   /** GST on the service charge (the setting visa.invoice), for a quote being entered */
   gstRatePercent: number
   /** The price (0009), or null until someone enters it */

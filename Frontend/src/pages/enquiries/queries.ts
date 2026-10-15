@@ -348,6 +348,13 @@ export function useVendorReceived(caseNo: string) {
   return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/vendor-received`, { method: 'POST', body }))
 }
 
+/** "Submitted at the embassy" (0011 Decisions 3 and 4), or a change to it at Step 5. */
+export function useSaveSubmission(caseNo: string) {
+  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/submission`, { method: 'PUT', body }),
+  )
+}
+
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */
 export function useDocketSticker(caseNo: string, enabled = true) {
   return useQuery({

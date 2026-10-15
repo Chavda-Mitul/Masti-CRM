@@ -1,7 +1,7 @@
 # 0011 · Visa Step 5: at the vendor
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
-  it" (15 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
+  it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -114,6 +114,52 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
   (proposed; settled in component 2's plan). The case isn't touched until then.
 - **The chip:** "Submitted · FR-MUM-88421", as in the demo.
 
+**Decided 15 Oct 2026 (project lead), while planning component 2:**
+- **One file number per file,** as in the demo. The per-traveller portal numbers are already in Step 3.
+- **The file number and the date can be changed** while the file is at Step 5, by its processor, the Visa HOD or the
+  Head. Every change is audited with the old and new values; no reason is asked.
+- **"Submitted at the embassy" is stamped when it's first saved;** nothing is picked.
+- **The reminder:** due the open office day before the collection date, at 11:00 ⚠️ (a setting).
+
+**Built 15 Oct 2026** (component 2):
+
+- **API and data:**
+  - `PUT /api/visa/cases/:caseNo/submission` with `{ vendorFileNo, embassyId, collectionOn, updatedAt }` saves it, and
+    changes it later; it returns `{ case }`. It's for whoever can act on the case (`WITH_VENDOR`). Refused with:
+    - 409 "Confirm the vendor got it first."
+    - 409 for an e-visa ("…there's no vendor file number")
+    - 409 at any other step, STALE, postponed
+    - 400 under `vendorFileNo`: spaces are dropped and letters made capitals, then it must be 3–40 capitals, digits,
+      "-" or "/", starting with a letter or digit ⚠️
+    - 400 under `embassyId`: another country's embassy, or one switched off. The one already on the case stays
+      allowed, so its date can still move.
+    - 400 under `collectionOn`: today or earlier; more than 366 days ahead; or a day the embassy is closed ("Dussehra:
+      French embassy, Mumbai is closed that day. Pick another."). That's `blockedDays` with `{ embassyId }`: its own,
+      its country's and all embassies' holidays, and the seeded weekly Sunday.
+  - **Columns** on `VisaCase`: `vendorFileNo`, `embassyId`, `collectionOn`, `submittedAt`, `submittedById` (migration
+    `20261015130000_submission`). CHECKs: all five set together; only after the vendor got it; the file-number pattern.
+  - **In one transaction:**
+    - the first save stamps who and when, and is audited as `visa.submitted`
+    - a later change keeps the stamp, and is audited as `visa.submission.update` with the old and new values
+    - a save that changes nothing writes nothing
+  - **`dueAt`:** the open office day `daysBefore` the date, walking back over Sundays and office holidays (the new
+    `previousOpenDay` in `holidays/blockedDays.ts`), and never before today, at `at`. The setting is
+    `visa.collectionCheck` → `{ daysBefore: 1, at: "11:00" }` ⚠️.
+  - The case sends `submission { vendorFileNo, embassy { id, name, city }, collectionOn, at, by }`.
+- **Screen:**
+  - After Vendor got it, the header button **Mark submitted →** opens a dialog with:
+    - the file number
+    - the embassy (shown as text when the country has one, a list when it has several, "No embassy for France yet" when
+      none)
+    - a **month calendar** (`CollectionCalendar`, Monday first): the days the embassy is closed are struck through with
+      the holiday's name; today and earlier can't be picked
+  - The chip then reads **"Submitted · FR-MUM88421"**, and the header shows "Record the decision → Soon" (Step 6).
+  - **The With the vendor card** shows "Submitted at the embassy" with its date and the file number.
+  - **A new Expected collection date card** shows the embassy, the date, and "Mon 26 Oct, 11:00 · Neha: Check with the
+    vendor", with **Change**, which reopens the dialog filled in.
+  - The calendar is in the dialog rather than always on the card, so the file number and the date are always saved
+    together.
+
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
@@ -158,8 +204,8 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 | What | Seeded with |
 | --- | --- |
 | `visa.submissionCheck` (no appointment) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
-| The collection reminder | the open office day before, at 11:00 ⚠️ (component 2) |
-| The file number format | capitals, digits and dashes, 3–40 ⚠️ (component 2) |
+| `visa.collectionCheck` (the collection reminder) | `{ daysBefore: 1, at: "11:00" }` ⚠️ |
+| The file number format | capitals, digits, "-" and "/", 3–40 ⚠️ (in the code and a CHECK) |
 | The credit-note series, the reasons list | ⚠️ (component 3) |
 | The extra-charges list, with "GST applies" | Urgent submission, Photos ⚠️ (component 5) |
 | The chip wording ("With vendor · papers checked", "Submitted · …") | ours or the demo's ⚠️ |

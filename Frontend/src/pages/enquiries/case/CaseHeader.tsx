@@ -11,6 +11,7 @@ import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
+import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
 import { VendorReceivedDialog } from './VendorReceivedDialog'
 
@@ -37,7 +38,9 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   // An e-visa has no docket: it goes in on the portal (0008 Decision 11). Once in, the step's own "Submitted" ⚠️.
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt && !c.vendorNeeded) return <span className="chip chip-ok">File ready · to submit online</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
-  // On the way to the vendor until "Vendor got it" (0011 Decision 2); the seeded "Submitted" comes with the file number.
+  // On the way to the vendor until "Vendor got it" (0011 Decision 2); the step's own "Submitted" comes with the file
+  // number, as in the demo ("Submitted · FR-MUM-88421").
+  if (c.stage.code === 'AT_VENDOR' && c.submission) return <span className="chip chip-info">{c.stage.statusLabel} · {c.submission.vendorFileNo}</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED' && c.vendorReceived) return <span className="chip chip-info">With vendor · papers checked</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
@@ -58,6 +61,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [dispatching, setDispatching] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [recording, setRecording] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -146,8 +150,18 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
-  // After "Vendor got it", the file number and the collection date come next (0011 component 2).
-  const label = c.stage.code === 'AT_VENDOR' && c.vendorReceived ? 'Mark submitted' : c.stage.nextStepLabel
+  // After "Vendor got it": the file number, the embassy and the collection date (0011 Decisions 3 and 4).
+  if (c.stage.code === 'AT_VENDOR' && c.status === 'OPEN' && canAct && c.vendorReceived && !c.submission) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setRecording(true)}>
+          Mark submitted →
+        </button>
+        {recording && <SubmissionDialog visaCase={c} onClose={() => setRecording(false)} />}
+      </>
+    )
+  }
+  const label = c.stage.nextStepLabel
   return (
     <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with a later step' : 'Only the case’s owner, its HOD and the Head can do this'}>
       {label} → {canAct && <span className="tag">Soon</span>}

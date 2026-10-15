@@ -24,6 +24,7 @@ import {
   DEFAULT_ONLINE_CHECK,
   DEFAULT_STICKER,
   DEFAULT_SUBMISSION_CHECK,
+  DEFAULT_COLLECTION_CHECK,
   DEFAULT_VENDOR_CONFIRM,
   DOCKET_EMAIL_KEY,
   DOCKET_KEY,
@@ -32,6 +33,7 @@ import {
   ONLINE_CHECK_KEY,
   STICKER_KEY,
   SUBMISSION_CHECK_KEY,
+  COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
@@ -90,7 +92,8 @@ async function main() {
   // Docket numbers and the parcel sticker's size (docs/decisions/0008-visa-docket-dispatch.md Decisions 5 and 7) ⚠️, the
   // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, the vendor-confirm timing and slip-number
   // lengths (0008 Decisions 6 and 9) ⚠️, the e-visa portal check (0008 Decision 11) ⚠️, the vendor email's wording
-  // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, and Masti's own details.
+  // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, the collection reminder (0011
+  // Decision 4) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -98,6 +101,7 @@ async function main() {
     [VENDOR_CONFIRM_KEY, DEFAULT_VENDOR_CONFIRM],
     [ONLINE_CHECK_KEY, DEFAULT_ONLINE_CHECK],
     [SUBMISSION_CHECK_KEY, DEFAULT_SUBMISSION_CHECK],
+    [COLLECTION_CHECK_KEY, DEFAULT_COLLECTION_CHECK],
     [AWB_KEY, DEFAULT_AWB],
     [DOCKET_EMAIL_KEY, DEFAULT_DOCKET_EMAIL],
     [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],

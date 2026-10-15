@@ -9,6 +9,7 @@ import { ApplicationCard } from './ApplicationCard'
 import { ArrivalCard } from './ArrivalCard'
 import { CaseHeader } from './CaseHeader'
 import { CaseRail } from './CaseRail'
+import { CollectionCard } from './CollectionCard'
 import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
 import { DispatchCard } from './DispatchCard'
@@ -76,6 +77,7 @@ export function VisaCasePage() {
               </div>
             )
           )}
+          <CollectionCard visaCase={c} />
           <MaturedBanner visaCase={c} />
           <ChecklistCard visaCase={c} />
           <TripCard visaCase={c} />
