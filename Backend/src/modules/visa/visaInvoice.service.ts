@@ -289,11 +289,10 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
   };
   check(pre);
 
-  // The images are read before the case is locked: a slow bucket never holds the lock.
-  const images: InvoiceImages = {
-    logo: pre.images.logo && { bytes: await getObject(pre.images.logo.storageKey), contentType: pre.images.logo.contentType },
-    signature: pre.images.signature && { bytes: await getObject(pre.images.signature.storageKey), contentType: pre.images.signature.contentType },
-  };
+  // The images are read before the case is locked, side by side: a slow bucket never holds the lock.
+  const download = async (image: typeof pre.images.logo) => image && { bytes: await getObject(image.storageKey), contentType: image.contentType };
+  const [logo, signature] = await Promise.all([download(pre.images.logo), download(pre.images.signature)]);
+  const images: InvoiceImages = { logo, signature };
 
   for (let attempt = 1; ; attempt++) {
     let storageKey: string | null = null;
