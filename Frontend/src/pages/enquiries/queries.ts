@@ -9,6 +9,7 @@ import type {
   DocketStickerData,
   DispatchCheck,
   InvoiceCheck,
+  InvoiceTaxType,
   SaveQuoteBody,
   DocumentArrival,
   DocumentCheck,
@@ -284,9 +285,10 @@ export function useInvoiceCheck(caseNo: string) {
   })
 }
 
-/** Raises the locked tax invoice from the quote the dialog showed (0009). */
+/** Raises the locked tax invoice from what the dialog showed (0009): its quote, GST rate, tax type and total. */
 export function useRaiseInvoice(caseNo: string) {
-  return useCaseAction<{ quoteUpdatedAt: string }>(caseNo, (base, body) => api(`${base}/invoice`, { method: 'POST', body }), {
+  type Shown = { quoteUpdatedAt: string; taxType: InvoiceTaxType; gstRatePercent: number; totalPaise: number }
+  return useCaseAction<Shown>(caseNo, (base, body) => api(`${base}/invoice`, { method: 'POST', body }), {
     otherCases: true,
   })
 }

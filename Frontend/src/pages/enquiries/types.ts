@@ -357,6 +357,8 @@ export interface InvoiceCheck {
   alreadyRaised: string | null
   preview: {
     invoiceNo: string
+    /** The quote it was made from: sent back with the rate, tax type and total when raising */
+    quoteUpdatedAt: string
     gstRatePercent: number
     taxType: InvoiceTaxType
     grossPaise: number

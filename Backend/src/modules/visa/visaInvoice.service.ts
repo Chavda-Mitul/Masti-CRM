@@ -166,7 +166,15 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
   return {
     blockers,
     alreadyRaised: g.enquiry.invoice?.invoiceNo ?? null,
-    preview: ready ? { invoiceNo: await nextInvoiceNo(g, prisma), gstRatePercent: g.invoiceSetting.gstRatePercent, ...totalsOf(g) } : null,
+    // The dialog sends back the quote, the rate, the tax type and the total it showed (raiseInvoice compares them).
+    preview: ready
+      ? {
+          invoiceNo: await nextInvoiceNo(g, prisma),
+          quoteUpdatedAt: g.visa.quote!.updatedAt,
+          gstRatePercent: g.invoiceSetting.gstRatePercent,
+          ...totalsOf(g),
+        }
+      : null,
   };
 }
 
@@ -233,10 +241,10 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
 }
 
 /**
- * Raises the case's invoice (0009 Decisions 2–9): refused while anything blocks it, or if the quote changed since the
- * dialog showed it. In one transaction under the case lock: the next number, the PDF made and stored, the file row, the
- * invoice and its lines, and the audit. The PDF is removed again if the transaction fails after storing it, and a
- * failure uses no number.
+ * Raises the case's invoice (0009 Decisions 2–9): refused while anything blocks it, or if the quote, the GST rate, the
+ * tax type (the client's state) or the total changed since the dialog showed them. In one transaction under the case
+ * lock: the next number, the PDF made and stored, the file row, the invoice and its lines, and the audit. The PDF is
+ * removed again if the transaction fails after storing it, and a failure uses no number.
  */
 export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, QUOTING);
@@ -246,6 +254,12 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
     const blockers = blockersOf(g);
     if (blockers.length) throw new HttpError(409, "The invoice can't be raised yet.", { code: "INVOICE_BLOCKED", blockers });
     assertFresh(g.visa.quote!.updatedAt, input.quoteUpdatedAt, "quote");
+    const { taxType, totalPaise } = totalsOf(g);
+    if (taxType !== input.taxType || g.invoiceSetting.gstRatePercent !== input.gstRatePercent || totalPaise !== input.totalPaise) {
+      throw new HttpError(409, "The GST or the total changed after this opened (the GST rate or the client's state). Check the new amounts and raise again.", {
+        code: "INVOICE_CHANGED",
+      });
+    }
   };
   check(pre);
 

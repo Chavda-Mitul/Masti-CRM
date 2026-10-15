@@ -83,8 +83,8 @@ async function add(agent: Agent, caseNo: string) {
 
 async function raise(agent: Agent, c: Case, clientName = "Rakesh Mehta") {
   await makeInvoiceable(agent, c, { clientName });
-  const quoteUpdatedAt = (await load(agent, c.caseNo)).quote!.updatedAt;
-  expect((await agent.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt })).status).toBe(200);
+  const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await agent.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body.preview;
+  expect((await agent.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
 }
 
 /** Presses Dispatch with the files the page shows (or `caseNos`), by Blue Dart unless told otherwise. */

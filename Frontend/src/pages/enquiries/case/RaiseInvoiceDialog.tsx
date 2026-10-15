@@ -15,8 +15,9 @@ function fixLink(kind: InvoiceCheck['blockers'][number]['kind'], c: VisaCase) {
 
 /**
  * "Raise invoice" (docs/decisions/0009-visa-invoice.md): first what blocks it, with where to fix each thing; then the
- * invoice it will make, amount by amount, and a clear warning that it can never be edited. The quote the dialog showed is
- * sent back, so an invoice is never made from amounts nobody saw.
+ * invoice it will make, amount by amount, and a clear warning that it can never be edited. What the dialog showed (the
+ * quote, the GST rate, CGST + SGST or IGST, and the total) is sent back, so an invoice is never made from amounts nobody
+ * saw. If any of it changed meanwhile, the amounts are loaded again for another look.
  */
 export function RaiseInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
@@ -33,16 +34,19 @@ export function RaiseInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCas
   const q = c.quote
 
   const submit = () => {
-    if (!q) return
+    if (!preview) return
+    const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = preview
     raise.mutate(
-      { quoteUpdatedAt: q.updatedAt },
+      { quoteUpdatedAt, taxType, gstRatePercent, totalPaise },
       {
         onSuccess: (updated) => {
           toast({ tone: 'ok', message: `Invoice ${updated.invoice?.invoiceNo ?? ''} raised.` })
           onClose()
         },
         onError: (err) => {
-          if (errorCode(err) === 'INVOICE_BLOCKED') void queryClient.invalidateQueries({ queryKey: enquiryKeys.invoiceCheck(c.caseNo) })
+          if (['INVOICE_BLOCKED', 'INVOICE_CHANGED', 'STALE'].includes(errorCode(err) ?? '')) {
+            void queryClient.invalidateQueries({ queryKey: enquiryKeys.invoiceCheck(c.caseNo) })
+          }
         },
       },
     )
@@ -130,7 +134,7 @@ export function RaiseInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCas
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary" disabled={!preview || blockers.length > 0 || raise.isPending} onClick={submit}>
+          <button type="button" className="btn btn-primary" disabled={!preview || blockers.length > 0 || raise.isPending || check.isFetching} onClick={submit}>
             {raise.isPending ? 'Raising…' : preview ? `Raise invoice ${preview.invoiceNo}` : 'Raise invoice'}
           </button>
         </div>

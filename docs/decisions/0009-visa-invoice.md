@@ -190,9 +190,16 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - `GET /api/visa/cases/:caseNo/invoice/check` returns `{ blockers, alreadyRaised, preview }` for anyone who can
     open the case. Each blocker is grouped by kind: `QUOTE`, `TRAVELLERS` (unnamed), `CLIENT` (the readiness setting,
     plus the state), `COMPANY` (Decision 8's list) and `NOT_ENGLISH`.
-  - `POST /api/visa/cases/:caseNo/invoice` with `{ quoteUpdatedAt }`, for the case owner, the Visa HOD or the Head,
-    from Enquiry to Docket & dispatch. It's refused with 409 `INVOICE_BLOCKED` `{ blockers }`, 409 STALE if the quote
-    changed since the dialog, or 409 if already raised.
+  - `POST /api/visa/cases/:caseNo/invoice` with `{ quoteUpdatedAt, taxType, gstRatePercent, totalPaise }`, for the
+    case owner, the Visa HOD or the Head, from Enquiry to Docket & dispatch. It's refused with:
+    - 409 `INVOICE_BLOCKED` `{ blockers }`
+    - 409 STALE if the quote changed since the dialog
+    - 409 `INVOICE_CHANGED` if the GST rate, the tax type (the client's state) or the total did
+    - 409 if already raised
+  - **What the dialog showed is sent back** (fixed 15 Oct 2026, from a code review). The preview carries the
+    `quoteUpdatedAt` it was made from, and the dialog sends that back with the rate, tax type and total. Before, only
+    the case page's quote time was sent, so a GST-rate or client-state change after the preview (or a background reload
+    of the page) could lock in amounts nobody saw. On STALE or `INVOICE_CHANGED`, the dialog loads the amounts again.
   - Tables `Invoice` (snapshots of the client, Masti and the terms; place of supply; tax type; the totals in paise),
     `InvoiceLine` and `InvoiceCounter`, plus `CaseFileKind.INVOICE` (migration `20261013140000_invoices`).
   - **Triggers refuse any UPDATE or DELETE of an invoice or its lines.** CHECKs make the total add up, the tax match its

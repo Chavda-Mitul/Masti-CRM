@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -286,8 +286,12 @@ export type SaveQuoteInput = z.infer<typeof saveQuoteSchema>;
  * Raising the invoice (docs/decisions/0009-visa-invoice.md): the quote's updatedAt as the dialog showed it, so an
  * invoice is never made from amounts nobody saw.
  */
+/** What the Raise dialog showed, sent back: an invoice is never made from a quote, tax or total nobody saw. */
 export const raiseInvoiceSchema = z.object({
   quoteUpdatedAt: z.iso.datetime("Reload and try again."),
+  taxType: z.enum(InvoiceTaxType, "Reload and try again."),
+  gstRatePercent: z.number("Reload and try again."),
+  totalPaise: z.number("Reload and try again.").int("Reload and try again."),
 });
 
 export type RaiseInvoiceInput = z.infer<typeof raiseInvoiceSchema>;

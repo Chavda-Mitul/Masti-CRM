@@ -36,11 +36,28 @@ async function invoiceableCase({ state = "24", mobile = "98250 41234", clientNam
   return { ...saved, staff, ...(await makeInvoiceable(staff, saved, { state, clientName, service })) };
 }
 
-async function raise(agent: Agent, caseNo: string, quoteUpdatedAt?: string) {
-  const seen = quoteUpdatedAt ?? (await load(agent, caseNo)).quote!.updatedAt;
-  return agent.post(`/api/visa/cases/${caseNo}/invoice`).send({ quoteUpdatedAt: seen });
-}
 const check = (agent: Agent, caseNo: string) => agent.get(`/api/visa/cases/${caseNo}/invoice/check`);
+
+interface Shown {
+  quoteUpdatedAt: string;
+  taxType: string;
+  gstRatePercent: number;
+  totalPaise: number;
+}
+/** What the Raise dialog showed and sends back: its preview's quote, rate, tax type and total. */
+async function shown(agent: Agent, caseNo: string): Promise<Shown> {
+  const { preview } = (await check(agent, caseNo)).body as { preview: Shown | null };
+  if (preview) return { quoteUpdatedAt: preview.quoteUpdatedAt, taxType: preview.taxType, gstRatePercent: preview.gstRatePercent, totalPaise: preview.totalPaise };
+  // Blocked, so no preview: the press is refused for what blocks it.
+  const quote = (await load(agent, caseNo)).quote;
+  return { quoteUpdatedAt: quote?.updatedAt ?? new Date().toISOString(), taxType: "INTRA_STATE", gstRatePercent: 18, totalPaise: quote?.totalPaise ?? 0 };
+}
+
+/** Presses Raise with what the dialog shows now, or `seen`, what it showed earlier. */
+async function raise(agent: Agent, caseNo: string, seen?: Shown) {
+  const body = seen ?? (await shown(agent, caseNo));
+  return agent.post(`/api/visa/cases/${caseNo}/invoice`).send(body);
+}
 
 describe("raising the invoice", () => {
   it("makes MVI + 8 digits from the quote, with CGST + SGST for a Gujarat client, a stored PDF, and an audit row", async () => {
@@ -124,7 +141,7 @@ describe("raising the invoice", () => {
   it("is refused for a second time, a quote that changed meanwhile, and uses no number when refused", async () => {
     await mastiReady();
     const c = await invoiceableCase();
-    const seen = (await load(c.staff, c.caseNo)).quote!.updatedAt;
+    const seen = await shown(c.staff, c.caseNo);
     // The quote changes after the dialog opened.
     const travellers = c.travellers;
     const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
@@ -135,7 +152,7 @@ describe("raising the invoice", () => {
         { travellerId: travellers[0]!.id, form: "LUMP_SUM", lumpSumPaise: 100_000 },
         { travellerId: travellers[1]!.id, form: "LUMP_SUM", lumpSumPaise: 100_000 },
       ],
-      updatedAt: seen,
+      updatedAt: seen.quoteUpdatedAt,
     });
     const stale = await raise(c.staff, c.caseNo, seen);
     expect(stale.status).toBe(409);
@@ -146,6 +163,50 @@ describe("raising the invoice", () => {
     const again = await raise(c.staff, c.caseNo);
     expect(again.status).toBe(409);
     expect(again.body.message).toBe("This case already has invoice MVI00000001.");
+  });
+
+  it("is refused if the GST rate changed after the dialog showed it, and uses no number", async () => {
+    await mastiReady();
+    const c = await invoiceableCase();
+    const seen = await shown(c.staff, c.caseNo);
+    expect(seen).toMatchObject({ gstRatePercent: 18, totalPaise: 600_000 });
+    const value = { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 12, sac: "998559" };
+    await prisma.setting.upsert({ where: { key: "visa.invoice" }, update: { value }, create: { key: "visa.invoice", value } });
+
+    const changed = await raise(c.staff, c.caseNo, seen);
+    expect(changed.status).toBe(409);
+    expect(changed.body.details).toMatchObject({ code: "INVOICE_CHANGED" });
+    expect(await prisma.invoiceCounter.count()).toBe(0);
+    expect(await prisma.invoice.count()).toBe(0);
+
+    // The dialog loads the new amounts, and those are raised.
+    const now = await shown(c.staff, c.caseNo);
+    expect(now).toMatchObject({ gstRatePercent: 12, totalPaise: 600_000 - 9_000 + 6_000 });
+    const res = await raise(c.staff, c.caseNo, now);
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).invoice).toMatchObject({ gstPaise: 6_000, totalPaise: 597_000 });
+  });
+
+  it("is refused if the client's state changed after the dialog showed it (CGST + SGST became IGST)", async () => {
+    await mastiReady();
+    const c = await invoiceableCase();
+    const seen = await shown(c.staff, c.caseNo);
+    expect(seen.taxType).toBe("INTRA_STATE");
+    await prisma.client.update({ where: { id: c.client.id }, data: { stateCode: "27" } });
+
+    const changed = await raise(c.staff, c.caseNo, seen);
+    expect(changed.status).toBe(409);
+    expect(changed.body.details).toMatchObject({ code: "INVOICE_CHANGED" });
+    expect(await prisma.invoice.count()).toBe(0);
+    expect((await raise(c.staff, c.caseNo)).body.case.invoice).toMatchObject({ taxType: "INTER_STATE" });
+  });
+
+  it("is refused if the request leaves out what the dialog showed", async () => {
+    await mastiReady();
+    const c = await invoiceableCase();
+    const { quoteUpdatedAt } = await shown(c.staff, c.caseNo);
+    expect((await c.staff.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt })).status).toBe(400);
+    expect(await prisma.invoice.count()).toBe(0);
   });
 });
 
@@ -161,7 +222,7 @@ describe("what blocks it", () => {
     expect(blockers.find((b) => b.kind === "CLIENT")!.items).toEqual(["Address", "City", "State"]);
     expect(blockers.find((b) => b.kind === "COMPANY")!.items).toEqual(["PAN", "GSTIN", "State", "Bank details", "Logo", "Signature"]);
 
-    const refused = await staff.post(`/api/visa/cases/${saved.caseNo}/invoice`).send({ quoteUpdatedAt: new Date().toISOString() });
+    const refused = await raise(staff, saved.caseNo);
     expect(refused.status).toBe(409);
     expect(refused.body.details.code).toBe("INVOICE_BLOCKED");
 
@@ -185,7 +246,7 @@ describe("who and when", () => {
     const [hod, viewer, other] = [await loginAs("riya@masti.test"), await loginAs("meena@masti.test"), await loginAs("neha@masti.test")];
 
     const c = await invoiceableCase();
-    const seen = (await load(hod, c.caseNo)).quote!.updatedAt;
+    const seen = await shown(hod, c.caseNo);
     expect((await raise(viewer, c.caseNo, seen)).status).toBe(403);
     expect((await raise(other, c.caseNo, seen)).status).toBe(403);
     const ok = await raise(hod, c.caseNo, seen);
@@ -273,7 +334,7 @@ describe("taking turns", () => {
   it("two raises of one case at once give one invoice; two cases at once get consecutive numbers", async () => {
     await mastiReady();
     const a = await invoiceableCase();
-    const seen = (await load(a.staff, a.caseNo)).quote!.updatedAt;
+    const seen = await shown(a.staff, a.caseNo);
     const results = await Promise.all([raise(a.staff, a.caseNo, seen), raise(a.staff, a.caseNo, seen)]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     expect(await prisma.invoice.count()).toBe(1);
