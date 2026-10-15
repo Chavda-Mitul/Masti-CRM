@@ -321,8 +321,19 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
   HOD edits (Urgent submission, Photos… ⚠️) and type the amount. A reason is never free text, so the accounts stay
   structured. The amount is data, because urgent embassy fees vary widely. A second quote would be over-engineering for
   a ₹500 charge.
-- **GST:** each charge in the list says whether GST applies ⚠️, until Masti's accountant answers (M38).
+- ~~GST: each charge in the list says whether GST applies~~ (superseded below).
 - Locked like the invoice, with its own PDF.
+
+**Decided 15 Oct 2026 (project lead), while planning component 5:**
+- **Its number** is the main invoice's with "-A": `MVI00000001-A`, as the demo's `INV-0412-A`. It's tied to its main
+  invoice, and still unique.
+- **No GST** on additional charges: they're charges passed on. ⚠️ If a charge is Masti's own service (its own
+  urgent-handling fee), GST law would normally apply, so M38(a) stays open for the accountant to confirm.
+- **When:** at any step, once the main invoice stands, while the case is open. Photos may be needed at Step 2, an
+  urgent fee at Step 5.
+- **Several charges** can go on the one additional invoice (an urgent fee and photos together), since a file gets only
+  one.
+- **Who:** the case's processor, the Visa HOD or the Head, as for the main invoice.
 
 ### 8. E-visas at Step 5
 
@@ -341,7 +352,7 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 | `visa.recallReturn` (after a recall) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | The recall reasons | Embassy taking too long · Client cancelled the trip · Documents changed ⚠️ |
 | The credit-note reasons | Wrong amount · Wrong client details · Wrong traveller details · Client cancelled · Recall ⚠️ |
-| The extra-charges list, with "GST applies" | Urgent submission, Photos ⚠️ (component 5) |
+| The extra-charges list (no GST) | Urgent submission, Photos ⚠️ (component 5) |
 | The chip wording ("With vendor · papers checked", "Submitted · …") | ours or the demo's ⚠️ |
 
 ## Not in this record
