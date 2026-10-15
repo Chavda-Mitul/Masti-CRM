@@ -57,6 +57,12 @@ export const vendorConfirmSchema = firstFollowUpSchema;
  */
 export const onlineCheckSchema = firstFollowUpSchema;
 
+/**
+ * When a file the vendor got comes back to its processor for the file number, when no traveller has an appointment still
+ * to come (docs/decisions/0011-visa-at-vendor.md Decision 2): the next open office day, afterDays on, at `at` (IST).
+ */
+export const submissionCheckSchema = firstFollowUpSchema;
+
 /** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */
 export const awbSettingSchema = z
   .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
@@ -95,6 +101,7 @@ export const visaSettingsSchema = z.object({
   invoice: invoiceSettingSchema,
   vendorConfirm: vendorConfirmSchema,
   onlineCheck: onlineCheckSchema,
+  submissionCheck: submissionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
 });
@@ -128,6 +135,7 @@ export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
 export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
 export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
+export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
@@ -270,6 +278,15 @@ export const submitOnlineSchema = matureCaseSchema;
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
 export type SubmitOnlineInput = z.infer<typeof submitOnlineSchema>;
+
+// ---------------------------------------------------------------------------
+// Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md)
+// ---------------------------------------------------------------------------
+
+/** "Vendor got it, papers checked" (Decision 2): sends the case's updatedAt. */
+export const vendorReceivedSchema = matureCaseSchema;
+
+export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;
 
 /**
  * "Dispatch docket" (Decision 9): the courier, its slip number when it needs one (spaces dropped, made capitals; the

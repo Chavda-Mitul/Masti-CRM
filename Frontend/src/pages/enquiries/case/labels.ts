@@ -31,6 +31,13 @@ export function dayTime(iso: string): string {
   return `${part('weekday')} ${part('day')} ${part('month')}, ${part('hour')}:${part('minute')}`
 }
 
+/** "Wed 7 Oct", in India time: when a step happened (the timeline on demo screen 10). */
+export function weekdayDay(iso: string): string {
+  const parts = DAY_TIME.formatToParts(new Date(iso))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('weekday')} ${part('day')} ${part('month')}`
+}
+
 /** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
 export function passportTotal(current: number, old: number): string {
   const label = `${current} ${current === 1 ? 'passport' : 'passports'}`

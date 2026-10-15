@@ -1,7 +1,7 @@
 # 0011 · Visa Step 5: at the vendor
 
-- **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). A "Built" note is
-  added under each part as its component lands.
+- **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
+  it" (15 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -64,6 +64,38 @@ tested, checked in the browser and committed before the next starts:
   appointment (the visa needs none, or it has passed), it's due the next open office day at 11:00 ⚠️: the setting
   `visa.submissionCheck` → `{ afterDays: 1, at: "11:00" }`.
 - **E-visas have no vendor:** they skip this, and the With the vendor card isn't shown for them.
+
+**Built 15 Oct 2026** (component 1):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/vendor-received/check` (anyone who can open the case) returns `{ dueAt, dueReason }`,
+    where `dueReason` is `APPOINTMENT` or `NEXT_DAY`.
+  - `POST /api/visa/cases/:caseNo/vendor-received` with `{ updatedAt }` returns `{ case }`. It's for whoever can act on
+    the case (`lockCase` with the new step rule `WITH_VENDOR`), and refused with:
+    - 409 at any other step ("…while the file is with the vendor")
+    - 409 for an e-visa ("This file went in online: there's no vendor to confirm.")
+    - 409 when it's already recorded
+    - 409 STALE; the usual postponed and closed refusals
+  - **In one transaction:** `VisaCase.vendorReceivedAt` / `vendorReceivedById` are stamped (migration
+    `20261015120000_vendor_received`; CHECKs: set together, and only with a docket). The case's `dueAt` becomes the
+    earliest traveller appointment still to come, or else `visa.submissionCheck` → `{ afterDays: 1, at: "11:00" }` ⚠️
+    through `dueOnOfficeDay`. The other files in the docket don't change.
+  - **Audited** as `visa.vendorReceived` on the Enquiry, with `clientId`, before/after `dueAt`, `dueReason` and the
+    docket number. The case sends `vendorReceived { at, by }`.
+  - The setting is seeded and changed through `PUT /api/visa/settings`, like the other timings.
+- **Screen:**
+  - The header button **Vendor got it →** opens a confirm dialog: "Did Global Visa Services get VISA-2026-0001 in
+    docket D-2026-0001, with its papers in order?", and when the file comes back due ("…at the embassy appointment, to
+    get the file number").
+  - Then the chip reads **"With vendor · papers checked"** ⚠️, and the header shows "Mark submitted → Soon" until
+    component 2.
+  - **Step 5's layout:** a **With the vendor** card beside the Dispatch card (demo screen 10). It shows Dispatched in
+    D-… with its date, Vendor got it with its date (or "Waiting"), Submitted at the embassy and the file number ("—"
+    until component 2), and what's due next ("Thu 15 Oct, 11:00 · Neha: Confirm vendor got it", then "Get the file
+    number").
+  - The Docket and Sticker cards now show only at Docket & dispatch. The Dispatch card keeps the courier, the slip and
+    the email (with Send again); its due row moved to the With the vendor card. So the sticker can't be reprinted from
+    Step 5, as in the demo.
 
 ### 3. The embassy
 

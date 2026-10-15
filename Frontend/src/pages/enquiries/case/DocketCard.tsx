@@ -46,7 +46,8 @@ function InvoiceCell({ row, canRaise }: { row: CaseDocket['cases'][number]; canR
  * The docket (demo screen 09 ⚠️, docs/decisions/0008-visa-docket-dispatch.md Decisions 2, 4 and 10): at Docket & dispatch
  * the processor, the HOD or the Head adds the file to its vendor's shared docket ("Several files in one") or sends it in
  * a docket of its own ("One file per docket"), and can take it out again until the docket is dispatched. The table shows
- * every file in the docket, with its passports and its invoice. Once dispatched it stays, read-only. E-visas (no
+ * every file in the docket, with its passports and its invoice. Once dispatched the case moves on, and the card goes
+ * with Step 4. E-visas (no
  * vendor) have no docket: the Submit online card stands in its place. A case whose Vendor needed was switched off after
  * it joined a docket still shows it, so it can be taken out and submitted online instead.
  */
@@ -56,9 +57,8 @@ export function DocketCard({ visaCase: c }: { visaCase: VisaCase }) {
   const add = useAddToDocket(c.caseNo)
   const takeOut = useTakeOutOfDocket(c.caseNo)
   const [mode, setMode] = useState<DocketKind>('GROUP')
-  // Read-only once dispatched, until Step 5 has its own cards (canAct needs Docket & dispatch).
-  const shown = c.stage.code === 'DISPATCH' || c.docket?.status === 'DISPATCHED'
-  if (!shown || !c.vendor || (!c.vendorNeeded && !c.docket)) return null
+  // Only at Docket & dispatch: from Step 5 the With the vendor card shows where the file is (0011).
+  if (c.stage.code !== 'DISPATCH' || !c.vendor || (!c.vendorNeeded && !c.docket)) return null
 
   const d = c.docket
   const canAct = !!me && c.stage.code === 'DISPATCH' && c.status === 'OPEN' && canActOnCase(me, { department: c.department.code, owner: c.owner })

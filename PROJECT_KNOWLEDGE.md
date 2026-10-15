@@ -1675,6 +1675,7 @@ Masti CRM/
 - **Recall:** a credit note for the embassy fee only; only an HOD can return more. The case then goes to Step 7 · Passport back, marked Recalled, and closes after the normal handover (chain of custody for the passports).
 - **The credit note** is possible from the moment an invoice exists (M36). M37 is still open.
 - **E-visas** have no vendor steps: they wait at Step 5 for the portal's decision (M39).
+- **Built so far:** component 1, **"Vendor got it"** (15 Oct 2026). A header button on each file confirms the vendor has it, with its papers in order. It's due next at the earliest appointment, or the next office day at 11:00 ⚠️ (`visa.submissionCheck`). The chip then reads "With vendor · papers checked". At Step 5 a **With the vendor** card sits beside the Dispatch card; the Docket and Sticker cards stay at Step 4. Next: submitted at the embassy (file number, embassy, collection date).
 
 **Decided 13 Oct 2026 (project lead), for Visa Step 4 (Docket & dispatch).** The design is `docs/decisions/0008-visa-docket-dispatch.md` (decided; all five components built by 15 Oct 2026).
 - **Build order:** dockets and the sticker first, then the visa invoice in its own record (0009), then dispatch, always with the invoice check. No file can leave without its invoice (rule 3).

@@ -296,6 +296,13 @@ export interface SubmitOnlineCheck {
   dueAt: string
 }
 
+/** GET /api/visa/cases/:caseNo/vendor-received/check (0011 Decision 2): when the file comes back due, and why then. */
+export interface VendorReceivedCheck {
+  dueAt: string
+  /** At the earliest appointment still to come, or else the next office day (the setting visa.submissionCheck ⚠️). */
+  dueReason: 'APPOINTMENT' | 'NEXT_DAY'
+}
+
 /** GET /api/visa/cases/:caseNo/sticker: the parcel label (0008 Decision 5). */
 export interface DocketStickerData {
   docketNo: string
@@ -437,6 +444,8 @@ export interface VisaCase {
   openDocket: { docketNo: string; caseCount: number } | null
   /** An e-visa's "Submitted online" (0008 Decision 11): who and when, instead of a docket. */
   submittedOnline: { at: string; by: PersonRef | null } | null
+  /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
+  vendorReceived: { at: string; by: PersonRef | null } | null
   /** GST on the service charge (the setting visa.invoice), for a quote being entered */
   gstRatePercent: number
   /** The price (0009), or null until someone enters it */

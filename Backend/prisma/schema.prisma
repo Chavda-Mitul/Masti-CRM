@@ -81,6 +81,7 @@ model User {
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   visaCasesOnline    VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
+  visaCasesReceived  VisaCase[]         @relation("VisaCaseVendorReceivedBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
@@ -893,11 +894,16 @@ model VisaCase {
   /// case moved to At vendor. Both set together, and never with a docket (checked in the migration).
   submittedOnlineAt   DateTime?           @db.Timestamptz(3)
   submittedOnlineById String?
+  /// "Vendor got it, papers checked" (0011 Decision 2): the vendor has this file, at Step 5. Both set together, and only
+  /// for a file sent in a docket (checked in the migration).
+  vendorReceivedAt    DateTime?           @db.Timestamptz(3)
+  vendorReceivedById  String?
   enquiry             Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering            VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy           User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
   fileReadyBy         User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   submittedOnlineBy   User?               @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
+  vendorReceivedBy    User?               @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
   vendor              Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket              Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers          VisaCaseTraveller[]
