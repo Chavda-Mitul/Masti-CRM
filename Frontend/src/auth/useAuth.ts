@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, retryWhileUnreachable } from '../lib/api'
 import type { User } from './types'
 
 export const ME_KEY = ['me'] as const
@@ -17,7 +17,7 @@ export function useMe() {
       }
     },
     staleTime: 60_000,
-    retry: false,
+    retry: retryWhileUnreachable,
   })
 }
 

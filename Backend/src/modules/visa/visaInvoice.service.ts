@@ -5,6 +5,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { istToday, toDbDate } from "../../lib/dates";
 import { conflict, HttpError } from "../../lib/httpError";
+import { logger } from "../../lib/logger";
 import { gstPaise, lineTotalPaise, quoteTotals, rateBasisPoints, splitIntraState } from "../../lib/money";
 import { deleteObject, getObject, putObject } from "../../lib/storage";
 import { GST_STATES } from "../../lib/shared.schemas";
@@ -370,7 +371,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
     } catch (err) {
       if (storageKey) {
         const key = storageKey;
-        await deleteObject(key).catch((cleanupErr) => console.error(`Couldn't remove unsaved invoice ${key}:`, cleanupErr));
+        await deleteObject(key).catch((cleanupErr) => logger.error({ err: cleanupErr, storageKey: key }, "Couldn't remove an unsaved invoice."));
       }
       if (!(err instanceof NumberTaken)) throw err;
       if (attempt === RAISE_ATTEMPTS) throw conflict("Other invoices were being raised at the same moment. Please try again.");

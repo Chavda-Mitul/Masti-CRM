@@ -59,6 +59,11 @@ export function isoWeekday(value: string): number {
   return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;
 }
 
+/** An instant as India time with its offset: "2026-10-15T12:53:23.858+05:30". IST has no daylight saving. */
+export function istTimestamp(now: Date = new Date()): string {
+  return new Date(now.getTime() + 330 * 60_000).toISOString().replace("Z", "+05:30");
+}
+
 /** A date and an "HH:mm" wall-clock time in India → the instant (UTC Date). IST has no daylight saving. */
 export function istDateTimeToUtc(date: string, time: string): Date {
   return new Date(`${date}T${time}:00.000+05:30`);

@@ -3,6 +3,7 @@ import { audit, auditMany } from "../../lib/audit";
 import { staleError } from "../../lib/changes";
 import { sendEmail } from "../../lib/email";
 import { conflict, fieldError, forbidden, HttpError } from "../../lib/httpError";
+import { logger } from "../../lib/logger";
 import { getCompanyDetails } from "../company/company.settings";
 import { isHodOf } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
@@ -202,7 +203,7 @@ export async function dispatchDocket(caseNo: string, input: DispatchDocketInput,
     );
   });
   // The dispatch is saved: even a failure to record the email's outcome must not turn it into an error.
-  await sendVendorEmail(docketId, actor).catch((err: unknown) => console.error("Docket email after dispatch failed:", err));
+  await sendVendorEmail(docketId, actor).catch((err: unknown) => logger.error({ err, docketId }, "Docket email after dispatch failed."));
   return getVisaCaseById(enquiryId);
 }
 
@@ -274,6 +275,7 @@ async function sendVendorEmail(docketId: string, actor: Actor) {
   try {
     await sendEmail(email);
   } catch (err) {
+    logger.warn({ err, docketId }, "Docket email couldn't be sent.");
     error = (err instanceof Error && err.message ? err.message : "The email couldn't be sent.").slice(0, 500);
   }
 

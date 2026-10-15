@@ -1545,6 +1545,7 @@ Masti CRM/
 | `Backend/.env` | `SESSION_IDLE_HOURS` (12), `SESSION_MAX_DAYS` (7) | Session expiry |
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
+| `Backend/.env` | `LOG_LEVEL` (`info`), `LOG_DIR` (`logs`), `LOG_RETENTION_DAYS` (90) | The server log: one file a day, the last 90 days kept plus today's. An unexpected error shows the user a request code to grep for (`docs/decisions/0010-server-logs.md`) |
 | `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 

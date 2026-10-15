@@ -40,7 +40,7 @@ Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTT
 
 Inside the route and its service:
 - Read the user with `currentUser(req)` (or `actorOf(req)`, the user plus IP for audited changes) in the route and pass it to the service.
-- Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`isUniqueViolation`, `rethrowUnique`), `settings.ts` (`saveSetting`), `dates.ts`, `audit.ts`, `httpError.ts`. Reuse them rather than copying.
+- Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`isUniqueViolation`, `rethrowUnique`), `settings.ts` (`saveSetting`), `dates.ts`, `audit.ts`, `httpError.ts`, `logger.ts` (the server log; use `logger`, never `console`). Reuse them rather than copying.
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
 - Throw `HttpError` helpers for errors.

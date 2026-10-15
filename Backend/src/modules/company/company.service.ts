@@ -4,6 +4,7 @@ import type { CompanyImageKind } from "../../../generated/prisma/enums";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { badRequest, fieldError, notFound } from "../../lib/httpError";
+import { logger } from "../../lib/logger";
 import { saveSetting } from "../../lib/settings";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { GST_STATES } from "../../lib/shared.schemas";
@@ -138,7 +139,7 @@ export async function uploadCompanyImage(kindParam: CompanyImageKindParam, conte
       );
     });
   } catch (err) {
-    await deleteObject(storageKey).catch((cleanupErr) => console.error(`Couldn't remove unsaved upload ${storageKey}:`, cleanupErr));
+    await deleteObject(storageKey).catch((cleanupErr) => logger.error({ err: cleanupErr, storageKey }, "Couldn't remove an unsaved upload."));
     throw err;
   }
   return getCompanyView();

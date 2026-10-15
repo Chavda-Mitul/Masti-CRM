@@ -5,6 +5,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { istDateTimeToUtc } from "../../lib/dates";
 import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { logger } from "../../lib/logger";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
@@ -240,7 +241,7 @@ export async function uploadFinalFile(caseNo: string, bytes: Buffer, actor: Acto
     });
   } catch (err) {
     // Nothing points at the object: remove it so the bucket holds only files the CRM knows. Best effort.
-    await deleteObject(storageKey).catch((cleanupErr: unknown) => console.error(`Couldn't remove unsaved upload ${storageKey}:`, cleanupErr));
+    await deleteObject(storageKey).catch((cleanupErr: unknown) => logger.error({ err: cleanupErr, storageKey }, "Couldn't remove an unsaved upload."));
     throw err;
   }
   return getVisaCaseById(enquiry.id);
