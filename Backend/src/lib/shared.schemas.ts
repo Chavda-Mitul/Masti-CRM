@@ -70,6 +70,9 @@ export function gstinChecksumOk(gstin: string): boolean {
   return GSTIN_CHARS.charAt((36 - (sum % 36)) % 36) === gstin.charAt(14);
 }
 
+/** An email address, as loosely as mail servers accept them: something@something.something, no spaces. */
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** Spaces dropped and capitals: how PAN, GSTIN, IFSC and the like are typed and stored. */
 export const upperNoSpaces = z.string().transform((s) => s.replace(/\s+/g, "").toUpperCase());
 

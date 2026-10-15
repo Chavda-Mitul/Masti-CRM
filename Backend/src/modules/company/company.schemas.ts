@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { gstin, pan, stateCode, upperNoSpaces } from "../../lib/shared.schemas";
+import { EMAIL_PATTERN, gstin, pan, stateCode, upperNoSpaces } from "../../lib/shared.schemas";
 
 // Only zod and the shared fields (src/lib/shared.schemas.ts, zod only) are imported here, so these schemas can later be
 // shared with the frontend.
@@ -17,7 +17,7 @@ const email = z
   .trim()
   .toLowerCase()
   .max(120, "120 characters at most.")
-  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address.");
+  .regex(EMAIL_PATTERN, "Enter a valid email address.");
 
 /** "https://www.example.com/" is kept as "www.example.com": the invoice prints the host. */
 const website = z

@@ -3,13 +3,12 @@ import { audit, auditMany } from "../../lib/audit";
 import { staleError } from "../../lib/changes";
 import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { sendEmail } from "../../lib/email";
-import { conflict, fieldError, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { conflict, fieldError, forbidden, HttpError } from "../../lib/httpError";
 import { getCompanyDetails } from "../company/company.settings";
 import { isHodOf } from "../auth/permissions";
-import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { visaStage } from "./caseLock";
+import { findVisibleCase, visaStage } from "./caseLock";
 import { emailSending } from "./visaCase";
 import { docketEmail } from "./docketEmail";
 import type { DispatchDocketInput } from "./visa.schemas";
@@ -94,14 +93,9 @@ async function confirmAtOf(db: Db) {
 
 /** The case the request came from, and its docket: anyone who can open the case. */
 async function caseAndDocket(caseNo: string, user: UserWithDepartments) {
-  const row = await prisma.enquiry.findUnique({
-    where: { caseNo: caseNo.toUpperCase() },
-    select: { id: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docketId: true } } },
-  });
-  if (!row?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(user, row);
-  if (!row.visa.docketId) throw conflict("This case isn't in a docket yet.");
-  return { enquiryId: row.id, docketId: row.visa.docketId };
+  const { id, docketId } = await findVisibleCase(caseNo, user);
+  if (!docketId) throw conflict("This case isn't in a docket yet.");
+  return { enquiryId: id, docketId };
 }
 
 /** The dialog's first look (Decision 9): what blocks dispatch, the vendor it goes to, and when the cases come back due. */

@@ -137,6 +137,11 @@ export function familyName(clientName: string | null) {
   return clientName?.trim().split(/\s+/).at(-1) ?? "";
 }
 
+/** The last name as a file name may carry it: letters and digits only ("" for a name in Gujarati letters). */
+export function fileSafeFamilyName(clientName: string | null) {
+  return familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+}
+
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;

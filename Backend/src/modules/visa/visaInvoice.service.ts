@@ -4,7 +4,7 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { istToday, toDbDate } from "../../lib/dates";
-import { conflict, HttpError, notFound } from "../../lib/httpError";
+import { conflict, HttpError } from "../../lib/httpError";
 import { gstPaise, lineTotalPaise, quoteTotals, rateBasisPoints, splitIntraState } from "../../lib/money";
 import { deleteObject, getObject, putObject } from "../../lib/storage";
 import { GST_STATES } from "../../lib/shared.schemas";
@@ -12,14 +12,13 @@ import { getClientSettings } from "../clients/clients.settings";
 import { readinessOf } from "../clients/readiness";
 import { currentCompanyImages } from "../company/company.service";
 import { getCompanyDetails, getInvoiceTerms, invoiceMissing } from "../company/company.settings";
-import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { loadCase, lockCase, QUOTING } from "./caseLock";
+import { findVisibleCase, loadCase, lockCase, QUOTING } from "./caseLock";
 import { renderInvoicePdf, unprintable, type InvoiceImages, type InvoiceView } from "./invoicePdf";
 import type { RaiseInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
-import { familyName, travellerLabel } from "./visaCase";
+import { fileSafeFamilyName, travellerLabel } from "./visaCase";
 
 // The visa tax invoice (docs/decisions/0009-visa-invoice.md): raised from the case's quote by its owner, the Visa HOD or
 // the Head, numbered in Masti's series, with a PDF in Masti's layout stored privately, and never edited (triggers in
@@ -176,13 +175,8 @@ const RAISE_ATTEMPTS = 3;
  * For the Raise invoice dialog: what blocks it, or what the invoice will say. Anyone who can open the case may look.
  */
 export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
-  const row = await prisma.enquiry.findUnique({
-    where: { caseNo: caseNo.toUpperCase() },
-    select: { id: true, ownerId: true, department: { select: { code: true } }, visa: { select: { enquiryId: true } } },
-  });
-  if (!row?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(user, row);
-  const g = await gather(row.id, prisma);
+  const { id } = await findVisibleCase(caseNo, user);
+  const g = await gather(id, prisma);
   const blockers = blockersOf(g, user.name);
   const ready = blockers.length === 0;
   return {
@@ -320,7 +314,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
             RETURNING "lastValue"`;
           if (Number(counter!.lastValue) !== expected) throw new NumberTaken();
 
-          const family = familyName(g.enquiry.client.name).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+          const family = fileSafeFamilyName(g.enquiry.client.name);
           const file = await tx.caseFile.create({
             data: {
               enquiryId: enquiry.id,

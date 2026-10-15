@@ -3,11 +3,10 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { istToday } from "../../lib/dates";
-import { conflict, notFound } from "../../lib/httpError";
+import { conflict } from "../../lib/httpError";
 import { getCompanyDetails } from "../company/company.settings";
-import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { DISPATCHING, loadCase, lockCase } from "./caseLock";
+import { DISPATCHING, findVisibleCase, loadCase, lockCase } from "./caseLock";
 import type { AddToDocketInput, TakeOutOfDocketInput } from "./visa.schemas";
 import { formatCaseNo, getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -154,15 +153,10 @@ export async function takeOutOfDocket(caseNo: string, input: TakeOutOfDocketInpu
  * print it, a dispatched docket too (a reprint). Printing changes nothing, so it isn't audited.
  */
 export async function docketSticker(caseNo: string, user: UserWithDepartments) {
-  const row = await prisma.enquiry.findUnique({
-    where: { caseNo: caseNo.toUpperCase() },
-    select: { id: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docket: { select: docketSelect } } } },
-  });
-  if (!row?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(user, row);
-  if (!row.visa.docket) throw conflict("This case isn't in a docket yet.");
+  const { id, docketId } = await findVisibleCase(caseNo, user);
+  if (!docketId) throw conflict("This case isn't in a docket yet.");
 
-  const docket = docketOf(row.visa.docket, row.id);
+  const docket = docketOf(await prisma.docket.findUniqueOrThrow({ where: { id: docketId }, select: docketSelect }), id);
   const [company, { sticker }] = await Promise.all([getCompanyDetails(), getVisaSettings()]);
   // The label prints only who it's from: never the tax or bank details.
   const from = { name: company.name, address: company.address, phone: company.phone };

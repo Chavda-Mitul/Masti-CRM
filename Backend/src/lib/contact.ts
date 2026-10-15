@@ -1,8 +1,7 @@
 import { badRequest } from "./httpError";
+import { EMAIL_PATTERN } from "./shared.schemas";
 
 // Clean-up and validation for mobile numbers and emails, shared by users, clients and login.
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Lowercased, trimmed email. */
 export function normaliseEmail(input: string): string {

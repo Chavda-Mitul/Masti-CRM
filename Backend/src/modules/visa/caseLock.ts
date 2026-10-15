@@ -3,7 +3,7 @@ import { prisma, type Db } from "../../config/prisma";
 import { conflict, HttpError, notFound } from "../../lib/httpError";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
-import type { Actor } from "../users/user";
+import type { Actor, UserWithDepartments } from "../users/user";
 
 // Who may change a visa case, and at which step, for every Step 2, 3 and 4 write (0006 amendment 12,
 // docs/decisions/0007-visa-file-prep.md Decision 1, docs/decisions/0008-visa-docket-dispatch.md Decision 3).
@@ -53,6 +53,20 @@ function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
   if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
   if (enquiry.status !== "OPEN") throw conflict("This case is closed, so it can't change.");
   if (!rule.stages.includes(enquiry.stage.code)) throw conflict(rule.wrongStage);
+}
+
+/**
+ * The case's id, its client's and its docket's, if this user may open it: staff their own, the HOD the department's, the Head all
+ * (0006 Decision 1). For reads and checks that anyone who can open the case may make.
+ */
+export async function findVisibleCase(caseNo: string, user: UserWithDepartments) {
+  const row = await prisma.enquiry.findUnique({
+    where: { caseNo: caseNo.toUpperCase() },
+    select: { id: true, clientId: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docketId: true } } },
+  });
+  if (!row?.visa) throw notFound("Case not found.");
+  assertCanSeeEnquiry(user, row);
+  return { id: row.id, clientId: row.clientId, docketId: row.visa.docketId };
 }
 
 /** The case, if this user may change it at this step: the quick check before any transaction. */
