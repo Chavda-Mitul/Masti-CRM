@@ -381,6 +381,20 @@ export interface CaseInvoice {
   } | null
 }
 
+/** GET /api/visa/cases/:caseNo/additional-invoice/check (0011 Decision 7): what it adds to, its number, what blocks it. */
+export interface AdditionalInvoiceCheck {
+  mainInvoiceNo: string
+  alreadyRaised: string | null
+  /** The cancelled additional invoice this one corrects, or null for the file's first */
+  replaces: string | null
+  /** "MVI00000001-A"; a correction takes the next letter, "-B" */
+  invoiceNo: string
+  blockers: { kind: string; label: string; items: string[] }[]
+}
+
+/** The file's one additional invoice (0011 Decision 7): an invoice of extra charges, with no GST. */
+export type CaseAdditionalInvoice = CaseInvoice & { charges: { name: string; amountPaise: number }[] }
+
 /** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
 export interface RecallCheck {
   invoiceNo: string
@@ -524,6 +538,10 @@ export interface VisaCase {
   invoice: CaseInvoice | null
   /** The earlier invoices of the chain, each cancelled and replaced, newest first (0011 Decision 5) */
   earlierInvoices: CaseInvoice[]
+  /** The file's one additional invoice, "MVI…-A" (0011 Decision 7), or null until raised */
+  additionalInvoice: CaseAdditionalInvoice | null
+  /** Earlier additional invoices, each cancelled and replaced, newest first */
+  earlierAdditionalInvoices: CaseAdditionalInvoice[]
   /** "Take the file back" (0011 Decision 6): who, when, why, and the credit note that gave the embassy fee back */
   recall: {
     at: string

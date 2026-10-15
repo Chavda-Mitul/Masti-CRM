@@ -341,6 +341,21 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+/* The one additional invoice per file (0011 Decision 7), under the main invoice. */
+.money-additional {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+.additional-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 8px;
+  align-items: center;
+}
 /* The chain's earlier invoices, each cancelled and replaced (0011 Decision 5). */
 .money-earlier {
   display: flex;

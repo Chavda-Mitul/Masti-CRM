@@ -12,6 +12,7 @@ import {
   createCourierSchema,
   createCreditNoteReasonSchema,
   createRecallReasonSchema,
+  createExtraChargeSchema,
   createProcessingSpeedSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
@@ -26,6 +27,7 @@ import {
   updateCourierSchema,
   updateCreditNoteReasonSchema,
   updateRecallReasonSchema,
+  updateExtraChargeSchema,
   updateProcessingSpeedSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
@@ -166,6 +168,20 @@ router.post("/recall-reasons", visaEdit, async (req, res) => {
 router.patch("/recall-reasons/:id", visaEdit, async (req, res) => {
   const body = updateRecallReasonSchema.parse(req.body);
   res.json({ recallReason: await mastersService.updateRecallReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Extra charges, for the additional invoice (docs/decisions/0011-visa-at-vendor.md Decision 7)
+router.get("/extra-charges", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ extraCharges: await mastersService.listExtraCharges(active) });
+});
+router.post("/extra-charges", visaEdit, async (req, res) => {
+  const body = createExtraChargeSchema.parse(req.body);
+  res.status(201).json({ extraCharge: await mastersService.createExtraCharge(body, actorOf(req)) });
+});
+router.patch("/extra-charges/:id", visaEdit, async (req, res) => {
+  const body = updateExtraChargeSchema.parse(req.body);
+  res.json({ extraCharge: await mastersService.updateExtraCharge(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

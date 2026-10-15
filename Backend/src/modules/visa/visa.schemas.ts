@@ -447,3 +447,23 @@ export const raiseInvoiceSchema = z.object({
 });
 
 export type RaiseInvoiceInput = z.infer<typeof raiseInvoiceSchema>;
+
+/**
+ * The file's one additional invoice (Decision 7): extra charges picked from the list, each with its amount (no GST),
+ * against the main invoice the dialog showed, with the total it showed.
+ */
+export const raiseAdditionalInvoiceSchema = z.object({
+  mainInvoiceNo: z.string().trim().toUpperCase().min(1).max(40),
+  charges: z
+    .array(
+      z.object({
+        chargeId: z.number("Pick the charge.").int().positive("Pick the charge."),
+        amountPaise: z.number("Enter the amount.").int().min(1, "Enter an amount above 0.").max(MAX_AMOUNT_PAISE, "At most ₹10,00,000 per charge."),
+      }),
+    )
+    .min(1, "Add at least one charge.")
+    .max(10, "At most 10 charges."),
+  totalPaise: z.number().int().min(0),
+});
+
+export type RaiseAdditionalInvoiceInput = z.infer<typeof raiseAdditionalInvoiceSchema>;

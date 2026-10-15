@@ -11,6 +11,7 @@ import type {
   InvoiceCheck,
   CancelInvoiceCheck,
   RecallCheck,
+  AdditionalInvoiceCheck,
   SubmitOnlineCheck,
   VendorReceivedCheck,
   InvoiceTaxType,
@@ -57,8 +58,9 @@ export const enquiryKeys = {
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
-  cancelInvoiceCheck: (caseNo: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase()] as const,
+  cancelInvoiceCheck: (caseNo: string, invoiceNo?: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase(), invoiceNo ?? 'main'] as const,
   recallCheck: (caseNo: string) => ['enquiries', 'recall-check', caseNo.toUpperCase()] as const,
+  additionalInvoiceCheck: (caseNo: string) => ['enquiries', 'additional-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
@@ -360,10 +362,11 @@ export function useSaveSubmission(caseNo: string) {
 }
 
 /** What cancelling the case's invoice with a credit note gives back, and what blocks it (0011 Decision 5). */
-export function useCancelInvoiceCheck(caseNo: string) {
+export function useCancelInvoiceCheck(caseNo: string, invoiceNo?: string) {
+  const which = invoiceNo ? `?invoiceNo=${encodeURIComponent(invoiceNo)}` : ''
   return useQuery({
-    queryKey: enquiryKeys.cancelInvoiceCheck(caseNo),
-    queryFn: () => api<CancelInvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/invoice/cancel/check`),
+    queryKey: enquiryKeys.cancelInvoiceCheck(caseNo, invoiceNo),
+    queryFn: () => api<CancelInvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/invoice/cancel/check${which}`),
     staleTime: 0,
   })
 }
@@ -391,6 +394,22 @@ export function useRecallFile(caseNo: string) {
   return useCaseAction<{ invoiceNo: string; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
     caseNo,
     (base, body) => api(`${base}/recall`, { method: 'POST', body }),
+  )
+}
+
+/** The file's one additional invoice: what it adds to, its number, and what blocks it (0011 Decision 7). */
+export function useAdditionalInvoiceCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.additionalInvoiceCheck(caseNo),
+    queryFn: () => api<AdditionalInvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/additional-invoice/check`),
+    staleTime: 0,
+  })
+}
+
+/** Raises the file's one additional invoice, "MVI…-A" (0011 Decision 7). */
+export function useRaiseAdditionalInvoice(caseNo: string) {
+  return useCaseAction<{ mainInvoiceNo: string; charges: { chargeId: number; amountPaise: number }[]; totalPaise: number }>(caseNo, (base, body) =>
+    api(`${base}/additional-invoice`, { method: 'POST', body }),
   )
 }
 

@@ -139,6 +139,10 @@ export const updateCreditNoteReasonSchema = z.object({
 export const createRecallReasonSchema = createCreditNoteReasonSchema;
 export const updateRecallReasonSchema = updateCreditNoteReasonSchema;
 
+/** What an additional invoice charges for (docs/decisions/0011-visa-at-vendor.md Decision 7): picked, never typed. */
+export const createExtraChargeSchema = createCreditNoteReasonSchema;
+export const updateExtraChargeSchema = updateCreditNoteReasonSchema;
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -206,6 +210,8 @@ export type CreateCreditNoteReasonInput = z.infer<typeof createCreditNoteReasonS
 export type UpdateCreditNoteReasonInput = z.infer<typeof updateCreditNoteReasonSchema>;
 export type CreateRecallReasonInput = z.infer<typeof createRecallReasonSchema>;
 export type UpdateRecallReasonInput = z.infer<typeof updateRecallReasonSchema>;
+export type CreateExtraChargeInput = z.infer<typeof createExtraChargeSchema>;
+export type UpdateExtraChargeInput = z.infer<typeof updateExtraChargeSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

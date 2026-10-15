@@ -70,6 +70,13 @@ export const RECALL_REASONS = [
   { code: "DOCUMENTS_CHANGED", name: "Documents changed", sortOrder: 3 },
 ];
 
+/** What an additional invoice charges for (docs/decisions/0011-visa-at-vendor.md Decision 7): ours, for Masti ⚠️. */
+export const EXTRA_CHARGES = [
+  { code: "URGENT_SUBMISSION", name: "Urgent submission", sortOrder: 1 },
+  { code: "PHOTOS", name: "Photos", sortOrder: 2 },
+  { code: "COURIER_EXTRA", name: "Courier, extra", sortOrder: 3 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -123,6 +130,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const reason of RECALL_REASONS) {
     await db.recallReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  }
+  for (const charge of EXTRA_CHARGES) {
+    await db.extraCharge.upsert({ where: { code: charge.code }, update: {}, create: charge });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });

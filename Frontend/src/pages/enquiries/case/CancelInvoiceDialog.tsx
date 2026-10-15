@@ -11,12 +11,13 @@ import type { CancelInvoiceCheck, VisaCase } from '../types'
  * "Cancel with a credit note" (docs/decisions/0011-visa-at-vendor.md Decision 5). A wrong invoice is never changed: a
  * WHOLE credit note cancels it, giving back everything it charged, its GST included, so the tax reports net to zero. The
  * reason is picked from the credit-note reasons list. The invoice and total shown are sent back, so a change meanwhile
- * is refused rather than cancelling something nobody saw.
+ * is refused rather than cancelling something nobody saw. `invoiceNo` picks the additional invoice (Decision 7), which
+ * has no GST; without it, the main invoice.
  */
-export function CancelInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
+export function CancelInvoiceDialog({ visaCase: c, invoiceNo, onClose }: { visaCase: VisaCase; invoiceNo?: string; onClose: () => void }) {
   const toast = useToast()
   const queryClient = useQueryClient()
-  const check = useCancelInvoiceCheck(c.caseNo)
+  const check = useCancelInvoiceCheck(c.caseNo, invoiceNo)
   const cancel = useCancelInvoice(c.caseNo)
   const reasons = useMasterList('credit-note-reasons')
   const [reasonId, setReasonId] = useState('')
@@ -41,13 +42,14 @@ export function CancelInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCa
       { invoiceNo: check.data.invoiceNo, totalPaise: p.totalPaise, reasonId: Number(reasonId) },
       {
         onSuccess: (updated) => {
-          toast({ tone: 'ok', message: `Invoice ${check.data.invoiceNo} cancelled by ${updated.invoice?.cancelled?.creditNoteNo ?? 'a credit note'}.` })
+          const note = (invoiceNo ? updated.additionalInvoice : updated.invoice)?.cancelled?.creditNoteNo
+          toast({ tone: 'ok', message: `Invoice ${check.data.invoiceNo} cancelled by ${note ?? 'a credit note'}.` })
           onClose()
         },
         onError: (err) => {
           setReasonError(errorBody(err)?.issues?.reasonId?.[0] ?? null)
           if (errorCode(err) === 'CREDIT_NOTE_CHANGED' || errorCode(err) === 'CREDIT_NOTE_BLOCKED') {
-            void queryClient.invalidateQueries({ queryKey: enquiryKeys.cancelInvoiceCheck(c.caseNo) })
+            void queryClient.invalidateQueries({ queryKey: enquiryKeys.cancelInvoiceCheck(c.caseNo, invoiceNo) })
           }
         },
       },
@@ -65,11 +67,12 @@ export function CancelInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCa
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog invoice-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-invoice-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="cancel-invoice-title">
-          Cancel invoice {check.data?.invoiceNo ?? c.invoice?.invoiceNo}
+          Cancel invoice {check.data?.invoiceNo ?? invoiceNo ?? c.invoice?.invoiceNo}
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
-          An invoice is never changed. A credit note cancels it, giving back everything it charged, GST included. A corrected
-          invoice can then be raised.
+          {invoiceNo
+            ? 'An invoice is never changed. A credit note cancels it, giving back every extra charge. A corrected additional invoice can then be raised; it still counts as the file’s one.'
+            : 'An invoice is never changed. A credit note cancels it, giving back everything it charged, GST included. A corrected invoice can then be raised.'}
         </p>
 
         {check.isPending ? (
@@ -84,7 +87,7 @@ export function CancelInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCa
           <>
             {p && (
               <div className="invoice-summary">
-                {row('Travellers’ amounts', p.grossPaise)}
+                {row(invoiceNo ? 'Extra charges' : 'Travellers’ amounts', p.grossPaise)}
                 {p.serviceChargePaise > 0 && row('Service charge', p.serviceChargePaise)}
                 {p.taxType === 'INTRA_STATE' ? (
                   <>

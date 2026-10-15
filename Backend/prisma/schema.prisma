@@ -1049,6 +1049,19 @@ model RecallReason {
   visaCases VisaCase[]
 }
 
+/// What an additional invoice charges for: "Urgent submission", "Photos"… (docs/decisions/0011-visa-at-vendor.md
+/// Decision 7). Picked, with the amount typed; never free text. Edited by the Visa HOD or the Head; switched off, never
+/// deleted.
+model ExtraCharge {
+  id             Int             @id @default(autoincrement())
+  /// URGENT_SUBMISSION… Never changes.
+  code           String          @unique
+  name           String
+  sortOrder      Int             @default(0)
+  isActive       Boolean         @default(true)
+  invoiceCharges InvoiceCharge[]
+}
+
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
 model DocumentProblemReason {
   id        Int                @id @default(autoincrement())
@@ -1190,18 +1203,27 @@ enum InvoiceTaxType {
 
 /// Hand-written in the migration: the totals add up, the tax matches the type, amounts are never negative, and the
 /// row can't be changed or deleted.
+/// The case's tax invoice, or the one additional invoice for extra charges (docs/decisions/0011-visa-at-vendor.md Decision 7).
+enum InvoiceKind {
+  MAIN
+  ADDITIONAL
+}
+
 model Invoice {
-  id                 String         @id @default(uuid())
+  id                 String          @id @default(uuid())
+  /// MAIN: raised from the quote, with traveller lines. ADDITIONAL: "MVI…-A", extra charges, no GST (checked in the
+  /// migration). One original of each per case.
+  kind               InvoiceKind     @default(MAIN)
   /// "MVI00001379": Masti's own series continues (0009 Decision 4).
-  invoiceNo          String         @unique
+  invoiceNo          String          @unique
   /// The case. One original invoice per case (0009 Decision 6); a cancelled one can be replaced, each replacement
   /// pointing at the one it replaces (docs/decisions/0011-visa-at-vendor.md Decision 5). Checked in the migration.
   enquiryId          String
   /// The cancelled invoice this one replaces, if it's a replacement.
-  replacesId         String?        @unique
+  replacesId         String?         @unique
   /// The date printed on it (IST).
-  issuedOn           DateTime       @db.Date
-  issuedAt           DateTime       @default(now()) @db.Timestamptz(3)
+  issuedOn           DateTime        @db.Date
+  issuedAt           DateTime        @default(now()) @db.Timestamptz(3)
   /// "Prepared by".
   issuedById         String
   /// Snapshots at raise time, so a later edit to the client, Masti's details or the terms never changes an invoice.
@@ -1209,7 +1231,7 @@ model Invoice {
   company            Json
   terms              Json
   /// The client's GST state code.
-  placeOfSupply      String         @db.Char(2)
+  placeOfSupply      String          @db.Char(2)
   taxType            InvoiceTaxType
   sac                String
   /// 1800 = 18%.
@@ -1223,13 +1245,14 @@ model Invoice {
   igstPaise          Int
   totalPaise         Int
   /// The PDF as raised.
-  fileId             String         @unique
-  enquiry            Enquiry        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  replaces           Invoice?       @relation("InvoiceReplaces", fields: [replacesId], references: [id], onDelete: Restrict)
-  replacedBy         Invoice?       @relation("InvoiceReplaces")
-  issuedBy           User           @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
-  file               CaseFile       @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  fileId             String          @unique
+  enquiry            Enquiry         @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  replaces           Invoice?        @relation("InvoiceReplaces", fields: [replacesId], references: [id], onDelete: Restrict)
+  replacedBy         Invoice?        @relation("InvoiceReplaces")
+  issuedBy           User            @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
+  file               CaseFile        @relation(fields: [fileId], references: [id], onDelete: Restrict)
   lines              InvoiceLine[]
+  charges            InvoiceCharge[]
   creditNotes        CreditNote[]
 
   @@index([enquiryId])
@@ -1327,6 +1350,23 @@ model CreditNoteLine {
 model CreditNoteCounter {
   id        Int @id @default(1)
   lastValue Int
+}
+
+/// One extra charge on an ADDITIONAL invoice (docs/decisions/0011-visa-at-vendor.md Decision 7): picked from the list,
+/// with its amount. Can't be changed, and only on an ADDITIONAL invoice (both in the migration).
+model InvoiceCharge {
+  invoiceId   String
+  /// 1, 2, 3…
+  position    Int
+  chargeId    Int
+  /// The charge's name as printed.
+  name        String
+  amountPaise Int
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  charge      ExtraCharge @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+
+  @@id([invoiceId, position])
+  @@index([chargeId])
 }
 
 /// The last invoice number used: one row (id 1), bumped in the invoice's own transaction.

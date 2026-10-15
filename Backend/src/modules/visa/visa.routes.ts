@@ -6,6 +6,7 @@ import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordCh
 import {
   addToDocketSchema,
   cancelInvoiceSchema,
+  raiseAdditionalInvoiceSchema,
   recallSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
@@ -32,6 +33,7 @@ import * as atVendorService from "./visaAtVendor.service";
 import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
+import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -143,9 +145,25 @@ router.post("/cases/:caseNo/invoice", visaEdit, async (req, res) => {
   res.json({ case: await invoiceService.raiseInvoice(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
+/** The file's one additional invoice (0011 Decision 7): the main invoice it adds to, its number, and what blocks it. */
+router.get("/cases/:caseNo/additional-invoice/check", visaView, async (req, res) => {
+  res.json(await additionalInvoiceService.additionalInvoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/**
+ * Raises the file's one additional invoice, "MVI…-A" (0011 Decision 7): extra charges from the list, no GST. 409 when
+ * one is already raised, ADDITIONAL_CHANGED, or ADDITIONAL_BLOCKED with details.blockers.
+ */
+router.post("/cases/:caseNo/additional-invoice", visaEdit, async (req, res) => {
+  const body = raiseAdditionalInvoiceSchema.parse(req.body);
+  res.json({ case: await additionalInvoiceService.raiseAdditionalInvoice(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
 /** What cancelling the case's invoice would give back, and what blocks it (0011 Decision 5). Anyone who can open it. */
 router.get("/cases/:caseNo/invoice/cancel/check", visaView, async (req, res) => {
-  res.json(await creditNoteService.cancelInvoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+  // ?invoiceNo= picks the additional invoice (0011 Decision 7); without it, the main one.
+  const invoiceNo = z.string().trim().toUpperCase().min(1).max(40).optional().parse(req.query.invoiceNo);
+  res.json(await creditNoteService.cancelInvoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req), invoiceNo));
 });
 
 /**
