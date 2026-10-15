@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { Link, useBlocker, useNavigate, useSearchParams } from 'react-router'
 import { can, canSeeEnquiry } from '../../auth/permissions'
@@ -308,7 +308,22 @@ export function NewEnquiryPage() {
           />
 
           <FormField label="Travel month" required error={errors.travelMonth?.message}>
-            <input className="input" type="month" min={thisMonth} {...register('travelMonth', { onChange: () => setValue('travelDate', '') })} />
+            <Controller
+              control={control}
+              name="travelMonth"
+              render={({ field }) => (
+                <TravelMonthPicker
+                  ref={field.ref}
+                  value={field.value}
+                  thisMonth={thisMonth}
+                  invalid={!!errors.travelMonth}
+                  onChange={(value) => {
+                    field.onChange(value)
+                    setValue('travelDate', '')
+                  }}
+                />
+              )}
+            />
           </FormField>
           <FormField label="Travel date (if they know it)" error={errors.travelDate?.message} hint="Optional.">
             <input
@@ -355,6 +370,75 @@ export function NewEnquiryPage() {
         />
       )}
     </form>
+  )
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+/** The Year dropdown offers this year and the next two. */
+const TRAVEL_YEARS_AHEAD = 2
+
+/**
+ * Travel month as two dropdowns, Month and Year: "2027-01" once both are picked, "" until then.
+ * Not the browser's month box: Chrome's opens on this year with January greyed out, typing "01" there picks the
+ * wrong month, and Firefox and Safari don't have one.
+ */
+function TravelMonthPicker({
+  ref,
+  value,
+  thisMonth,
+  invalid,
+  onChange,
+}: {
+  ref: Ref<HTMLSelectElement>
+  value: string
+  /** "2026-10": months before it are greyed out. */
+  thisMonth: string
+  invalid: boolean
+  onChange: (value: string) => void
+}) {
+  const [month, setMonth] = useState(value.slice(5, 7))
+  const [year, setYear] = useState(value.slice(0, 4))
+  const thisYear = Number(thisMonth.slice(0, 4))
+  const years = Array.from({ length: TRAVEL_YEARS_AHEAD + 1 }, (_, i) => String(thisYear + i))
+
+  const pick = (m: string, y: string) => {
+    // Choosing this year after a month already past (January, then 2026) clears the month.
+    const kept = m && y && `${y}-${m}` < thisMonth ? '' : m
+    setMonth(kept)
+    setYear(y)
+    onChange(kept && y ? `${y}-${kept}` : '')
+  }
+
+  return (
+    <div className="month-year">
+      <select
+        ref={ref}
+        className="select"
+        aria-label="Travel month"
+        aria-required
+        aria-invalid={invalid}
+        value={month}
+        onChange={(e) => pick(e.target.value, year)}
+      >
+        <option value="">Month</option>
+        {MONTH_NAMES.map((name, i) => {
+          const m = String(i + 1).padStart(2, '0')
+          return (
+            <option key={m} value={m} disabled={year !== '' && `${year}-${m}` < thisMonth}>
+              {name}
+            </option>
+          )
+        })}
+      </select>
+      <select className="select" aria-label="Travel year" aria-required aria-invalid={invalid} value={year} onChange={(e) => pick(month, e.target.value)}>
+        <option value="">Year</option>
+        {years.map((y) => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
+      </select>
+    </div>
   )
 }
 

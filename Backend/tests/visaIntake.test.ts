@@ -283,6 +283,14 @@ describe("intake dropdowns and settings", () => {
       docket: { prefix: "D" },
       sticker: { widthMm: 100, heightMm: 150 },
       invoice: { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" },
+      vendorConfirm: { afterDays: 1, at: "11:00" },
+      awb: { minLength: 4, maxLength: 30 },
+      docketEmail: {
+        subject: "Docket {docketNo} · {files} · {company}",
+        greeting: "Dear {vendor},",
+        opening: "Docket {docketNo} is on its way to you: {files}, {passports} passports.",
+        closing: "Please confirm when you receive it.",
+      },
     });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);
 

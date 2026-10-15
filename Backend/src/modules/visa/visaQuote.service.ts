@@ -6,10 +6,11 @@ import type { Actor } from "../users/user";
 import { loadCase, lockCase, QUOTING } from "./caseLock";
 import type { SaveQuoteInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
+import { assertNotInvoiced } from "./visaInvoice.service";
 
 // The quote on a visa case (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, per
 // traveller a lump sum or itemised, plus Masti's service charge. Money is in paise. Saved whole, by whoever can act on
-// the case, from Step 1 until the file goes to the vendor. The invoice (a later component) will freeze it.
+// the case, from Step 1 until the file goes to the vendor. A raised invoice freezes it.
 
 /** The quote's own token: null means "there was no quote when I opened it". */
 function assertQuoteFresh(existing: { updatedAt: Date } | null, sent: string | null) {
@@ -64,6 +65,7 @@ export async function saveQuote(caseNo: string, input: SaveQuoteInput, actor: Ac
 
   await prisma.$transaction(async (tx) => {
     await lockCase(tx, enquiry.id, actor, QUOTING);
+    await assertNotInvoiced(tx, enquiry.id);
     const before = await tx.visaQuote.findUnique({ where: { enquiryId: enquiry.id }, include: { lines: true } });
     assertQuoteFresh(before, input.updatedAt);
 

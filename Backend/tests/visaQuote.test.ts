@@ -197,6 +197,22 @@ describe("what is refused", () => {
     expect(await prisma.visaQuote.count()).toBe(0);
   });
 
+  it("a quote over ₹1,00,00,000 before GST, so the invoice's total always fits", async () => {
+    const staff = await visaStaff();
+    const saved = await saveCase(staff, { adults: 4, children: 0 });
+    const c = await load(staff, saved.caseNo);
+    // Each adult itemised at ₹25,00,000: ₹1,00,00,000 in all, and ₹0.01 of service charge over it.
+    const lines = c.travellers.map((t) => ({ travellerId: t.id, form: "ITEMISED", embassyFeePaise: 100_000_000, vfsFeePaise: 100_000_000, otherFeePaise: 50_000_000 }));
+    const over = await save(staff, saved.caseNo, { processingSpeedId: await speed(), serviceChargePaise: 1, lines, updatedAt: null });
+    expect(over.status).toBe(400);
+    expect(over.body.issues.lines).toEqual(["The quote comes to more than ₹1,00,00,000 before GST."]);
+    expect(await prisma.visaQuote.count()).toBe(0);
+
+    // Exactly ₹1,00,00,000 is fine.
+    lines[0]!.otherFeePaise -= 1;
+    expect((await save(staff, saved.caseNo, { processingSpeedId: await speed(), serviceChargePaise: 1, lines, updatedAt: null })).status).toBe(200);
+  });
+
   it("a switched-off processing speed as a new choice, but keeping the current one is fine", async () => {
     const c = await enquiryCase();
     const express = await speed("EXPRESS");

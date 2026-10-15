@@ -240,10 +240,52 @@ a.btn-primary:hover {
     color: var(--primary);
     font-weight: 700;
   }
+  .select option:disabled {
+    color: var(--text-faint);
+    cursor: default;
+  }
+  .select option:disabled:hover {
+    background: none;
+  }
 }
 .input:focus,
 .select:focus,
 .btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+/* A password field with an eye button inside its right edge (components/PasswordInput.tsx). */
+.password-input {
+  position: relative;
+  display: block;
+}
+.password-input .input {
+  padding-right: 44px;
+}
+/* Edge's own eye would sit beside ours. */
+.password-input .input::-ms-reveal {
+  display: none;
+}
+.password-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.password-eye:hover {
+  color: var(--ink);
+}
+.password-eye:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }

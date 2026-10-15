@@ -7,9 +7,11 @@ import {
   addToDocketSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
+  dispatchDocketSchema,
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  raiseInvoiceSchema,
   saveQuoteSchema,
   matureCaseSchema,
   setVendorSchema,
@@ -22,7 +24,9 @@ import {
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as docketService from "./visaDocket.service";
+import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
+import * as invoiceService from "./visaInvoice.service";
 import * as quoteService from "./visaQuote.service";
 import * as stepsService from "./visaSteps.service";
 
@@ -119,6 +123,17 @@ router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
+/** What stands in the way of raising the invoice, or what it will say (0009). Anyone who can open the case. */
+router.get("/cases/:caseNo/invoice/check", visaView, async (req, res) => {
+  res.json(await invoiceService.invoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/** Raises the locked tax invoice from the quote: 409 INVOICE_BLOCKED with details.blockers while anything is missing. */
+router.post("/cases/:caseNo/invoice", visaEdit, async (req, res) => {
+  const body = raiseInvoiceSchema.parse(req.body);
+  res.json({ case: await invoiceService.raiseInvoice(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, saved whole. */
 router.put("/cases/:caseNo/quote", visaEdit, async (req, res) => {
   const body = saveQuoteSchema.parse(req.body);
@@ -140,6 +155,25 @@ router.get("/cases/:caseNo/sticker", visaView, async (req, res) => {
 router.delete("/cases/:caseNo/docket", visaEdit, async (req, res) => {
   const body = takeOutOfDocketSchema.parse(req.body);
   res.json({ case: await docketService.takeOutOfDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** What stands in the way of dispatching the case's docket, the vendor it goes to, and when it comes back due (0008). */
+router.get("/cases/:caseNo/dispatch/check", visaView, async (req, res) => {
+  res.json(await dispatchService.dispatchCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/**
+ * Dispatch the case's docket (0008 Decision 9): every case in it goes to the vendor at once. 409 DISPATCH_BLOCKED with
+ * details.blockers while a file has no invoice or the vendor can't take it.
+ */
+router.post("/cases/:caseNo/dispatch", visaEdit, async (req, res) => {
+  const body = dispatchDocketSchema.parse(req.body);
+  res.json({ case: await dispatchService.dispatchDocket(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, while it hasn't gone. */
+router.post("/cases/:caseNo/dispatch/email", visaEdit, async (req, res) => {
+  res.json({ case: await dispatchService.resendVendorEmail(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
 });
 
 /**

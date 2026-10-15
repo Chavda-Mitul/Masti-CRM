@@ -69,8 +69,7 @@ export function VendorsTable({ canEdit, showInactive }: { canEdit: boolean; show
                 <td className="small">
                   {v.contactName && <div>{v.contactName}</div>}
                   {v.mobile && <div className="mono">{formatMobile(v.mobile)}</div>}
-                  {v.email && <div className="muted">{v.email}</div>}
-                  {!v.contactName && !v.mobile && !v.email && <span className="muted">—</span>}
+                  <div className="muted">{v.email}</div>
                 </td>
                 <td>{v.isActive ? <span className="chip chip-ok chip-sm">Active</span> : <span className="chip chip-muted chip-sm">Switched off</span>}</td>
                 {canEdit && (
@@ -120,7 +119,7 @@ function VendorDrawer({ vendor, onClose }: { vendor: Vendor | null; onClose: () 
       countryIds: v.countryIds.map(Number),
       contactName: orNull(v.contactName),
       mobile: orNull(v.mobile),
-      email: orNull(v.email),
+      email: v.email.trim(),
     }
     save.mutate(vendor ? { id: vendor.id, body } : { body }, {
       onSuccess: (saved) => {
@@ -177,8 +176,8 @@ function VendorDrawer({ vendor, onClose }: { vendor: Vendor | null; onClose: () 
       <FormField label="Mobile" error={errors.mobile?.message}>
         <input className="input mono" {...filtered(register('mobile'), mobileChars)} placeholder="98250 41234" inputMode="tel" />
       </FormField>
-      <FormField label="Email" error={errors.email?.message} hint="For the dispatch email (Step 4).">
-        <input className="input" type="email" {...register('email')} placeholder="optional" />
+      <FormField label="Email" error={errors.email?.message} hint="The dispatch email goes here (Step 4)." required>
+        <input className="input" type="email" {...register('email')} placeholder="name@company.com" aria-required />
       </FormField>
     </MasterDrawer>
   )

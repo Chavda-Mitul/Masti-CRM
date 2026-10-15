@@ -3,8 +3,10 @@ import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { formatRupees } from '../../../lib/money'
 import type { VisaCase } from '../types'
+import { useOpenCaseFile } from '../queries'
 import { dayMonth } from './labels'
 import { QuoteDialog } from './QuoteDialog'
+import { RaiseInvoiceDialog } from './RaiseInvoiceDialog'
 
 /** The quote can change from Step 1 until the file goes to the vendor (Backend caseLock.ts QUOTING). */
 const QUOTE_STEPS = ['ENQUIRY', 'DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH']
@@ -12,18 +14,39 @@ const QUOTE_STEPS = ['ENQUIRY', 'DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH']
 /**
  * "Money on this case" (demo screen 09 ⚠️, docs/decisions/0009-visa-invoice.md Decision 2): the quote, each traveller's
  * amount, Masti's service charge, GST on it and the total. The case's owner, its HOD or the Head add or edit it until the
- * file goes to the vendor. The invoice joins this section with a later component.
+ * file goes to the vendor, and raise the locked tax invoice from it. Once raised, the invoice shows here with its PDF, and
+ * the quote can't change.
  */
 export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const [editing, setEditing] = useState(false)
+  const [raising, setRaising] = useState(false)
+  const openFile = useOpenCaseFile(c.caseNo)
   const q = c.quote
-  const canEdit =
+  const invoice = c.invoice
+  const canAct =
     !!me && c.status === 'OPEN' && QUOTE_STEPS.includes(c.stage.code) && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const canEdit = canAct && !invoice
 
   return (
-    <div className="rail-section money-section">
+    <div className="rail-section money-section" id="money">
       <div className="lbl">Money on this case</div>
+      {invoice && (
+        <div className="money-invoice">
+          <div className="money-invoice-head">
+            <span className="chip chip-ok">
+              <span className="mono">{invoice.invoiceNo}</span> · locked
+            </span>
+            <strong>{formatRupees(invoice.totalPaise)}</strong>
+          </div>
+          <span className="muted small">
+            Raised by {invoice.issuedBy.name}, {dayMonth(invoice.issuedAt)}
+          </span>
+          <button type="button" className="btn btn-sm" onClick={() => openFile(invoice.file.id)}>
+            Open invoice
+          </button>
+        </div>
+      )}
       {q ? (
         <>
           <div className="money-rows">
@@ -59,11 +82,19 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
         </p>
       )}
       {canEdit && (
-        <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => setEditing(true)}>
-          {q ? 'Edit quote' : 'Add quote'}
-        </button>
+        <div className="money-actions">
+          <button type="button" className="btn btn-sm" onClick={() => setEditing(true)}>
+            {q ? 'Edit quote' : 'Add quote'}
+          </button>
+          {q?.complete && (
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => setRaising(true)}>
+              Raise invoice
+            </button>
+          )}
+        </div>
       )}
       {editing && <QuoteDialog visaCase={c} onClose={() => setEditing(false)} />}
+      {raising && <RaiseInvoiceDialog visaCase={c} onClose={() => setRaising(false)} />}
     </div>
   )
 }

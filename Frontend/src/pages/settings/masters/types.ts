@@ -185,7 +185,8 @@ export interface Vendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
-  email: string | null
+  /** Where the dispatch email goes (0008 Decision 8): every vendor has one */
+  email: string
   isActive: boolean
   /** The countries it submits files for, by name. */
   countries: { id: number; code: string; name: string; zone: string | null }[]
@@ -275,6 +276,12 @@ export interface FollowUpOption {
 /** How fast the embassy processes the application: "Normal", "Express"… (0009). Picked on the quote. */
 export type ProcessingSpeed = FollowUpOption
 
+/** How a docket goes to the vendor: "Blue Dart", "By hand (no AWB)"… (0008 Decision 6). Picked at dispatch. */
+export interface Courier extends FollowUpOption {
+  /** Off for "By hand": no slip (AWB) number is asked for */
+  awbNeeded: boolean
+}
+
 /** Why a paper needs replacing in Step 3: "Not signed", "Wrong photo size"… (0007 Decision 3). */
 export interface DocumentProblemReason {
   id: number
@@ -304,3 +311,4 @@ export type MasterResource =
   | 'vendors'
   | 'document-problem-reasons'
   | 'processing-speeds'
+  | 'couriers'

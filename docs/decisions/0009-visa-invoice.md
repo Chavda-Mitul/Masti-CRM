@@ -1,7 +1,8 @@
 # 0009 · The visa invoice: the quote, the locked tax invoice and its PDF
 
-- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the quote and the invoice settings, are built
-  (13 Oct 2026). One point is waiting for Masti's accountant
+- **Status:** decided (13 Oct 2026, project lead). All four components (the quote, the invoice settings, raising the
+  invoice and the Docket card's Invoice column) are built
+  (13 Oct 2026). Masti answered M36 the same day: GST as built (Decision 3), and every correction is a credit note
   (Decision 9). A "Built" note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** the price quoted on a visa case, and raising the visa tax invoice from it:
@@ -25,6 +26,8 @@ What the sources say:
 | Demo ⚠️ (screen 09) | The docket's Invoice column ("INV-0412 · locked" / "Raise invoice first"). The rule copy: "The invoice is built from the price quoted at the start — nobody types amounts — and can never be edited." The right rail shows "Money on this case". |
 | Masti, 13 Oct 2026 (through the project lead) | Masti often quotes **one lump sum**, with no strict fee breakdown. There is no fee sheet per visa (the hand-over plan's B1 assumption is dropped). |
 | Masti's two invoice PDFs (13 Oct 2026; real client data, kept out of the repo) | See below. |
+| Masti, 13 Oct 2026 (through the project lead), answering M36 | A flat **18% GST on Masti's own service charge** only. An invoice is **never cancelled or changed**; a mistake is corrected only by a **credit note**, even before the file is dispatched. |
+| A vendor's tax invoice to Masti (13 Oct 2026; kept out of the repo) | The same treatment from the other side: 18% IGST only on the vendor's handling, delivery and misc charges; the visa, VFS and DD fees are untaxed, collected "as pure agent". |
 
 **Masti's current TAX INVOICE** (from their accounting software's "Voucher (Single Print)"):
 
@@ -89,6 +92,11 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - Hand-written CHECKs:
     - every amount is 0 to ₹10,00,000 (a sanity limit)
     - the amounts match the form: a lump sum has only `lumpSumPaise`; itemised has the three fees (0 allowed)
+  - **The whole quote is at most ₹1,00,00,000 before GST** (`MAX_QUOTE_PAISE`, a sanity limit; added 15 Oct 2026 from a
+    code review). The invoice's totals are INTEGER paise (at most about ₹2.14 crore). Sixty travellers at ₹10,00,000
+    each could otherwise save a quote whose invoice then failed with a server error. With GST at most 28% on the
+    service charge, a quote under the limit always fits. It's checked when saving (400 on `lines`), not in the
+    database, because the total spans the lines.
   - Audited as `visa.quote.save` on the Enquiry, with `clientId`; before and after are the whole quote.
   - The case sends `quote { processingSpeed, serviceChargePaise, lines (each with totalPaise), travellersPaise,
     gstRatePercent, gstPaise, totalPaise, complete, updatedAt, updatedBy }`, plus `gstRatePercent` for a quote not yet
@@ -130,8 +138,9 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - any other state: **IGST**
 - **The embassy, VFS and other amounts carry no GST** (passed on).
 - **A quote with no service charge gets no tax line,** like Masti's lump-sum invoice today.
-- ⚠️ **Masti's accountant must confirm** the GST treatment, including lump sums with no service charge. We build what
-  their current invoices show; we aren't tax advisers.
+- **Confirmed 13 Oct 2026 (Masti, M36):** a flat 18% on the service charge only; the embassy, VFS and other amounts
+  are untaxed; a quote with no service charge has no tax line. A vendor's invoice to Masti treats its own fees the
+  same way. This is what was built, so no code changed. The rate stays a setting.
 - **Rounding:** the tax is worked out in paise and rounded to the nearest paisa. CGST and SGST are each half of the
   total tax; if it doesn't split evenly, the odd paisa goes to CGST. The amount in words is in Indian numbering
   ("Four Thousand Rupees").
@@ -141,6 +150,9 @@ stops issuing visa invoices. An export to it can come later (Q26).
 - **Continue Masti's own:** prefix `MVI` ⚠️ + 8 digits ⚠️, **never restarting** by year.
 - **Settings:** the prefix, the digit count and the **starting number.** At go-live the Head sets it to follow
   straight on from Masti's last voucher.
+- **Until handover (13 Oct 2026, project lead):** the series starts at **MVI00000001** (`startAt: 1`). At handover the
+  starting number is set to Masti's last voucher + 1, which is higher, so the counter jumps forward. Test invoices
+  stay in a test database, never in Masti's live one.
 - **A single counter row,** bumped in the invoice's own transaction (like `CaseCounter`). A refused or failed raise
   rolls back, so no number is skipped.
 - This **replaces the 9 Oct 2026 decision** that the series was "our choice".
@@ -173,6 +185,72 @@ stops issuing visa invoices. An export to it can come later (Q26).
   later.
 - **Upload first, then commit,** as with the saved file. If the PDF can't be stored, the invoice isn't raised and its
   number is rolled back.
+- **Fonts (decided 13 Oct 2026, project lead):** the free **Noto Sans** (Regular and Bold, SIL Open Font Licence) is
+  embedded, for the ₹ sign. Invoices are in English: **a name the font can't print (Gujarati letters, for example)
+  blocks raising** with "Enter these in English letters".
+  - **Every typed-in text the invoice prints is checked** (completed 15 Oct 2026, from a code review). That covers the
+    client's name, contact person and address, and the travellers' names. It covers Masti's name, address, phones,
+    email, bank account name, bank name and branch. It also covers each line of the terms, the visa's description, and
+    the name of whoever raises it ("Prepared by"; the check uses the person looking). Before, the phones, email, bank
+    and terms weren't checked, so they could print as empty boxes on an invoice that can never be made again. The
+    other printed values have their own format (digits, PAN, GSTIN, IFSC, the website) or come from the code.
+
+**Built 13 Oct 2026** (component 3, raising the invoice):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/invoice/check` returns `{ blockers, alreadyRaised, preview }` for anyone who can
+    open the case. Each blocker is grouped by kind: `QUOTE`, `TRAVELLERS` (unnamed), `CLIENT` (the readiness setting,
+    plus the state), `COMPANY` (Decision 8's list) and `NOT_ENGLISH`.
+  - `POST /api/visa/cases/:caseNo/invoice` with `{ quoteUpdatedAt, taxType, gstRatePercent, totalPaise }`, for the
+    case owner, the Visa HOD or the Head, from Enquiry to Docket & dispatch. It's refused with:
+    - 409 `INVOICE_BLOCKED` `{ blockers }`
+    - 409 STALE if the quote changed since the dialog
+    - 409 `INVOICE_CHANGED` if the GST rate, the tax type (the client's state) or the total did
+    - 409 if already raised
+  - **What the dialog showed is sent back** (fixed 15 Oct 2026, from a code review). The preview carries the
+    `quoteUpdatedAt` it was made from, and the dialog sends that back with the rate, tax type and total. Before, only
+    the case page's quote time was sent, so a GST-rate or client-state change after the preview (or a background reload
+    of the page) could lock in amounts nobody saw. On STALE or `INVOICE_CHANGED`, the dialog loads the amounts again.
+  - Tables `Invoice` (snapshots of the client, Masti and the terms; place of supply; tax type; the totals in paise),
+    `InvoiceLine` and `InvoiceCounter`, plus `CaseFileKind.INVOICE` (migration `20261013140000_invoices`).
+  - **Triggers refuse any UPDATE or DELETE of an invoice or its lines.** CHECKs make the total add up, the tax match its
+    type, and the line amounts match the form.
+  - **The number:** `GREATEST(last + 1, startAt)`, bumped in the invoice's transaction. A refused raise uses no number;
+    raising the starting number jumps forward; lowering it reuses nothing.
+  - **The counter is taken last** (15 Oct 2026, from a code review). Every raise in the company takes its one row, so
+    the PDF is made and stored first, with the number the counter will give next. Then the counter is taken and held
+    only for the quick inserts. If another raise took that number meanwhile, the PDF is removed and the raise starts
+    again with the next number (3 tries, then 409 "try again"). Before, a slow bucket held up every other raise.
+  - Audited as `visa.invoice.raise`. The PDF opens through the existing `/files/:fileId/link`, audited as
+    `visa.file.open`. A raised invoice freezes the quote ("Invoice MVI… is raised, so the quote can't change").
+- **The PDF** (`src/modules/visa/invoicePdf.ts`) is A4, in Masti's layout:
+  - the orange band; the address and contacts; the logo
+  - PAN | GSTIN; the To block; the TAX INVOICE box with the number and date
+  - the traveller table: fee columns when any line is itemised, otherwise just Service and Total
+  - Gross total, processing charges, GST; the total and the balance; the amount in words
+    (`src/lib/amountInWords.ts`, Indian numbering)
+  - the GST table (CGST/SGST or IGST); the bank details; the terms
+  - "for MASTI TOUR AND TRAVEL" with the signature; "Prepared by"
+  - Many travellers flow onto more pages.
+  - **The terms keep the room they really take** (15 Oct 2026, from a review of PR #9). They're wrapped first, and
+    the heading and every term move to a new page together when they don't fit. Before, about one line was kept per
+    term. The longest terms the setting allows (10 of 200 characters, 3 lines each) then ran off page 1 once 4–10
+    travellers filled it, and the PDF was locked without them. A word too wide for its line (a long web address) is
+    broken across lines instead of running off the right edge. `tests/invoicePdf.test.ts` checks that every line stays
+    inside the margins.
+- **Screen:** "Money on this case" gains **Raise invoice** once the quote is complete. The confirm dialog lists the
+  blockers with links to fix them, or shows each amount, the GST split, the total and the number it will get, with a
+  warning that it can never be edited. Once raised, the panel shows "**MVI… · locked**", the total, who raised it, and
+  **Open invoice**.
+- **Settled while building:**
+  - **The whole font is embedded, not a subset:** pdf-lib's subsetting dropped most of Noto Sans's glyphs (the text
+    extracted but didn't show). Each invoice is about 630 KB.
+  - **The line's entry type** is left out until the trip details give it (e.g. at the Enquiry step:
+    `FRANCE(TOURIST)(NORMAL)`).
+  - **The client's state is always needed,** whatever the readiness setting says, because it decides CGST + SGST or
+    IGST.
+  - **A long amount in words wraps** within its half of the total row. The client's mobile prints as
+    "+91 98250 41237".
 
 ### 8. What it prints: the settings
 
@@ -241,9 +319,13 @@ copied onto the invoice. A later edit to the client or the company never changes
   `AuditLog_append_only` (migration `20261007191550_auth`).
 - **The one additional invoice per file and the credit note** (a recall refunds the embassy fee only) come with
   **Step 5**, in their own record.
-- ❓ **Open: correcting a wrong invoice before dispatch.** This is a question for Masti's accountant. One option is
-  for the Visa HOD to cancel it with a reason (kept on record, number used) and re-raise; the other is a credit note
-  only. **Until it's answered, a raised invoice can't be undone,** so the confirm step (Decision 5) matters.
+- **Correcting a wrong invoice, decided 13 Oct 2026 (Masti, M36):** an invoice is never cancelled or changed. Every
+  correction is a **credit note**, even before the file is dispatched. The lock as built (no edit route, the trigger)
+  is exactly what they need, and the confirm step (Decision 5) still matters.
+  - **So the credit note must be possible from the moment an invoice is raised,** not only on a recall at Step 5. It
+    is designed with Step 5.
+  - ❓ **Open (M37):** after a credit note, is the corrected invoice the case's one additional invoice, or a new
+    invoice of its own? Decided when the credit note is designed.
 
 ### 10. Not in this record
 
@@ -316,7 +398,13 @@ model InvoiceCounter { id Int @id @default(1); lastValue Int }   // one row; the
    - the PDF, made and stored
    - the immutability trigger
    - the Invoice card / "Money on this case"
-4. **The Docket card's Invoice column:** "MVI… · locked" or "Raise invoice first".
+   **Built 13 Oct 2026.**
+4. **The Docket card's Invoice column:** "MVI… · locked" or "Raise invoice first". **Built 13 Oct 2026:**
+   - each docket row in the case sends `invoiceNo` (null until raised): only the number for another case, never its
+     amounts. The sticker doesn't print it.
+   - the column shows a green "**MVI00000001** · locked" chip, or an amber "Raise invoice first", as in the demo
+   - on the case's own row, whoever can act on it gets "Raise invoice first →", which scrolls to Money on this case
+   - raising an invoice refreshes the other cases in the docket that are open in the browser (as a docket change does)
 
 Then 0008's Dispatch card, with the invoice check.
 
@@ -346,8 +434,11 @@ Then 0008's Dispatch card, with the invoice check.
 
 ## Still needed from Masti
 
-- **Their accountant:** confirm GST on the service charge only, the lump sum with no tax line, and how a wrong invoice
-  is corrected before dispatch (Decision 9).
-- **The last `MVI` number** before go-live (the starting number).
-- **The logo and signature artwork** (or the Head uploads them).
+- ~~Their accountant (M36)~~: **answered 13 Oct 2026.** GST as built (Decision 3); corrections only by credit note
+  (Decision 9).
+- **M37:** after a credit note, is the corrected invoice the one additional invoice, or a new one (Decision 9)?
+- **The last `MVI` number** before go-live (the starting number). Until handover the series starts at 1.
+- ~~The logo and signature artwork~~: **received 13 Oct 2026.** Upload-ready copies (trimmed, print size, under the
+  2 MB limit) are in `Masti-CRM-Handover/references/branding/` (gitignored: the signature is never committed). The
+  Head uploads them in Settings → Company & invoice.
 - **Confirm "NORMAL"** in the line description (processing speed?).

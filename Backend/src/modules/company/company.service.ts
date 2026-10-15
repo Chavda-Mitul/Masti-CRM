@@ -6,7 +6,7 @@ import { audit } from "../../lib/audit";
 import { badRequest, fieldError, notFound } from "../../lib/httpError";
 import { saveSetting } from "../../lib/settings";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
-import { GST_STATES } from "../clients/clients.schemas";
+import { GST_STATES } from "../../lib/shared.schemas";
 import type { Actor } from "../users/user";
 import type { CompanyDetails, CompanyImageKindParam, InvoiceTerms, UpdateCompanyDetailsInput } from "./company.schemas";
 import { COMPANY_DETAILS_KEY, getCompanyDetails, getInvoiceTerms, INVOICE_TERMS_KEY, invoiceMissing } from "./company.settings";
@@ -23,6 +23,12 @@ async function currentImage(kind: CompanyImageKind) {
     orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
     include: { uploadedBy: { select: { id: true, name: true } } },
   });
+}
+
+/** The current logo and signature, with where they are stored: the invoice PDF embeds them. */
+export async function currentCompanyImages() {
+  const [logo, signature] = await Promise.all([currentImage("LOGO"), currentImage("SIGNATURE")]);
+  return { logo, signature };
 }
 
 const imageView = (image: Awaited<ReturnType<typeof currentImage>>) =>

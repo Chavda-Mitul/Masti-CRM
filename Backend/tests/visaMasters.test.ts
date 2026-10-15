@@ -327,7 +327,61 @@ describe("document problems (why a paper needs replacing, 0007 Decision 3)", () 
   });
 });
 
+describe("couriers (how a docket goes to the vendor, 0008 Decision 6)", () => {
+  it("is seeded with the placeholders, read by Visa staff and written only by the Visa HOD or the Head", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/couriers");
+    expect(list.status).toBe(200);
+    expect(list.body.couriers.map((c: { name: string; awbNeeded: boolean }) => [c.name, c.awbNeeded])).toEqual([
+      ["Blue Dart", true],
+      ["DTDC", true],
+      ["By hand (no AWB)", false],
+    ]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const editor = await loginAs("neha@masti.test");
+    const refused = await editor.post("/api/masters/couriers").send({ code: "FEDEX", name: "FedEx" });
+    expect(refused.status).toBe(403);
+    expect(refused.body.message).toMatch(/Visa HOD/);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/couriers").send({ code: " fedex ", name: "FedEx" });
+    expect(created.status).toBe(201);
+    expect(created.body.courier).toMatchObject({ code: "FEDEX", name: "FedEx", awbNeeded: true, isActive: true });
+    const peon = await hod.post("/api/masters/couriers").send({ code: "OFFICE_BOY", name: "Office boy", awbNeeded: false });
+    expect(peon.body.courier.awbNeeded).toBe(false);
+    expect(await prisma.auditLog.count({ where: { action: "courier.create" } })).toBe(2);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    expect((await head.post("/api/masters/couriers").send({ code: "PROFESSIONAL", name: "The Professional" })).status).toBe(201);
+  });
+
+  it("refuses a used or badly formed code, never changes a code, switches AWB needed and switches couriers off", async () => {
+    const hod = await visaHod();
+    expect((await hod.post("/api/masters/couriers").send({ code: "DTDC", name: "DTDC Express" })).status).toBe(409);
+    expect((await hod.post("/api/masters/couriers").send({ code: "blue dart", name: "Blue" })).status).toBe(400);
+
+    const dtdc = await prisma.courier.findUniqueOrThrow({ where: { code: "DTDC" } });
+    const patched = await hod.patch(`/api/masters/couriers/${dtdc.id}`).send({ code: "OLD", name: "DTDC Courier", awbNeeded: false });
+    expect(patched.status).toBe(200);
+    expect(patched.body.courier).toMatchObject({ code: "DTDC", name: "DTDC Courier", awbNeeded: false });
+    const unchanged = await hod.patch(`/api/masters/couriers/${dtdc.id}`).send({ awbNeeded: false });
+    expect(unchanged.status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { action: "courier.update" } })).toBe(1);
+
+    await hod.patch(`/api/masters/couriers/${dtdc.id}`).send({ isActive: false });
+    const active = await hod.get("/api/masters/couriers?active=true");
+    expect(active.body.couriers.map((c: { code: string }) => c.code)).toEqual(["BLUE_DART", "BY_HAND"]);
+    expect((await hod.get("/api/masters/couriers")).body.couriers).toHaveLength(3);
+  });
+});
+
 describe("the database", () => {
+  it("refuses a lowercase courier code", async () => {
+    await expect(prisma.courier.create({ data: { code: "blue dart", name: "x" } })).rejects.toThrow();
+  });
+
   it("refuses a lowercase document problem code", async () => {
     await expect(prisma.documentProblemReason.create({ data: { code: "not signed", name: "x" } })).rejects.toThrow();
   });

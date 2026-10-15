@@ -35,7 +35,8 @@ const stageId = async (code: string) => (await prisma.departmentStage.findFirstO
 /** A vendor straight in the database (the master's own rules are tested in vendors.test.ts). */
 async function vendor(name: string, city: string, countryCodes: string[], extra: { isActive?: boolean; contactName?: string; mobile?: string } = {}) {
   const countries = await prisma.country.findMany({ where: { code: { in: countryCodes } } });
-  return prisma.vendor.create({ data: { name, city, ...extra, countries: { create: countries.map((c) => ({ countryId: c.id })) } } });
+  const email = `desk@${name.toLowerCase().replace(/[^a-z]/g, "")}.test`;
+  return prisma.vendor.create({ data: { name, city, email, ...extra, countries: { create: countries.map((c) => ({ countryId: c.id })) } } });
 }
 
 async function hodHeadViewer() {
@@ -63,6 +64,7 @@ describe("the case's vendor (Decision 7)", () => {
       isActive: true,
       contactName: "Sanjay Rao",
       mobile: "+919820012345",
+      email: "desk@globalvisaservices.test",
       coversCountry: true,
     });
     // A field on the case, like the checks: nobody's open page goes stale.

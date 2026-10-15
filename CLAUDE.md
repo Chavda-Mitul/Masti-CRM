@@ -25,7 +25,7 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 | Where | Commands |
 |---|---|
-| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket), `npm run typecheck`, `npm run build` |
+| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, + Mailpit, which catches outgoing email at http://localhost:8025, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket, and Mailpit), `npm run typecheck`, `npm run build` |
 | `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
 
 Make new migrations with `prisma migrate diff` and remove its proposed `DROP INDEX "HolidayTarget_unique"` (hand-written SQL that must stay). `npm run db:migrate` (`prisma migrate dev`) stops at a prompt over that index and holds the migration lock.
@@ -36,7 +36,7 @@ Make new migrations with `prisma migrate diff` and remove its proposed `DROP IND
 
 Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`).
 
-Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod and `generated/prisma/enums`).
+Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod, `generated/prisma/enums` and other `*.schemas.ts` files, so it stays shareable with the frontend). Fields several modules validate alike (PAN, GSTIN, the GST states, a person's name) live in `src/lib/shared.schemas.ts`, not in one module's schemas.
 
 Inside the route and its service:
 - Read the user with `currentUser(req)` (or `actorOf(req)`, the user plus IP for audited changes) in the route and pass it to the service.
@@ -68,6 +68,7 @@ Details are in PROJECT_KNOWLEDGE.md §7.
 - **Out-of-scope work:** a feature that isn't in the demo screens may be a paid change request. Flag it; don't build it quietly. Add it to [docs/change-requests.md](docs/change-requests.md).
 - **Testing:** test the money and rule logic (invoice immutability, refunds, follow-up caps, holiday-blocked dates, permissions).
 - **Keeping docs current:** when a decision is made, update `PROJECT_KNOWLEDGE.md` and `Masti-CRM-Handover/05_Open_Questions.md`.
+- **We're still in development: no patches for old data.** There is no live data before go-live, so change things properly. A rule that becomes required is required in the database too (`NOT NULL`, a CHECK). Write no backfills, legacy fallbacks, "saved before this change" warnings or code paths for rows that the new rule forbids. Reset or reseed the dev database instead (`npx prisma migrate reset`, then `npm run db:seed`), and say so when a migration needs it.
 
 ## Agent skills
 

@@ -9,6 +9,7 @@ import {
   createEmbassySchema,
   createEnquirySourceSchema,
   createOfferingSchema,
+  createCourierSchema,
   createProcessingSpeedSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
@@ -20,6 +21,7 @@ import {
   updateEmbassySchema,
   updateEnquirySourceSchema,
   updateOfferingSchema,
+  updateCourierSchema,
   updateProcessingSpeedSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
@@ -118,6 +120,20 @@ router.post("/processing-speeds", visaEdit, async (req, res) => {
 router.patch("/processing-speeds/:id", visaEdit, async (req, res) => {
   const body = updateProcessingSpeedSchema.parse(req.body);
   res.json({ processingSpeed: await mastersService.updateProcessingSpeed(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Couriers: how a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6)
+router.get("/couriers", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ couriers: await mastersService.listCouriers(active) });
+});
+router.post("/couriers", visaEdit, async (req, res) => {
+  const body = createCourierSchema.parse(req.body);
+  res.status(201).json({ courier: await mastersService.createCourier(body, actorOf(req)) });
+});
+router.patch("/couriers/:id", visaEdit, async (req, res) => {
+  const body = updateCourierSchema.parse(req.body);
+  res.json({ courier: await mastersService.updateCourier(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

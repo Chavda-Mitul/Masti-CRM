@@ -229,6 +229,8 @@ export interface CaseVendor {
   contactName: string | null
   /** +91XXXXXXXXXX */
   mobile: string | null
+  /** Where the dispatch email goes (0008 Decision 8) */
+  email: string
   /** false when the case's country was taken off the vendor after it was picked: "File ready" asks for another. */
   coversCountry: boolean
 }
@@ -246,6 +248,10 @@ export interface DocketCase {
   /** Current booklets, or one per traveller when nobody counted them */
   passports: number
   oldPassports: number
+  /** "MVI00000001", or null until the case's invoice is raised (0009) */
+  invoiceNo: string | null
+  /** Who may dispatch (0008 Decision 3): a processor who owns at least one case in the docket */
+  ownerId: string | null
   isThisCase: boolean
 }
 
@@ -258,9 +264,29 @@ export interface CaseDocket {
   /** "Open since 12 Oct, not sent yet" from the next day on */
   openedAt: string
   vendor: { name: string; city: string }
+  /** Set when dispatched (0008 Decision 9): the courier, its slip number (null for one with none), who and when */
+  courier: { name: string; awbNeeded: boolean } | null
+  awbNo: string | null
+  /** The email to the vendor (0008 Decision 8), once dispatched: when and to whom it went, or why not, or that it's going now */
+  email: { sentAt: string | null; to: string | null; error: string | null; sending: boolean } | null
+  dispatchedAt: string | null
+  dispatchedBy: PersonRef | null
   cases: DocketCase[]
   totalPassports: number
   totalOldPassports: number
+}
+
+export type DispatchBlockerKind = 'INVOICE' | 'VENDOR_OFF'
+
+/** GET /api/visa/cases/:caseNo/dispatch/check (0008 Decision 9): what blocks dispatch, and when the cases come back due. */
+export interface DispatchCheck {
+  docketNo: string
+  alreadyDispatched: boolean
+  canDispatch: boolean
+  blockers: { kind: DispatchBlockerKind; label: string; items: string[] }[]
+  vendor: { name: string; city: string; email: string }
+  /** The next open office day at 11:00 ⚠️: "Confirm vendor got it" */
+  confirmAt: string
 }
 
 /** GET /api/visa/cases/:caseNo/sticker: the parcel label (0008 Decision 5). */
@@ -304,6 +330,44 @@ export interface CaseQuote {
   /** The quote's own token: send it back when saving */
   updatedAt: string
   updatedBy: PersonRef
+}
+
+/** The case's locked tax invoice (docs/decisions/0009-visa-invoice.md), once raised. */
+export interface CaseInvoice {
+  /** "MVI00001379" */
+  invoiceNo: string
+  /** YYYY-MM-DD (IST) */
+  issuedOn: string
+  issuedAt: string
+  issuedBy: PersonRef
+  taxType: InvoiceTaxType
+  gstPaise: number
+  totalPaise: number
+  /** The PDF as raised: open it like any case file. */
+  file: { id: string; fileName: string }
+}
+
+export type InvoiceTaxType = 'INTRA_STATE' | 'INTER_STATE'
+
+export type InvoiceBlockerKind = 'QUOTE' | 'TRAVELLERS' | 'CLIENT' | 'COMPANY' | 'NOT_ENGLISH'
+
+/** GET /api/visa/cases/:caseNo/invoice/check: what blocks raising it, or what it will say. */
+export interface InvoiceCheck {
+  blockers: { kind: InvoiceBlockerKind; label: string; items: string[] }[]
+  alreadyRaised: string | null
+  preview: {
+    invoiceNo: string
+    /** The quote it was made from: sent back with the rate, tax type and total when raising */
+    quoteUpdatedAt: string
+    gstRatePercent: number
+    taxType: InvoiceTaxType
+    grossPaise: number
+    serviceChargePaise: number
+    cgstPaise: number
+    sgstPaise: number
+    igstPaise: number
+    totalPaise: number
+  } | null
 }
 
 /** PUT /api/visa/cases/:caseNo/quote */
@@ -368,6 +432,8 @@ export interface VisaCase {
   gstRatePercent: number
   /** The price (0009), or null until someone enters it */
   quote: CaseQuote | null
+  /** The locked tax invoice (0009), or null until it is raised */
+  invoice: CaseInvoice | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

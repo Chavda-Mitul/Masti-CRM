@@ -107,6 +107,21 @@ export const updateProcessingSpeedSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** How a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6): picked at dispatch. */
+export const createCourierSchema = z.object({
+  code: keyCode,
+  name: text(80),
+  awbNeeded: z.boolean().default(true),
+  sortOrder: sortOrder.default(0),
+  isActive: z.boolean().default(true),
+});
+export const updateCourierSchema = z.object({
+  name: text(80).optional(),
+  awbNeeded: z.boolean().optional(),
+  sortOrder: sortOrder.optional(),
+  isActive: z.boolean().optional(),
+});
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -168,6 +183,8 @@ export type CreateDocumentProblemReasonInput = z.infer<typeof createDocumentProb
 export type UpdateDocumentProblemReasonInput = z.infer<typeof updateDocumentProblemReasonSchema>;
 export type CreateProcessingSpeedInput = z.infer<typeof createProcessingSpeedSchema>;
 export type UpdateProcessingSpeedInput = z.infer<typeof updateProcessingSpeedSchema>;
+export type CreateCourierInput = z.infer<typeof createCourierSchema>;
+export type UpdateCourierInput = z.infer<typeof updateCourierSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

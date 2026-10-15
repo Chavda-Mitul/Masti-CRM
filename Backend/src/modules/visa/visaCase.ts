@@ -14,6 +14,17 @@ export const CASE_FOLLOW_UPS = 20;
 
 const personSelect = { select: { id: true, name: true } } as const;
 
+/**
+ * A send of the vendor email that started this long ago without recording its outcome (the server stopped mid-send)
+ * is stuck, and may be retried: well past the SMTP timeouts in src/lib/email.ts.
+ */
+export const EMAIL_SENDING_STUCK_MS = 5 * 60_000;
+
+/** Whether the docket's email is being sent right now: started, its outcome not recorded yet, and not stuck. */
+export function emailSending(startedAt: Date | null, now = new Date()) {
+  return !!startedAt && now.getTime() - startedAt.getTime() < EMAIL_SENDING_STUCK_MS;
+}
+
 /** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
 export const docketSelect = {
   docketNo: true,
@@ -21,13 +32,23 @@ export const docketSelect = {
   status: true,
   openedAt: true,
   vendor: { select: { name: true, city: true } },
+  /** Dispatch (0008 Decision 9): set together when the docket is sent. */
+  courier: { select: { name: true, awbNeeded: true } },
+  awbNo: true,
+  dispatchedAt: true,
+  dispatchedBy: personSelect,
+  /** The email to the vendor (Decision 8): sent, or why not. */
+  vendorEmailSentAt: true,
+  vendorEmailTo: true,
+  vendorEmailError: true,
+  vendorEmailSendingAt: true,
   cases: {
     orderBy: { enquiry: { caseNo: "asc" } },
     select: {
       enquiryId: true,
       bookletsCurrent: true,
       bookletsOld: true,
-      enquiry: { select: { caseNo: true, client: { select: { name: true } } } },
+      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoice: { select: { invoiceNo: true } } } },
       offering: { select: { country: { select: { name: true } } } },
       _count: { select: { travellers: true } },
     },
@@ -45,6 +66,21 @@ export const visaCaseInclude = {
   /** The current final file (0007 Decision 8): the newest upload. Older ones are counted, not loaded. */
   files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
   _count: { select: { files: { where: { kind: "FINAL_FILE" } } } },
+  /** The tax invoice (0009), once raised. */
+  invoice: {
+    select: {
+      invoiceNo: true,
+      issuedOn: true,
+      issuedAt: true,
+      issuedBy: personSelect,
+      taxType: true,
+      cgstPaise: true,
+      sgstPaise: true,
+      igstPaise: true,
+      totalPaise: true,
+      file: { select: { id: true, fileName: true } },
+    },
+  },
   followUps: {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: CASE_FOLLOW_UPS,
@@ -63,6 +99,7 @@ export const visaCaseInclude = {
           isActive: true,
           contactName: true,
           mobile: true,
+          email: true,
           countries: { select: { countryId: true } },
           /** Its shared open docket (0008 Decision 2): "Add to docket" joins it. */
           dockets: { where: { status: "OPEN", kind: "GROUP" }, select: { docketNo: true, _count: { select: { cases: true } } } },
@@ -100,6 +137,11 @@ export function familyName(clientName: string | null) {
   return clientName?.trim().split(/\s+/).at(-1) ?? "";
 }
 
+/** The last name as a file name may carry it: letters and digits only ("" for a name in Gujarati letters). */
+export function fileSafeFamilyName(clientName: string | null) {
+  return familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+}
+
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
@@ -118,8 +160,8 @@ type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
 
 /** The case's vendor, and whether it still covers the case's country. */
 function vendorOf(v: VendorRow, countryId: number) {
-  const { id, name, city, isActive, contactName, mobile } = v;
-  return { id, name, city, isActive, contactName, mobile, coversCountry: v.countries.some((c) => c.countryId === countryId) };
+  const { id, name, city, isActive, contactName, mobile, email } = v;
+  return { id, name, city, isActive, contactName, mobile, email, coversCountry: v.countries.some((c) => c.countryId === countryId) };
 }
 
 type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
@@ -127,7 +169,8 @@ type DocketRow = Prisma.DocketGetPayload<{ select: typeof docketSelect }>;
 /**
  * The docket table (0008 Decision 4). Passports are the current booklets counted in Step 2, or one per traveller when
  * nobody counted them; old passports go in the parcel too, so the totals count both. Other cases in the docket show
- * only their number, family name, country and passports.
+ * only their number, family name, country, passports and invoice number (0009 component 4: no file leaves without its
+ * invoice), never their amounts.
  */
 export function docketOf(d: DocketRow, enquiryId: string) {
   const cases = d.cases.map((c) => ({
@@ -136,6 +179,10 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     country: c.offering.country.name,
     passports: c.bookletsCurrent ?? c._count.travellers,
     oldPassports: c.bookletsOld ?? 0,
+    /** "MVI00000001 · locked", or null: "Raise invoice first" */
+    invoiceNo: c.enquiry.invoice?.invoiceNo ?? null,
+    /** Who may dispatch (Decision 3): a processor who owns at least one case in the docket. */
+    ownerId: c.enquiry.ownerId,
     isThisCase: c.enquiryId === enquiryId,
   }));
   return {
@@ -145,6 +192,16 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     /** "Open since 12 Oct, not sent yet" from the next day on. */
     openedAt: d.openedAt,
     vendor: d.vendor,
+    /** null until dispatched; then the courier, its slip number (null for one with none), who and when. */
+    courier: d.courier,
+    awbNo: d.awbNo,
+    dispatchedAt: d.dispatchedAt,
+    dispatchedBy: d.dispatchedBy,
+    /** null until dispatched; then when and to whom it went, or why it didn't ("Send again"), or that it's going now. */
+    email:
+      d.status === "DISPATCHED"
+        ? { sentAt: d.vendorEmailSentAt, to: d.vendorEmailTo, error: d.vendorEmailError, sending: emailSending(d.vendorEmailSendingAt) }
+        : null,
     cases,
     totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
     totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),
@@ -271,6 +328,17 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** The locked tax invoice (0009), or null until it is raised. */
+    invoice: row.invoice && {
+      invoiceNo: row.invoice.invoiceNo,
+      issuedOn: fromDbDate(row.invoice.issuedOn),
+      issuedAt: row.invoice.issuedAt,
+      issuedBy: row.invoice.issuedBy,
+      taxType: row.invoice.taxType,
+      gstPaise: row.invoice.cgstPaise + row.invoice.sgstPaise + row.invoice.igstPaise,
+      totalPaise: row.invoice.totalPaise,
+      file: row.invoice.file,
+    },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */

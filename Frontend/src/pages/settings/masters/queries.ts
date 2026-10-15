@@ -10,6 +10,7 @@ import type {
   DocumentMaster,
   DocumentProblemReason,
   ProcessingSpeed,
+  Courier,
   EnquiryReason,
   EnquirySource,
   FollowUpOption,
@@ -241,6 +242,7 @@ interface MasterRow {
   vendors: Vendor
   'document-problem-reasons': DocumentProblemReason
   'processing-speeds': ProcessingSpeed
+  couriers: Courier
 }
 
 /** The JSON key each list and save comes back under. */
@@ -256,6 +258,7 @@ const LIST_KEY = {
   vendors: 'vendors',
   'document-problem-reasons': 'problemReasons',
   'processing-speeds': 'processingSpeeds',
+  couriers: 'couriers',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -269,6 +272,7 @@ const ITEM_KEY = {
   vendors: 'vendor',
   'document-problem-reasons': 'problemReason',
   'processing-speeds': 'processingSpeed',
+  couriers: 'courier',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -304,8 +308,8 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
         return
       }
-      // The document problems change nothing else: the case page reads this same list.
-      if (resource === 'document-problem-reasons') return
+      // The document problems and couriers change nothing else: the case page reads these same lists.
+      if (resource === 'document-problem-reasons' || resource === 'couriers') return
       // A case's quote shows its processing speed by name.
       if (resource === 'processing-speeds') {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })

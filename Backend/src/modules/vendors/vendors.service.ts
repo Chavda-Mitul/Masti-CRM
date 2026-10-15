@@ -97,7 +97,7 @@ export async function createVendor(input: CreateVendorInput, actor: Actor) {
     city: input.city,
     contactName: input.contactName ?? null,
     mobile: cleanMobile(input.mobile) ?? null,
-    email: cleanEmail(input.email) ?? null,
+    email: cleanEmail(input.email)!,
     isActive: input.isActive,
   };
   await assertNotDuplicate("VISA_AGENT", data.name, data.city);
@@ -128,7 +128,8 @@ export async function updateVendor(id: number, input: UpdateVendorInput, actor: 
   const sent = definedOnly({
     ...input,
     mobile: cleanMobile(input.mobile),
-    email: cleanEmail(input.email),
+    // Never cleared: the schema refuses an empty email.
+    email: input.email === undefined ? undefined : cleanEmail(input.email)!,
     countryIds: input.countryIds && sortedIds(input.countryIds),
   });
   const changes = onlyChanged(sent, before);

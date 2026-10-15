@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -45,12 +45,51 @@ export const invoiceSettingSchema = z.object({
   sac: z.string().regex(/^\d{4,8}$/, "4–8 digits, e.g. 998559."),
 });
 
+/**
+ * When the processor confirms the vendor got the docket (0008 Decision 9): the next open office day, afterDays after
+ * dispatch, at `at` (IST). The demo's "Tomorrow 11:00".
+ */
+export const vendorConfirmSchema = firstFollowUpSchema;
+
+/** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */
+export const awbSettingSchema = z
+  .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
+  .refine((s) => s.minLength <= s.maxLength, { message: "The shortest can't be longer than the longest.", path: ["minLength"] });
+
+/** The {tokens} the vendor email's wording may use, filled in for each docket. */
+export const DOCKET_EMAIL_TOKENS = ["docketNo", "files", "passports", "vendor", "company"] as const;
+
+const emailWording = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1, "Can't be blank.")
+    .max(max, `${max} characters at most.`)
+    .refine(
+      (s) => [...s.matchAll(/\{([^}]*)\}/g)].every((m) => (DOCKET_EMAIL_TOKENS as readonly string[]).includes(m[1]!)),
+      `Use only ${DOCKET_EMAIL_TOKENS.map((t) => `{${t}}`).join(", ")}.`,
+    );
+
+/**
+ * The email to the vendor at dispatch (0008 Decision 8): its wording ⚠️, each part with {tokens} filled in per docket.
+ * The table of files between the opening and the closing is laid out by the code.
+ */
+export const docketEmailSettingSchema = z.object({
+  subject: emailWording(200),
+  greeting: emailWording(200),
+  opening: emailWording(500),
+  closing: emailWording(500),
+});
+
 export const visaSettingsSchema = z.object({
   firstFollowUp: firstFollowUpSchema,
   finalFile: finalFileSchema,
   docket: docketSettingSchema,
   sticker: stickerSettingSchema,
   invoice: invoiceSettingSchema,
+  vendorConfirm: vendorConfirmSchema,
+  awb: awbSettingSchema,
+  docketEmail: docketEmailSettingSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
@@ -80,6 +119,9 @@ export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type DocketSetting = z.infer<typeof docketSettingSchema>;
 export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
+export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
+export type AwbSetting = z.infer<typeof awbSettingSchema>;
+export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -217,12 +259,36 @@ export const takeOutOfDocketSchema = matureCaseSchema;
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
 
+/**
+ * "Dispatch docket" (Decision 9): the courier, its slip number when it needs one (spaces dropped, made capitals; the
+ * length rule is the setting visa.awb), and the case numbers the dialog showed, so a file added or taken out meanwhile
+ * makes it stale.
+ */
+export const dispatchDocketSchema = z.object({
+  courierId: z.number("Pick the courier.").int().positive("Pick the courier."),
+  awbNo: z
+    .string()
+    .transform((s) => s.replace(/\s+/g, "").toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]*$/, "Use only letters and digits."))
+    .transform((s) => s || null)
+    .nullish(),
+  caseNos: z.array(z.string().trim().toUpperCase().min(1).max(40)).min(1).max(200),
+});
+
+export type DispatchDocketInput = z.infer<typeof dispatchDocketSchema>;
+
 // ---------------------------------------------------------------------------
 // The quote (docs/decisions/0009-visa-invoice.md Decision 2). Money is in paise, as integers.
 // ---------------------------------------------------------------------------
 
 /** ₹10,00,000 per amount: a sanity limit, not a business rule (checked in the database too). */
 export const MAX_AMOUNT_PAISE = 100_000_000;
+
+/**
+ * ₹1,00,00,000 for the travellers' amounts and the service charge together: a sanity limit, not a business rule. With
+ * GST (at most 28%) on the service charge, the invoice's total then always fits its column (an INTEGER, ₹2.14 crore).
+ */
+export const MAX_QUOTE_PAISE = 1_000_000_000;
 
 const paise = z
   .number("Enter an amount.")
@@ -240,11 +306,32 @@ const quoteLineSchema = z.discriminatedUnion("form", [
  * Saving the whole quote. `updatedAt` is the quote's own token: null for a new quote, else the quote's updatedAt as the
  * page loaded it (a change by someone else in between is a 409 STALE).
  */
-export const saveQuoteSchema = z.object({
-  processingSpeedId: z.number("Pick the processing speed.").int().positive("Pick the processing speed."),
-  serviceChargePaise: paise,
-  lines: z.array(quoteLineSchema).min(1, "Give every traveller an amount.").max(MAX_ADULTS + MAX_CHILDREN),
-  updatedAt: z.iso.datetime("Reload and try again.").nullable(),
-});
+export const saveQuoteSchema = z
+  .object({
+    processingSpeedId: z.number("Pick the processing speed.").int().positive("Pick the processing speed."),
+    serviceChargePaise: paise,
+    lines: z.array(quoteLineSchema).min(1, "Give every traveller an amount.").max(MAX_ADULTS + MAX_CHILDREN),
+    updatedAt: z.iso.datetime("Reload and try again.").nullable(),
+  })
+  .refine(
+    (q) =>
+      q.lines.reduce((sum, l) => sum + (l.form === "LUMP_SUM" ? l.lumpSumPaise : l.embassyFeePaise + l.vfsFeePaise + l.otherFeePaise), 0) +
+        q.serviceChargePaise <=
+      MAX_QUOTE_PAISE,
+    { path: ["lines"], message: "The quote comes to more than ₹1,00,00,000 before GST." },
+  );
 
 export type SaveQuoteInput = z.infer<typeof saveQuoteSchema>;
+
+/**
+ * Raising the invoice (docs/decisions/0009-visa-invoice.md): what the dialog showed, sent back (the quote's updatedAt,
+ * the GST rate, the tax type and the total), so an invoice is never made from amounts nobody saw.
+ */
+export const raiseInvoiceSchema = z.object({
+  quoteUpdatedAt: z.iso.datetime("Reload and try again."),
+  taxType: z.enum(InvoiceTaxType, "Reload and try again."),
+  gstRatePercent: z.number("Reload and try again."),
+  totalPaise: z.number("Reload and try again.").int("Reload and try again."),
+});
+
+export type RaiseInvoiceInput = z.infer<typeof raiseInvoiceSchema>;

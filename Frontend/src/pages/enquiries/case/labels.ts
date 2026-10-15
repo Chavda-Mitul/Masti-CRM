@@ -15,6 +15,22 @@ export function dayMonth(iso: string): string {
   return DAY_MONTH.format(new Date(iso))
 }
 
+const DAY_TIME = new Intl.DateTimeFormat('en-IN', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'Asia/Kolkata',
+})
+
+/** "Thu 15 Oct, 11:00", in India time: when a case comes back due (the demo's "Tomorrow 11:00"). */
+export function dayTime(iso: string): string {
+  const part = (type: Intl.DateTimeFormatPartTypes) => DAY_TIME.formatToParts(new Date(iso)).find((p) => p.type === type)?.value ?? ''
+  return `${part('weekday')} ${part('day')} ${part('month')}, ${part('hour')}:${part('minute')}`
+}
+
 /** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
 export function passportTotal(current: number, old: number): string {
   const label = `${current} ${current === 1 ? 'passport' : 'passports'}`

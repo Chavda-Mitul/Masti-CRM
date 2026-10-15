@@ -11,6 +11,7 @@ import type {
   CreateCountryInput,
   CreateDocumentInput,
   CreateDocumentProblemReasonInput,
+  CreateCourierInput,
   CreateProcessingSpeedInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
@@ -19,6 +20,7 @@ import type {
   UpdateCountryInput,
   UpdateDocumentInput,
   UpdateDocumentProblemReasonInput,
+  UpdateCourierInput,
   UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
@@ -232,6 +234,35 @@ export async function updateProcessingSpeed(id: number, input: UpdateProcessingS
     entityType: "ProcessingSpeed",
     entityId: id,
     write: (tx) => tx.processingSpeed.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Couriers: how a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6)
+// ---------------------------------------------------------------------------
+
+export async function listCouriers(active?: boolean) {
+  return prisma.courier.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createCourier(input: CreateCourierInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "courier.create", "Courier", (tx) => tx.courier.create({ data: input }));
+}
+
+export async function updateCourier(id: number, input: UpdateCourierInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.courier.findUnique({ where: { id } });
+  if (!before) throw notFound("Courier not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "courier.update",
+    entityType: "Courier",
+    entityId: id,
+    write: (tx) => tx.courier.update({ where: { id }, data: changes }),
   });
 }
 

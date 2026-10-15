@@ -7,6 +7,9 @@ import type {
   CreateVisaCaseBody,
   DocketKind,
   DocketStickerData,
+  DispatchCheck,
+  InvoiceCheck,
+  InvoiceTaxType,
   SaveQuoteBody,
   DocumentArrival,
   DocumentCheck,
@@ -49,6 +52,8 @@ export const enquiryKeys = {
   case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
+  invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
+  dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
@@ -269,6 +274,46 @@ export function useSetVendor(caseNo: string) {
 /** The quote (0009 Decision 2): saved whole. A save that missed someone else's (409 STALE) reloads the case. */
 export function useSaveQuote(caseNo: string) {
   return useCaseAction<SaveQuoteBody>(caseNo, (base, body) => api(`${base}/quote`, { method: 'PUT', body }))
+}
+
+/** What stands in the way of raising the invoice, or what it will say (0009). Always fresh: it opens a dialog. */
+export function useInvoiceCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.invoiceCheck(caseNo),
+    queryFn: () => api<InvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/invoice/check`),
+    staleTime: 0,
+  })
+}
+
+/** Raises the locked tax invoice from what the dialog showed (0009): its quote, GST rate, tax type and total. */
+export function useRaiseInvoice(caseNo: string) {
+  type Shown = { quoteUpdatedAt: string; taxType: InvoiceTaxType; gstRatePercent: number; totalPaise: number }
+  return useCaseAction<Shown>(caseNo, (base, body) => api(`${base}/invoice`, { method: 'POST', body }), {
+    otherCases: true,
+  })
+}
+
+/** What stands in the way of dispatching the docket, and when its cases come back due (0008). Fresh: it opens a dialog. */
+export function useDispatchCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.dispatchCheck(caseNo),
+    queryFn: () => api<DispatchCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/dispatch/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Dispatch docket" (0008 Decision 9): every case in the docket moves on, so the other cases' pages refresh too. */
+export function useDispatchDocket(caseNo: string) {
+  return useCaseAction<{ courierId: number; awbNo: string | null; caseNos: string[] }>(
+    caseNo,
+    (base, body) => api(`${base}/dispatch`, { method: 'POST', body }),
+    { otherCases: true },
+  )
+}
+
+/** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, after a failed send. */
+export function useResendDocketEmail(caseNo: string) {
+  return useCaseAction<void>(caseNo, (base) => api(`${base}/dispatch/email`, { method: 'POST', body: {} }), { otherCases: true })
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */

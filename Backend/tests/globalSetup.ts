@@ -6,7 +6,7 @@ import { bucket, s3 } from "../src/lib/storage";
 
 /**
  * Creates the test database if needed and applies all migrations to it, then makes sure the test document bucket
- * exists and is empty (MinIO from docker compose: `npm run db:up`).
+ * exists and is empty (MinIO from docker compose: `npm run db:up`), and Mailpit has no mail.
  */
 export default async function setup() {
   const url = new URL(process.env.DATABASE_URL as string);
@@ -22,6 +22,18 @@ export default async function setup() {
 
   execSync("npx prisma migrate deploy", { stdio: "pipe", env: process.env });
   await resetTestBucket();
+  await resetMailpit();
+}
+
+/** Mailpit (docker compose) catches the tests' email: check it's up and start empty. */
+async function resetMailpit() {
+  const url = process.env.MAILPIT_URL as string;
+  try {
+    const res = await fetch(`${url}/api/v1/messages`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+  } catch (err) {
+    throw new Error(`Mailpit isn't answering at ${url} (${String(err)}). Start it with \`npm run db:up\`.`);
+  }
 }
 
 async function resetTestBucket() {

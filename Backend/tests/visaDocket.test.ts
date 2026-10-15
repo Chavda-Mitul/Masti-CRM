@@ -108,7 +108,9 @@ describe("Add to docket (Decision 2)", () => {
   it("gives each vendor its own docket", async () => {
     const mehta = await dispatchCase();
     const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
-    const delhi = await prisma.vendor.create({ data: { name: "Capital Visas", city: "Delhi", countries: { create: [{ countryId: fr.id }] } } });
+    const delhi = await prisma.vendor.create({
+      data: { name: "Capital Visas", city: "Delhi", email: "desk@capitalvisas.test", countries: { create: [{ countryId: fr.id }] } },
+    });
     const shah = await dispatchCase({ vendorId: delhi.id, extra: { mobile: "98250 41235", clientName: "Sunil Shah" } });
     const processor = await neha();
 

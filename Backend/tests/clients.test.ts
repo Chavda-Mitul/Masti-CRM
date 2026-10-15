@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addMonths, istToday } from "../src/lib/dates";
-import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
+import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { assertInvoiceReady } from "../src/modules/clients/readiness";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 

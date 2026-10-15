@@ -6,13 +6,12 @@ import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { istDateTimeToUtc } from "../../lib/dates";
 import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
-import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor } from "../users/user";
-import { loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
+import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
 import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
-import { countTravellers, familyName, travellerLabel } from "./visaCase";
+import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -186,7 +185,7 @@ export async function finalFileLimit(caseNo: string, actor: Actor) {
 
 /** "VISA-2026-0001_Mehta_file.pdf" ⚠️ (demo screen 08): the case number and the client's last name, letters and digits only. */
 function finalFileName(caseNo: string, clientName: string) {
-  const safe = familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+  const safe = fileSafeFamilyName(clientName);
   return safe ? `${caseNo}_${safe}_file.pdf` : `${caseNo}_file.pdf`;
 }
 
@@ -252,12 +251,7 @@ export async function uploadFinalFile(caseNo: string, bytes: Buffer, actor: Acto
  * passports and personal papers (golden rule 5).
  */
 export async function openCaseFile(caseNo: string, fileId: string, actor: Actor) {
-  const enquiry = await prisma.enquiry.findUnique({
-    where: { caseNo: caseNo.toUpperCase() },
-    include: { department: { select: { code: true } }, visa: { select: { enquiryId: true } } },
-  });
-  if (!enquiry?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(actor.user, enquiry);
+  const enquiry = await findVisibleCase(caseNo, actor.user);
   const file = await prisma.caseFile.findFirst({ where: { id: fileId, enquiryId: enquiry.id } });
   if (!file) throw notFound("File not found on this case.");
 

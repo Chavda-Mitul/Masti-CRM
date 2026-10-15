@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/app";
 import { bucket, s3 } from "../src/lib/storage";
-import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
+import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 
 // Masti's own details, the invoice's terms, and its logo and signature (docs/decisions/0008-visa-docket-dispatch.md

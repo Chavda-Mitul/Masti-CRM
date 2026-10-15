@@ -32,18 +32,25 @@ function snapshot(value: unknown): Prisma.InputJsonValue | undefined {
  * Pass the transaction client when the audited change happens inside a transaction.
  */
 export async function audit(entry: AuditEntry, db: Db = prisma): Promise<void> {
+  await db.auditLog.create({ data: rowOf(entry) });
+}
+
+/** Several entries in one insert, e.g. one per case when a whole docket is dispatched. */
+export async function auditMany(entries: AuditEntry[], db: Db = prisma): Promise<void> {
+  if (entries.length) await db.auditLog.createMany({ data: entries.map(rowOf) });
+}
+
+function rowOf(entry: AuditEntry) {
   const before = snapshot(entry.before);
   const after = snapshot(entry.after);
-  await db.auditLog.create({
-    data: {
-      action: entry.action,
-      entityType: entry.entityType,
-      actorId: entry.actorId ?? null,
-      entityId: entry.entityId ?? null,
-      clientId: entry.clientId ?? null,
-      ip: entry.ip ?? null,
-      ...(before !== undefined ? { before } : {}),
-      ...(after !== undefined ? { after } : {}),
-    },
-  });
+  return {
+    action: entry.action,
+    entityType: entry.entityType,
+    actorId: entry.actorId ?? null,
+    entityId: entry.entityId ?? null,
+    clientId: entry.clientId ?? null,
+    ip: entry.ip ?? null,
+    ...(before !== undefined ? { before } : {}),
+    ...(after !== undefined ? { after } : {}),
+  };
 }

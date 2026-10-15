@@ -273,6 +273,15 @@
     padding-right: 10px;
   }
 }
+/* "Raise invoice first →" on the case's own row: the amber chip, pressable. */
+.docket-raise {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.docket-raise:hover {
+  text-decoration: underline;
+}
 .docket-table tr.this-case td {
   background: var(--dept-tint);
 }
@@ -297,6 +306,69 @@
   font-size: 13.5px;
 }
 .money-total {
+  border-top: 1px solid var(--divider);
+}
+/* The locked invoice (0009), above the quote it was raised from. */
+.money-invoice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--fill-muted);
+}
+.money-invoice-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+}
+.money-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.invoice-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+/* "Dispatch docket" (0008 Decision 9): the files going, then the courier and its slip. */
+.dispatch-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.dispatch-files .kv {
+  font-size: 13.5px;
+  gap: 12px;
+}
+.dispatch-no-invoice,
+.dispatch-warn {
+  color: var(--warn);
+}
+.dispatch-bad {
+  color: var(--bad);
+}
+.dispatch-email-failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dispatch-card .kv {
+  font-size: 13.5px;
+  gap: 12px;
+}
+.invoice-summary .kv {
+  font-size: 14px;
+}
+.invoice-total {
   border-top: 1px solid var(--divider);
 }
 /* The dialog: a fixed header, the travellers scrolling in the middle, and the totals pinned at the bottom. */
@@ -510,12 +582,11 @@
 .sticker-card .h2 {
   margin: 0;
 }
-/* The label and its summary side by side, centred together; stacked (still centred) on a narrow card. */
+/* The small label and its Print button side by side; stacked on a narrow card. */
 .sticker-card-body {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 32px;
+  align-items: flex-start;
+  gap: 20px;
   flex-wrap: wrap;
 }
 .sticker-preview {
@@ -529,16 +600,12 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 12px;
-  flex: 1 1 220px;
-  max-width: 300px;
+  flex: 1 1 160px;
+  min-width: 0;
 }
-.sticker-card-side > div {
-  align-self: stretch;
-}
-.sticker-card-summary {
+.sticker-card-size {
   margin: 0;
   font-weight: 700;
-  overflow-wrap: anywhere;
 }
 /* Step 3's trip details and the portal's numbers per traveller (0007 Decisions 4 and 5, demo screen 08). */
 /* Two columns while the card is wide enough, one when it isn't (the card's width, not the screen's, decides). */

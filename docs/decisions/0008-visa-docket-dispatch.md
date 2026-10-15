@@ -1,7 +1,7 @@
 # 0008 · Visa Step 4: docket, sticker and dispatch
 
-- **Status:** decided (13 Oct 2026, project lead). Components 1 and 2, the Docket card and the Sticker card, are
-  built (13 Oct 2026). A "Built"
+- **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
+  courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c). Next: e-visas. A "Built"
   note is added under each part as its component lands.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
@@ -87,7 +87,8 @@ plan mode, built, tested, checked in the browser and committed before the next o
     While it isn't in one, it sends `openDocket { docketNo, caseCount }`, the vendor's shared docket it would join.
 - **Screen:**
   - The **Docket card** sits at the top of the case page at Docket & dispatch, as in the demo. It has the switch, the
-    Case · Passports · Invoice table (the Invoice column says "Invoices come later" until 0009), the totals, the
+    Case · Passports · Invoice table (the Invoice column shows "MVI… · locked" or "Raise invoice first" since 0009
+    component 4), the totals, the
     amber "Open since" line, the rule copy, and **Add** / **Take out of docket**.
   - The header chip says "In docket D-…". The next-step button says "Add to docket →" (it scrolls to the card), then
     "Dispatch docket D-… →" with **Soon**.
@@ -192,6 +193,14 @@ plan mode, built, tested, checked in the browser and committed before the next o
   capitals; then it must be capitals and digits, 4–30 characters ⚠️.
 - Built with the Dispatch card.
 
+**Built 14 Oct 2026** (component 4a, the courier list):
+- Table `Courier` (`code`, `name`, `awbNeeded`, `sortOrder`, `isActive`; migration `20261014100000_couriers`, with the
+  code format CHECK).
+- `GET/POST/PATCH /api/masters/couriers`: Visa staff read; the Visa HOD or the Head edits. Audited as
+  `courier.create` / `courier.update`.
+- Seeded ⚠️ with Blue Dart, DTDC and "By hand (no AWB)" (`awbNeeded` off).
+- Settings → Masters → Lists → **Couriers**, with a "Slip (AWB) number: Needed / Not asked for" column.
+
 ### 7. The docket number
 
 - **`D-2026-0001`**, the same pattern as case numbers (§17 #21).
@@ -216,9 +225,51 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 - **Sent after the dispatch transaction commits,** never inside it. The docket records the time it was sent, or the
   error.
 - **A failure never undoes the dispatch.** The Dispatch card shows the error and a **Send again** button.
-- **The vendor's email becomes required to dispatch** (0007 open point C). Without it, dispatch is refused with "Add
-  an email for Global Visa Services in Vendors first."
+- **Every vendor has an email** (0007 open point C). **Decided 14 Oct 2026 (project lead):** required in the vendor
+  master, when adding and editing (it can be changed, never cleared), and `NOT NULL` in the database (migration
+  `20261014130000_vendor_email_required`), so dispatch never meets a vendor without one. The form's placeholder is
+  `name@company.com`.
 - Built with the Dispatch card.
+
+**Built 14 Oct 2026** (component 4c, the vendor email):
+- **`src/lib/email.ts`** sends through nodemailer 10.0.12 (pinned), configured by `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM` in `.env`. With no `SMTP_HOST` nothing is sent: "Email
+  isn't set up yet."
+- **Mailpit** (`axllent/mailpit:v1.31.3`) in `docker-compose.yml`: SMTP on 1025, the web view on 8025. The tests point
+  at it (`vitest.config.mts` refuses any other SMTP host), clear it at the start, and read the mail back.
+- **Docket columns** `vendorEmailSentAt`, `vendorEmailTo`, `vendorEmailError` (migration `20261014120000_docket_email`),
+  with a CHECK: sent means when and to whom, with no error, and only once dispatched.
+- **After the dispatch commits,** the email is sent: when and to whom, or the error, is recorded and audited as
+  `visa.docket.email` (`{ sent, to }` or `{ sent: false, error }`). A failure never undoes the dispatch.
+- **Nothing is held open while the mail server answers** (fixed 15 Oct 2026, from a code review). Under the docket's
+  lock, a short transaction marks it `vendorEmailSendingAt` (migration `20261015100000_docket_email_sending`). The email
+  then goes outside any transaction, and a second short one records the outcome and clears the mark. Before this, the
+  send ran inside the transaction, so a slow server or a failed save could roll a delivered email back to "Not sent",
+  and Send again would deliver it twice. A CHECK allows the mark only on a dispatched docket whose email hasn't gone.
+  A mark older than 5 minutes (well past the SMTP timeouts) is stuck, because the server stopped mid-send, and may be
+  retried. If the email goes and the database fails at that moment, a later retry can still send it twice; plain SMTP
+  can't rule that out.
+- **`POST /api/visa/cases/:caseNo/dispatch/email`** ("Send again") is for whoever may dispatch, only once the docket is
+  dispatched and while its email hasn't gone. Once sent, it's refused, so the vendor never gets it twice. While a send
+  is under way, it's refused with "being sent right now", and the case's `docket.email.sending` is true. The card then
+  shows "Sending…" in place of "Not sent" and Send again.
+- **The email** (wording ⚠️ ours, for Masti to approve):
+  - subject "Docket D-2026-0001 · 2 files · MASTI TOUR AND TRAVEL"
+  - "Sent by: DTDC, slip X74411902"
+  - a table of each file with its travellers, country and passports ("3 + 2 old"), and the totals
+  - Masti's name and phone; Reply-To is the company email when there is one
+  - plain text and HTML
+  - **The wording is a setting** (15 Oct 2026, from a code review: golden rule 1). `visa.docketEmail` →
+    `{ subject, greeting, opening, closing }`, seeded with our words: "Docket {docketNo} · {files} · {company}",
+    "Dear {vendor},", "Docket {docketNo} is on its way to you: {files}, {passports} passports." and "Please confirm
+    when you receive it." Each part may use `{docketNo}`, `{files}`, `{passports}`, `{vendor}` and `{company}`; any
+    other token is refused (400). In the HTML it's escaped, with the docket number bold. The Visa HOD or the Head
+    changes it through `PUT /api/visa/settings` (no screen yet, like `visa.awb`). The "Sent by" line and the table
+    stay laid out by the code.
+- **The Dispatch card** shows "Email to vendor: Sent with the docket list · 14 Oct, 11:12 am", or "Not sent" with the
+  error and **Send again**.
+- **Still needed from Masti (A6):** the SMTP account the CRM sends from. Until then, production shows "Email isn't set
+  up yet" after each dispatch.
 
 ### 9. Dispatch, and where it leaves the case
 
@@ -245,6 +296,52 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
 | `DISPATCH`, in an open docket | "In docket D-2026-0001" |
 | `AT_VENDOR`, the vendor hasn't confirmed | "Dispatched · D-2026-0001" (the board's "Dispatched" column) |
 | `AT_VENDOR`, confirmed | the seeded "Submitted" (Step 5) |
+
+**Built 14 Oct 2026** (component 4b, dispatch; the vendor email came with 4c, under Decision 8):
+
+- **API and data:**
+  - `GET /api/visa/cases/:caseNo/dispatch/check` (anyone who can open the case) returns `{ docketNo,
+    alreadyDispatched, canDispatch, blockers, vendor { name, city, email }, confirmAt }`. Each blocker is grouped by
+    kind: `INVOICE` (the files without one) or `VENDOR_OFF`. (Every vendor has an email; see Decision 8.)
+  - `POST /api/visa/cases/:caseNo/dispatch` with `{ courierId, awbNo?, caseNos }` returns `{ case }`. It's refused with:
+    - 409 `DISPATCH_BLOCKED { blockers }`
+    - 409 STALE when `caseNos` isn't the docket's files any more
+    - 409 when it's already dispatched
+    - 400 on `courierId` (switched off) or `awbNo` (missing, malformed, wrong length, or given for a courier with none)
+  - Docket columns `courierId`, `awbNo`, `dispatchedAt`, `dispatchedById` (migration `20261014110000_dispatch`), with
+    CHECKs: all of them set when DISPATCHED, none (and no slip) while OPEN; the slip is capitals and digits.
+  - Settings ⚠️ (no screen yet, changed through `PUT /api/visa/settings` like `visa.docket`):
+    - `visa.vendorConfirm` → `{ afterDays: 1, at: "11:00" }`
+    - `visa.awb` → `{ minLength: 4, maxLength: 30 }`
+  - Audited as `visa.docket.dispatch`: once per case (on the Enquiry, with `clientId`, before/after stage and `dueAt`)
+    and once on the Docket (the courier, slip, files and vendor).
+  - The case's `docket` gains `courier`, `awbNo`, `dispatchedAt`, `dispatchedBy`, and each row its `ownerId`; the
+    case's `vendor` gains `email`.
+- **Screen:**
+  - The header button **Dispatch docket D-… →** opens a confirm dialog with:
+    - the vendor and its email
+    - each file with its passports and invoice
+    - what blocks it (with a link to Vendors), or the courier and the slip number (shown only when the courier has
+      one)
+    - when the files come back due ("Thu 15 Oct, 11:00")
+  - The button is off, with the reason, for anyone else.
+  - A **Dispatch** card beside the Sticker card (as in the demo):
+    - before dispatch: "Invoices 2 of 3 raised", where the email will go, "Courier: picked at dispatch"
+    - after: "Blue Dart · slip 50218834", who and when, and "Thu 15 Oct, 11:00 · Neha: Confirm vendor got it"
+  - After dispatch the chip reads **Dispatched · D-…**. The Docket, Dispatch and Sticker cards stay, read-only, until
+    Step 5 has its own.
+- **Settled while building:**
+  - **The routes hang off the case** (`/cases/:caseNo/dispatch`), like every other Step 4 route, not
+    `/dockets/:docketNo/…`. The answer is that case, and the others in the docket that are open in the browser
+    refresh.
+  - **The cases are locked by hand,** in id order, after the vendor and the docket. `lockCase` would require the
+    dispatcher to be able to act on every case, but Decision 3 lets a processor who owns one of them send the docket.
+  - **However many cases, a handful of queries** (15 Oct 2026, from a code review): one `FOR UPDATE` for all the cases
+    (`ORDER BY "id"`), one `updateMany`, and one insert for their audit rows (`auditMany` in `src/lib/audit.ts`). Before,
+    each case had its own lock, update and audit, so a docket near the 200-case limit could pass the transaction's
+    5-second timeout.
+  - **A file with no invoice is refused before any lock,** so there is no "invoice raised meanwhile" race. A change to
+    a case meanwhile (its row is locked) is seen and refused.
 
 ### 10. Changing your mind before dispatch
 

@@ -23,9 +23,11 @@ async function visaStaff(access: "VIEW" | "EDIT" = "EDIT") {
 
 const countryId = async (code: string) => (await prisma.country.findUniqueOrThrow({ where: { code } })).id;
 
-/** "Global Visa Services", Mumbai, covering France. */
+/** "Global Visa Services", Mumbai, covering France, with its dispatch email. */
 async function addVendor(agent: Agent, body: Record<string, unknown> = {}) {
-  return agent.post("/api/masters/vendors").send({ name: "Global Visa Services", city: "Mumbai", countryIds: [await countryId("FR")], ...body });
+  return agent
+    .post("/api/masters/vendors")
+    .send({ name: "Global Visa Services", city: "Mumbai", countryIds: [await countryId("FR")], email: "desk@globalvisa.example", ...body });
 }
 
 describe("who can see and change vendors", () => {
@@ -86,11 +88,13 @@ describe("adding a vendor", () => {
     expect(entry.after).toMatchObject({ name: "Global Visa Services", mobile: "+919825041234" });
   });
 
-  it("needs a name, a city and at least one active country; checks the contact details", async () => {
+  it("needs a name, a city, at least one active country and an email; checks the contact details", async () => {
     const hod = await visaHod();
     const empty = await hod.post("/api/masters/vendors").send({ name: " ", city: "", countryIds: [] });
     expect(empty.status).toBe(400);
-    expect(Object.keys(empty.body.issues)).toEqual(expect.arrayContaining(["name", "city", "countryIds"]));
+    expect(Object.keys(empty.body.issues)).toEqual(expect.arrayContaining(["name", "city", "countryIds", "email"]));
+    expect((await addVendor(hod, { email: "  " })).body.issues.email).toEqual(["Enter the vendor's email: the dispatch email goes to it."]);
+    expect((await addVendor(hod, { email: null })).body.issues.email).toBeDefined();
 
     expect((await addVendor(hod, { countryIds: [999] })).body.issues.countryIds).toBeDefined();
     const cn = await countryId("CN");
@@ -114,8 +118,10 @@ describe("adding a vendor", () => {
     expect((await addVendor(hod, { city: "Ahmedabad" })).status).toBe(201);
 
     // The database refuses it too, whatever the API checks.
-    await expect(prisma.vendor.create({ data: { name: "Global VISA Services", city: "MUMBAI" } })).rejects.toThrow();
-    await expect(prisma.vendor.create({ data: { name: "  ", city: "Pune" } })).rejects.toThrow();
+    await expect(prisma.vendor.create({ data: { name: "Global VISA Services", city: "MUMBAI", email: "a@b.test" } })).rejects.toThrow();
+    await expect(prisma.vendor.create({ data: { name: "  ", city: "Pune", email: "a@b.test" } })).rejects.toThrow();
+    await expect(prisma.vendor.create({ data: { name: "Shree Visa", city: "Pune", email: "" } })).rejects.toThrow();
+    await expect(prisma.vendor.create({ data: { name: "Shree Visa", city: "Pune", email: "Desk@Shree.test" } })).rejects.toThrow();
   });
 });
 
@@ -139,9 +145,13 @@ describe("changing a vendor", () => {
     expect(same.status).toBe(200);
     expect(await prisma.auditLog.count({ where: { action: "vendor.update" } })).toBe(1);
 
-    // Clearing the contact details.
-    const cleared = await hod.patch(`/api/masters/vendors/${id}`).send({ mobile: "", email: null });
-    expect(cleared.body.vendor).toMatchObject({ mobile: null, email: null });
+    // The mobile can be cleared; the email can be changed but never cleared (the dispatch email goes to it).
+    const cleared = await hod.patch(`/api/masters/vendors/${id}`).send({ mobile: "" });
+    expect(cleared.body.vendor).toMatchObject({ mobile: null, email: "desk@globalvisa.example" });
+    expect((await hod.patch(`/api/masters/vendors/${id}`).send({ email: null })).status).toBe(400);
+    expect((await hod.patch(`/api/masters/vendors/${id}`).send({ email: "" })).status).toBe(400);
+    const moved = await hod.patch(`/api/masters/vendors/${id}`).send({ email: "Visas@GlobalVisa.example" });
+    expect(moved.body.vendor.email).toBe("visas@globalvisa.example");
   });
 
   it("keeps a country switched off since, but won't add one", async () => {
