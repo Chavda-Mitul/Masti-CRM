@@ -197,6 +197,16 @@ export const recallReasonFormSchema = creditNoteReasonFormSchema.extend({
 })
 export type RecallReasonFormValues = z.infer<typeof recallReasonFormSchema>
 
+export const extraChargeFormSchema = creditNoteReasonFormSchema.extend({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. URGENT_SUBMISSION.'),
+  name: required(80, 'Enter the charge.'),
+})
+export type ExtraChargeFormValues = z.infer<typeof extraChargeFormSchema>
+
 const optionCode = z
   .string()
   .trim()

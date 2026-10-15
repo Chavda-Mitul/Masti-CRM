@@ -14,6 +14,7 @@ import type {
   CreateCourierInput,
   CreateCreditNoteReasonInput,
   CreateRecallReasonInput,
+  CreateExtraChargeInput,
   CreateProcessingSpeedInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
@@ -25,6 +26,7 @@ import type {
   UpdateCourierInput,
   UpdateCreditNoteReasonInput,
   UpdateRecallReasonInput,
+  UpdateExtraChargeInput,
   UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
@@ -325,6 +327,35 @@ export async function updateRecallReason(id: number, input: UpdateRecallReasonIn
     entityType: "RecallReason",
     entityId: id,
     write: (tx) => tx.recallReason.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Extra charges, for the additional invoice (docs/decisions/0011-visa-at-vendor.md Decision 7)
+// ---------------------------------------------------------------------------
+
+export async function listExtraCharges(active?: boolean) {
+  return prisma.extraCharge.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createExtraCharge(input: CreateExtraChargeInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "extraCharge.create", "ExtraCharge", (tx) => tx.extraCharge.create({ data: input }));
+}
+
+export async function updateExtraCharge(id: number, input: UpdateExtraChargeInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.extraCharge.findUnique({ where: { id } });
+  if (!before) throw notFound("Extra charge not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "extraCharge.update",
+    entityType: "ExtraCharge",
+    entityId: id,
+    write: (tx) => tx.extraCharge.update({ where: { id }, data: changes }),
   });
 }
 

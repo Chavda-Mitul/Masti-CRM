@@ -289,6 +289,9 @@ export type CreditNoteReason = FollowUpOption
 /** Why a file is taken back from the vendor: "Embassy taking too long"… (0011 Decision 6). Picked at the recall. */
 export type RecallReason = FollowUpOption
 
+/** What an additional invoice charges for: "Urgent submission", "Photos"… (0011 Decision 7). No GST. */
+export type ExtraCharge = FollowUpOption
+
 export interface Courier extends FollowUpOption {
   /** Off for "By hand": no slip (AWB) number is asked for */
   awbNeeded: boolean
@@ -326,3 +329,4 @@ export type MasterResource =
   | 'couriers'
   | 'credit-note-reasons'
   | 'recall-reasons'
+  | 'extra-charges'

@@ -7,6 +7,7 @@ import { CountriesTable } from './CountriesTable'
 import { CouriersTable } from './CouriersTable'
 import { CreditNoteReasonsTable } from './CreditNoteReasonsTable'
 import { RecallReasonsTable } from './RecallReasonsTable'
+import { ExtraChargesTable } from './ExtraChargesTable'
 import { DocumentProblemsTable } from './DocumentProblemsTable'
 import { DocumentsTable } from './DocumentsTable'
 import { EmbassiesTable } from './EmbassiesTable'
@@ -31,6 +32,7 @@ type ListTab =
   | 'couriers'
   | 'credit-note-reasons'
   | 'recall-reasons'
+  | 'extra-charges'
 
 /** `visa`: read with Visa access, changed by the Visa HOD or the Head. `shared`: every department's, changed by any HOD. */
 const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User) => boolean; editors: string }[] = [
@@ -51,6 +53,7 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'couriers', label: 'Couriers', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'credit-note-reasons', label: 'Credit-note reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'recall-reasons', label: 'Recall reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
+  { value: 'extra-charges', label: 'Extra charges', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
@@ -58,7 +61,7 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
 
 /**
  * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources,
- * vendors, couriers, credit-note and recall reasons are the Visa department's;
+ * vendors, couriers, credit-note and recall reasons and extra charges are the Visa department's;
  * embassies and the follow-up and reason dropdowns are shared by every department (changed by any HOD).
  */
 export function MasterListsPage() {
@@ -123,6 +126,7 @@ export function MasterListsPage() {
       {tab === 'couriers' && <CouriersTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'credit-note-reasons' && <CreditNoteReasonsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'recall-reasons' && <RecallReasonsTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'extra-charges' && <ExtraChargesTable canEdit={canEdit} showInactive={showInactive} />}
     </>
   )
 }

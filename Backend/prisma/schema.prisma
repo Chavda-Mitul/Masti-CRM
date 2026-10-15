@@ -1049,6 +1049,18 @@ model RecallReason {
   visaCases VisaCase[]
 }
 
+/// What an additional invoice charges for: "Urgent submission", "Photos"… (docs/decisions/0011-visa-at-vendor.md
+/// Decision 7). Picked, with the amount typed; never free text. Edited by the Visa HOD or the Head; switched off, never
+/// deleted.
+model ExtraCharge {
+  id        Int     @id @default(autoincrement())
+  /// URGENT_SUBMISSION… Never changes.
+  code      String  @unique
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
 model DocumentProblemReason {
   id        Int                @id @default(autoincrement())

@@ -449,7 +449,36 @@ describe("recall reasons (0011 Decision 6)", () => {
   });
 });
 
+describe("extra charges (0011 Decision 7)", () => {
+  it("is seeded, read by Visa staff and written only by the Visa HOD or the Head; codes never change; switched off", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/extra-charges");
+    expect(list.status).toBe(200);
+    expect(list.body.extraCharges.map((r: { name: string }) => r.name)).toEqual(["Urgent submission", "Photos", "Courier, extra"]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    expect((await (await loginAs("neha@masti.test")).post("/api/masters/extra-charges").send({ code: "TRANSLATION", name: "Translation" })).status).toBe(403);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/extra-charges").send({ code: " translation ", name: "Translation" });
+    expect(created.status).toBe(201);
+    expect(created.body.extraCharge).toMatchObject({ code: "TRANSLATION", isActive: true });
+    expect((await hod.post("/api/masters/extra-charges").send({ code: "PHOTOS", name: "Again" })).status).toBe(409);
+
+    const photos = await prisma.extraCharge.findUniqueOrThrow({ where: { code: "PHOTOS" } });
+    const patched = await hod.patch(`/api/masters/extra-charges/${photos.id}`).send({ code: "OLD", name: "Photos (35×45 mm)" });
+    expect(patched.body.extraCharge).toMatchObject({ code: "PHOTOS", name: "Photos (35×45 mm)" });
+    await hod.patch(`/api/masters/extra-charges/${photos.id}`).send({ isActive: false });
+    expect((await hod.get("/api/masters/extra-charges?active=true")).body.extraCharges.map((r: { code: string }) => r.code)).not.toContain("PHOTOS");
+    expect(await prisma.auditLog.count({ where: { action: { in: ["extraCharge.create", "extraCharge.update"] } } })).toBe(3);
+  });
+});
+
 describe("the database", () => {
+  it("refuses a lowercase extra charge code", async () => {
+    await expect(prisma.extraCharge.create({ data: { code: "urgent fee", name: "x" } })).rejects.toThrow();
+  });
+
   it("refuses a lowercase recall reason code", async () => {
     await expect(prisma.recallReason.create({ data: { code: "embassy delay", name: "x" } })).rejects.toThrow();
   });
