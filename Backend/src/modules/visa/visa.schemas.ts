@@ -74,6 +74,12 @@ export const onlineCheckSchema = firstFollowUpSchema;
 export const submissionCheckSchema = firstFollowUpSchema;
 
 /**
+ * When a recalled file comes back to its processor to chase the vendor for the papers (0011 Decision 6): the next open
+ * office day, afterDays after the recall, at `at` (IST).
+ */
+export const recallReturnSchema = firstFollowUpSchema;
+
+/**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
  */
@@ -122,6 +128,7 @@ export const visaSettingsSchema = z.object({
   vendorConfirm: vendorConfirmSchema,
   onlineCheck: onlineCheckSchema,
   submissionCheck: submissionCheckSchema,
+  recallReturn: recallReturnSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -158,6 +165,7 @@ export type CreditNoteSetting = z.infer<typeof creditNoteSettingSchema>;
 export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
 export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
 export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
+export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -344,7 +352,22 @@ export const cancelInvoiceSchema = z.object({
   totalPaise: z.number().int().min(0),
 });
 
+/**
+ * "Take the file back" (Decision 6): why, from the recall-reasons list, and the invoice and case as the dialog showed
+ * them. `refunds` is only for the HOD's "Change refund": per traveller (the invoice's line position), what goes back.
+ */
+export const recallSchema = z.object({
+  invoiceNo: z.string().trim().toUpperCase().min(1).max(40),
+  reasonId: z.number("Pick why it's taken back.").int().positive("Pick why it's taken back."),
+  refunds: z
+    .array(z.object({ position: z.number().int().min(1), refundPaise: z.number().int().min(0).max(100_000_000) }))
+    .max(60)
+    .optional(),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
+export type RecallInput = z.infer<typeof recallSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;
 export type SaveSubmissionInput = z.infer<typeof saveSubmissionSchema>;
 

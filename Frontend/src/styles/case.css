@@ -71,6 +71,11 @@
   border-color: var(--ok-bg);
   color: var(--ok);
 }
+.step-chip.skipped {
+  color: var(--text-faint);
+  border-style: dashed;
+  text-decoration: line-through;
+}
 .step-chip.current {
   background: var(--dept, var(--primary));
   border-color: var(--dept, var(--primary));
@@ -1042,4 +1047,9 @@ button.tick:focus-visible {
   padding: 10px 14px;
   border-radius: 12px;
   background: var(--primary-tint);
+}
+/* The HOD's "Change refund" (0011 Decision 6): a small amount box per traveller. */
+.recall-refund {
+  width: 110px;
+  text-align: right;
 }

@@ -28,6 +28,7 @@ import {
   ONLINE_CHECK_KEY,
   STICKER_KEY,
   SUBMISSION_CHECK_KEY,
+  RECALL_RETURN_KEY,
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
@@ -304,6 +305,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: VENDOR_CONFIRM_KEY, before: before.vendorConfirm, after: input.vendorConfirm },
     { key: ONLINE_CHECK_KEY, before: before.onlineCheck, after: input.onlineCheck },
     { key: SUBMISSION_CHECK_KEY, before: before.submissionCheck, after: input.submissionCheck },
+    { key: RECALL_RETURN_KEY, before: before.recallReturn, after: input.recallReturn },
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },

@@ -38,6 +38,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   // An e-visa has no docket: it goes in on the portal (0008 Decision 11). Once in, the step's own "Submitted" ⚠️.
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt && !c.vendorNeeded) return <span className="chip chip-ok">File ready · to submit online</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
+  // Taken back from the vendor (0011 Decision 6): the papers come back to Passport back.
+  if (c.recall) return <span className="chip chip-warn">Recalled · {c.recall.reason}</span>
   // On the way to the vendor until "Vendor got it" (0011 Decision 2); the step's own "Submitted" comes with the file
   // number, as in the demo ("Submitted · FR-MUM-88421").
   if (c.stage.code === 'AT_VENDOR' && c.submission) return <span className="chip chip-info">{c.stage.statusLabel} · {c.submission.vendorFileNo}</span>
@@ -244,11 +246,13 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
       <ol className="step-chips" aria-label="Case steps">
         {c.steps.map((s, i) => {
           const step = i + 1
-          const state = step < c.stage.step ? 'done' : step === c.stage.step ? 'current' : ''
+          // A recalled file never reached a decision (0011 Decision 6): that step was skipped, not done.
+          const skipped = !!c.recall && s.code === 'DECISION'
+          const state = skipped ? 'skipped' : step < c.stage.step ? 'done' : step === c.stage.step ? 'current' : ''
           return (
             <li key={s.code}>
-              <span className={`step-chip ${state}`} aria-current={state === 'current' ? 'step' : undefined}>
-                <span className="step-no">{state === 'done' ? '✓' : step}</span>
+              <span className={`step-chip ${state}`} aria-current={state === 'current' ? 'step' : undefined} title={skipped ? 'Skipped: the file was taken back' : undefined}>
+                <span className="step-no">{state === 'done' ? '✓' : skipped ? '–' : step}</span>
                 {s.name}
               </span>
             </li>

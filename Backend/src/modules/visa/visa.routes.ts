@@ -6,6 +6,7 @@ import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordCh
 import {
   addToDocketSchema,
   cancelInvoiceSchema,
+  recallSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -35,6 +36,7 @@ import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
 import * as quoteService from "./visaQuote.service";
+import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
 
 /** Visa cases (docs/decisions/0003-visa-intake.md). Visa VIEW to read, Visa EDIT to save. */
@@ -229,6 +231,20 @@ router.post("/cases/:caseNo/vendor-received", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/submission", visaEdit, async (req, res) => {
   const body = saveSubmissionSchema.parse(req.body);
   res.json({ case: await atVendorService.saveSubmission(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** What taking the file back would give back, per traveller, and when it's due back (0011 Decision 6). */
+router.get("/cases/:caseNo/recall/check", visaView, async (req, res) => {
+  res.json(await recallService.recallCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/**
+ * "Take the file back" (0011 Decision 6): the case goes to Passport back, with a PART credit note for the embassy fee.
+ * `refunds` above it only for the Visa HOD or the Head (403); 400 under `refunds` outside a traveller's limits.
+ */
+router.post("/cases/:caseNo/recall", visaEdit, async (req, res) => {
+  const body = recallSchema.parse(req.body);
+  res.json({ case: await recallService.recallFile(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

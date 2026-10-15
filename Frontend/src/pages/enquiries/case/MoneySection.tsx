@@ -38,8 +38,14 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
     (QUOTE_STEPS.includes(c.stage.code) || !!cancelled) &&
     canActOnCase(me, { department: c.department.code, owner: c.owner })
   const canEdit = canAct && !liveInvoice(c)
+  // An invoice a recall gave part of can't be cancelled whole (0011 Decision 5: never more than invoiced).
   const canCancel =
-    !!me && c.status === 'OPEN' && !!invoice && !cancelled && canActOnCase(me, { department: c.department.code, owner: c.owner })
+    !!me &&
+    c.status === 'OPEN' &&
+    !!invoice &&
+    !cancelled &&
+    invoice.partCredits.length === 0 &&
+    canActOnCase(me, { department: c.department.code, owner: c.owner })
 
   return (
     <div className="rail-section money-section" id="money">
@@ -66,6 +72,14 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
               Replaces <span className="mono">{invoice.replaces}</span>
             </span>
           )}
+          {invoice.partCredits.map((p) => (
+            <span key={p.creditNoteNo} className="muted small">
+              <span className="mono">{p.creditNoteNo}</span> gave back {formatRupees(p.totalPaise)} · {p.reason}{' '}
+              <button type="button" className="btn-link small" onClick={() => openFile(p.file.id)}>
+                Open
+              </button>
+            </span>
+          ))}
           {cancelled && (
             <span className="muted small">
               Cancelled by <span className="mono">{cancelled.creditNoteNo}</span> · {cancelled.reason} · {cancelled.issuedBy.name},{' '}

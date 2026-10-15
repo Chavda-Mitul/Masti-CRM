@@ -352,7 +352,8 @@ describe("the database", () => {
       totalPaise: note.totalPaise,
     };
     await expect(prisma.creditNote.create({ data: { ...base, creditNoteNo: "T1", kind: "WHOLE", fileId: (await fileRow(1)).id } })).rejects.toThrow(
-      /CreditNote_one_whole_per_invoice/,
+      // The "never more than invoiced" trigger runs first; the one-whole-per-invoice index backs it up.
+      /CreditNote_one_whole_per_invoice|give back more than their invoice charged/,
     );
 
     const other = await invoiced({ mobile: "98250 41235", clientName: "Sunil Shah" });

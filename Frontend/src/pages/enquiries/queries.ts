@@ -10,6 +10,7 @@ import type {
   DispatchCheck,
   InvoiceCheck,
   CancelInvoiceCheck,
+  RecallCheck,
   SubmitOnlineCheck,
   VendorReceivedCheck,
   InvoiceTaxType,
@@ -57,6 +58,7 @@ export const enquiryKeys = {
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   cancelInvoiceCheck: (caseNo: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase()] as const,
+  recallCheck: (caseNo: string) => ['enquiries', 'recall-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
@@ -372,6 +374,23 @@ export function useCancelInvoice(caseNo: string) {
     caseNo,
     (base, body) => api(`${base}/invoice/cancel`, { method: 'POST', body }),
     { otherCases: true },
+  )
+}
+
+/** What taking the file back gives back, per traveller, and when it's due back (0011 Decision 6). */
+export function useRecallCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.recallCheck(caseNo),
+    queryFn: () => api<RecallCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/recall/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Take the file back" (0011 Decision 6): `refunds` only for the HOD's "Change refund". */
+export function useRecallFile(caseNo: string) {
+  return useCaseAction<{ invoiceNo: string; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
+    caseNo,
+    (base, body) => api(`${base}/recall`, { method: 'POST', body }),
   )
 }
 
