@@ -177,6 +177,17 @@ export const courierFormSchema = z.object({
 })
 export type CourierFormValues = z.infer<typeof courierFormSchema>
 
+export const creditNoteReasonFormSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. WRONG_AMOUNT.'),
+  name: required(80, 'Enter the reason.'),
+  sortOrder,
+})
+export type CreditNoteReasonFormValues = z.infer<typeof creditNoteReasonFormSchema>
+
 const optionCode = z
   .string()
   .trim()

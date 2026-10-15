@@ -377,7 +377,58 @@ describe("couriers (how a docket goes to the vendor, 0008 Decision 6)", () => {
   });
 });
 
+describe("credit-note reasons (0011 Decision 5)", () => {
+  it("is seeded, read by Visa staff and written only by the Visa HOD or the Head, audited", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/credit-note-reasons");
+    expect(list.status).toBe(200);
+    expect(list.body.creditNoteReasons.map((r: { name: string }) => r.name)).toEqual([
+      "Wrong amount",
+      "Wrong client details",
+      "Wrong traveller details",
+      "Client cancelled",
+      "Recall",
+    ]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const editor = await loginAs("neha@masti.test");
+    const refused = await editor.post("/api/masters/credit-note-reasons").send({ code: "DUPLICATE", name: "Duplicate invoice" });
+    expect(refused.status).toBe(403);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/credit-note-reasons").send({ code: " duplicate ", name: "Duplicate invoice" });
+    expect(created.status).toBe(201);
+    expect(created.body.creditNoteReason).toMatchObject({ code: "DUPLICATE", name: "Duplicate invoice", isActive: true });
+    expect(await prisma.auditLog.count({ where: { action: "creditNoteReason.create" } })).toBe(1);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    expect((await head.post("/api/masters/credit-note-reasons").send({ code: "OTHER_FIX", name: "Other correction" })).status).toBe(201);
+  });
+
+  it("refuses a used or badly formed code, never changes a code, and switches reasons off", async () => {
+    const hod = await visaHod();
+    expect((await hod.post("/api/masters/credit-note-reasons").send({ code: "RECALL", name: "Recalled" })).status).toBe(409);
+    expect((await hod.post("/api/masters/credit-note-reasons").send({ code: "wrong amount", name: "x" })).status).toBe(400);
+
+    const wrong = await prisma.creditNoteReason.findUniqueOrThrow({ where: { code: "WRONG_AMOUNT" } });
+    const patched = await hod.patch(`/api/masters/credit-note-reasons/${wrong.id}`).send({ code: "OLD", name: "Wrong amount charged" });
+    expect(patched.status).toBe(200);
+    expect(patched.body.creditNoteReason).toMatchObject({ code: "WRONG_AMOUNT", name: "Wrong amount charged" });
+    expect(await prisma.auditLog.count({ where: { action: "creditNoteReason.update" } })).toBe(1);
+
+    await hod.patch(`/api/masters/credit-note-reasons/${wrong.id}`).send({ isActive: false });
+    const active = await hod.get("/api/masters/credit-note-reasons?active=true");
+    expect(active.body.creditNoteReasons.map((r: { code: string }) => r.code)).not.toContain("WRONG_AMOUNT");
+    expect((await hod.get("/api/masters/credit-note-reasons")).body.creditNoteReasons).toHaveLength(5);
+  });
+});
+
 describe("the database", () => {
+  it("refuses a lowercase credit-note reason code", async () => {
+    await expect(prisma.creditNoteReason.create({ data: { code: "wrong amount", name: "x" } })).rejects.toThrow();
+  });
+
   it("refuses a lowercase courier code", async () => {
     await expect(prisma.courier.create({ data: { code: "blue dart", name: "x" } })).rejects.toThrow();
   });

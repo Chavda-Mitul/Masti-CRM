@@ -12,6 +12,7 @@ import type {
   CreateDocumentInput,
   CreateDocumentProblemReasonInput,
   CreateCourierInput,
+  CreateCreditNoteReasonInput,
   CreateProcessingSpeedInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
@@ -21,6 +22,7 @@ import type {
   UpdateDocumentInput,
   UpdateDocumentProblemReasonInput,
   UpdateCourierInput,
+  UpdateCreditNoteReasonInput,
   UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
@@ -263,6 +265,35 @@ export async function updateCourier(id: number, input: UpdateCourierInput, actor
     entityType: "Courier",
     entityId: id,
     write: (tx) => tx.courier.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Credit-note reasons (docs/decisions/0011-visa-at-vendor.md Decision 5)
+// ---------------------------------------------------------------------------
+
+export async function listCreditNoteReasons(active?: boolean) {
+  return prisma.creditNoteReason.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createCreditNoteReason(input: CreateCreditNoteReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "creditNoteReason.create", "CreditNoteReason", (tx) => tx.creditNoteReason.create({ data: input }));
+}
+
+export async function updateCreditNoteReason(id: number, input: UpdateCreditNoteReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.creditNoteReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Credit-note reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "creditNoteReason.update",
+    entityType: "CreditNoteReason",
+    entityId: id,
+    write: (tx) => tx.creditNoteReason.update({ where: { id }, data: changes }),
   });
 }
 

@@ -1011,6 +1011,17 @@ model Courier {
   dockets   Docket[]
 }
 
+/// Why a credit note is issued: "Wrong amount", "Client cancelled", "Recall"… (docs/decisions/0011-visa-at-vendor.md
+/// Decision 5). Never free text. Edited by the Visa HOD or the Head; switched off, never deleted.
+model CreditNoteReason {
+  id        Int     @id @default(autoincrement())
+  /// WRONG_AMOUNT, RECALL… Never changes.
+  code      String  @unique
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
 model DocumentProblemReason {
   id        Int                @id @default(autoincrement())
