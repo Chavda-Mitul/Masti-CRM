@@ -1,6 +1,6 @@
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { PDFDocument } from "pdf-lib";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addMonths, istToday, toDbDate } from "../src/lib/dates";
 import { bucket, getObject, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
@@ -11,7 +11,21 @@ import { dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Ag
 // Raising the visa tax invoice (docs/decisions/0009-visa-invoice.md): from the quote, numbered in Masti's series, GST
 // on the service charge, a stored PDF, and never edited.
 
+/** The bucket is MinIO for real; `whileStoring` runs while an invoice PDF is being stored, before it is. */
+const uploads = vi.hoisted(() => ({ whileStoring: null as ((key: string) => Promise<void>) | null }));
+vi.mock("../src/lib/storage", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/lib/storage")>();
+  return {
+    ...real,
+    putObject: async (key: string, body: Buffer, contentType: string) => {
+      if (key.includes("/invoice/")) await uploads.whileStoring?.(key);
+      return real.putObject(key, body, contentType);
+    },
+  };
+});
+
 beforeEach(async () => {
+  uploads.whileStoring = null;
   await resetDb();
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
@@ -363,5 +377,31 @@ describe("taking turns", () => {
     const c = await invoiceableCase({ mobile: "98250 41298", clientName: "Mohan Patel" });
     const [rb, rc] = await Promise.all([raise(b.staff, b.caseNo), raise(c.staff, c.caseNo)]);
     expect([rb.body.case.invoice.invoiceNo, rc.body.case.invoice.invoiceNo].sort()).toEqual(["MVI00000002", "MVI00000003"]);
+  });
+
+  it("the counter isn't held while the PDF is stored; a number taken meanwhile is made again with the next one", async () => {
+    await mastiReady();
+    const c = await invoiceableCase();
+    const seen = await shown(c.staff, c.caseNo);
+    const stored: { key: string; counterLocked: boolean }[] = [];
+    uploads.whileStoring = async (key) => {
+      // NOWAIT fails at once if this raise already held the counter's row.
+      const counterLocked = await prisma
+        .$transaction(async (tx) => tx.$queryRaw`SELECT "id" FROM "InvoiceCounter" FOR UPDATE NOWAIT`)
+        .then(() => false, () => true);
+      // The first time, another raise takes MVI00000001 while this PDF is being stored.
+      if (stored.length === 0) await prisma.invoiceCounter.create({ data: { id: 1, lastValue: 1 } });
+      stored.push({ key, counterLocked });
+    };
+
+    const res = await raise(c.staff, c.caseNo, seen);
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).invoice!.invoiceNo).toBe("MVI00000002");
+    expect(stored.map((s) => s.counterLocked)).toEqual([false, false]);
+    // The PDF made with the taken number is removed; the one kept carries MVI00000002.
+    await expect(s3.send(new HeadObjectCommand({ Bucket: bucket, Key: stored[0]!.key }))).rejects.toThrow();
+    const row = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000002" }, include: { file: true } });
+    expect(row.file.storageKey).toBe(stored[1]!.key);
+    expect((await prisma.invoiceCounter.findUniqueOrThrow({ where: { id: 1 } })).lastValue).toBe(2);
   });
 });

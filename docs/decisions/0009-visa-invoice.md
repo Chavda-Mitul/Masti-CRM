@@ -217,6 +217,10 @@ stops issuing visa invoices. An export to it can come later (Q26).
     type, and the line amounts match the form.
   - **The number:** `GREATEST(last + 1, startAt)`, bumped in the invoice's transaction. A refused raise uses no number;
     raising the starting number jumps forward; lowering it reuses nothing.
+  - **The counter is taken last** (15 Oct 2026, from a code review). Every raise in the company takes its one row, so
+    the PDF is made and stored first, with the number the counter will give next. Then the counter is taken and held
+    only for the quick inserts. If another raise took that number meanwhile, the PDF is removed and the raise starts
+    again with the next number (3 tries, then 409 "try again"). Before, a slow bucket held up every other raise.
   - Audited as `visa.invoice.raise`. The PDF opens through the existing `/files/:fileId/link`, audited as
     `visa.file.open`. A raised invoice freezes the quote ("Invoice MVI… is raised, so the quote can't change").
 - **The PDF** (`src/modules/visa/invoicePdf.ts`) is A4, in Masti's layout:

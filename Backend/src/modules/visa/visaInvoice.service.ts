@@ -154,12 +154,23 @@ function totalsOf(g: Gathered) {
 
 const formatInvoiceNo = (prefix: string, digits: number, value: number) => `${prefix}${String(value).padStart(digits, "0")}`;
 
+/** The counter's next value, without taking it: the dialog's preview, and the number a raise makes its PDF with. */
+async function nextCounterValue(g: Gathered, db: Db) {
+  const counter = await db.invoiceCounter.findUnique({ where: { id: 1 } });
+  return Math.max((counter?.lastValue ?? 0) + 1, g.invoiceSetting.startAt);
+}
+
 /** The number the next invoice will get (a preview: two raises at once still get consecutive numbers). */
 async function nextInvoiceNo(g: Gathered, db: Db) {
-  const counter = await db.invoiceCounter.findUnique({ where: { id: 1 } });
-  const { prefix, digits, startAt } = g.invoiceSetting;
-  return formatInvoiceNo(prefix, digits, Math.max((counter?.lastValue ?? 0) + 1, startAt));
+  const { prefix, digits } = g.invoiceSetting;
+  return formatInvoiceNo(prefix, digits, await nextCounterValue(g, db));
 }
+
+/** Another raise took the number this one's PDF was made with. */
+class NumberTaken extends Error {}
+
+/** Tries before giving up when other raises keep taking the number first. */
+const RAISE_ATTEMPTS = 3;
 
 /**
  * For the Raise invoice dialog: what blocks it, or what the invoice will say. Anyone who can open the case may look.
@@ -254,8 +265,12 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
 /**
  * Raises the case's invoice (0009 Decisions 2–9): refused while anything blocks it, or if the quote, the GST rate, the
  * tax type (the client's state) or the total changed since the dialog showed them. In one transaction under the case
- * lock: the next number, the PDF made and stored, the file row, the invoice and its lines, and the audit. The PDF is
- * removed again if the transaction fails after storing it, and a failure uses no number.
+ * lock: the PDF made and stored with the next number, the number taken, the file row, the invoice and its lines, and
+ * the audit. The PDF is removed again if the transaction fails after storing it, and a failure uses no number.
+ *
+ * The counter is one row that every raise in the company takes, so it's taken last, after the PDF is made and stored:
+ * a slow bucket never holds up anyone else's raise. If another raise took the number meanwhile, this one starts again
+ * with the next.
  */
 export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, QUOTING);
@@ -280,85 +295,93 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
     signature: pre.images.signature && { bytes: await getObject(pre.images.signature.storageKey), contentType: pre.images.signature.contentType },
   };
 
-  let storageKey: string | null = null;
-  try {
-    await prisma.$transaction(
-      async (tx) => {
-        await lockCase(tx, enquiry.id, actor, QUOTING);
-        const g = await gather(enquiry.id, tx);
-        check(g);
+  for (let attempt = 1; ; attempt++) {
+    let storageKey: string | null = null;
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          await lockCase(tx, enquiry.id, actor, QUOTING);
+          const g = await gather(enquiry.id, tx);
+          check(g);
 
-        const { prefix, digits, startAt, gstRatePercent, sac } = g.invoiceSetting;
-        const [counter] = await tx.$queryRaw<{ lastValue: number }[]>`
-          INSERT INTO "InvoiceCounter" ("id", "lastValue") VALUES (1, ${startAt})
-          ON CONFLICT ("id") DO UPDATE SET "lastValue" = GREATEST("InvoiceCounter"."lastValue" + 1, ${startAt})
-          RETURNING "lastValue"`;
-        const invoiceNo = formatInvoiceNo(prefix, digits, Number(counter!.lastValue));
-        const issuedOn = istToday();
-        const { view, lines } = buildView(g, invoiceNo, issuedOn, actor.user.name);
+          const { prefix, digits, startAt, gstRatePercent, sac } = g.invoiceSetting;
+          const expected = await nextCounterValue(g, tx);
+          const invoiceNo = formatInvoiceNo(prefix, digits, expected);
+          const issuedOn = istToday();
+          const { view, lines } = buildView(g, invoiceNo, issuedOn, actor.user.name);
 
-        const pdf = await renderInvoicePdf(view, images);
-        storageKey = `cases/${enquiry.id}/invoice/${randomUUID()}.pdf`;
-        await putObject(storageKey, Buffer.from(pdf.bytes), "application/pdf");
+          const pdf = await renderInvoicePdf(view, images);
+          storageKey = `cases/${enquiry.id}/invoice/${randomUUID()}.pdf`;
+          await putObject(storageKey, Buffer.from(pdf.bytes), "application/pdf");
 
-        const family = familyName(g.enquiry.client.name).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
-        const file = await tx.caseFile.create({
-          data: {
-            enquiryId: enquiry.id,
-            kind: "INVOICE",
-            storageKey,
-            fileName: family ? `${invoiceNo}_${family}.pdf` : `${invoiceNo}.pdf`,
-            sizeBytes: pdf.bytes.length,
-            pageCount: pdf.pageCount,
-            uploadedById: actor.user.id,
-          },
-        });
-        const invoice = await tx.invoice.create({
-          data: {
-            invoiceNo,
-            enquiryId: enquiry.id,
-            issuedOn: toDbDate(issuedOn),
-            issuedById: actor.user.id,
-            client: view.client as unknown as Prisma.InputJsonValue,
-            company: view.company as unknown as Prisma.InputJsonValue,
-            terms: view.terms,
-            placeOfSupply: view.placeOfSupply.code,
-            taxType: view.taxType,
-            sac,
-            gstRateBp: rateBasisPoints(gstRatePercent),
-            processingSpeed: g.visa.quote!.processingSpeed.name,
-            grossPaise: view.grossPaise,
-            serviceChargePaise: view.serviceChargePaise,
-            cgstPaise: view.cgstPaise,
-            sgstPaise: view.sgstPaise,
-            igstPaise: view.igstPaise,
-            totalPaise: view.totalPaise,
-            fileId: file.id,
-            lines: { create: lines },
-          },
-        });
-        await audit(
-          {
-            actorId: actor.user.id,
-            action: "visa.invoice.raise",
-            entityType: "Enquiry",
-            entityId: enquiry.id,
-            clientId: g.enquiry.clientId,
-            after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id },
-            ip: actor.ip,
-          },
-          tx,
-        );
-      },
-      // Making the PDF and storing it takes a moment; the lock is held for it so no one changes the quote meanwhile.
-      { timeout: 30_000 },
-    );
-  } catch (err) {
-    if (storageKey) {
-      const key = storageKey;
-      await deleteObject(key).catch((cleanupErr) => console.error(`Couldn't remove unsaved invoice ${key}:`, cleanupErr));
+          // Taken only now, and held until the commit: the inserts below are quick.
+          const [counter] = await tx.$queryRaw<{ lastValue: number }[]>`
+            INSERT INTO "InvoiceCounter" ("id", "lastValue") VALUES (1, ${startAt})
+            ON CONFLICT ("id") DO UPDATE SET "lastValue" = GREATEST("InvoiceCounter"."lastValue" + 1, ${startAt})
+            RETURNING "lastValue"`;
+          if (Number(counter!.lastValue) !== expected) throw new NumberTaken();
+
+          const family = familyName(g.enquiry.client.name).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
+          const file = await tx.caseFile.create({
+            data: {
+              enquiryId: enquiry.id,
+              kind: "INVOICE",
+              storageKey,
+              fileName: family ? `${invoiceNo}_${family}.pdf` : `${invoiceNo}.pdf`,
+              sizeBytes: pdf.bytes.length,
+              pageCount: pdf.pageCount,
+              uploadedById: actor.user.id,
+            },
+          });
+          const invoice = await tx.invoice.create({
+            data: {
+              invoiceNo,
+              enquiryId: enquiry.id,
+              issuedOn: toDbDate(issuedOn),
+              issuedById: actor.user.id,
+              client: view.client as unknown as Prisma.InputJsonValue,
+              company: view.company as unknown as Prisma.InputJsonValue,
+              terms: view.terms,
+              placeOfSupply: view.placeOfSupply.code,
+              taxType: view.taxType,
+              sac,
+              gstRateBp: rateBasisPoints(gstRatePercent),
+              processingSpeed: g.visa.quote!.processingSpeed.name,
+              grossPaise: view.grossPaise,
+              serviceChargePaise: view.serviceChargePaise,
+              cgstPaise: view.cgstPaise,
+              sgstPaise: view.sgstPaise,
+              igstPaise: view.igstPaise,
+              totalPaise: view.totalPaise,
+              fileId: file.id,
+              lines: { create: lines },
+            },
+          });
+          await audit(
+            {
+              actorId: actor.user.id,
+              action: "visa.invoice.raise",
+              entityType: "Enquiry",
+              entityId: enquiry.id,
+              clientId: g.enquiry.clientId,
+              after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id },
+              ip: actor.ip,
+            },
+            tx,
+          );
+        },
+        // Making the PDF and storing it takes a moment; the case lock is held for it so no one changes the quote meanwhile.
+        { timeout: 30_000 },
+      );
+      break;
+    } catch (err) {
+      if (storageKey) {
+        const key = storageKey;
+        await deleteObject(key).catch((cleanupErr) => console.error(`Couldn't remove unsaved invoice ${key}:`, cleanupErr));
+      }
+      if (!(err instanceof NumberTaken)) throw err;
+      if (attempt === RAISE_ATTEMPTS) throw conflict("Other invoices were being raised at the same moment. Please try again.");
     }
-    throw err;
   }
   return getVisaCaseById(enquiry.id);
 }
