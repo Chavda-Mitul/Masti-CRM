@@ -1,5 +1,5 @@
 import { prisma, type Db } from "../../config/prisma";
-import { audit } from "../../lib/audit";
+import { audit, auditMany } from "../../lib/audit";
 import { staleError } from "../../lib/changes";
 import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { sendEmail } from "../../lib/email";
@@ -168,10 +168,10 @@ export async function dispatchDocket(caseNo: string, input: DispatchDocketInput,
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "Vendor" WHERE "id" = ${pre.vendor.id} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "Docket" WHERE "id" = ${docketId} FOR UPDATE`;
-    // Taking a case out locks the docket first, so the list can't change now; adding waits too.
-    for (const c of (await gather(tx, docketId)).cases) {
-      await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ${c.enquiryId} FOR UPDATE`;
-    }
+    // Taking a case out locks the docket first, so the list can't change now; adding waits too. One query for all of
+    // them, in id order, however many the docket holds.
+    const ids = (await gather(tx, docketId)).cases.map((c) => c.enquiryId);
+    await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ANY(${ids}) ORDER BY "id" FOR UPDATE`;
     const g = await gather(tx, docketId);
     assertCanSend(g, input, actor);
     const { courier, awbNo } = await checkCourier(tx, input);
@@ -180,22 +180,20 @@ export async function dispatchDocket(caseNo: string, input: DispatchDocketInput,
     const dispatchedAt = new Date();
     const atVendor = await visaStage(tx, g.cases[0]!.enquiry.departmentId, "AT_VENDOR");
     const sent = { docketNo: g.docketNo, courier: courier.name, awbNo };
-    for (const c of g.cases) {
-      await tx.enquiry.update({ where: { id: c.enquiryId }, data: { stageId: atVendor.id, dueAt: confirmAt } });
-      await audit(
-        {
-          actorId: actor.user.id,
-          action: "visa.docket.dispatch",
-          entityType: "Enquiry",
-          entityId: c.enquiryId,
-          clientId: c.enquiry.clientId,
-          before: { stage: "DISPATCH", dueAt: c.enquiry.dueAt },
-          after: { stage: "AT_VENDOR", dueAt: confirmAt, ...sent },
-          ip: actor.ip,
-        },
-        tx,
-      );
-    }
+    await tx.enquiry.updateMany({ where: { id: { in: g.cases.map((c) => c.enquiryId) } }, data: { stageId: atVendor.id, dueAt: confirmAt } });
+    await auditMany(
+      g.cases.map((c) => ({
+        actorId: actor.user.id,
+        action: "visa.docket.dispatch",
+        entityType: "Enquiry",
+        entityId: c.enquiryId,
+        clientId: c.enquiry.clientId,
+        before: { stage: "DISPATCH", dueAt: c.enquiry.dueAt },
+        after: { stage: "AT_VENDOR", dueAt: confirmAt, ...sent },
+        ip: actor.ip,
+      })),
+      tx,
+    );
     await tx.docket.update({
       where: { id: docketId },
       data: { status: "DISPATCHED", courierId: courier.id, awbNo, dispatchedAt, dispatchedById: actor.user.id },

@@ -329,6 +329,10 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
     refresh.
   - **The cases are locked by hand,** in id order, after the vendor and the docket. `lockCase` would require the
     dispatcher to be able to act on every case, but Decision 3 lets a processor who owns one of them send the docket.
+  - **However many cases, a handful of queries** (15 Oct 2026, from a code review): one `FOR UPDATE` for all the cases
+    (`ORDER BY "id"`), one `updateMany`, and one insert for their audit rows (`auditMany` in `src/lib/audit.ts`). Before,
+    each case had its own lock, update and audit, so a docket near the 200-case limit could pass the transaction's
+    5-second timeout.
   - **A file with no invoice is refused before any lock,** so there is no "invoice raised meanwhile" race. A change to
     a case meanwhile (its row is locked) is seen and refused.
 
