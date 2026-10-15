@@ -46,6 +46,7 @@ export async function gatherForCredit(enquiryId: string, db: Db) {
     select: {
       clientId: true,
       invoices: {
+        where: { kind: "MAIN" },
         orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
         take: 1,
         include: {

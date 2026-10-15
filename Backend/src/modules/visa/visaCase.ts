@@ -31,6 +31,7 @@ export function emailSending(startedAt: Date | null, now = new Date()) {
  * liveInvoiceNo: a cancelled invoice no longer counts. A case has one chain of invoices, so at most one stands.
  */
 export const liveInvoicesArgs = {
+  where: { kind: "MAIN" },
   select: { invoiceNo: true, creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } } },
 } satisfies Prisma.InvoiceFindManyArgs;
 
@@ -84,8 +85,11 @@ export const visaCaseInclude = {
   invoices: {
     orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
     select: {
+      kind: true,
       invoiceNo: true,
       replaces: { select: { invoiceNo: true } },
+      /** An additional invoice's extra charges (0011 Decision 7). */
+      charges: { orderBy: { position: "asc" }, select: { name: true, amountPaise: true } },
       issuedOn: true,
       issuedAt: true,
       issuedBy: personSelect,
@@ -333,6 +337,9 @@ export function toVisaCaseDto(
   const visa = row.visa;
   if (!visa) throw new Error(`Enquiry ${row.caseNo} has no visa part.`);
   const { adults, children } = countTravellers(visa.travellers);
+  // The main invoice's chain, and the additional invoice's (0011 Decision 7): newest first, each.
+  const mainInvoices = row.invoices.filter((i) => i.kind === "MAIN");
+  const additionalInvoices = row.invoices.filter((i) => i.kind === "ADDITIONAL");
   return {
     id: row.id,
     caseNo: row.caseNo,
@@ -410,9 +417,15 @@ export function toVisaCaseDto(
      * The case's latest tax invoice (0009), or null until one is raised. When a credit note cancelled it
      * (`cancelled`), it no longer counts and a corrected one can be raised (0011 Decision 5).
      */
-    invoice: row.invoices[0] ? invoiceOf(row.invoices[0]) : null,
+    invoice: mainInvoices[0] ? invoiceOf(mainInvoices[0]) : null,
     /** The earlier invoices of the chain, each cancelled and replaced, newest first. */
-    earlierInvoices: row.invoices.slice(1).map(invoiceOf),
+    earlierInvoices: mainInvoices.slice(1).map(invoiceOf),
+    /**
+     * The file's one additional invoice (0011 Decision 7), "MVI…-A", for extra charges with no GST; null until raised.
+     * When cancelled, its replacement is the latest; the earlier ones follow in `earlierAdditionalInvoices`.
+     */
+    additionalInvoice: additionalInvoices[0] ? { ...invoiceOf(additionalInvoices[0]), charges: additionalInvoices[0].charges } : null,
+    earlierAdditionalInvoices: additionalInvoices.slice(1).map((i) => ({ ...invoiceOf(i), charges: i.charges })),
     /** "Take the file back" (0011 Decision 6): who, when, why, and the credit note that gave the embassy fee back. */
     recall: visa.recalledAt && {
       at: visa.recalledAt,

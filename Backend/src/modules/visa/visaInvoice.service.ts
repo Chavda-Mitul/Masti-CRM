@@ -35,7 +35,7 @@ const invoicesArgs = {
 const caseInclude = {
   client: true,
   stage: { select: { code: true } },
-  invoices: invoicesArgs,
+  invoices: { where: { kind: "MAIN" }, ...invoicesArgs },
   visa: {
     include: {
       offering: { include: { country: true, visaType: true } },
@@ -444,7 +444,7 @@ function assertInvoiceStep(stageCode: string, invoices: CaseInvoices) {
  * cancelled one reopens it, at any step, so the corrected invoice can be raised from it (0011 Decision 5).
  */
 export async function assertQuoteCanChange(tx: Db, enquiryId: string, stageCode: string) {
-  const invoices = await tx.invoice.findMany({ where: { enquiryId }, ...invoicesArgs });
+  const invoices = await tx.invoice.findMany({ where: { enquiryId, kind: "MAIN" }, ...invoicesArgs });
   assertInvoiceStep(stageCode, invoices);
   const live = standing(invoices);
   if (live) throw conflict(`Invoice ${live.invoiceNo} is raised, so the quote can't change.`);

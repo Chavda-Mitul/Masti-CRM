@@ -11,6 +11,7 @@ import type {
   InvoiceCheck,
   CancelInvoiceCheck,
   RecallCheck,
+  AdditionalInvoiceCheck,
   SubmitOnlineCheck,
   VendorReceivedCheck,
   InvoiceTaxType,
@@ -59,6 +60,7 @@ export const enquiryKeys = {
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   cancelInvoiceCheck: (caseNo: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase()] as const,
   recallCheck: (caseNo: string) => ['enquiries', 'recall-check', caseNo.toUpperCase()] as const,
+  additionalInvoiceCheck: (caseNo: string) => ['enquiries', 'additional-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
@@ -391,6 +393,22 @@ export function useRecallFile(caseNo: string) {
   return useCaseAction<{ invoiceNo: string; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
     caseNo,
     (base, body) => api(`${base}/recall`, { method: 'POST', body }),
+  )
+}
+
+/** The file's one additional invoice: what it adds to, its number, and what blocks it (0011 Decision 7). */
+export function useAdditionalInvoiceCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.additionalInvoiceCheck(caseNo),
+    queryFn: () => api<AdditionalInvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/additional-invoice/check`),
+    staleTime: 0,
+  })
+}
+
+/** Raises the file's one additional invoice, "MVI…-A" (0011 Decision 7). */
+export function useRaiseAdditionalInvoice(caseNo: string) {
+  return useCaseAction<{ mainInvoiceNo: string; charges: { chargeId: number; amountPaise: number }[]; totalPaise: number }>(caseNo, (base, body) =>
+    api(`${base}/additional-invoice`, { method: 'POST', body }),
   )
 }
 

@@ -5,6 +5,7 @@ import { formatDate } from '../../../lib/format'
 import { formatRupees } from '../../../lib/money'
 import type { VisaCase } from '../types'
 import { useOpenCaseFile } from '../queries'
+import { AdditionalInvoiceDialog } from './AdditionalInvoiceDialog'
 import { CancelInvoiceDialog } from './CancelInvoiceDialog'
 import { dayMonth, liveInvoice } from './labels'
 import { QuoteDialog } from './QuoteDialog'
@@ -28,6 +29,7 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const [editing, setEditing] = useState(false)
   const [raising, setRaising] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [adding, setAdding] = useState(false)
   const openFile = useOpenCaseFile(c.caseNo)
   const q = c.quote
   const invoice = c.invoice
@@ -38,6 +40,9 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
     (QUOTE_STEPS.includes(c.stage.code) || !!cancelled) &&
     canActOnCase(me, { department: c.department.code, owner: c.owner })
   const canEdit = canAct && !liveInvoice(c)
+  // The one additional invoice (0011 Decision 7): at any step once the main invoice stands, while the case is open.
+  const additional = c.additionalInvoice
+  const canAdd = !!me && c.status === 'OPEN' && !!liveInvoice(c) && !additional && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // An invoice a recall gave part of can't be cancelled whole (0011 Decision 5: never more than invoiced).
   const canCancel =
     !!me &&
@@ -149,6 +154,41 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
           )}
         </div>
       )}
+      {(additional || canAdd) && (
+        <div className="money-additional">
+          <div className="money-invoice-head">
+            <span className="lbl">Additional invoice</span>
+            <span className={`chip chip-sm ${additional ? 'chip-warn' : 'chip-muted'}`}>{additional ? '1 of 1 used' : '0 of 1 used'}</span>
+          </div>
+          {additional ? (
+            <div className="money-invoice">
+              <div className="money-invoice-head">
+                <span className="chip chip-ok">
+                  <span className="mono">{additional.invoiceNo}</span> · locked
+                </span>
+                <strong>{formatRupees(additional.totalPaise)}</strong>
+              </div>
+              {additional.charges.map((ch, i) => (
+                <span key={i} className="muted small">
+                  {ch.name} · {formatRupees(ch.amountPaise)}
+                </span>
+              ))}
+              <span className="muted small">
+                Raised by {additional.issuedBy.name}, {dayMonth(additional.issuedAt)} · no GST
+              </span>
+              <div className="money-invoice-actions">
+                <button type="button" className="btn btn-sm" onClick={() => openFile(additional.file.id)}>
+                  Open invoice
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(true)}>
+              Raise additional invoice
+            </button>
+          )}
+        </div>
+      )}
       {c.earlierInvoices.length > 0 && (
         <div className="money-earlier">
           <span className="muted small">Earlier invoices</span>
@@ -174,6 +214,7 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
       {editing && <QuoteDialog visaCase={c} onClose={() => setEditing(false)} />}
       {raising && <RaiseInvoiceDialog visaCase={c} onClose={() => setRaising(false)} />}
       {cancelling && <CancelInvoiceDialog visaCase={c} onClose={() => setCancelling(false)} />}
+      {adding && <AdditionalInvoiceDialog visaCase={c} onClose={() => setAdding(false)} />}
     </div>
   )
 }
