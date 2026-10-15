@@ -1,4 +1,6 @@
 import { prisma, type Db } from "../../config/prisma";
+import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
+import { nextOpenDay } from "../holidays/blockedDays";
 import {
   docketSettingSchema,
   finalFileSchema,
@@ -8,12 +10,14 @@ import {
   vendorConfirmSchema,
   awbSettingSchema,
   docketEmailSettingSchema,
+  onlineCheckSchema,
   type AwbSetting,
   type DocketEmailSetting,
   type DocketSetting,
   type FinalFileSetting,
   type FirstFollowUp,
   type InvoiceSetting,
+  type OnlineCheckSetting,
   type StickerSetting,
   type VendorConfirmSetting,
   type VisaSettings,
@@ -28,6 +32,7 @@ export const DOCKET_KEY = "visa.docket";
 export const STICKER_KEY = "visa.sticker";
 export const INVOICE_KEY = "visa.invoice";
 export const VENDOR_CONFIRM_KEY = "visa.vendorConfirm";
+export const ONLINE_CHECK_KEY = "visa.onlineCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
 
@@ -52,6 +57,9 @@ export const DEFAULT_INVOICE: InvoiceSetting = { prefix: "MVI", digits: 8, start
 /** ⚠️ 0008 Decision 9 and §10.9: the processor confirms the vendor got it the next office day, at 11:00 (the demo). */
 export const DEFAULT_VENDOR_CONFIRM: VendorConfirmSetting = { afterDays: 1, at: "11:00" };
 
+/** ⚠️ 0008 Decision 11: an e-visa comes back to check the portal like a couriered file, the next office day at 11:00. */
+export const DEFAULT_ONLINE_CHECK: OnlineCheckSetting = { afterDays: 1, at: "11:00" };
+
 /** ⚠️ 0008 Decision 6: a slip number is 4–30 capitals and digits (ours; Masti's couriers' formats aren't known). */
 export const DEFAULT_AWB: AwbSetting = { minLength: 4, maxLength: 30 };
 
@@ -63,9 +71,18 @@ export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
   closing: "Please confirm when you receive it.",
 };
 
+/**
+ * When a case comes back due on its processor's desk after a step: the next open office day (skipping Sundays and
+ * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation and the e-visa portal check.
+ */
+export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma) {
+  const day = await nextOpenDay(addDays(istToday(), timing.afterDays), { office: true }, db);
+  return istDateTimeToUtc(day, timing.at);
+}
+
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -74,6 +91,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const sticker = stickerSettingSchema.safeParse(value(STICKER_KEY));
   const invoice = invoiceSettingSchema.safeParse(value(INVOICE_KEY));
   const vendorConfirm = vendorConfirmSchema.safeParse(value(VENDOR_CONFIRM_KEY));
+  const onlineCheck = onlineCheckSchema.safeParse(value(ONLINE_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
   return {
@@ -83,6 +101,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     sticker: sticker.success ? sticker.data : DEFAULT_STICKER,
     invoice: invoice.success ? invoice.data : DEFAULT_INVOICE,
     vendorConfirm: vendorConfirm.success ? vendorConfirm.data : DEFAULT_VENDOR_CONFIRM,
+    onlineCheck: onlineCheck.success ? onlineCheck.data : DEFAULT_ONLINE_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,
   };

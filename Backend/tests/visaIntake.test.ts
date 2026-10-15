@@ -284,6 +284,7 @@ describe("intake dropdowns and settings", () => {
       sticker: { widthMm: 100, heightMm: 150 },
       invoice: { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" },
       vendorConfirm: { afterDays: 1, at: "11:00" },
+      onlineCheck: { afterDays: 1, at: "11:00" },
       awb: { minLength: 4, maxLength: 30 },
       docketEmail: {
         subject: "Docket {docketNo} · {files} · {company}",

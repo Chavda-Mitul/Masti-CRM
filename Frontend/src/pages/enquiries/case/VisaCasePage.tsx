@@ -17,6 +17,7 @@ import { FollowUpsCard } from './FollowUpsCard'
 import { MaturedBanner } from './MaturedBanner'
 import { SavedFileCard } from './SavedFileCard'
 import { StickerCard } from './StickerCard'
+import { SubmitOnlineCard } from './SubmitOnlineCard'
 import { TripCard } from './TripCard'
 
 /**
@@ -59,6 +60,7 @@ export function VisaCasePage() {
       <div className="case-grid">
         <div className="case-col">
           <DocketCard visaCase={c} />
+          <SubmitOnlineCard visaCase={c} />
           {c.docket && (
             <div className="case-pair">
               <DispatchCard visaCase={c} />

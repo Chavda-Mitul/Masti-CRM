@@ -15,6 +15,7 @@ import {
   saveQuoteSchema,
   matureCaseSchema,
   setVendorSchema,
+  submitOnlineSchema,
   takeOutOfDocketSchema,
   updateApplicationSchema,
   updateCaseDocumentSchema,
@@ -27,6 +28,7 @@ import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as invoiceService from "./visaInvoice.service";
+import * as onlineService from "./visaOnline.service";
 import * as quoteService from "./visaQuote.service";
 import * as stepsService from "./visaSteps.service";
 
@@ -174,6 +176,20 @@ router.post("/cases/:caseNo/dispatch", visaEdit, async (req, res) => {
 /** "Send again" (0008 Decision 8): the dispatched docket's email to the vendor, while it hasn't gone. */
 router.post("/cases/:caseNo/dispatch/email", visaEdit, async (req, res) => {
   res.json({ case: await dispatchService.resendVendorEmail(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
+});
+
+/** What stands in the way of an e-visa's "Submitted online", and when it comes back due to check the portal (0008). */
+router.get("/cases/:caseNo/submit-online/check", visaView, async (req, res) => {
+  res.json(await onlineService.submitOnlineCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/**
+ * "Submitted online" (0008 Decision 11): an e-visa (no vendor) went in on the portal and moves to At vendor. 409
+ * SUBMIT_BLOCKED with details.blockers until the invoice is raised.
+ */
+router.post("/cases/:caseNo/submit-online", visaEdit, async (req, res) => {
+  const body = submitOnlineSchema.parse(req.body);
+  res.json({ case: await onlineService.submitOnline(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**
