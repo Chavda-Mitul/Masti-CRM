@@ -331,6 +331,13 @@
   font-weight: 700;
 }
 
+/* Travel month on the New enquiry form: Month and Year dropdowns side by side. */
+.month-year {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 8px;
+}
+
 .enquiry-actions {
   display: flex;
   gap: 10px;

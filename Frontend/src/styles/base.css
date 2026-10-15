@@ -240,6 +240,13 @@ a.btn-primary:hover {
     color: var(--primary);
     font-weight: 700;
   }
+  .select option:disabled {
+    color: var(--text-faint);
+    cursor: default;
+  }
+  .select option:disabled:hover {
+    background: none;
+  }
 }
 .input:focus,
 .select:focus,
