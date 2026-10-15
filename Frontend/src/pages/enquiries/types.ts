@@ -359,6 +359,33 @@ export interface CaseInvoice {
   totalPaise: number
   /** The PDF as raised: open it like any case file. */
   file: { id: string; fileName: string }
+  /** The WHOLE credit note that cancelled it (0011 Decision 5): it no longer counts as the case's invoice. */
+  cancelled: {
+    creditNoteNo: string
+    /** YYYY-MM-DD (IST) */
+    issuedOn: string
+    issuedBy: PersonRef
+    reason: string
+    totalPaise: number
+    file: { id: string; fileName: string }
+  } | null
+}
+
+/** GET /api/visa/cases/:caseNo/invoice/cancel/check (0011 Decision 5): what cancelling it gives back, and what blocks it. */
+export interface CancelInvoiceCheck {
+  invoiceNo: string
+  alreadyCancelled: string | null
+  blockers: { kind: string; label: string; items: string[] }[]
+  preview: {
+    creditNoteNo: string
+    taxType: InvoiceTaxType
+    grossPaise: number
+    serviceChargePaise: number
+    cgstPaise: number
+    sgstPaise: number
+    igstPaise: number
+    totalPaise: number
+  }
 }
 
 export type InvoiceTaxType = 'INTRA_STATE' | 'INTER_STATE'

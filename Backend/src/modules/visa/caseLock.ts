@@ -33,6 +33,15 @@ export const QUOTING: StepRule = {
   wrongStage: "The quote can't change once the file has gone to the vendor.",
 };
 
+/**
+ * A credit note against the case's invoice (docs/decisions/0011-visa-at-vendor.md Decision 5): an invoice can turn out
+ * wrong at any step, before or after the file goes to the vendor.
+ */
+export const INVOICED: StepRule = {
+  stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH", "AT_VENDOR", "DECISION", "PASSPORT_BACK", "DELIVERED"],
+  wrongStage: "This case's invoice can't be changed at this step.",
+};
+
 /** Trip details (0007 Decision 4): captured as the documents come in, and corrected during file preparation. */
 export const TRIP: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION"],

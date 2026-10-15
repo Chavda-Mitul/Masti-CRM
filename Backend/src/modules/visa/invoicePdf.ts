@@ -103,6 +103,15 @@ export interface InvoiceView {
   terms: string[];
 }
 
+/**
+ * Which document the layout prints: the tax invoice, or a credit note against one (docs/decisions/0011-visa-at-vendor.md
+ * Decision 5). A credit note is the invoice's layout with its own title and number (`view.invoiceNo`), the invoice it
+ * cancels and why, and no bank details, balance or terms: nothing is to be paid on it.
+ */
+export type PdfDocument =
+  | { kind: "INVOICE" }
+  | { kind: "CREDIT_NOTE"; againstInvoiceNo: string; againstIssuedOn: string; reason: string };
+
 export interface InvoiceImages {
   logo: { bytes: Buffer; contentType: string } | null;
   signature: { bytes: Buffer; contentType: string } | null;
@@ -240,13 +249,18 @@ function columns(itemised: boolean) {
 }
 
 /**
- * Draws the invoice. Returns the PDF's bytes and its page count. Long invoices (many travellers) flow onto more pages;
- * the table's header repeats.
+ * Draws the invoice, or a credit note in the same layout. Returns the PDF's bytes and its page count. Long ones (many
+ * travellers) flow onto more pages; the table's header repeats.
  */
-export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages): Promise<{ bytes: Uint8Array; pageCount: number }> {
+export async function renderInvoicePdf(
+  view: InvoiceView,
+  images: InvoiceImages,
+  document: PdfDocument = { kind: "INVOICE" },
+): Promise<{ bytes: Uint8Array; pageCount: number }> {
+  const credit = document.kind === "CREDIT_NOTE" ? document : null;
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  doc.setTitle(`Tax invoice ${view.invoiceNo}`);
+  doc.setTitle(credit ? `Credit note ${view.invoiceNo}` : `Tax invoice ${view.invoiceNo}`);
   doc.setAuthor(view.company.name);
   doc.setCreator("Masti CRM");
   // The whole font, not a subset: pdf-lib's subsetting drops most of Noto Sans's glyphs (the text extracts but doesn't
@@ -281,7 +295,7 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
   const blockTop = pen.y;
   const boxLeft = 370;
   shade(pen, boxLeft, blockTop, RIGHT - boxLeft, 46);
-  draw(pen, "TAX INVOICE", (boxLeft + RIGHT) / 2, blockTop + 6, { size: 10.5, bold: true, align: "center" });
+  draw(pen, credit ? "CREDIT NOTE" : "TAX INVOICE", (boxLeft + RIGHT) / 2, blockTop + 6, { size: 10.5, bold: true, align: "center" });
   draw(pen, view.invoiceNo, boxLeft + 8, blockTop + 26, { size: 10.5, bold: true });
   draw(pen, longDate(view.issuedOn), RIGHT - 8, blockTop + 26, { size: 10.5, bold: true, align: "right" });
 
@@ -300,6 +314,11 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
   draw(pen, supply, MARGIN, pen.y, { size: 9 });
   draw(pen, `HSN/SAC Code: ${view.sac}`, boxLeft + 8, pen.y, { size: 9 });
   pen.y += 18;
+  if (credit) {
+    para(pen, `Against Tax Invoice ${credit.againstInvoiceNo} dated ${longDate(credit.againstIssuedOn)}`, MARGIN, RIGHT - MARGIN, { size: 9.5, bold: true });
+    para(pen, `Reason: ${credit.reason}`, MARGIN, RIGHT - MARGIN, { size: 9 });
+    pen.y += 8;
+  }
 
   // --- The table: one row per traveller.
   const itemised = view.lines.some((l) => l.form === "ITEMISED");
@@ -355,7 +374,7 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
   const totalsBottom = pen.y;
 
   pen.y = totalsTop;
-  if (c.bank) {
+  if (c.bank && !credit) {
     const b = c.bank;
     para(
       pen,
@@ -372,11 +391,13 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
   const rowHeight = Math.max(18, words.length * 12 + 6);
   shade(pen, MARGIN, pen.y, RIGHT - MARGIN, rowHeight);
   words.forEach((line, i) => draw(pen, line, MARGIN + 6, pen.y + 4.5 + i * 12, { size: 9, bold: true }));
-  draw(pen, "Total Amount in ₹", totalsLeft, pen.y + 4.5, { size: 9, bold: true });
+  draw(pen, credit ? "Total Credit in ₹" : "Total Amount in ₹", totalsLeft, pen.y + 4.5, { size: 9, bold: true });
   draw(pen, money(view.totalPaise), RIGHT - 6, pen.y + 4.5, { size: 9.5, bold: true, align: "right" });
   pen.y += rowHeight + 4;
-  draw(pen, "Balance Amount in ₹", totalsLeft, pen.y, { size: 9, bold: true });
-  draw(pen, money(view.totalPaise), RIGHT - 6, pen.y, { size: 9.5, bold: true, align: "right" });
+  if (!credit) {
+    draw(pen, "Balance Amount in ₹", totalsLeft, pen.y, { size: 9, bold: true });
+    draw(pen, money(view.totalPaise), RIGHT - 6, pen.y, { size: 9.5, bold: true, align: "right" });
+  }
   pen.y += 20;
 
   // --- The GST table, when there is GST.
@@ -404,15 +425,17 @@ export async function renderInvoicePdf(view: InvoiceView, images: InvoiceImages)
   }
 
   // --- The terms, with their heading, on one page: the room kept is what they take once wrapped. The most the setting
-  // allows (10 terms of 200 characters) is well under a page.
-  const terms = view.terms.map((term) => `# ${term}`);
-  const termLines = terms.reduce((n, term) => n + wrap(pen.regular, term, 8, 330).length, 0);
-  room(pen, 14 + termLines * 8 * LEADING + 6);
-  draw(pen, "Terms :", MARGIN, pen.y, { size: 9, bold: true });
-  draw(pen, "E. & O. E.", RIGHT, pen.y, { size: 9, align: "right" });
-  pen.y += 14;
-  for (const term of terms) para(pen, term, MARGIN, 330, { size: 8 });
-  pen.y += 6;
+  // allows (10 terms of 200 characters) is well under a page. A credit note has none.
+  if (!credit) {
+    const terms = view.terms.map((term) => `# ${term}`);
+    const termLines = terms.reduce((n, term) => n + wrap(pen.regular, term, 8, 330).length, 0);
+    room(pen, 14 + termLines * 8 * LEADING + 6);
+    draw(pen, "Terms :", MARGIN, pen.y, { size: 9, bold: true });
+    draw(pen, "E. & O. E.", RIGHT, pen.y, { size: 9, align: "right" });
+    pen.y += 14;
+    for (const term of terms) para(pen, term, MARGIN, 330, { size: 8 });
+    pen.y += 6;
+  }
 
   // --- Signatures, and who prepared it.
   room(pen, 100);

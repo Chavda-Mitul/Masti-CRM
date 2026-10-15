@@ -66,3 +66,6 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
 
 /** The steps the follow-up person owns; processing owns the rest (§12.4). */
 export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
+
+/** The case's invoice while it stands; null when there's none, or a credit note cancelled it (0011 Decision 5). */
+export const liveInvoice = (c: VisaCase) => (c.invoice && !c.invoice.cancelled ? c.invoice : null)

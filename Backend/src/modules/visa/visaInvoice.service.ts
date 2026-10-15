@@ -103,7 +103,6 @@ function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
 
   // Everything typed in that the invoice prints must be in its font (English letters): the font has no Gujarati. The
   // rest is checked by its own format (digits, PAN, GSTIN, IFSC, the website) or comes from the code.
-  const bank = g.company.bank;
   const printed: [string, string | null | undefined][] = [
     ["Client's name", client.name],
     ["Client's contact person", client.contactPerson],
@@ -111,21 +110,37 @@ function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
     ["Client's area", client.area],
     ["Client's city", client.city],
     ...g.visa.travellers.map((t): [string, string | null] => [`${label(t)}'s name`, travellerName(t)]),
-    ["Masti's name", g.company.name],
-    ["Masti's address", g.company.address],
-    ["Masti's phone", g.company.phone],
-    ["Masti's 24/7 phone", g.company.phone2],
-    ["Masti's email", g.company.email],
+    ...companyPrinted(g.company),
+    ...g.terms.lines.map((term, i): [string, string] => [`Invoice terms, line ${i + 1}`, term]),
+    ["The visa's description", description(g)],
+    preparedByPrinted(preparedBy),
+  ];
+  const notEnglish = notInEnglish(printed);
+  if (notEnglish.length) blockers.push({ kind: "NOT_ENGLISH", label: "Enter these in English letters: the invoice can't print them.", items: notEnglish });
+  return blockers;
+}
+
+/** Masti's typed-in details a printed invoice or credit note shows. */
+export function companyPrinted(company: Gathered["company"]): [string, string | null | undefined][] {
+  const bank = company.bank;
+  return [
+    ["Masti's name", company.name],
+    ["Masti's address", company.address],
+    ["Masti's phone", company.phone],
+    ["Masti's 24/7 phone", company.phone2],
+    ["Masti's email", company.email],
     ["Masti's bank account name", bank?.accountName],
     ["Masti's bank name", bank?.bankName],
     ["Masti's bank branch", bank?.branch],
-    ...g.terms.lines.map((term, i): [string, string] => [`Invoice terms, line ${i + 1}`, term]),
-    ["The visa's description", description(g)],
-    ["Your name (printed as Prepared by)", preparedBy],
   ];
-  const notEnglish = printed.filter(([, text]) => text && unprintable(text).length > 0).map(([what]) => what);
-  if (notEnglish.length) blockers.push({ kind: "NOT_ENGLISH", label: "Enter these in English letters: the invoice can't print them.", items: notEnglish });
-  return blockers;
+}
+
+/** The name an invoice or credit note prints as "Prepared by": whoever raises it. */
+export const preparedByPrinted = (preparedBy: string): [string, string] => ["Your name (printed as Prepared by)", preparedBy];
+
+/** Which of these the PDF's font can't print (it has no Gujarati letters). */
+export function notInEnglish(printed: [string, string | null | undefined][]) {
+  return printed.filter(([, text]) => text && unprintable(text).length > 0).map(([what]) => what);
 }
 
 /** CGST + SGST when the client is in Masti's state, IGST otherwise; null until both states are known. */
@@ -152,7 +167,8 @@ function totalsOf(g: Gathered) {
   };
 }
 
-const formatInvoiceNo = (prefix: string, digits: number, value: number) => `${prefix}${String(value).padStart(digits, "0")}`;
+/** "MVI00000001": a series' prefix and its number padded to `digits` (the invoice's, and the credit note's). */
+export const formatSeriesNo = (prefix: string, digits: number, value: number) => `${prefix}${String(value).padStart(digits, "0")}`;
 
 /** The counter's next value, without taking it: the dialog's preview, and the number a raise makes its PDF with. */
 async function nextCounterValue(g: Gathered, db: Db) {
@@ -163,14 +179,14 @@ async function nextCounterValue(g: Gathered, db: Db) {
 /** The number the next invoice will get (a preview: two raises at once still get consecutive numbers). */
 async function nextInvoiceNo(g: Gathered, db: Db) {
   const { prefix, digits } = g.invoiceSetting;
-  return formatInvoiceNo(prefix, digits, await nextCounterValue(g, db));
+  return formatSeriesNo(prefix, digits, await nextCounterValue(g, db));
 }
 
-/** Another raise took the number this one's PDF was made with. */
-class NumberTaken extends Error {}
+/** Another raise (or credit note) took the number this one's PDF was made with. */
+export class NumberTaken extends Error {}
 
-/** Tries before giving up when other raises keep taking the number first. */
-const RAISE_ATTEMPTS = 3;
+/** Tries before giving up when others keep taking the number first. */
+export const RAISE_ATTEMPTS = 3;
 
 /**
  * For the Raise invoice dialog: what blocks it, or what the invoice will say. Anyone who can open the case may look.
@@ -192,6 +208,21 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
           ...totalsOf(g),
         }
       : null,
+  };
+}
+
+/** Masti's details as an invoice or credit note prints them (and stores them, as a snapshot). */
+export function companyView(company: Gathered["company"]): InvoiceView["company"] {
+  return {
+    name: company.name,
+    address: company.address,
+    phone: company.phone,
+    phone2: company.phone2,
+    email: company.email,
+    website: company.website,
+    pan: company.pan,
+    gstin: company.gstin,
+    bank: company.bank,
   };
 }
 
@@ -220,17 +251,7 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
     invoiceNo,
     issuedOn,
     preparedBy,
-    company: {
-      name: g.company.name,
-      address: g.company.address,
-      phone: g.company.phone,
-      phone2: g.company.phone2,
-      email: g.company.email,
-      website: g.company.website,
-      pan: g.company.pan,
-      gstin: g.company.gstin,
-      bank: g.company.bank,
-    },
+    company: companyView(g.company),
     client: {
       name: client.name,
       contactPerson: client.contactPerson,
@@ -300,7 +321,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
 
           const { prefix, digits, startAt, gstRatePercent, sac } = g.invoiceSetting;
           const expected = await nextCounterValue(g, tx);
-          const invoiceNo = formatInvoiceNo(prefix, digits, expected);
+          const invoiceNo = formatSeriesNo(prefix, digits, expected);
           const issuedOn = istToday();
           const { view, lines } = buildView(g, invoiceNo, issuedOn, actor.user.name);
 

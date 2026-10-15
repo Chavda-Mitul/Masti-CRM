@@ -89,6 +89,7 @@ model User {
   quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
   companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
   invoicesIssued     Invoice[]          @relation("InvoiceIssuedBy")
+  creditNotesIssued  CreditNote[]       @relation("CreditNoteIssuedBy")
 
   @@index([type, isActive])
 }
@@ -787,6 +788,7 @@ model Enquiry {
   followUps      FollowUp[]
   files          CaseFile[]
   invoice        Invoice?
+  creditNotes    CreditNote[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -799,6 +801,8 @@ enum CaseFileKind {
   FINAL_FILE
   /// The case's tax invoice, as raised (docs/decisions/0009-visa-invoice.md Decision 7). Never regenerated.
   INVOICE
+  /// A credit note against one of its invoices, as issued (docs/decisions/0011-visa-at-vendor.md Decision 5).
+  CREDIT_NOTE
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -818,6 +822,7 @@ model CaseFile {
   enquiry      Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   uploadedBy   User         @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
   invoice      Invoice?
+  creditNote   CreditNote?
 
   @@index([enquiryId, kind, uploadedAt])
 }
@@ -1014,12 +1019,13 @@ model Courier {
 /// Why a credit note is issued: "Wrong amount", "Client cancelled", "Recall"… (docs/decisions/0011-visa-at-vendor.md
 /// Decision 5). Never free text. Edited by the Visa HOD or the Head; switched off, never deleted.
 model CreditNoteReason {
-  id        Int     @id @default(autoincrement())
+  id          Int          @id @default(autoincrement())
   /// WRONG_AMOUNT, RECALL… Never changes.
-  code      String  @unique
-  name      String
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  code        String       @unique
+  name        String
+  sortOrder   Int          @default(0)
+  isActive    Boolean      @default(true)
+  creditNotes CreditNote[]
 }
 
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
@@ -1198,6 +1204,7 @@ model Invoice {
   issuedBy           User           @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
   file               CaseFile       @relation(fields: [fileId], references: [id], onDelete: Restrict)
   lines              InvoiceLine[]
+  creditNotes        CreditNote[]
 
   @@index([issuedById])
 }
@@ -1222,6 +1229,77 @@ model InvoiceLine {
 
   @@id([invoiceId, position])
   @@index([travellerId])
+}
+
+/// Whole: cancels an invoice outright, a correction. Part: gives back some of it, a recall (docs/decisions/0011-visa-at-vendor.md
+/// Decisions 5 and 6).
+enum CreditNoteKind {
+  WHOLE
+  PART
+}
+
+/// A credit note against one invoice (docs/decisions/0011-visa-at-vendor.md Decision 5), in its own number series. Never
+/// edited (a trigger). Hand-written in the migration: the totals add up, nothing is negative, a WHOLE one gives back
+/// exactly what its invoice charged (GST included) and is the invoice's only one, a PART one carries no GST.
+model CreditNote {
+  id                 String           @id @default(uuid())
+  /// "MCN00000001"
+  creditNoteNo       String           @unique
+  invoiceId          String
+  /// The invoice's case (checked in the migration), for the case page and reports.
+  enquiryId          String
+  kind               CreditNoteKind
+  reasonId           Int
+  /// The date printed on it (IST).
+  issuedOn           DateTime         @db.Date
+  issuedAt           DateTime         @default(now()) @db.Timestamptz(3)
+  issuedById         String
+  /// The client as the invoice printed them, and Masti's details now.
+  client             Json
+  company            Json
+  grossPaise         Int
+  serviceChargePaise Int
+  cgstPaise          Int
+  sgstPaise          Int
+  igstPaise          Int
+  totalPaise         Int
+  /// The PDF as issued.
+  fileId             String           @unique
+  invoice            Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  enquiry            Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  reason             CreditNoteReason @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  issuedBy           User             @relation("CreditNoteIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
+  file               CaseFile         @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  lines              CreditNoteLine[]
+
+  @@index([invoiceId])
+  @@index([enquiryId])
+  @@index([issuedById])
+}
+
+/// One traveller's amounts given back, from the invoice's line `invoicePosition`. Can't be changed.
+model CreditNoteLine {
+  creditNoteId    String
+  /// 1, 2, 3… (printed 001, 002…).
+  position        Int
+  invoicePosition Int
+  name            String
+  description     String
+  form            QuoteForm
+  lumpSumPaise    Int?
+  embassyFeePaise Int?
+  vfsFeePaise     Int?
+  otherFeePaise   Int?
+  totalPaise      Int
+  creditNote      CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Restrict)
+
+  @@id([creditNoteId, position])
+}
+
+/// The last credit-note number used: one row (id 1), bumped in the credit note's own transaction.
+model CreditNoteCounter {
+  id        Int @id @default(1)
+  lastValue Int
 }
 
 /// The last invoice number used: one row (id 1), bumped in the invoice's own transaction.

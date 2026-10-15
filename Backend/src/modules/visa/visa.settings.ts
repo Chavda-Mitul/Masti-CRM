@@ -6,6 +6,7 @@ import {
   finalFileSchema,
   firstFollowUpSchema,
   invoiceSettingSchema,
+  creditNoteSettingSchema,
   stickerSettingSchema,
   vendorConfirmSchema,
   awbSettingSchema,
@@ -20,6 +21,7 @@ import {
   type FinalFileSetting,
   type FirstFollowUp,
   type InvoiceSetting,
+  type CreditNoteSetting,
   type OnlineCheckSetting,
   type StickerSetting,
   type SubmissionCheckSetting,
@@ -35,6 +37,7 @@ export const FINAL_FILE_KEY = "visa.finalFile";
 export const DOCKET_KEY = "visa.docket";
 export const STICKER_KEY = "visa.sticker";
 export const INVOICE_KEY = "visa.invoice";
+export const CREDIT_NOTE_KEY = "visa.creditNote";
 export const VENDOR_CONFIRM_KEY = "visa.vendorConfirm";
 export const ONLINE_CHECK_KEY = "visa.onlineCheck";
 export const SUBMISSION_CHECK_KEY = "visa.submissionCheck";
@@ -59,6 +62,9 @@ export const DEFAULT_STICKER: StickerSetting = { widthMm: 100, heightMm: 150 };
  * voucher), GST 18% on the service charge, SAC 998559 (from their current invoices).
  */
 export const DEFAULT_INVOICE: InvoiceSetting = { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" };
+
+/** ⚠️ 0011 Decision 5: Masti has no credit-note series yet, so MCN + 8 digits from 1 (the Head can move it at go-live). */
+export const DEFAULT_CREDIT_NOTE: CreditNoteSetting = { prefix: "MCN", digits: 8, startAt: 1 };
 
 /** ⚠️ 0008 Decision 9 and §10.9: the processor confirms the vendor got it the next office day, at 11:00 (the demo). */
 export const DEFAULT_VENDOR_CONFIRM: VendorConfirmSetting = { afterDays: 1, at: "11:00" };
@@ -105,7 +111,7 @@ export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: num
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -113,6 +119,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const docket = docketSettingSchema.safeParse(value(DOCKET_KEY));
   const sticker = stickerSettingSchema.safeParse(value(STICKER_KEY));
   const invoice = invoiceSettingSchema.safeParse(value(INVOICE_KEY));
+  const creditNote = creditNoteSettingSchema.safeParse(value(CREDIT_NOTE_KEY));
   const vendorConfirm = vendorConfirmSchema.safeParse(value(VENDOR_CONFIRM_KEY));
   const onlineCheck = onlineCheckSchema.safeParse(value(ONLINE_CHECK_KEY));
   const submissionCheck = submissionCheckSchema.safeParse(value(SUBMISSION_CHECK_KEY));
@@ -125,6 +132,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     docket: docket.success ? docket.data : DEFAULT_DOCKET,
     sticker: sticker.success ? sticker.data : DEFAULT_STICKER,
     invoice: invoice.success ? invoice.data : DEFAULT_INVOICE,
+    creditNote: creditNote.success ? creditNote.data : DEFAULT_CREDIT_NOTE,
     vendorConfirm: vendorConfirm.success ? vendorConfirm.data : DEFAULT_VENDOR_CONFIRM,
     onlineCheck: onlineCheck.success ? onlineCheck.data : DEFAULT_ONLINE_CHECK,
     submissionCheck: submissionCheck.success ? submissionCheck.data : DEFAULT_SUBMISSION_CHECK,

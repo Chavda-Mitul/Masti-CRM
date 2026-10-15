@@ -2,7 +2,7 @@ import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { formatDateTime } from '../../../lib/format'
 import type { VisaCase } from '../types'
-import { dayTime, firstName } from './labels'
+import { dayTime, firstName, liveInvoice } from './labels'
 
 /**
  * An e-visa's Step 4 (docs/decisions/0008-visa-docket-dispatch.md Decision 11), where the Docket card would be: the visa
@@ -12,6 +12,7 @@ import { dayTime, firstName } from './labels'
 export function SubmitOnlineCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const s = c.submittedOnline
+  const invoice = liveInvoice(c)
 
   if (s) {
     return (
@@ -25,11 +26,11 @@ export function SubmitOnlineCard({ visaCase: c }: { visaCase: VisaCase }) {
               {s.by && ` · ${s.by.name}`}
             </strong>
           </div>
-          {c.invoice && (
+          {invoice && (
             <div className="kv">
               <span>Invoice</span>
               <strong>
-                <span className="mono">{c.invoice.invoiceNo}</span> · locked
+                <span className="mono">{invoice.invoiceNo}</span> · locked
               </strong>
             </div>
           )}
@@ -58,9 +59,9 @@ export function SubmitOnlineCard({ visaCase: c }: { visaCase: VisaCase }) {
       </p>
       <div className="kv">
         <span>Invoice</span>
-        {c.invoice ? (
+        {invoice ? (
           <span className="chip chip-ok chip-sm">
-            <span className="mono">{c.invoice.invoiceNo}</span> · locked
+            <span className="mono">{invoice.invoiceNo}</span> · locked
           </span>
         ) : canRaise ? (
           <button

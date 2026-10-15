@@ -46,6 +46,16 @@ export const invoiceSettingSchema = z.object({
 });
 
 /**
+ * The credit note's own number series (docs/decisions/0011-visa-at-vendor.md Decision 5): Masti had none, so it starts
+ * at startAt. Never restarted by year, like the invoice's.
+ */
+export const creditNoteSettingSchema = z.object({
+  prefix: z.string().regex(/^[A-Z]{1,8}$/, "Use 1–8 capital letters, e.g. MCN."),
+  digits: z.number().int().min(4).max(12),
+  startAt: z.number().int().min(1).max(2_000_000_000),
+});
+
+/**
  * When the processor confirms the vendor got the docket (0008 Decision 9): the next open office day, afterDays after
  * dispatch, at `at` (IST). The demo's "Tomorrow 11:00".
  */
@@ -108,6 +118,7 @@ export const visaSettingsSchema = z.object({
   docket: docketSettingSchema,
   sticker: stickerSettingSchema,
   invoice: invoiceSettingSchema,
+  creditNote: creditNoteSettingSchema,
   vendorConfirm: vendorConfirmSchema,
   onlineCheck: onlineCheckSchema,
   submissionCheck: submissionCheckSchema,
@@ -143,6 +154,7 @@ export type FinalFileSetting = z.infer<typeof finalFileSchema>;
 export type DocketSetting = z.infer<typeof docketSettingSchema>;
 export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
+export type CreditNoteSetting = z.infer<typeof creditNoteSettingSchema>;
 export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
 export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
 export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
@@ -322,6 +334,17 @@ export const saveSubmissionSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/**
+ * "Cancel with a credit note" (Decision 5): the invoice and the total the dialog showed (a different one is refused),
+ * and why, from the credit-note reasons list.
+ */
+export const cancelInvoiceSchema = z.object({
+  invoiceNo: z.string().trim().toUpperCase().min(1).max(40),
+  reasonId: z.number("Pick why it's cancelled.").int().positive("Pick why it's cancelled."),
+  totalPaise: z.number().int().min(0),
+});
+
+export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;
 export type SaveSubmissionInput = z.infer<typeof saveSubmissionSchema>;
 

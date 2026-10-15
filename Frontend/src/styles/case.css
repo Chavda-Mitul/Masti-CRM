@@ -326,6 +326,16 @@
   gap: 8px;
   align-self: stretch;
 }
+/* Cancelled by a credit note (0011 Decision 5): it no longer counts, so its total is struck through. */
+.money-invoice.is-cancelled .money-invoice-total {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.money-invoice-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .money-actions {
   display: flex;
   gap: 8px;

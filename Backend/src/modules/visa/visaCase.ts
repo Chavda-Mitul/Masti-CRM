@@ -25,6 +25,20 @@ export function emailSending(startedAt: Date | null, now = new Date()) {
   return !!startedAt && now.getTime() - startedAt.getTime() < EMAIL_SENDING_STUCK_MS;
 }
 
+/**
+ * A case's invoice and whether a WHOLE credit note cancelled it (docs/decisions/0011-visa-at-vendor.md Decision 5).
+ * Select it this way wherever "has its invoice" is asked (dispatch, Submitted online, the docket table), then ask
+ * liveInvoiceNo: a cancelled invoice no longer counts.
+ */
+export const liveInvoiceSelect = {
+  select: { invoiceNo: true, creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } } },
+} satisfies Prisma.InvoiceDefaultArgs;
+
+/** The invoice's number while it stands; null when there's none, or a credit note has cancelled it. */
+export function liveInvoiceNo(invoice: { invoiceNo: string; creditNotes: unknown[] } | null) {
+  return invoice && invoice.creditNotes.length === 0 ? invoice.invoiceNo : null;
+}
+
 /** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
 export const docketSelect = {
   docketNo: true,
@@ -48,7 +62,7 @@ export const docketSelect = {
       enquiryId: true,
       bookletsCurrent: true,
       bookletsOld: true,
-      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoice: { select: { invoiceNo: true } } } },
+      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoice: liveInvoiceSelect } },
       offering: { select: { country: { select: { name: true } } } },
       _count: { select: { travellers: true } },
     },
@@ -79,6 +93,18 @@ export const visaCaseInclude = {
       igstPaise: true,
       totalPaise: true,
       file: { select: { id: true, fileName: true } },
+      /** The credit note that cancelled it, if one did (0011 Decision 5). */
+      creditNotes: {
+        where: { kind: "WHOLE" },
+        select: {
+          creditNoteNo: true,
+          issuedOn: true,
+          issuedBy: personSelect,
+          reason: { select: { name: true } },
+          totalPaise: true,
+          file: { select: { id: true, fileName: true } },
+        },
+      },
     },
   },
   followUps: {
@@ -184,7 +210,7 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     passports: c.bookletsCurrent ?? c._count.travellers,
     oldPassports: c.bookletsOld ?? 0,
     /** "MVI00000001 · locked", or null: "Raise invoice first" */
-    invoiceNo: c.enquiry.invoice?.invoiceNo ?? null,
+    invoiceNo: liveInvoiceNo(c.enquiry.invoice),
     /** Who may dispatch (Decision 3): a processor who owns at least one case in the docket. */
     ownerId: c.enquiry.ownerId,
     isThisCase: c.enquiryId === enquiryId,
@@ -354,6 +380,10 @@ export function toVisaCaseDto(
       gstPaise: row.invoice.cgstPaise + row.invoice.sgstPaise + row.invoice.igstPaise,
       totalPaise: row.invoice.totalPaise,
       file: row.invoice.file,
+      /** Cancelled by a WHOLE credit note (0011 Decision 5): it no longer counts as the case's invoice. */
+      cancelled: row.invoice.creditNotes[0]
+        ? { ...row.invoice.creditNotes[0], issuedOn: fromDbDate(row.invoice.creditNotes[0].issuedOn), reason: row.invoice.creditNotes[0].reason.name }
+        : null,
     },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
