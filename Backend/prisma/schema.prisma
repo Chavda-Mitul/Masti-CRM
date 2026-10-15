@@ -441,32 +441,36 @@ enum DocketKind {
 /// Hand-written in the migration: at most one OPEN GROUP docket per vendor (a partial unique index), and the
 /// number's format. An emptied open docket stays and is reused by the vendor's next case of the same kind.
 model Docket {
-  id                String       @id @default(uuid())
+  id                   String       @id @default(uuid())
   /// "D-2026-0001": the prefix is the setting visa.docket, the counter runs per calendar year (IST).
-  docketNo          String       @unique
-  vendorId          Int
-  kind              DocketKind
-  status            DocketStatus @default(OPEN)
+  docketNo             String       @unique
+  vendorId             Int
+  kind                 DocketKind
+  status               DocketStatus @default(OPEN)
   /// When it started holding cases: "Open since 12 Oct, not sent yet". Reset when a case joins an empty docket.
-  openedAt          DateTime     @default(now()) @db.Timestamptz(3)
-  createdById       String
-  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime     @updatedAt @db.Timestamptz(3)
+  openedAt             DateTime     @default(now()) @db.Timestamptz(3)
+  createdById          String
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
   /// Dispatch (0008 Decision 9): all set together when the docket is DISPATCHED, none while it is OPEN (a CHECK).
-  courierId         Int?
+  courierId            Int?
   /// The courier's slip number, typed in: capitals and digits (the setting visa.awb). Null for "By hand".
-  awbNo             String?
-  dispatchedAt      DateTime?    @db.Timestamptz(3)
-  dispatchedById    String?
+  awbNo                String?
+  dispatchedAt         DateTime?    @db.Timestamptz(3)
+  dispatchedById       String?
   /// The email to the vendor (0008 Decision 8), sent after dispatch: when and to whom, or why it failed ("Send again").
-  vendorEmailSentAt DateTime?    @db.Timestamptz(3)
-  vendorEmailTo     String?
-  vendorEmailError  String?
-  vendor            Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  createdBy         User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  courier           Courier?     @relation(fields: [courierId], references: [id], onDelete: Restrict)
-  dispatchedBy      User?        @relation("DocketDispatchedBy", fields: [dispatchedById], references: [id], onDelete: Restrict)
-  cases             VisaCase[]
+  vendorEmailSentAt    DateTime?    @db.Timestamptz(3)
+  vendorEmailTo        String?
+  vendorEmailError     String?
+  /// When a send started that hasn't recorded its outcome yet: marked before the mail server is called, so no lock is
+  /// held during the send and a second press waits. Cleared with the outcome; a stuck one (the server stopped
+  /// mid-send) may be retried after a few minutes.
+  vendorEmailSendingAt DateTime?    @db.Timestamptz(3)
+  vendor               Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  createdBy            User         @relation("DocketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  courier              Courier?     @relation(fields: [courierId], references: [id], onDelete: Restrict)
+  dispatchedBy         User?        @relation("DocketDispatchedBy", fields: [dispatchedById], references: [id], onDelete: Restrict)
+  cases                VisaCase[]
 
   @@index([vendorId, status])
   @@index([createdById])

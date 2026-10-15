@@ -57,6 +57,8 @@ export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
             <span>Email to vendor</span>
             {d.email?.sentAt ? (
               <strong>Sent with the docket list · {formatDateTime(d.email.sentAt)}</strong>
+            ) : d.email?.sending ? (
+              <strong>Sending…</strong>
             ) : (
               <strong className="dispatch-bad">Not sent</strong>
             )}
@@ -71,7 +73,7 @@ export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
             </div>
           )}
         </div>
-        {d.email && !d.email.sentAt && (
+        {d.email && !d.email.sentAt && !d.email.sending && (
           <div className="alert alert-bad dispatch-email-failed">
             <span>{d.email.error ?? 'The email to the vendor hasn’t gone yet.'}</span>
             {canSend && (

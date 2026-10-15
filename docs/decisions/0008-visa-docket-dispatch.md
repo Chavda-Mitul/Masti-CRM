@@ -239,10 +239,20 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
   at it (`vitest.config.mts` refuses any other SMTP host), clear it at the start, and read the mail back.
 - **Docket columns** `vendorEmailSentAt`, `vendorEmailTo`, `vendorEmailError` (migration `20261014120000_docket_email`),
   with a CHECK: sent means when and to whom, with no error, and only once dispatched.
-- **After the dispatch commits,** the email is sent under the docket's lock: when and to whom, or the error, is recorded
-  and audited as `visa.docket.email` (`{ sent, to }` or `{ sent: false, error }`). A failure never undoes the dispatch.
+- **After the dispatch commits,** the email is sent: when and to whom, or the error, is recorded and audited as
+  `visa.docket.email` (`{ sent, to }` or `{ sent: false, error }`). A failure never undoes the dispatch.
+- **Nothing is held open while the mail server answers** (fixed 15 Oct 2026, from a code review). Under the docket's
+  lock, a short transaction marks it `vendorEmailSendingAt` (migration `20261015100000_docket_email_sending`). The email
+  then goes outside any transaction, and a second short one records the outcome and clears the mark. Before this, the
+  send ran inside the transaction, so a slow server or a failed save could roll a delivered email back to "Not sent",
+  and Send again would deliver it twice. A CHECK allows the mark only on a dispatched docket whose email hasn't gone.
+  A mark older than 5 minutes (well past the SMTP timeouts) is stuck, because the server stopped mid-send, and may be
+  retried. If the email goes and the database fails at that moment, a later retry can still send it twice; plain SMTP
+  can't rule that out.
 - **`POST /api/visa/cases/:caseNo/dispatch/email`** ("Send again") is for whoever may dispatch, only once the docket is
-  dispatched and while its email hasn't gone. Once sent, it's refused, so the vendor never gets it twice.
+  dispatched and while its email hasn't gone. Once sent, it's refused, so the vendor never gets it twice. While a send
+  is under way, it's refused with "being sent right now", and the case's `docket.email.sending` is true. The card then
+  shows "Sending…" in place of "Not sent" and Send again.
 - **The email** (wording ⚠️ ours, for Masti to approve):
   - subject "Docket D-2026-0001 · 2 files · MASTI TOUR AND TRAVEL"
   - "Sent by: DTDC, slip X74411902"

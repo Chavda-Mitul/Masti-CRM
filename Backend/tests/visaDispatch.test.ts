@@ -8,13 +8,17 @@ import { dispatchCase, makeInvoiceable, mastiReady, untilWaitingOnLock, holdCase
 // Visa Step 4, dispatch (docs/decisions/0008-visa-docket-dispatch.md Decisions 3, 6 and 9): one press sends every case in
 // the docket to the vendor, only once every case has its locked invoice and the vendor can take it.
 
-/** The email goes to Mailpit for real, unless a test asks the next sends to fail ("Connection refused"). */
-const failures = vi.hoisted(() => ({ next: 0 }));
+/**
+ * The email goes to Mailpit for real, unless a test asks the next sends to fail ("Connection refused"). `whileSending`
+ * runs while the mail server is answering, before the email goes.
+ */
+const failures = vi.hoisted(() => ({ next: 0, whileSending: null as (() => Promise<void>) | null }));
 vi.mock("../src/lib/email", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/lib/email")>();
   return {
     ...real,
     sendEmail: async (email: Parameters<typeof real.sendEmail>[0]) => {
+      await failures.whileSending?.();
       if (failures.next > 0) {
         failures.next--;
         throw new Error("Connection refused");
@@ -28,6 +32,7 @@ const mailpit = process.env.MAILPIT_URL as string;
 
 beforeEach(async () => {
   failures.next = 0;
+  failures.whileSending = null;
   await resetDb();
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
@@ -57,7 +62,7 @@ interface CaseDto {
     status: string;
     courier: { name: string; awbNeeded: boolean } | null;
     awbNo: string | null;
-    email: { sentAt: string | null; to: string | null; error: string | null } | null;
+    email: { sentAt: string | null; to: string | null; error: string | null; sending: boolean } | null;
     dispatchedAt: string | null;
     dispatchedBy: { name: string } | null;
     cases: { caseNo: string; ownerId: string | null; invoiceNo: string | null }[];
@@ -367,7 +372,7 @@ describe("the email to the vendor (Decision 8)", () => {
     expect(res.status).toBe(200);
     const c = res.body.case as CaseDto;
     expect(c.stage.code).toBe("AT_VENDOR");
-    expect(c.docket!.email).toEqual({ sentAt: null, to: null, error: "Connection refused" });
+    expect(c.docket!.email).toEqual({ sentAt: null, to: null, error: "Connection refused", sending: false });
     expect((await inbox()).messages).toHaveLength(0);
     expect(await prisma.auditLog.count({ where: { action: "visa.docket.email", after: { path: ["sent"], equals: false } } })).toBe(1);
 
@@ -383,6 +388,60 @@ describe("the email to the vendor (Decision 8)", () => {
     const twice = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});
     expect(twice.status).toBe(409);
     expect(twice.body.message).toMatch(/already gone to ops@globalvisa.test/);
+    expect((await inbox()).messages).toHaveLength(1);
+  });
+
+  it("holds nothing open while the mail server answers: the docket is marked as sending, not locked", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+    const seen: { sendingAt: Date | null; locked: boolean }[] = [];
+    failures.whileSending = async () => {
+      const { vendorEmailSendingAt } = await prisma.docket.findUniqueOrThrow({ where: { docketNo }, select: { vendorEmailSendingAt: true } });
+      // NOWAIT fails at once if the send still held the docket's row.
+      const locked = await prisma
+        .$transaction(async (tx) => tx.$queryRaw`SELECT "id" FROM "Docket" WHERE "docketNo" = ${docketNo} FOR UPDATE NOWAIT`)
+        .then(() => false, () => true);
+      seen.push({ sendingAt: vendorEmailSendingAt, locked });
+    };
+    expect((await dispatch(processor, mehta.caseNo)).status).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.sendingAt).not.toBeNull();
+    expect(seen[0]!.locked).toBe(false);
+    expect(await prisma.docket.findUniqueOrThrow({ where: { docketNo } })).toMatchObject({ vendorEmailSendingAt: null, vendorEmailTo: "ops@globalvisa.test" });
+  });
+
+  it("two presses of Send again at once send it once", async () => {
+    const { mehta, shah, processor } = await docketOfTwo();
+    failures.next = 1;
+    expect((await dispatch(processor, mehta.caseNo)).status).toBe(200);
+    failures.whileSending = () => new Promise((resolve) => setTimeout(resolve, 300));
+    const both = await Promise.all([
+      processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({}),
+      processor.post(`/api/visa/cases/${shah.caseNo}/dispatch/email`).send({}),
+    ]);
+    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(both.find((r) => r.status === 409)!.body.message).toMatch(/being sent right now|already gone/);
+    expect((await inbox()).messages).toHaveLength(1);
+  });
+
+  it("Send again waits while a send is under way; one stuck for 5 minutes (the server stopped mid-send) may be retried", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    failures.next = 1;
+    expect((await dispatch(processor, mehta.caseNo)).status).toBe(200);
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+
+    await prisma.docket.update({ where: { docketNo }, data: { vendorEmailSendingAt: new Date() } });
+    expect((await load(processor, mehta.caseNo)).docket!.email).toMatchObject({ sentAt: null, sending: true });
+    const busy = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});
+    expect(busy.status).toBe(409);
+    expect(busy.body.message).toMatch(/being sent right now/);
+    expect((await inbox()).messages).toHaveLength(0);
+
+    await prisma.docket.update({ where: { docketNo }, data: { vendorEmailSendingAt: new Date(Date.now() - 5 * 60_000 - 1000) } });
+    expect((await load(processor, mehta.caseNo)).docket!.email).toMatchObject({ sentAt: null, sending: false });
+    const retried = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});
+    expect(retried.status).toBe(200);
+    expect((retried.body.case as CaseDto).docket!.email).toMatchObject({ to: "ops@globalvisa.test", error: null, sending: false });
     expect((await inbox()).messages).toHaveLength(1);
   });
 
@@ -406,5 +465,13 @@ describe("the database", () => {
     // Sent means when and to whom, and no error.
     await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailTo: null } })).rejects.toThrow();
     await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailError: "x" } })).rejects.toThrow();
+    // A sent email isn't sending.
+    await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailSendingAt: new Date() } })).rejects.toThrow();
+  });
+
+  it("refuses an open docket marked as sending its email", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    const { docketNo } = (await load(processor, mehta.caseNo)).docket!;
+    await expect(prisma.docket.update({ where: { docketNo }, data: { vendorEmailSendingAt: new Date() } })).rejects.toThrow();
   });
 });

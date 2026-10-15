@@ -14,6 +14,17 @@ export const CASE_FOLLOW_UPS = 20;
 
 const personSelect = { select: { id: true, name: true } } as const;
 
+/**
+ * A send of the vendor email that started this long ago without recording its outcome (the server stopped mid-send)
+ * is stuck, and may be retried: well past the SMTP timeouts in src/lib/email.ts.
+ */
+export const EMAIL_SENDING_STUCK_MS = 5 * 60_000;
+
+/** Whether the docket's email is being sent right now: started, its outcome not recorded yet, and not stuck. */
+export function emailSending(startedAt: Date | null, now = new Date()) {
+  return !!startedAt && now.getTime() - startedAt.getTime() < EMAIL_SENDING_STUCK_MS;
+}
+
 /** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
 export const docketSelect = {
   docketNo: true,
@@ -30,6 +41,7 @@ export const docketSelect = {
   vendorEmailSentAt: true,
   vendorEmailTo: true,
   vendorEmailError: true,
+  vendorEmailSendingAt: true,
   cases: {
     orderBy: { enquiry: { caseNo: "asc" } },
     select: {
@@ -180,8 +192,11 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     awbNo: d.awbNo,
     dispatchedAt: d.dispatchedAt,
     dispatchedBy: d.dispatchedBy,
-    /** null until dispatched; then when and to whom it went, or why it didn't ("Send again"). */
-    email: d.status === "DISPATCHED" ? { sentAt: d.vendorEmailSentAt, to: d.vendorEmailTo, error: d.vendorEmailError } : null,
+    /** null until dispatched; then when and to whom it went, or why it didn't ("Send again"), or that it's going now. */
+    email:
+      d.status === "DISPATCHED"
+        ? { sentAt: d.vendorEmailSentAt, to: d.vendorEmailTo, error: d.vendorEmailError, sending: emailSending(d.vendorEmailSendingAt) }
+        : null,
     cases,
     totalPassports: cases.reduce((sum, c) => sum + c.passports, 0),
     totalOldPassports: cases.reduce((sum, c) => sum + c.oldPassports, 0),
