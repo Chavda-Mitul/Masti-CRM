@@ -5,8 +5,9 @@ import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
 
-// Who may change a visa case, and at which step, for every Step 2, 3 and 4 write (0006 amendment 12,
-// docs/decisions/0007-visa-file-prep.md Decision 1, docs/decisions/0008-visa-docket-dispatch.md Decision 3).
+// Who may change a visa case, and at which step, for every Step 2, 3, 4 and 5 write (0006 amendment 12,
+// docs/decisions/0007-visa-file-prep.md Decision 1, docs/decisions/0008-visa-docket-dispatch.md Decision 3,
+// docs/decisions/0011-visa-at-vendor.md Decision 2).
 
 /** The steps a write is allowed at, and what to say at any other. */
 export interface StepRule {
@@ -22,6 +23,9 @@ export const PREPARING: StepRule = { stages: ["FILE_PREPARATION"], wrongStage: "
 
 /** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): adding a file-ready case to a docket, or taking it out. */
 export const DISPATCHING: StepRule = { stages: ["DISPATCH"], wrongStage: "This can only be changed while the case waits for dispatch." };
+
+/** Step 5 (docs/decisions/0011-visa-at-vendor.md): the file is with the vendor, until the decision is recorded. */
+export const WITH_VENDOR: StepRule = { stages: ["AT_VENDOR"], wrongStage: "This can only be changed while the file is with the vendor." };
 
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): from Step 1 until the file goes to the vendor. */
 export const QUOTING: StepRule = {

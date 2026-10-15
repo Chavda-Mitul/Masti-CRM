@@ -22,8 +22,11 @@ import {
   updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
+  saveSubmissionSchema,
+  vendorReceivedSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
+import * as atVendorService from "./visaAtVendor.service";
 import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
@@ -190,6 +193,26 @@ router.get("/cases/:caseNo/submit-online/check", visaView, async (req, res) => {
 router.post("/cases/:caseNo/submit-online", visaEdit, async (req, res) => {
   const body = submitOnlineSchema.parse(req.body);
   res.json({ case: await onlineService.submitOnline(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** When a file the vendor got comes back due, and why then (0011 Decision 2): for the "Vendor got it" dialog. */
+router.get("/cases/:caseNo/vendor-received/check", visaView, async (req, res) => {
+  res.json(await atVendorService.vendorReceivedCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+});
+
+/** "Vendor got it, papers checked" (0011 Decision 2): this file only, not the rest of its docket. */
+router.post("/cases/:caseNo/vendor-received", visaEdit, async (req, res) => {
+  const body = vendorReceivedSchema.parse(req.body);
+  res.json({ case: await atVendorService.markVendorReceived(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy and the expected collection
+ * date, saved together; the same call changes them at Step 5. 400 under collectionOn for a day the embassy is closed.
+ */
+router.put("/cases/:caseNo/submission", visaEdit, async (req, res) => {
+  const body = saveSubmissionSchema.parse(req.body);
+  res.json({ case: await atVendorService.saveSubmission(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

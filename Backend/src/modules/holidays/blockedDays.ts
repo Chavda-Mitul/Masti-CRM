@@ -87,6 +87,19 @@ export async function nextOpenDay(from: string, target: BlockTarget, db: Db = pr
   return from;
 }
 
+/**
+ * The last day on or before `from` that isn't blocked for this target: office work due before a date (the visa
+ * collection reminder, 0011 Decision 4). If every day in the 60 before is blocked, `from` itself.
+ */
+export async function previousOpenDay(from: string, target: BlockTarget, db: Db = prisma): Promise<string> {
+  const blocked = new Set((await blockedDays(addDays(from, -OPEN_DAY_SEARCH_DAYS), from, target, db)).map((d) => d.date));
+  for (let i = 0; i <= OPEN_DAY_SEARCH_DAYS; i++) {
+    const day = addDays(from, -i);
+    if (!blocked.has(day)) return day;
+  }
+  return from;
+}
+
 /** True if a holiday blocks this date for this target. For server-side checks (e.g. Visa Step 5). */
 export async function isDateBlocked(date: string, target: BlockTarget, db: Db = prisma): Promise<boolean> {
   return (await blockedDays(date, date, target, db)).length > 0;

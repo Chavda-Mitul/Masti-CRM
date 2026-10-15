@@ -11,7 +11,9 @@ import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
+import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
+import { VendorReceivedDialog } from './VendorReceivedDialog'
 
 /** "2 adults, 1 child" */
 function travellers(adults: number, children: number) {
@@ -36,7 +38,10 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   // An e-visa has no docket: it goes in on the portal (0008 Decision 11). Once in, the step's own "Submitted" ⚠️.
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt && !c.vendorNeeded) return <span className="chip chip-ok">File ready · to submit online</span>
   if (c.stage.code === 'DISPATCH' && c.fileReadyAt) return <span className="chip chip-ok">File ready · to dispatch</span>
-  // On the way to the vendor until Step 5's "Vendor got it" (the seeded "Submitted" comes with it).
+  // On the way to the vendor until "Vendor got it" (0011 Decision 2); the step's own "Submitted" comes with the file
+  // number, as in the demo ("Submitted · FR-MUM-88421").
+  if (c.stage.code === 'AT_VENDOR' && c.submission) return <span className="chip chip-info">{c.stage.statusLabel} · {c.submission.vendorFileNo}</span>
+  if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED' && c.vendorReceived) return <span className="chip chip-info">With vendor · papers checked</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
@@ -44,8 +49,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
 /**
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
- * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). The later steps show as
- * "Soon" until they are built.
+ * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
+ * it" (0011 Decision 2). The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -55,6 +60,8 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [finishing, setFinishing] = useState(false)
   const [dispatching, setDispatching] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [recording, setRecording] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -130,6 +137,27 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           Dispatch docket {d.docketNo} →
         </button>
         {dispatching && <DispatchDialog visaCase={c} onClose={() => setDispatching(false)} />}
+      </>
+    )
+  }
+  if (c.stage.code === 'AT_VENDOR' && c.status === 'OPEN' && canAct && d?.status === 'DISPATCHED' && !c.vendorReceived) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setConfirming(true)}>
+          Vendor got it →
+        </button>
+        {confirming && <VendorReceivedDialog visaCase={c} onClose={() => setConfirming(false)} />}
+      </>
+    )
+  }
+  // After "Vendor got it": the file number, the embassy and the collection date (0011 Decisions 3 and 4).
+  if (c.stage.code === 'AT_VENDOR' && c.status === 'OPEN' && canAct && c.vendorReceived && !c.submission) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setRecording(true)}>
+          Mark submitted →
+        </button>
+        {recording && <SubmissionDialog visaCase={c} onClose={() => setRecording(false)} />}
       </>
     )
   }

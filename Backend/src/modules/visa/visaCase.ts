@@ -92,6 +92,9 @@ export const visaCaseInclude = {
       maturedBy: personSelect,
       fileReadyBy: personSelect,
       submittedOnlineBy: personSelect,
+      vendorReceivedBy: personSelect,
+      submittedBy: personSelect,
+      embassy: { select: { id: true, name: true, city: true } },
       vendor: {
         select: {
           id: true,
@@ -331,6 +334,16 @@ export function toVisaCaseDto(
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
     /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
     submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
+    /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
+    vendorReceived: visa.vendorReceivedAt && { at: visa.vendorReceivedAt, by: visa.vendorReceivedBy },
+    /** "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy and the collection date. */
+    submission: visa.submittedAt && {
+      vendorFileNo: visa.vendorFileNo!,
+      embassy: visa.embassy!,
+      collectionOn: fromDbDate(visa.collectionOn!),
+      at: visa.submittedAt,
+      by: visa.submittedBy,
+    },
     /** The locked tax invoice (0009), or null until it is raised. */
     invoice: row.invoice && {
       invoiceNo: row.invoice.invoiceNo,

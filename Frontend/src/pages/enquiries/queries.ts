@@ -10,6 +10,7 @@ import type {
   DispatchCheck,
   InvoiceCheck,
   SubmitOnlineCheck,
+  VendorReceivedCheck,
   InvoiceTaxType,
   SaveQuoteBody,
   DocumentArrival,
@@ -56,6 +57,7 @@ export const enquiryKeys = {
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
+  vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
 }
 
@@ -330,6 +332,27 @@ export function useSubmitOnlineCheck(caseNo: string) {
 /** "Submitted online" (0008 Decision 11): an e-visa moves to At vendor, with no docket. */
 export function useSubmitOnline(caseNo: string) {
   return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/submit-online`, { method: 'POST', body }))
+}
+
+/** When a file the vendor got comes back due, and why then (0011 Decision 2). */
+export function useVendorReceivedCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.vendorReceivedCheck(caseNo),
+    queryFn: () => api<VendorReceivedCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/vendor-received/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Vendor got it, papers checked" (0011 Decision 2), for this file only. */
+export function useVendorReceived(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/vendor-received`, { method: 'POST', body }))
+}
+
+/** "Submitted at the embassy" (0011 Decisions 3 and 4), or a change to it at Step 5. */
+export function useSaveSubmission(caseNo: string) {
+  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/submission`, { method: 'PUT', body }),
+  )
 }
 
 /** The docket's parcel label (0008 Decision 5), once the case is in a docket. */

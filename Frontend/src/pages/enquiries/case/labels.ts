@@ -31,6 +31,20 @@ export function dayTime(iso: string): string {
   return `${part('weekday')} ${part('day')} ${part('month')}, ${part('hour')}:${part('minute')}`
 }
 
+/** "Wed 7 Oct", in India time: when a step happened (the timeline on demo screen 10). */
+export function weekdayDay(iso: string): string {
+  const parts = DAY_TIME.formatToParts(new Date(iso))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('weekday')} ${part('day')} ${part('month')}`
+}
+
+const LONG_DATE = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+/** "Tue, 27 October 2026" for a day (YYYY-MM-DD), such as the expected collection date. */
+export function longDate(day: string): string {
+  return LONG_DATE.format(new Date(`${day}T00:00:00Z`))
+}
+
 /** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
 export function passportTotal(current: number, old: number): string {
   const label = `${current} ${current === 1 ? 'passport' : 'passports'}`

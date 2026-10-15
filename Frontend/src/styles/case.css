@@ -936,3 +936,87 @@ button.tick:focus-visible {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
 }
+/* The expected collection date (0011 Decision 4, demo screen 10): a month, Monday first; closed days struck through. */
+.submission-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.collection-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.collection-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.collection-weekday {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.collection-day {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.collection-day:hover:not(:disabled) {
+  border-color: var(--dept, var(--primary));
+}
+.collection-day:disabled {
+  cursor: default;
+  background: var(--fill-muted);
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+.collection-day.is-holiday:disabled {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.collection-day.is-picked {
+  background: var(--dept, var(--primary));
+  border-color: var(--dept, var(--primary));
+  color: var(--on-fill);
+  font-weight: 700;
+}
+.collection-day-no {
+  font-size: 14px;
+}
+.collection-day-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.collection-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--primary-tint);
+}

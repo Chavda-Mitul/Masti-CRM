@@ -4,6 +4,7 @@ import { isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { enquiryKeys } from '../../enquiries/queries'
 import type {
+  BlockedDay,
   Checklist,
   ChecklistLineBody,
   Country,
@@ -43,6 +44,8 @@ export const holidayKeys = {
   list: (filter: HolidayFilter) => ['holidays', 'list', filter] as const,
   targets: ['holidays', 'targets'] as const,
   settings: ['holidays', 'settings'] as const,
+  /** Under all, so a holiday change greys out the right days on every open calendar. */
+  blocked: (embassyId: number, from: string, to: string) => ['holidays', 'blocked', embassyId, from, to] as const,
 }
 
 export const masterKeys = {
@@ -87,6 +90,16 @@ export function useHolidayTargets() {
     queryKey: holidayKeys.targets,
     queryFn: () => api<HolidayTargetOptions>('/holidays/targets'),
     staleTime: MASTER_STALE,
+  })
+}
+
+/** The days an embassy is closed in from…to, with the holidays that close it (0005 §3): the date pickers grey them out. */
+export function useBlockedDays(embassyId: number | null, from: string, to: string) {
+  return useQuery({
+    enabled: embassyId !== null,
+    queryKey: holidayKeys.blocked(embassyId ?? 0, from, to),
+    queryFn: async () =>
+      (await api<{ days: BlockedDay[] }>(`/holidays/blocked?from=${from}&to=${to}&embassyId=${embassyId}`)).days,
   })
 }
 

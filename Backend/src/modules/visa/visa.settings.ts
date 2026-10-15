@@ -1,6 +1,6 @@
 import { prisma, type Db } from "../../config/prisma";
 import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
-import { nextOpenDay } from "../holidays/blockedDays";
+import { nextOpenDay, previousOpenDay } from "../holidays/blockedDays";
 import {
   docketSettingSchema,
   finalFileSchema,
@@ -11,7 +11,10 @@ import {
   awbSettingSchema,
   docketEmailSettingSchema,
   onlineCheckSchema,
+  submissionCheckSchema,
+  collectionCheckSchema,
   type AwbSetting,
+  type CollectionCheckSetting,
   type DocketEmailSetting,
   type DocketSetting,
   type FinalFileSetting,
@@ -19,6 +22,7 @@ import {
   type InvoiceSetting,
   type OnlineCheckSetting,
   type StickerSetting,
+  type SubmissionCheckSetting,
   type VendorConfirmSetting,
   type VisaSettings,
 } from "./visa.schemas";
@@ -33,6 +37,8 @@ export const STICKER_KEY = "visa.sticker";
 export const INVOICE_KEY = "visa.invoice";
 export const VENDOR_CONFIRM_KEY = "visa.vendorConfirm";
 export const ONLINE_CHECK_KEY = "visa.onlineCheck";
+export const SUBMISSION_CHECK_KEY = "visa.submissionCheck";
+export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
 
@@ -60,6 +66,12 @@ export const DEFAULT_VENDOR_CONFIRM: VendorConfirmSetting = { afterDays: 1, at: 
 /** ⚠️ 0008 Decision 11: an e-visa comes back to check the portal like a couriered file, the next office day at 11:00. */
 export const DEFAULT_ONLINE_CHECK: OnlineCheckSetting = { afterDays: 1, at: "11:00" };
 
+/** ⚠️ 0011 Decision 2: with no appointment to wait for, the file number is asked for the next office day at 11:00. */
+export const DEFAULT_SUBMISSION_CHECK: SubmissionCheckSetting = { afterDays: 1, at: "11:00" };
+
+/** ⚠️ 0011 Decision 4 and §10.9: reminded the office day before the expected collection date, at 11:00. */
+export const DEFAULT_COLLECTION_CHECK: CollectionCheckSetting = { daysBefore: 1, at: "11:00" };
+
 /** ⚠️ 0008 Decision 6: a slip number is 4–30 capitals and digits (ours; Masti's couriers' formats aren't known). */
 export const DEFAULT_AWB: AwbSetting = { minLength: 4, maxLength: 30 };
 
@@ -73,16 +85,27 @@ export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
 
 /**
  * When a case comes back due on its processor's desk after a step: the next open office day (skipping Sundays and
- * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation and the e-visa portal check.
+ * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation, the e-visa portal check and the
+ * file number.
  */
 export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma) {
   const day = await nextOpenDay(addDays(istToday(), timing.afterDays), { office: true }, db);
   return istDateTimeToUtc(day, timing.at);
 }
 
+/**
+ * When a case comes back due before a date: the open office day `daysBefore` it (walking back over Sundays and office
+ * holidays), at `at` (IST), never earlier than today. For the collection reminder.
+ */
+export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: number; at: string }, db: Db = prisma) {
+  const day = await previousOpenDay(addDays(date, -timing.daysBefore), { office: true }, db);
+  const today = istToday();
+  return istDateTimeToUtc(day < today ? today : day, timing.at);
+}
+
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -92,6 +115,8 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const invoice = invoiceSettingSchema.safeParse(value(INVOICE_KEY));
   const vendorConfirm = vendorConfirmSchema.safeParse(value(VENDOR_CONFIRM_KEY));
   const onlineCheck = onlineCheckSchema.safeParse(value(ONLINE_CHECK_KEY));
+  const submissionCheck = submissionCheckSchema.safeParse(value(SUBMISSION_CHECK_KEY));
+  const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
   return {
@@ -102,6 +127,8 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     invoice: invoice.success ? invoice.data : DEFAULT_INVOICE,
     vendorConfirm: vendorConfirm.success ? vendorConfirm.data : DEFAULT_VENDOR_CONFIRM,
     onlineCheck: onlineCheck.success ? onlineCheck.data : DEFAULT_ONLINE_CHECK,
+    submissionCheck: submissionCheck.success ? submissionCheck.data : DEFAULT_SUBMISSION_CHECK,
+    collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,
   };

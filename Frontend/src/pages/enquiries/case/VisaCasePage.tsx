@@ -9,6 +9,7 @@ import { ApplicationCard } from './ApplicationCard'
 import { ArrivalCard } from './ArrivalCard'
 import { CaseHeader } from './CaseHeader'
 import { CaseRail } from './CaseRail'
+import { CollectionCard } from './CollectionCard'
 import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
 import { DispatchCard } from './DispatchCard'
@@ -19,6 +20,7 @@ import { SavedFileCard } from './SavedFileCard'
 import { StickerCard } from './StickerCard'
 import { SubmitOnlineCard } from './SubmitOnlineCard'
 import { TripCard } from './TripCard'
+import { WithVendorCard } from './WithVendorCard'
 
 /**
  * One visa case (demo screen 07): the header with its steps, then the Step 2 cards (checklist, how documents arrive,
@@ -61,12 +63,21 @@ export function VisaCasePage() {
         <div className="case-col">
           <DocketCard visaCase={c} />
           <SubmitOnlineCard visaCase={c} />
-          {c.docket && (
+          {/* Step 4: the courier and the parcel label. Step 5 (demo screen 10): the vendor's progress beside the courier. */}
+          {c.docket?.status === 'DISPATCHED' ? (
             <div className="case-pair">
+              <WithVendorCard visaCase={c} />
               <DispatchCard visaCase={c} />
-              <StickerCard visaCase={c} />
             </div>
+          ) : (
+            c.docket && (
+              <div className="case-pair">
+                <DispatchCard visaCase={c} />
+                <StickerCard visaCase={c} />
+              </div>
+            )
           )}
+          <CollectionCard visaCase={c} />
           <MaturedBanner visaCase={c} />
           <ChecklistCard visaCase={c} />
           <TripCard visaCase={c} />

@@ -5,13 +5,12 @@ import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useResendDocketEmail } from '../queries'
 import type { VisaCase } from '../types'
-import { dayTime, firstName } from './labels'
 
 /**
  * "Dispatch" (demo screen 09 ⚠️, docs/decisions/0008-visa-docket-dispatch.md Decisions 6, 8 and 9), beside the Sticker
- * card. Before dispatch: whether every file has its invoice, and where the email will go. After: the courier and
- * its slip, who sent it and when, the email to the vendor (or why it failed, with Send again), and when this file comes
- * back due: "Confirm vendor got it". "Dispatch docket" itself is the header's button.
+ * card. Before dispatch: whether every file has its invoice, and where the email will go. After, beside the With the
+ * vendor card (0011): the courier and its slip, who sent it and when, and the email to the vendor (or why it failed,
+ * with Send again). "Dispatch docket" itself is the header's button.
  */
 export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -63,15 +62,6 @@ export function DispatchCard({ visaCase: c }: { visaCase: VisaCase }) {
               <strong className="dispatch-bad">Not sent</strong>
             )}
           </div>
-          {c.stage.code === 'AT_VENDOR' && c.dueAt && (
-            <div className="kv">
-              <span>
-                {dayTime(c.dueAt)}
-                {c.owner && ` · ${firstName(c.owner.name)}`}
-              </span>
-              <strong>Confirm vendor got it</strong>
-            </div>
-          )}
         </div>
         {d.email && !d.email.sentAt && !d.email.sending && (
           <div className="alert alert-bad dispatch-email-failed">

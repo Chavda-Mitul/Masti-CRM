@@ -81,6 +81,8 @@ model User {
   visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
   visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
   visaCasesOnline    VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
+  visaCasesReceived  VisaCase[]         @relation("VisaCaseVendorReceivedBy")
+  visaCasesSubmitted VisaCase[]         @relation("VisaCaseSubmittedBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
@@ -378,6 +380,8 @@ model Embassy {
   isActive       Boolean         @default(true)
   country        Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
   holidayTargets HolidayTarget[]
+  /// Visa files submitted here (docs/decisions/0011-visa-at-vendor.md Decision 3).
+  visaCases      VisaCase[]
 
   @@index([countryId])
 }
@@ -893,17 +897,33 @@ model VisaCase {
   /// case moved to At vendor. Both set together, and never with a docket (checked in the migration).
   submittedOnlineAt   DateTime?           @db.Timestamptz(3)
   submittedOnlineById String?
+  /// "Vendor got it, papers checked" (0011 Decision 2): the vendor has this file, at Step 5. Both set together, and only
+  /// for a file sent in a docket (checked in the migration).
+  vendorReceivedAt    DateTime?           @db.Timestamptz(3)
+  vendorReceivedById  String?
+  /// "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy it went to and the
+  /// expected collection date, all saved together, with who first saved them and when. All set or none, only after the
+  /// vendor got the file, and the file number's format (checked in the migration).
+  vendorFileNo        String?
+  embassyId           Int?
+  collectionOn        DateTime?           @db.Date
+  submittedAt         DateTime?           @db.Timestamptz(3)
+  submittedById       String?
   enquiry             Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering            VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy           User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
   fileReadyBy         User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   submittedOnlineBy   User?               @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
+  vendorReceivedBy    User?               @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
+  submittedBy         User?               @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  embassy             Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor              Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket              Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers          VisaCaseTraveller[]
   quote               VisaQuote?
 
   @@index([offeringId])
+  @@index([embassyId])
   @@index([vendorId])
   @@index([fileReadyById])
   @@index([docketId])
