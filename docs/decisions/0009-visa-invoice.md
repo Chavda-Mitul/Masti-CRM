@@ -183,6 +183,12 @@ stops issuing visa invoices. An export to it can come later (Q26).
 - **Fonts (decided 13 Oct 2026, project lead):** the free **Noto Sans** (Regular and Bold, SIL Open Font Licence) is
   embedded, for the ₹ sign. Invoices are in English: **a name the font can't print (Gujarati letters, for example)
   blocks raising** with "Enter these in English letters".
+  - **Every typed-in text the invoice prints is checked** (completed 15 Oct 2026, from a code review). That covers the
+    client's name, contact person and address, and the travellers' names. It covers Masti's name, address, phones,
+    email, bank account name, bank name and branch. It also covers each line of the terms, the visa's description, and
+    the name of whoever raises it ("Prepared by"; the check uses the person looking). Before, the phones, email, bank
+    and terms weren't checked, so they could print as empty boxes on an invoice that can never be made again. The
+    other printed values have their own format (digits, PAN, GSTIN, IFSC, the website) or come from the code.
 
 **Built 13 Oct 2026** (component 3, raising the invoice):
 

@@ -235,6 +235,26 @@ describe("what blocks it", () => {
     expect((await raise(c.staff, c.caseNo)).body.details.code).toBe("INVOICE_BLOCKED");
     expect(await prisma.invoice.count()).toBe(0);
   });
+
+  it("non-English text anywhere it prints: Masti's phones, email and bank, the terms, and the name of whoever raises it", async () => {
+    const head = await mastiReady();
+    const c = await invoiceableCase();
+    const bank = { accountName: "Test Travels", accountNo: "123456789012", bankName: "Test Bank", branch: "વરાછા", ifsc: "TEST0000123" };
+    expect((await head.put("/api/company/details").send({ phone2: "૯૮૨૫૦ ૧૨૩૪૫", bank })).status).toBe(200);
+    expect((await head.put("/api/company/invoice-terms").send({ lines: ["Fees once paid are not refundable.", "વિઝા ફી પરત નથી."] })).status).toBe(200);
+    await prisma.user.update({ where: { email: "aarti@masti.test" }, data: { name: "આરતી" } });
+
+    const blockers = await blockersOf(c.staff, c.caseNo);
+    expect(blockers).toEqual([
+      {
+        kind: "NOT_ENGLISH",
+        label: expect.any(String),
+        items: ["Masti's 24/7 phone", "Masti's bank branch", "Invoice terms, line 2", "Your name (printed as Prepared by)"],
+      },
+    ]);
+    expect((await raise(c.staff, c.caseNo)).body.details.code).toBe("INVOICE_BLOCKED");
+    expect(await prisma.invoice.count()).toBe(0);
+  });
 });
 
 describe("who and when", () => {

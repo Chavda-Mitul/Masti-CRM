@@ -75,9 +75,10 @@ function description(g: Gathered) {
 
 /**
  * What still stands in the way of raising the invoice, grouped for the dialog. Empty means it can be raised. The
- * client's state is always needed (it decides CGST + SGST or IGST), whatever the readiness setting says.
+ * client's state is always needed (it decides CGST + SGST or IGST), whatever the readiness setting says. `preparedBy` is
+ * the name of whoever would raise it: the invoice prints it.
  */
-function blockersOf(g: Gathered): InvoiceBlocker[] {
+function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
   const blockers: InvoiceBlocker[] = [];
   const adults = g.visa.travellers.filter((t) => !t.isChild).length;
   const label = (t: Gathered["visa"]["travellers"][number]) => travellerLabel(t, adults);
@@ -100,8 +101,10 @@ function blockersOf(g: Gathered): InvoiceBlocker[] {
   const missingCompany = invoiceMissing(g.company, g.images);
   if (missingCompany.length) blockers.push({ kind: "COMPANY", label: "Fill in Masti's details (Settings → Company & invoice).", items: missingCompany });
 
-  // Everything printed must be in the invoice's font (English letters): the font has no Gujarati.
-  const printed: [string, string | null][] = [
+  // Everything typed in that the invoice prints must be in its font (English letters): the font has no Gujarati. The
+  // rest is checked by its own format (digits, PAN, GSTIN, IFSC, the website) or comes from the code.
+  const bank = g.company.bank;
+  const printed: [string, string | null | undefined][] = [
     ["Client's name", client.name],
     ["Client's contact person", client.contactPerson],
     ["Client's address", client.addressLine],
@@ -110,7 +113,15 @@ function blockersOf(g: Gathered): InvoiceBlocker[] {
     ...g.visa.travellers.map((t): [string, string | null] => [`${label(t)}'s name`, travellerName(t)]),
     ["Masti's name", g.company.name],
     ["Masti's address", g.company.address],
+    ["Masti's phone", g.company.phone],
+    ["Masti's 24/7 phone", g.company.phone2],
+    ["Masti's email", g.company.email],
+    ["Masti's bank account name", bank?.accountName],
+    ["Masti's bank name", bank?.bankName],
+    ["Masti's bank branch", bank?.branch],
+    ...g.terms.lines.map((term, i): [string, string] => [`Invoice terms, line ${i + 1}`, term]),
     ["The visa's description", description(g)],
+    ["Your name (printed as Prepared by)", preparedBy],
   ];
   const notEnglish = printed.filter(([, text]) => text && unprintable(text).length > 0).map(([what]) => what);
   if (notEnglish.length) blockers.push({ kind: "NOT_ENGLISH", label: "Enter these in English letters: the invoice can't print them.", items: notEnglish });
@@ -161,7 +172,7 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
   if (!row?.visa) throw notFound("Case not found.");
   assertCanSeeEnquiry(user, row);
   const g = await gather(row.id, prisma);
-  const blockers = blockersOf(g);
+  const blockers = blockersOf(g, user.name);
   const ready = blockers.length === 0;
   return {
     blockers,
@@ -251,7 +262,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
   const pre = await gather(enquiry.id, prisma);
   const check = (g: Gathered) => {
     if (g.enquiry.invoice) throw conflict(`This case already has invoice ${g.enquiry.invoice.invoiceNo}.`);
-    const blockers = blockersOf(g);
+    const blockers = blockersOf(g, actor.user.name);
     if (blockers.length) throw new HttpError(409, "The invoice can't be raised yet.", { code: "INVOICE_BLOCKED", blockers });
     assertFresh(g.visa.quote!.updatedAt, input.quoteUpdatedAt, "quote");
     const { taxType, totalPaise } = totalsOf(g);
