@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { errorText } from '../../lib/apiErrors'
 import '../../styles/print.css'
@@ -16,6 +16,18 @@ export function StickerPrintPage() {
   const sticker = useDocketSticker(caseNo)
   const printed = useRef(false)
   const autoprint = params.get('autoprint') === '1'
+  const docketNo = sticker.data?.docketNo
+
+  // The browser names the tab and the saved PDF after the title: "D-2026-0001_Sticker". This effect runs before the
+  // print below, which waits on a promise.
+  useEffect(() => {
+    if (!docketNo) return
+    const before = document.title
+    document.title = `${docketNo}_Sticker`
+    return () => {
+      document.title = before
+    }
+  }, [docketNo])
 
   const onDrawn = useCallback(() => {
     if (!autoprint || printed.current) return
