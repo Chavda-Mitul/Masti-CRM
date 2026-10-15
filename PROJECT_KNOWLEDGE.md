@@ -1674,6 +1674,7 @@ Masti CRM/
 - **The refusal letter** is a scanned PDF kept with the case, optional, uploadable at Step 6 or later.
 - **One form for the family:** "Record the decision →" at Step 5, once the file is submitted (at the embassy or online). Saving it moves the case to Step 6, due the next office day at 11:00 ⚠️ (`visa.passportsBackCheck`) to check the passports are on their way back.
 - **Corrections** at Step 6 by the processor, the Visa HOD or the Head, audited. A refusal changes no money. "Passports on the way back →" comes with Step 7.
+- **Built so far:** component 1, **recording the decision** (15 Oct 2026). "Record the decision →" at Step 5 (once submitted) opens one form for the family; saving moves the case to Step 6, where the Decision card shows each traveller's outcome and sticker (or e-visa) number with its dates. The chip reads "Approved", "Refused" or "Approved 1 · Refused 1". Next: changing a traveller's decision (component 2).
 
 **Decided 15 Oct 2026 (project lead), for Visa Step 5 (At vendor).** The design is `docs/decisions/0011-visa-at-vendor.md` (decided; being built).
 - **One component at a time, following the case:** "Vendor got it" → submitted at the embassy (file number, embassy, expected collection date, saved together) → the credit note → recall → the additional invoice.

@@ -1,7 +1,7 @@
 # 0012 · Visa Step 6: the decision
 
-- **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). A "Built" note
-  is added under each part as its component lands.
+- **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: recording
+  the decision (15 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** recording whether each traveller's visa was approved or refused, from the moment the file was submitted
   (at the embassy, or online for an e-visa) until the passports start back (Step 7):
@@ -86,6 +86,28 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
 - **Corrections:** "Change" on a traveller's row while the case is at Step 6, by the same people, recorded in the
   audit log. Locked once the case moves on.
 - **The header chip** reads "Approved" (everyone), "Refused" (everyone) or "Approved 3 · Refused 1".
+
+**Built 15 Oct 2026** (component 1, recording the decision):
+- **Data** (migration `20261015210000_visa_decision`):
+  - `VisaCaseTraveller.outcome` (`VisaOutcome`: APPROVED / REFUSED), `visaNo`, `validFrom`, `validTo`, with CHECKs
+    (approved needs all three and valid-to on or after valid-from; otherwise none; the number's format)
+  - `VisaCase.decidedAt` / `decidedById`: set together, only after the embassy submission or "Submitted online",
+    never on a recalled file (CHECKs)
+- `POST /api/visa/cases/:caseNo/decision` with `{ outcomes: [{ travellerId, outcome, visaNo?, validFrom?, validTo? }],
+  updatedAt }`, for whoever can act on the case, at At vendor once the file was submitted. Refused with:
+  - 409 before the submission ("Mark it submitted at the embassy first"), at another step, STALE, postponed
+  - 400 under `outcomes`, naming the traveller: missing, unknown or repeated; an approved one without its number or
+    dates, or ending before it starts; a refused one with them; a badly formed number
+- **In one transaction under the case lock:** each traveller's outcome; who and when; the case moves to Decision, due
+  the next open office day at 11:00 ⚠️ (`visa.passportsBackCheck`); audit `visa.decision.record`.
+- **The case** sends `decision { at, by }` and each traveller's `decision`.
+- **Screen:**
+  - At Step 5, once submitted (at the embassy or online), the header's **Record the decision →** opens the form: each
+    traveller's Approved / Refused (green / red, as the demo), and for Approved the sticker no. (an e-visa: e-Visa no.)
+    and the two dates.
+  - At Step 6, the **Decision** card: each traveller's outcome and "Sticker FRA 0182 4471 · valid 1 Dec 2026 – 14 Jan
+    2027", and when it's due back. The chip reads "Approved", "Refused" or "Approved 1 · Refused 1"; "Passports on the
+    way back →" stays "Soon" until Step 7.
 
 ### 7. Settings and seed data (golden rule 1)
 

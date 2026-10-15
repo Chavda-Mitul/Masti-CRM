@@ -26,6 +26,7 @@ import {
   DEFAULT_STICKER,
   DEFAULT_SUBMISSION_CHECK,
   DEFAULT_RECALL_RETURN,
+  DEFAULT_PASSPORTS_BACK_CHECK,
   DEFAULT_COLLECTION_CHECK,
   DEFAULT_VENDOR_CONFIRM,
   DOCKET_EMAIL_KEY,
@@ -37,6 +38,7 @@ import {
   STICKER_KEY,
   SUBMISSION_CHECK_KEY,
   RECALL_RETURN_KEY,
+  PASSPORTS_BACK_CHECK_KEY,
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
@@ -98,7 +100,7 @@ async function main() {
   // lengths (0008 Decisions 6 and 9) ⚠️, the e-visa portal check (0008 Decision 11) ⚠️, the vendor email's wording
   // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, the collection reminder (0011
   // Decision 4) ⚠️, the credit-note series (0011 Decision 5) ⚠️, the recall's
-  // follow-up (0011 Decision 6) ⚠️, and Masti's own details.
+  // follow-up (0011 Decision 6) ⚠️, the check after the decision (0012 Decision 7) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -108,6 +110,7 @@ async function main() {
     [ONLINE_CHECK_KEY, DEFAULT_ONLINE_CHECK],
     [SUBMISSION_CHECK_KEY, DEFAULT_SUBMISSION_CHECK],
     [RECALL_RETURN_KEY, DEFAULT_RECALL_RETURN],
+    [PASSPORTS_BACK_CHECK_KEY, DEFAULT_PASSPORTS_BACK_CHECK],
     [COLLECTION_CHECK_KEY, DEFAULT_COLLECTION_CHECK],
     [AWB_KEY, DEFAULT_AWB],
     [DOCKET_EMAIL_KEY, DEFAULT_DOCKET_EMAIL],

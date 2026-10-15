@@ -6,6 +6,7 @@ import { formatDate, formatMonthYear, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
+import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth } from './labels'
@@ -45,6 +46,18 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   if (c.stage.code === 'AT_VENDOR' && c.submission) return <span className="chip chip-info">{c.stage.statusLabel} · {c.submission.vendorFileNo}</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED' && c.vendorReceived) return <span className="chip chip-info">With vendor · papers checked</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
+  // The decision (0012 Decision 6) ⚠️: the step's seeded "Approved" would be wrong for a refusal.
+  if (c.stage.code === 'DECISION' && c.decision) {
+    const approved = c.travellers.filter((t) => t.decision?.outcome === 'APPROVED').length
+    const refused = c.travellers.filter((t) => t.decision?.outcome === 'REFUSED').length
+    if (refused === 0) return <span className="chip chip-ok">Approved</span>
+    if (approved === 0) return <span className="chip chip-bad">Refused</span>
+    return (
+      <span className="chip chip-warn">
+        Approved {approved} · Refused {refused}
+      </span>
+    )
+  }
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
 
@@ -52,7 +65,7 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
- * it" (0011 Decision 2). The later steps show as "Soon" until they are built.
+ * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6). The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -64,6 +77,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [submitting, setSubmitting] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [recording, setRecording] = useState(false)
+  const [deciding, setDeciding] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -160,6 +174,17 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           Mark submitted →
         </button>
         {recording && <SubmissionDialog visaCase={c} onClose={() => setRecording(false)} />}
+      </>
+    )
+  }
+  // Once the file went in, at the embassy or online: "Record the decision" (0012 Decision 6).
+  if (c.stage.code === 'AT_VENDOR' && c.status === 'OPEN' && canAct && (c.submission || c.submittedOnline)) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setDeciding(true)}>
+          {c.stage.nextStepLabel} →
+        </button>
+        {deciding && <DecisionDialog visaCase={c} onClose={() => setDeciding(false)} />}
       </>
     )
   }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, VisaOutcome } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -80,6 +80,12 @@ export const submissionCheckSchema = firstFollowUpSchema;
 export const recallReturnSchema = firstFollowUpSchema;
 
 /**
+ * When a decided file comes back to its processor to check the passports are on their way back
+ * (docs/decisions/0012-visa-decision.md Decision 7): the next open office day, afterDays after the decision, at `at` (IST).
+ */
+export const passportsBackCheckSchema = firstFollowUpSchema;
+
+/**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
  */
@@ -129,6 +135,7 @@ export const visaSettingsSchema = z.object({
   onlineCheck: onlineCheckSchema,
   submissionCheck: submissionCheckSchema,
   recallReturn: recallReturnSchema,
+  passportsBackCheck: passportsBackCheckSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -166,6 +173,7 @@ export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
 export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
 export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
 export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
+export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -366,6 +374,41 @@ export const recallSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+// ---------------------------------------------------------------------------
+// Step 6: the decision (docs/decisions/0012-visa-decision.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * A sticker or e-visa number ⚠️ (Decision 3), once its spaces are made single and its letters capitals: capitals,
+ * digits, spaces, "-" and "/", 3–40, starting and ending with a letter or digit.
+ */
+export const VISA_NO_PATTERN = /^[A-Z0-9][A-Z0-9 /-]{1,38}[A-Z0-9]$/;
+
+/**
+ * "Record the decision" (Decisions 2, 3 and 6): every traveller's outcome at once, with an approved one's number and
+ * dates. The service checks each traveller is the case's, once, and that the details match the outcome.
+ */
+export const recordDecisionSchema = z.object({
+  outcomes: z
+    .array(
+      z.object({
+        travellerId: z.string().trim().min(1).max(64),
+        outcome: z.enum(VisaOutcome, "Pick Approved or Refused for everyone."),
+        visaNo: z
+          .string()
+          .transform((s) => s.trim().replace(/\s+/g, " ").toUpperCase())
+          .pipe(z.string().regex(VISA_NO_PATTERN, "Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."))
+          .nullish(),
+        validFrom: z.iso.date("Pick the date the visa is valid from.").nullish(),
+        validTo: z.iso.date("Pick the date the visa is valid to.").nullish(),
+      }),
+    )
+    .min(1, "Record a decision for everyone.")
+    .max(60),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type RecallInput = z.infer<typeof recallSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;

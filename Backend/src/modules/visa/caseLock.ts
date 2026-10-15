@@ -27,6 +27,9 @@ export const DISPATCHING: StepRule = { stages: ["DISPATCH"], wrongStage: "This c
 /** Step 5 (docs/decisions/0011-visa-at-vendor.md): the file is with the vendor, until the decision is recorded. */
 export const WITH_VENDOR: StepRule = { stages: ["AT_VENDOR"], wrongStage: "This can only be changed while the file is with the vendor." };
 
+/** Step 6 (docs/decisions/0012-visa-decision.md): the decision is recorded from At vendor, once the file was submitted. */
+export const DECIDING: StepRule = { stages: ["AT_VENDOR"], wrongStage: "The decision is recorded while the file is at At vendor." };
+
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): from Step 1 until the file goes to the vendor. */
 export const QUOTING: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH"],

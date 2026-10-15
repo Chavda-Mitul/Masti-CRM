@@ -8,6 +8,7 @@ import {
   cancelInvoiceSchema,
   raiseAdditionalInvoiceSchema,
   recallSchema,
+  recordDecisionSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -34,6 +35,7 @@ import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
+import * as decisionService from "./visaDecision.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -263,6 +265,15 @@ router.get("/cases/:caseNo/recall/check", visaView, async (req, res) => {
 router.post("/cases/:caseNo/recall", visaEdit, async (req, res) => {
   const body = recallSchema.parse(req.body);
   res.json({ case: await recallService.recallFile(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Record the decision" (0012 Decision 6): every traveller's outcome at once, the approved ones with their sticker (or
+ * e-visa) number and dates; the case moves to Decision. 400 under `outcomes`, naming the traveller.
+ */
+router.post("/cases/:caseNo/decision", visaEdit, async (req, res) => {
+  const body = recordDecisionSchema.parse(req.body);
+  res.json({ case: await decisionService.recordDecision(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**
