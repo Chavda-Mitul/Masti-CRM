@@ -214,6 +214,116 @@ describe("who may cancel it", () => {
   });
 });
 
+/** Saves the quote again with a new service charge, as the case's quote token says. */
+async function requote(agent: Agent, c: { id: string; caseNo: string }, serviceChargePaise: number) {
+  const updatedAt = (await agent.get(`/api/visa/cases/${c.caseNo}`)).body.case.quote.updatedAt;
+  const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+  const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
+  return agent.put(`/api/visa/cases/${c.caseNo}/quote`).send({
+    processingSpeedId: speed.id,
+    serviceChargePaise,
+    lines: travellers.map((t) => ({ travellerId: t.id, form: "LUMP_SUM", lumpSumPaise: 300_000 })),
+    updatedAt,
+  });
+}
+
+interface ChainDto {
+  invoice: { invoiceNo: string; totalPaise: number; replaces: string | null; cancelled: { creditNoteNo: string } | null } | null;
+  earlierInvoices: { invoiceNo: string; replaces: string | null; cancelled: { creditNoteNo: string } | null }[];
+}
+
+describe("the replacement invoice (Decision 5, M37)", () => {
+  it("reopens the quote once the invoice is cancelled; the corrected invoice replaces it and freezes the quote again", async () => {
+    await mastiReady();
+    const c = await invoiced();
+    expect((await requote(c.staff, c, 70_000)).body.message).toMatch(/MVI00000001 is raised/);
+
+    expect((await cancel(c.staff, c.caseNo)).status).toBe(200);
+    expect((await requote(c.staff, c, 70_000)).status).toBe(200);
+    const look = (await c.staff.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body;
+    expect(look).toMatchObject({ alreadyRaised: null, replaces: "MVI00000001", preview: { invoiceNo: "MVI00000002" } });
+
+    const after = (await raise(c.staff, c.caseNo)) as unknown as ChainDto;
+    expect(after.invoice).toMatchObject({ invoiceNo: "MVI00000002", replaces: "MVI00000001", cancelled: null });
+    expect(after.earlierInvoices).toEqual([expect.objectContaining({ invoiceNo: "MVI00000001", replaces: null, cancelled: expect.objectContaining({ creditNoteNo: "MCN00000001" }) })]);
+    const first = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001" } });
+    const second = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000002" }, include: { file: true } });
+    expect(second.replacesId).toBe(first.id);
+    expect(second.serviceChargePaise).toBe(70_000);
+    const pdf = await PDFDocument.load(new Uint8Array(await getObject(second.file.storageKey)));
+    expect(pdf.getTitle()).toBe("Tax invoice MVI00000002");
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.invoice.raise", after: { path: ["invoiceNo"], equals: "MVI00000002" } } })).toMatchObject({
+      after: { replaces: "MVI00000001" },
+    });
+
+    expect((await requote(c.staff, c, 80_000)).body.message).toMatch(/MVI00000002 is raised/);
+    const again = await c.staff.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt: new Date().toISOString(), taxType: "INTRA_STATE", gstRatePercent: 18, totalPaise: 1 });
+    expect(again.status).toBe(409);
+    expect(again.body.message).toMatch(/already has invoice MVI00000002/);
+  });
+
+  it("can be cancelled and replaced again: one chain, only its last invoice stands", async () => {
+    await mastiReady();
+    const c = await invoiced();
+    await cancel(c.staff, c.caseNo);
+    await requote(c.staff, c, 60_000);
+    await raise(c.staff, c.caseNo);
+    expect((await cancel(c.staff, c.caseNo, { reasonId: await reasonId("WRONG_CLIENT_DETAILS") })).status).toBe(200);
+    await requote(c.staff, c, 65_000);
+    const after = (await raise(c.staff, c.caseNo)) as unknown as ChainDto;
+    expect(after.invoice).toMatchObject({ invoiceNo: "MVI00000003", replaces: "MVI00000002" });
+    expect(after.earlierInvoices.map((i) => [i.invoiceNo, i.cancelled?.creditNoteNo])).toEqual([
+      ["MVI00000002", "MCN00000002"],
+      ["MVI00000001", "MCN00000001"],
+    ]);
+  });
+
+  it("after the file has gone to the vendor: the quote stays shut until the invoice is cancelled, then the replacement unblocks", async () => {
+    await mastiReady();
+    const c = await dispatchCase();
+    const neha = await loginAs("neha@masti.test");
+    await makeInvoiceable(neha, c);
+    await raise(neha, c.caseNo);
+    const seen = (await neha.get(`/api/visa/cases/${c.caseNo}`)).body.case.updatedAt;
+    expect((await neha.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "OWN", updatedAt: seen })).status).toBe(200);
+
+    // At Docket & dispatch: cancelled, so the file can't leave until the corrected invoice is raised.
+    await cancel(neha, c.caseNo);
+    expect((await requote(neha, c, 55_000)).status).toBe(200);
+    await raise(neha, c.caseNo);
+    expect((await neha.get(`/api/visa/cases/${c.caseNo}/dispatch/check`)).body.blockers).toEqual([]);
+    const courier = await prisma.courier.findUniqueOrThrow({ where: { code: "BY_HAND" } });
+    expect((await neha.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: null, caseNos: [c.caseNo] })).status).toBe(200);
+
+    // At At vendor: the quote is shut while the invoice stands, and reopens once it's cancelled.
+    expect((await requote(neha, c, 57_000)).body.message).toMatch(/gone to the vendor/);
+    expect((await cancel(neha, c.caseNo)).status).toBe(200);
+    expect((await requote(neha, c, 57_000)).status).toBe(200);
+    const after = (await raise(neha, c.caseNo)) as unknown as ChainDto;
+    expect(after.invoice).toMatchObject({ invoiceNo: "MVI00000003", replaces: "MVI00000002" });
+  });
+
+  it("the database keeps one original per case, and replaces only a cancelled invoice of the same case", async () => {
+    await mastiReady();
+    const a = await invoiced();
+    const b = await invoiced({ mobile: "98250 41235", clientName: "Sunil Shah" });
+    const invA = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: a.invoice.invoiceNo }, include: { lines: true } });
+    const invB = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: b.invoice.invoiceNo } });
+    let n = 0;
+    const copy = async (replacesId: string | null) => {
+      n++;
+      const file = await prisma.caseFile.create({ data: { enquiryId: a.id, kind: "INVOICE", storageKey: `x/${n}.pdf`, fileName: `x${n}.pdf`, sizeBytes: 1, pageCount: 1, uploadedById: invA.issuedById } });
+      const { id: _id, lines: _lines, replacesId: _r, client, company, terms, ...rest } = invA;
+      return prisma.invoice.create({
+        data: { ...rest, client: client!, company: company!, terms: terms!, invoiceNo: `TEST${n}`, fileId: file.id, replacesId },
+      });
+    };
+    await expect(copy(null)).rejects.toThrow(/Invoice_one_original_per_case/);
+    await expect(copy(invA.id)).rejects.toThrow(/once a credit note has cancelled it/);
+    await expect(copy(invB.id)).rejects.toThrow(/same case/);
+  });
+});
+
 describe("the database", () => {
   it("never changes a credit note, makes a WHOLE one match its invoice, allows one per invoice, and no GST on a PART one", async () => {
     await mastiReady();

@@ -787,7 +787,7 @@ model Enquiry {
   visa           VisaCase?
   followUps      FollowUp[]
   files          CaseFile[]
-  invoice        Invoice?
+  invoices       Invoice[]
   creditNotes    CreditNote[]
 
   @@index([status, dueAt])
@@ -1173,8 +1173,11 @@ model Invoice {
   id                 String         @id @default(uuid())
   /// "MVI00001379": Masti's own series continues (0009 Decision 4).
   invoiceNo          String         @unique
-  /// One invoice per case (0009 Decision 6).
-  enquiryId          String         @unique
+  /// The case. One original invoice per case (0009 Decision 6); a cancelled one can be replaced, each replacement
+  /// pointing at the one it replaces (docs/decisions/0011-visa-at-vendor.md Decision 5). Checked in the migration.
+  enquiryId          String
+  /// The cancelled invoice this one replaces, if it's a replacement.
+  replacesId         String?        @unique
   /// The date printed on it (IST).
   issuedOn           DateTime       @db.Date
   issuedAt           DateTime       @default(now()) @db.Timestamptz(3)
@@ -1201,11 +1204,14 @@ model Invoice {
   /// The PDF as raised.
   fileId             String         @unique
   enquiry            Enquiry        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  replaces           Invoice?       @relation("InvoiceReplaces", fields: [replacesId], references: [id], onDelete: Restrict)
+  replacedBy         Invoice?       @relation("InvoiceReplaces")
   issuedBy           User           @relation("InvoiceIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
   file               CaseFile       @relation(fields: [fileId], references: [id], onDelete: Restrict)
   lines              InvoiceLine[]
   creditNotes        CreditNote[]
 
+  @@index([enquiryId])
   @@index([issuedById])
 }
 

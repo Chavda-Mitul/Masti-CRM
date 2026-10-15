@@ -8,7 +8,7 @@ import { getCompanyDetails } from "../company/company.settings";
 import { isHodOf } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, visaStage } from "./caseLock";
-import { emailSending, liveInvoiceNo, liveInvoiceSelect } from "./visaCase";
+import { emailSending, liveInvoiceNo, liveInvoicesArgs } from "./visaCase";
 import { docketEmail } from "./docketEmail";
 import type { DispatchDocketInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
@@ -49,7 +49,7 @@ async function gather(db: Db, docketId: string) {
               departmentId: true,
               dueAt: true,
               stage: { select: { code: true } },
-              invoice: liveInvoiceSelect,
+              invoices: liveInvoicesArgs,
             },
           },
         },
@@ -70,7 +70,7 @@ export interface DispatchBlocker {
 /** What stands in the way of dispatch (Decision 9), in the order to fix it. */
 function blockersOf(g: Gathered): DispatchBlocker[] {
   const blockers: DispatchBlocker[] = [];
-  const noInvoice = g.cases.filter((c) => !liveInvoiceNo(c.enquiry.invoice)).map((c) => c.enquiry.caseNo).sort();
+  const noInvoice = g.cases.filter((c) => !liveInvoiceNo(c.enquiry.invoices)).map((c) => c.enquiry.caseNo).sort();
   if (noInvoice.length) blockers.push({ kind: "INVOICE", label: "Raise the invoice on every file first: no file leaves without it.", items: noInvoice });
   if (!g.vendor.isActive) {
     blockers.push({ kind: "VENDOR_OFF", label: `${g.vendor.name} is switched off. Ask the Visa HOD to switch it back on.`, items: [] });

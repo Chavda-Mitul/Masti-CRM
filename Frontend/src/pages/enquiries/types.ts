@@ -359,6 +359,8 @@ export interface CaseInvoice {
   totalPaise: number
   /** The PDF as raised: open it like any case file. */
   file: { id: string; fileName: string }
+  /** The cancelled invoice this one replaces (0011 Decision 5), or null for the case's first. */
+  replaces: string | null
   /** The WHOLE credit note that cancelled it (0011 Decision 5): it no longer counts as the case's invoice. */
   cancelled: {
     creditNoteNo: string
@@ -396,6 +398,8 @@ export type InvoiceBlockerKind = 'QUOTE' | 'TRAVELLERS' | 'CLIENT' | 'COMPANY' |
 export interface InvoiceCheck {
   blockers: { kind: InvoiceBlockerKind; label: string; items: string[] }[]
   alreadyRaised: string | null
+  /** The cancelled invoice the new one replaces (0011 Decision 5), or null for the case's first */
+  replaces: string | null
   preview: {
     invoiceNo: string
     /** The quote it was made from: sent back with the rate, tax type and total when raising */
@@ -488,6 +492,8 @@ export interface VisaCase {
   quote: CaseQuote | null
   /** The locked tax invoice (0009), or null until it is raised */
   invoice: CaseInvoice | null
+  /** The earlier invoices of the chain, each cancelled and replaced, newest first (0011 Decision 5) */
+  earlierInvoices: CaseInvoice[]
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

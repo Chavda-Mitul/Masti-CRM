@@ -109,7 +109,7 @@ export interface InvoiceView {
  * cancels and why, and no bank details, balance or terms: nothing is to be paid on it.
  */
 export type PdfDocument =
-  | { kind: "INVOICE" }
+  | { kind: "INVOICE"; replaces?: { invoiceNo: string; creditNoteNo: string } }
   | { kind: "CREDIT_NOTE"; againstInvoiceNo: string; againstIssuedOn: string; reason: string };
 
 export interface InvoiceImages {
@@ -314,6 +314,11 @@ export async function renderInvoicePdf(
   draw(pen, supply, MARGIN, pen.y, { size: 9 });
   draw(pen, `HSN/SAC Code: ${view.sac}`, boxLeft + 8, pen.y, { size: 9 });
   pen.y += 18;
+  if (document.kind === "INVOICE" && document.replaces) {
+    const r = document.replaces;
+    para(pen, `Replaces Tax Invoice ${r.invoiceNo} (cancelled by Credit Note ${r.creditNoteNo})`, MARGIN, RIGHT - MARGIN, { size: 9.5, bold: true });
+    pen.y += 8;
+  }
   if (credit) {
     para(pen, `Against Tax Invoice ${credit.againstInvoiceNo} dated ${longDate(credit.againstIssuedOn)}`, MARGIN, RIGHT - MARGIN, { size: 9.5, bold: true });
     para(pen, `Reason: ${credit.reason}`, MARGIN, RIGHT - MARGIN, { size: 9 });

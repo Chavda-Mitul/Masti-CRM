@@ -26,17 +26,17 @@ export function emailSending(startedAt: Date | null, now = new Date()) {
 }
 
 /**
- * A case's invoice and whether a WHOLE credit note cancelled it (docs/decisions/0011-visa-at-vendor.md Decision 5).
- * Select it this way wherever "has its invoice" is asked (dispatch, Submitted online, the docket table), then ask
- * liveInvoiceNo: a cancelled invoice no longer counts.
+ * A case's invoices and whether a WHOLE credit note cancelled each (docs/decisions/0011-visa-at-vendor.md Decision 5).
+ * Select them this way wherever "has its invoice" is asked (dispatch, Submitted online, the docket table), then ask
+ * liveInvoiceNo: a cancelled invoice no longer counts. A case has one chain of invoices, so at most one stands.
  */
-export const liveInvoiceSelect = {
+export const liveInvoicesArgs = {
   select: { invoiceNo: true, creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } } },
-} satisfies Prisma.InvoiceDefaultArgs;
+} satisfies Prisma.InvoiceFindManyArgs;
 
-/** The invoice's number while it stands; null when there's none, or a credit note has cancelled it. */
-export function liveInvoiceNo(invoice: { invoiceNo: string; creditNotes: unknown[] } | null) {
-  return invoice && invoice.creditNotes.length === 0 ? invoice.invoiceNo : null;
+/** The number of the case's standing invoice; null when there's none, or a credit note cancelled every one. */
+export function liveInvoiceNo(invoices: { invoiceNo: string; creditNotes: unknown[] }[]) {
+  return invoices.find((i) => i.creditNotes.length === 0)?.invoiceNo ?? null;
 }
 
 /** A docket and every case in it (0008): the Docket card's table and the parcel sticker read the same rows. */
@@ -62,7 +62,7 @@ export const docketSelect = {
       enquiryId: true,
       bookletsCurrent: true,
       bookletsOld: true,
-      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoice: liveInvoiceSelect } },
+      enquiry: { select: { caseNo: true, ownerId: true, client: { select: { name: true } }, invoices: liveInvoicesArgs } },
       offering: { select: { country: { select: { name: true } } } },
       _count: { select: { travellers: true } },
     },
@@ -80,10 +80,12 @@ export const visaCaseInclude = {
   /** The current final file (0007 Decision 8): the newest upload. Older ones are counted, not loaded. */
   files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
   _count: { select: { files: { where: { kind: "FINAL_FILE" } } } },
-  /** The tax invoice (0009), once raised. */
-  invoice: {
+  /** The tax invoices (0009), newest first: the last of the chain, then any it replaced (0011 Decision 5). */
+  invoices: {
+    orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
     select: {
       invoiceNo: true,
+      replaces: { select: { invoiceNo: true } },
       issuedOn: true,
       issuedAt: true,
       issuedBy: personSelect,
@@ -210,7 +212,7 @@ export function docketOf(d: DocketRow, enquiryId: string) {
     passports: c.bookletsCurrent ?? c._count.travellers,
     oldPassports: c.bookletsOld ?? 0,
     /** "MVI00000001 · locked", or null: "Raise invoice first" */
-    invoiceNo: liveInvoiceNo(c.enquiry.invoice),
+    invoiceNo: liveInvoiceNo(c.enquiry.invoices),
     /** Who may dispatch (Decision 3): a processor who owns at least one case in the docket. */
     ownerId: c.enquiry.ownerId,
     isThisCase: c.enquiryId === enquiryId,
@@ -263,6 +265,27 @@ function quoteOf(q: QuoteRow, travellerIds: string[], gstRatePercent: number) {
     /** The quote's own token: send it back when saving. */
     updatedAt: q.updatedAt,
     updatedBy: q.updatedBy,
+  };
+}
+
+type InvoiceRow = VisaCaseRow["invoices"][number];
+
+/** One invoice for the case page: its totals and PDF, what it replaced, and the credit note that cancelled it. */
+function invoiceOf(inv: InvoiceRow) {
+  const note = inv.creditNotes[0];
+  return {
+    invoiceNo: inv.invoiceNo,
+    issuedOn: fromDbDate(inv.issuedOn),
+    issuedAt: inv.issuedAt,
+    issuedBy: inv.issuedBy,
+    taxType: inv.taxType,
+    gstPaise: inv.cgstPaise + inv.sgstPaise + inv.igstPaise,
+    totalPaise: inv.totalPaise,
+    file: inv.file,
+    /** The cancelled invoice this one replaces (0011 Decision 5). */
+    replaces: inv.replaces?.invoiceNo ?? null,
+    /** Cancelled by a WHOLE credit note (0011 Decision 5): it no longer counts as the case's invoice. */
+    cancelled: note ? { ...note, issuedOn: fromDbDate(note.issuedOn), reason: note.reason.name } : null,
   };
 }
 
@@ -370,21 +393,13 @@ export function toVisaCaseDto(
       at: visa.submittedAt,
       by: visa.submittedBy,
     },
-    /** The locked tax invoice (0009), or null until it is raised. */
-    invoice: row.invoice && {
-      invoiceNo: row.invoice.invoiceNo,
-      issuedOn: fromDbDate(row.invoice.issuedOn),
-      issuedAt: row.invoice.issuedAt,
-      issuedBy: row.invoice.issuedBy,
-      taxType: row.invoice.taxType,
-      gstPaise: row.invoice.cgstPaise + row.invoice.sgstPaise + row.invoice.igstPaise,
-      totalPaise: row.invoice.totalPaise,
-      file: row.invoice.file,
-      /** Cancelled by a WHOLE credit note (0011 Decision 5): it no longer counts as the case's invoice. */
-      cancelled: row.invoice.creditNotes[0]
-        ? { ...row.invoice.creditNotes[0], issuedOn: fromDbDate(row.invoice.creditNotes[0].issuedOn), reason: row.invoice.creditNotes[0].reason.name }
-        : null,
-    },
+    /**
+     * The case's latest tax invoice (0009), or null until one is raised. When a credit note cancelled it
+     * (`cancelled`), it no longer counts and a corrected one can be raised (0011 Decision 5).
+     */
+    invoice: row.invoices[0] ? invoiceOf(row.invoices[0]) : null,
+    /** The earlier invoices of the chain, each cancelled and replaced, newest first. */
+    earlierInvoices: row.invoices.slice(1).map(invoiceOf),
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */

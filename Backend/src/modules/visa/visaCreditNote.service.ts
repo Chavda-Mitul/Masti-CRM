@@ -35,13 +35,18 @@ import {
 // Like raising the invoice, the PDF is made and stored before the one-row counter is taken, so a slow bucket never holds
 // up anyone else; if another credit note took the number meanwhile, this one starts again with the next.
 
-/** The case's invoice and what its credit note prints, read together (inside the transaction when issuing). */
+/**
+ * The case's latest invoice and what its credit note prints, read together (inside the transaction when issuing). A
+ * case has one chain of invoices, so only the latest can still stand: earlier ones were cancelled and replaced.
+ */
 async function gather(enquiryId: string, db: Db) {
   const enquiry = await db.enquiry.findUniqueOrThrow({
     where: { id: enquiryId },
     select: {
       clientId: true,
-      invoice: {
+      invoices: {
+        orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
+        take: 1,
         include: {
           lines: { orderBy: { position: "asc" } },
           creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } },
@@ -50,7 +55,7 @@ async function gather(enquiryId: string, db: Db) {
     },
   });
   const [company, settings, images] = await Promise.all([getCompanyDetails(db), getVisaSettings(db), currentCompanyImages()]);
-  return { clientId: enquiry.clientId, invoice: enquiry.invoice, company, series: settings.creditNote, images };
+  return { clientId: enquiry.clientId, invoice: enquiry.invoices[0] ?? null, company, series: settings.creditNote, images };
 }
 
 type Gathered = Awaited<ReturnType<typeof gather>>;

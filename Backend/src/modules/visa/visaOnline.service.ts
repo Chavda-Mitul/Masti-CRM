@@ -7,7 +7,7 @@ import { DISPATCHING, findVisibleCase, loadCase, lockCase, visaStage } from "./c
 import type { SubmitOnlineInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
-import { liveInvoiceNo, liveInvoiceSelect } from "./visaCase";
+import { liveInvoiceNo, liveInvoicesArgs } from "./visaCase";
 import type { DispatchBlocker } from "./visaDispatch.service";
 
 // Visa Step 4 for e-visas (docs/decisions/0008-visa-docket-dispatch.md Decision 11): a visa whose "Vendor needed" is off
@@ -23,7 +23,7 @@ async function gather(db: Db, enquiryId: string) {
   return db.enquiry.findUniqueOrThrow({
     where: { id: enquiryId },
     select: {
-      invoice: liveInvoiceSelect,
+      invoices: liveInvoicesArgs,
       visa: {
         select: {
           fileReadyAt: true,
@@ -39,7 +39,7 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /** What stands in the way: only the invoice. A case that goes by docket never shows the button. */
 function blockersOf(g: Gathered): DispatchBlocker[] {
-  if (liveInvoiceNo(g.invoice)) return [];
+  if (liveInvoiceNo(g.invoices)) return [];
   return [{ kind: "INVOICE", label: "Raise the invoice first: no file is submitted without it.", items: [] }];
 }
 
@@ -90,7 +90,7 @@ export async function submitOnline(caseNo: string, input: SubmitOnlineInput, act
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: { stage: "DISPATCH", dueAt: locked.dueAt },
-        after: { stage: "AT_VENDOR", dueAt, invoiceNo: liveInvoiceNo(g.invoice) },
+        after: { stage: "AT_VENDOR", dueAt, invoiceNo: liveInvoiceNo(g.invoices) },
         ip: actor.ip,
       },
       tx,

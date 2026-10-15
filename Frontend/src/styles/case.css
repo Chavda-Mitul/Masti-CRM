@@ -336,6 +336,19 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+/* The chain's earlier invoices, each cancelled and replaced (0011 Decision 5). */
+.money-earlier {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+.money-earlier-actions {
+  display: flex;
+  gap: 10px;
+}
 .money-actions {
   display: flex;
   gap: 8px;

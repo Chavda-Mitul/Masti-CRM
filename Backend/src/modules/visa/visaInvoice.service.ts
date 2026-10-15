@@ -14,7 +14,7 @@ import { readinessOf } from "../clients/readiness";
 import { currentCompanyImages } from "../company/company.service";
 import { getCompanyDetails, getInvoiceTerms, invoiceMissing } from "../company/company.settings";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { findVisibleCase, loadCase, lockCase, QUOTING } from "./caseLock";
+import { findVisibleCase, INVOICED, loadCase, lockCase, QUOTING } from "./caseLock";
 import { renderInvoicePdf, unprintable, type InvoiceImages, type InvoiceView } from "./invoicePdf";
 import type { RaiseInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
@@ -26,9 +26,16 @@ import { fileSafeFamilyName, travellerLabel } from "./visaCase";
 // the database refuse it). A raised invoice can't be undone yet (Decision 9), so nothing is raised while anything is
 // missing: invoiceBlockers lists it first.
 
+/** A case's invoices, newest first, each with the WHOLE credit note that cancelled it (0011 Decision 5). */
+const invoicesArgs = {
+  orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
+  select: { id: true, invoiceNo: true, creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } } },
+} satisfies Prisma.InvoiceFindManyArgs;
+
 const caseInclude = {
   client: true,
-  invoice: { select: { invoiceNo: true } },
+  stage: { select: { code: true } },
+  invoices: invoicesArgs,
   visa: {
     include: {
       offering: { include: { country: true, visaType: true } },
@@ -198,7 +205,9 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
   const ready = blockers.length === 0;
   return {
     blockers,
-    alreadyRaised: g.enquiry.invoice?.invoiceNo ?? null,
+    alreadyRaised: standing(g.enquiry.invoices)?.invoiceNo ?? null,
+    /** The cancelled invoice the next one replaces (0011 Decision 5), or null for the case's first. */
+    replaces: replaced(g.enquiry.invoices)?.invoiceNo ?? null,
     // The dialog sends back the quote, the rate, the tax type and the total it showed (raiseInvoice compares them).
     preview: ready
       ? {
@@ -289,10 +298,12 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
  * with the next.
  */
 export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, QUOTING);
+  const enquiry = await loadCase(caseNo, actor, INVOICED);
   const pre = await gather(enquiry.id, prisma);
   const check = (g: Gathered) => {
-    if (g.enquiry.invoice) throw conflict(`This case already has invoice ${g.enquiry.invoice.invoiceNo}.`);
+    assertInvoiceStep(g.enquiry.stage.code, g.enquiry.invoices);
+    const live = standing(g.enquiry.invoices);
+    if (live) throw conflict(`This case already has invoice ${live.invoiceNo}.`);
     const blockers = blockersOf(g, actor.user.name);
     if (blockers.length) throw new HttpError(409, "The invoice can't be raised yet.", { code: "INVOICE_BLOCKED", blockers });
     assertFresh(g.visa.quote!.updatedAt, input.quoteUpdatedAt, "quote");
@@ -315,9 +326,10 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
     try {
       await prisma.$transaction(
         async (tx) => {
-          await lockCase(tx, enquiry.id, actor, QUOTING);
+          await lockCase(tx, enquiry.id, actor, INVOICED);
           const g = await gather(enquiry.id, tx);
           check(g);
+          const replaces = replaced(g.enquiry.invoices);
 
           const { prefix, digits, startAt, gstRatePercent, sac } = g.invoiceSetting;
           const expected = await nextCounterValue(g, tx);
@@ -325,7 +337,11 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
           const issuedOn = istToday();
           const { view, lines } = buildView(g, invoiceNo, issuedOn, actor.user.name);
 
-          const pdf = await renderInvoicePdf(view, images);
+          const pdf = await renderInvoicePdf(
+            view,
+            images,
+            replaces ? { kind: "INVOICE", replaces: { invoiceNo: replaces.invoiceNo, creditNoteNo: replaces.creditNotes[0]!.creditNoteNo } } : undefined,
+          );
           storageKey = `cases/${enquiry.id}/invoice/${randomUUID()}.pdf`;
           await putObject(storageKey, Buffer.from(pdf.bytes), "application/pdf");
 
@@ -352,6 +368,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
             data: {
               invoiceNo,
               enquiryId: enquiry.id,
+              replacesId: replaces?.id ?? null,
               issuedOn: toDbDate(issuedOn),
               issuedById: actor.user.id,
               client: view.client as unknown as Prisma.InputJsonValue,
@@ -379,7 +396,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
               entityType: "Enquiry",
               entityId: enquiry.id,
               clientId: g.enquiry.clientId,
-              after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id },
+              after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id, replaces: replaces?.invoiceNo ?? null },
               ip: actor.ip,
             },
             tx,
@@ -401,8 +418,34 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
   return getVisaCaseById(enquiry.id);
 }
 
-/** Saving a quote (visaQuote.service.ts) calls this under the case lock: a raised invoice freezes the quote. */
-export async function assertNotInvoiced(tx: Db, enquiryId: string) {
-  const invoice = await tx.invoice.findUnique({ where: { enquiryId }, select: { invoiceNo: true } });
-  if (invoice) throw conflict(`Invoice ${invoice.invoiceNo} is raised, so the quote can't change.`);
+type CaseInvoices = { id: string; invoiceNo: string; creditNotes: { creditNoteNo: string }[] }[];
+
+/** The case's invoice that stands, if any: the one no credit note has cancelled (a case has at most one). */
+function standing(invoices: CaseInvoices) {
+  return invoices.find((i) => i.creditNotes.length === 0) ?? null;
+}
+
+/** The cancelled invoice a new one replaces: the chain's latest, once cancelled (0011 Decision 5). Null for a first. */
+function replaced(invoices: CaseInvoices) {
+  const latest = invoices[0];
+  return latest && latest.creditNotes.length > 0 ? latest : null;
+}
+
+/**
+ * The quote can change, and an invoice be raised, at the quoting steps (until the file goes to the vendor, 0009
+ * Decision 2), or at any step while a cancelled invoice waits for its replacement (0011 Decision 5).
+ */
+function assertInvoiceStep(stageCode: string, invoices: CaseInvoices) {
+  if (!QUOTING.stages.includes(stageCode) && !replaced(invoices)) throw conflict(QUOTING.wrongStage);
+}
+
+/**
+ * Saving a quote (visaQuote.service.ts) calls this under the case lock: a standing invoice freezes the quote; a
+ * cancelled one reopens it, at any step, so the corrected invoice can be raised from it (0011 Decision 5).
+ */
+export async function assertQuoteCanChange(tx: Db, enquiryId: string, stageCode: string) {
+  const invoices = await tx.invoice.findMany({ where: { enquiryId }, ...invoicesArgs });
+  assertInvoiceStep(stageCode, invoices);
+  const live = standing(invoices);
+  if (live) throw conflict(`Invoice ${live.invoiceNo} is raised, so the quote can't change.`);
 }
