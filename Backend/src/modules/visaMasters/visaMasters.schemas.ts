@@ -135,6 +135,10 @@ export const updateCreditNoteReasonSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** Why a file is taken back from the vendor (docs/decisions/0011-visa-at-vendor.md Decision 6): picked, never typed. */
+export const createRecallReasonSchema = createCreditNoteReasonSchema;
+export const updateRecallReasonSchema = updateCreditNoteReasonSchema;
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -200,6 +204,8 @@ export type CreateCourierInput = z.infer<typeof createCourierSchema>;
 export type UpdateCourierInput = z.infer<typeof updateCourierSchema>;
 export type CreateCreditNoteReasonInput = z.infer<typeof createCreditNoteReasonSchema>;
 export type UpdateCreditNoteReasonInput = z.infer<typeof updateCreditNoteReasonSchema>;
+export type CreateRecallReasonInput = z.infer<typeof createRecallReasonSchema>;
+export type UpdateRecallReasonInput = z.infer<typeof updateRecallReasonSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

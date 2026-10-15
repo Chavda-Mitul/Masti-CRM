@@ -188,6 +188,15 @@ export const creditNoteReasonFormSchema = z.object({
 })
 export type CreditNoteReasonFormValues = z.infer<typeof creditNoteReasonFormSchema>
 
+export const recallReasonFormSchema = creditNoteReasonFormSchema.extend({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. EMBASSY_DELAY.'),
+})
+export type RecallReasonFormValues = z.infer<typeof recallReasonFormSchema>
+
 const optionCode = z
   .string()
   .trim()

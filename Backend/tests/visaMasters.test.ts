@@ -424,7 +424,36 @@ describe("credit-note reasons (0011 Decision 5)", () => {
   });
 });
 
+describe("recall reasons (0011 Decision 6)", () => {
+  it("is seeded, read by Visa staff and written only by the Visa HOD or the Head; codes never change; switched off", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/recall-reasons");
+    expect(list.status).toBe(200);
+    expect(list.body.recallReasons.map((r: { name: string }) => r.name)).toEqual(["Embassy taking too long", "Client cancelled the trip", "Documents changed"]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    expect((await (await loginAs("neha@masti.test")).post("/api/masters/recall-reasons").send({ code: "VISA_RULES_CHANGED", name: "Visa rules changed" })).status).toBe(403);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/recall-reasons").send({ code: " visa_rules_changed ", name: "Visa rules changed" });
+    expect(created.status).toBe(201);
+    expect(created.body.recallReason).toMatchObject({ code: "VISA_RULES_CHANGED", isActive: true });
+    expect((await hod.post("/api/masters/recall-reasons").send({ code: "EMBASSY_DELAY", name: "Again" })).status).toBe(409);
+
+    const delay = await prisma.recallReason.findUniqueOrThrow({ where: { code: "EMBASSY_DELAY" } });
+    const patched = await hod.patch(`/api/masters/recall-reasons/${delay.id}`).send({ code: "OLD", name: "Embassy too slow" });
+    expect(patched.body.recallReason).toMatchObject({ code: "EMBASSY_DELAY", name: "Embassy too slow" });
+    await hod.patch(`/api/masters/recall-reasons/${delay.id}`).send({ isActive: false });
+    expect((await hod.get("/api/masters/recall-reasons?active=true")).body.recallReasons.map((r: { code: string }) => r.code)).not.toContain("EMBASSY_DELAY");
+    expect(await prisma.auditLog.count({ where: { action: { in: ["recallReason.create", "recallReason.update"] } } })).toBe(3);
+  });
+});
+
 describe("the database", () => {
+  it("refuses a lowercase recall reason code", async () => {
+    await expect(prisma.recallReason.create({ data: { code: "embassy delay", name: "x" } })).rejects.toThrow();
+  });
+
   it("refuses a lowercase credit-note reason code", async () => {
     await expect(prisma.creditNoteReason.create({ data: { code: "wrong amount", name: "x" } })).rejects.toThrow();
   });

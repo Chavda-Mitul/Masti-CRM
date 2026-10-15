@@ -1028,6 +1028,18 @@ model CreditNoteReason {
   creditNotes CreditNote[]
 }
 
+/// Why a file is taken back from the vendor: "Embassy taking too long", "Client cancelled the trip"…
+/// (docs/decisions/0011-visa-at-vendor.md Decision 6). Never free text. Edited by the Visa HOD or the Head; switched off,
+/// never deleted.
+model RecallReason {
+  id        Int     @id @default(autoincrement())
+  /// EMBASSY_DELAY… Never changes.
+  code      String  @unique
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// Why a paper needs replacing: "Not signed", "Wrong photo size"… Edited by the Visa HOD or the Head.
 model DocumentProblemReason {
   id        Int                @id @default(autoincrement())
