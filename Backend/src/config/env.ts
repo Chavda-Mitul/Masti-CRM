@@ -50,6 +50,12 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   // The sender, e.g. "MASTI TOUR AND TRAVEL <crm@example.com>".
   SMTP_FROM: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // The server log (src/lib/logger.ts, docs/decisions/0010-server-logs.md): one file a day in LOG_DIR (relative to the
+  // folder the server starts in, Backend/), keeping the last LOG_RETENTION_DAYS days plus today's file (90: the project
+  // lead, 15 Oct 2026).
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+  LOG_DIR: z.string().min(1).default("logs"),
+  LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
 });
 
 const parsed = envSchema.safeParse(process.env);

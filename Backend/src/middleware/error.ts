@@ -7,8 +7,11 @@ export const apiNotFound: RequestHandler = (_req, res) => {
   res.status(404).json({ message: "Not found." });
 };
 
-/** Turns thrown errors into JSON responses. Never leaks internals for unexpected errors. */
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+/**
+ * Turns thrown errors into JSON responses. Never leaks internals for unexpected errors: those go to the server log with
+ * their request (src/lib/logger.ts), and the user gets the request's code to quote.
+ */
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof HttpError) {
     res.status(err.status).json({ message: err.message, ...(err.details ? { details: err.details } : {}) });
     return;
@@ -25,6 +28,6 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
 
-  console.error(err);
-  res.status(500).json({ message: "Something went wrong. Please try again." });
+  res.err = err instanceof Error ? err : new Error(String(err));
+  res.status(500).json({ message: `Something went wrong. Please try again. If it keeps happening, quote code ${String(req.id)}.` });
 };
