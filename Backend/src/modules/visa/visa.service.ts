@@ -18,6 +18,7 @@ import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/vis
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
 import {
   AWB_KEY,
+  DOCKET_EMAIL_KEY,
   DOCKET_KEY,
   FINAL_FILE_KEY,
   FIRST_FOLLOW_UP_KEY,
@@ -282,7 +283,8 @@ export async function getSettings() {
 /**
  * The Head or the Visa HOD. A follow-up timing change applies to enquiries saved after it; a file size limit to the next
  * upload; a docket prefix to the next new docket; a sticker size to the next print; the GST rate to the quotes' preview
- * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch. Only the keys sent and changed are written, each audited on its own.
+ * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch; the vendor
+ * email's wording to the next email. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -295,6 +297,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: INVOICE_KEY, before: before.invoice, after: input.invoice },
     { key: VENDOR_CONFIRM_KEY, before: before.vendorConfirm, after: input.vendorConfirm },
     { key: AWB_KEY, before: before.awb, after: input.awb },
+    { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));
   if (changes.length === 0) return before;
   await prisma.$transaction(async (tx) => {

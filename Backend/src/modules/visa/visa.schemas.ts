@@ -56,6 +56,31 @@ export const awbSettingSchema = z
   .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
   .refine((s) => s.minLength <= s.maxLength, { message: "The shortest can't be longer than the longest.", path: ["minLength"] });
 
+/** The {tokens} the vendor email's wording may use, filled in for each docket. */
+export const DOCKET_EMAIL_TOKENS = ["docketNo", "files", "passports", "vendor", "company"] as const;
+
+const emailWording = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1, "Can't be blank.")
+    .max(max, `${max} characters at most.`)
+    .refine(
+      (s) => [...s.matchAll(/\{([^}]*)\}/g)].every((m) => (DOCKET_EMAIL_TOKENS as readonly string[]).includes(m[1]!)),
+      `Use only ${DOCKET_EMAIL_TOKENS.map((t) => `{${t}}`).join(", ")}.`,
+    );
+
+/**
+ * The email to the vendor at dispatch (0008 Decision 8): its wording ⚠️, each part with {tokens} filled in per docket.
+ * The table of files between the opening and the closing is laid out by the code.
+ */
+export const docketEmailSettingSchema = z.object({
+  subject: emailWording(200),
+  greeting: emailWording(200),
+  opening: emailWording(500),
+  closing: emailWording(500),
+});
+
 export const visaSettingsSchema = z.object({
   firstFollowUp: firstFollowUpSchema,
   finalFile: finalFileSchema,
@@ -64,6 +89,7 @@ export const visaSettingsSchema = z.object({
   invoice: invoiceSettingSchema,
   vendorConfirm: vendorConfirmSchema,
   awb: awbSettingSchema,
+  docketEmail: docketEmailSettingSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
@@ -95,6 +121,7 @@ export type StickerSetting = z.infer<typeof stickerSettingSchema>;
 export type InvoiceSetting = z.infer<typeof invoiceSettingSchema>;
 export type VendorConfirmSetting = z.infer<typeof vendorConfirmSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
+export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;

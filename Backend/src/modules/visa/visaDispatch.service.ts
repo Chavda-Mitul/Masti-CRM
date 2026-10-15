@@ -250,6 +250,7 @@ async function markVendorEmailSending(docketId: string) {
 
     const to = d.vendor.email;
     const company = await getCompanyDetails(tx);
+    const { docketEmail: wording } = await getVisaSettings(tx);
     const email = docketEmail({
       docketNo: d.docketNo,
       vendor: { name: d.vendor.name, email: to },
@@ -263,6 +264,7 @@ async function markVendorEmailSending(docketId: string) {
         oldPassports: c.bookletsOld ?? 0,
       })),
       company: { name: company.name, phone: company.phone, email: company.email },
+      wording,
     });
     return { to, email };
   });

@@ -445,6 +445,34 @@ describe("the email to the vendor (Decision 8)", () => {
     expect((await inbox()).messages).toHaveLength(1);
   });
 
+  it("uses the wording the Visa HOD set (visa.docketEmail ⚠️), with its {tokens} filled in; an unknown token is refused", async () => {
+    const { mehta, processor } = await docketOfTwo();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const wording = {
+      subject: "{company}: docket {docketNo}",
+      greeting: "Namaste {vendor} team,",
+      opening: "Sending {files} ({passports} passports) as docket {docketNo}.",
+      closing: "Kindly reply once it <arrives>.",
+    };
+    const bad = await hod.put("/api/visa/settings").send({ docketEmail: { ...wording, closing: "Thanks, {staff}." } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.issues.docketEmail).toBeDefined();
+    expect((await processor.put("/api/visa/settings").send({ docketEmail: wording })).status).toBe(403);
+    expect((await hod.put("/api/visa/settings").send({ docketEmail: wording })).status).toBe(200);
+
+    const res = await dispatch(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    const { docketNo } = (res.body.case as CaseDto).docket!;
+    const { messages, text, html } = await inbox();
+    expect(messages[0]!.Subject).toBe(`MASTI TOUR AND TRAVEL: docket ${docketNo}`);
+    expect(text).toContain("Namaste Global Visa Services team,");
+    expect(text).toContain(`Sending 2 files (4 passports) as docket ${docketNo}.`);
+    expect(text).toContain("Kindly reply once it <arrives>.");
+    expect(html).toContain(`as docket <strong>${docketNo}</strong>.`);
+    expect(html).toContain("Kindly reply once it &lt;arrives&gt;.");
+  });
+
   it("isn't sent before dispatch", async () => {
     const { mehta, processor } = await docketOfTwo();
     const res = await processor.post(`/api/visa/cases/${mehta.caseNo}/dispatch/email`).send({});

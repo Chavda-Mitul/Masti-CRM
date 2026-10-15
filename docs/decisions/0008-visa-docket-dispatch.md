@@ -259,6 +259,13 @@ the Head, with no screen yet, like `visa.finalFile`) and the yearly `DocketCount
   - a table of each file with its travellers, country and passports ("3 + 2 old"), and the totals
   - Masti's name and phone; Reply-To is the company email when there is one
   - plain text and HTML
+  - **The wording is a setting** (15 Oct 2026, from a code review: golden rule 1). `visa.docketEmail` →
+    `{ subject, greeting, opening, closing }`, seeded with our words: "Docket {docketNo} · {files} · {company}",
+    "Dear {vendor},", "Docket {docketNo} is on its way to you: {files}, {passports} passports." and "Please confirm
+    when you receive it." Each part may use `{docketNo}`, `{files}`, `{passports}`, `{vendor}` and `{company}`; any
+    other token is refused (400). In the HTML it's escaped, with the docket number bold. The Visa HOD or the Head
+    changes it through `PUT /api/visa/settings` (no screen yet, like `visa.awb`). The "Sent by" line and the table
+    stay laid out by the code.
 - **The Dispatch card** shows "Email to vendor: Sent with the docket list · 14 Oct, 11:12 am", or "Not sent" with the
   error and **Send again**.
 - **Still needed from Masti (A6):** the SMTP account the CRM sends from. Until then, production shows "Email isn't set

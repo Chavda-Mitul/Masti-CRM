@@ -7,7 +7,9 @@ import {
   stickerSettingSchema,
   vendorConfirmSchema,
   awbSettingSchema,
+  docketEmailSettingSchema,
   type AwbSetting,
+  type DocketEmailSetting,
   type DocketSetting,
   type FinalFileSetting,
   type FirstFollowUp,
@@ -27,6 +29,7 @@ export const STICKER_KEY = "visa.sticker";
 export const INVOICE_KEY = "visa.invoice";
 export const VENDOR_CONFIRM_KEY = "visa.vendorConfirm";
 export const AWB_KEY = "visa.awb";
+export const DOCKET_EMAIL_KEY = "visa.docketEmail";
 
 /** ⚠️ The demo: "A follow-up lands on Aarti's desk for tomorrow", at the reminder time 11:00. */
 export const DEFAULT_FIRST_FOLLOW_UP: FirstFollowUp = { afterDays: 1, at: "11:00" };
@@ -52,9 +55,17 @@ export const DEFAULT_VENDOR_CONFIRM: VendorConfirmSetting = { afterDays: 1, at: 
 /** ⚠️ 0008 Decision 6: a slip number is 4–30 capitals and digits (ours; Masti's couriers' formats aren't known). */
 export const DEFAULT_AWB: AwbSetting = { minLength: 4, maxLength: 30 };
 
+/** ⚠️ 0008 Decision 8: the email to the vendor at dispatch, in our words until Masti approves them. */
+export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
+  subject: "Docket {docketNo} · {files} · {company}",
+  greeting: "Dear {vendor},",
+  opening: "Docket {docketNo} is on its way to you: {files}, {passports} passports.",
+  closing: "Please confirm when you receive it.",
+};
+
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, AWB_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, VENDOR_CONFIRM_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -64,6 +75,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const invoice = invoiceSettingSchema.safeParse(value(INVOICE_KEY));
   const vendorConfirm = vendorConfirmSchema.safeParse(value(VENDOR_CONFIRM_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
+  const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
   return {
     firstFollowUp: firstFollowUp.success ? firstFollowUp.data : DEFAULT_FIRST_FOLLOW_UP,
     finalFile: finalFile.success ? finalFile.data : DEFAULT_FINAL_FILE,
@@ -72,5 +84,6 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     invoice: invoice.success ? invoice.data : DEFAULT_INVOICE,
     vendorConfirm: vendorConfirm.success ? vendorConfirm.data : DEFAULT_VENDOR_CONFIRM,
     awb: awb.success ? awb.data : DEFAULT_AWB,
+    docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,
   };
 }
