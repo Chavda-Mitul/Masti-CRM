@@ -161,7 +161,9 @@ router.post("/cases/:caseNo/additional-invoice", visaEdit, async (req, res) => {
 
 /** What cancelling the case's invoice would give back, and what blocks it (0011 Decision 5). Anyone who can open it. */
 router.get("/cases/:caseNo/invoice/cancel/check", visaView, async (req, res) => {
-  res.json(await creditNoteService.cancelInvoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
+  // ?invoiceNo= picks the additional invoice (0011 Decision 7); without it, the main one.
+  const invoiceNo = z.string().trim().toUpperCase().min(1).max(40).optional().parse(req.query.invoiceNo);
+  res.json(await creditNoteService.cancelInvoiceCheck(caseNoParam.parse(req.params.caseNo), currentUser(req), invoiceNo));
 });
 
 /**

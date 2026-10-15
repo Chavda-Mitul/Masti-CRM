@@ -37,20 +37,22 @@ import {
 // up anyone else; if another credit note took the number meanwhile, the caller's transaction starts again with the next.
 
 /**
- * The case's latest invoice and what a credit note against it prints, read together (inside the transaction when
- * issuing). A case has one chain of invoices, so only the latest can still stand: earlier ones were cancelled.
+ * An invoice of the case and what a credit note against it prints, read together (inside the transaction when
+ * issuing): the one numbered `invoiceNo` (the main invoice or the additional one, 0011 Decision 7), or else the main
+ * invoice's chain's latest. A chain has one standing invoice at most, so earlier ones were cancelled.
  */
-export async function gatherForCredit(enquiryId: string, db: Db) {
+export async function gatherForCredit(enquiryId: string, db: Db, invoiceNo?: string) {
   const enquiry = await db.enquiry.findUniqueOrThrow({
     where: { id: enquiryId },
     select: {
       clientId: true,
       invoices: {
-        where: { kind: "MAIN" },
+        where: invoiceNo ? { invoiceNo } : { kind: "MAIN" },
         orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
         take: 1,
         include: {
           lines: { orderBy: { position: "asc" } },
+          charges: { orderBy: { position: "asc" } },
           creditNotes: { orderBy: { issuedAt: "asc" }, select: { creditNoteNo: true, kind: true, totalPaise: true } },
         },
       },
@@ -124,21 +126,36 @@ export interface CreditDraft {
 
 /** A WHOLE credit note's draft: every amount and line of the invoice given back. */
 export function wholeDraft(inv: CreditInvoice, reason: { id: number; code: string; name: string }): CreditDraft {
+  // An additional invoice's extra charges come back as one line each (0011 Decision 7).
+  const lines: CreditLine[] =
+    inv.kind === "ADDITIONAL"
+      ? inv.charges.map((c) => ({
+          invoicePosition: c.position,
+          name: c.name,
+          description: "Additional charge",
+          form: "LUMP_SUM",
+          lumpSumPaise: c.amountPaise,
+          embassyFeePaise: null,
+          vfsFeePaise: null,
+          otherFeePaise: null,
+          totalPaise: c.amountPaise,
+        }))
+      : inv.lines.map((l) => ({
+          invoicePosition: l.position,
+          name: l.name,
+          description: l.description,
+          form: l.form,
+          lumpSumPaise: l.lumpSumPaise,
+          embassyFeePaise: l.embassyFeePaise,
+          vfsFeePaise: l.vfsFeePaise,
+          otherFeePaise: l.otherFeePaise,
+          totalPaise: l.totalPaise,
+        }));
   return {
     kind: "WHOLE",
     reason,
     printedReason: reason.name,
-    lines: inv.lines.map((l) => ({
-      invoicePosition: l.position,
-      name: l.name,
-      description: l.description,
-      form: l.form,
-      lumpSumPaise: l.lumpSumPaise,
-      embassyFeePaise: l.embassyFeePaise,
-      vfsFeePaise: l.vfsFeePaise,
-      otherFeePaise: l.otherFeePaise,
-      totalPaise: l.totalPaise,
-    })),
+    lines,
     grossPaise: inv.grossPaise,
     serviceChargePaise: inv.serviceChargePaise,
     cgstPaise: inv.cgstPaise,
@@ -281,9 +298,9 @@ export async function withCreditNoteNumber(attempt: (upload: Upload) => Promise<
  * For the Cancel dialog: the invoice, everything its credit note will give back (GST included), the number it will get,
  * and what blocks it. Anyone who can open the case may look.
  */
-export async function cancelInvoiceCheck(caseNo: string, user: UserWithDepartments) {
+export async function cancelInvoiceCheck(caseNo: string, user: UserWithDepartments, invoiceNo?: string) {
   const { id } = await findVisibleCase(caseNo, user);
-  const g = await gatherForCredit(id, prisma);
+  const g = await gatherForCredit(id, prisma, invoiceNo);
   const inv = g.invoice;
   if (!inv) throw conflict("This case has no invoice yet.");
   return {
@@ -326,7 +343,7 @@ export async function cancelInvoice(caseNo: string, input: CancelInvoiceInput, a
     if (blockers.length) throw new HttpError(409, "The credit note can't be issued yet.", { code: "CREDIT_NOTE_BLOCKED", blockers });
     return { inv, reason };
   };
-  const pre = await gatherForCredit(enquiry.id, prisma);
+  const pre = await gatherForCredit(enquiry.id, prisma, input.invoiceNo);
   await check(pre, prisma);
   const images = await creditImages(pre);
 
@@ -334,7 +351,7 @@ export async function cancelInvoice(caseNo: string, input: CancelInvoiceInput, a
     prisma.$transaction(
       async (tx) => {
         await lockCase(tx, enquiry.id, actor, INVOICED);
-        const g = await gatherForCredit(enquiry.id, tx);
+        const g = await gatherForCredit(enquiry.id, tx, input.invoiceNo);
         const { inv, reason } = await check(g, tx);
         await issueCreditNote(tx, { enquiryId: enquiry.id, g, inv, draft: wholeDraft(inv, reason), images, actor, upload });
       },

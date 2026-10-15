@@ -385,7 +385,9 @@ export interface CaseInvoice {
 export interface AdditionalInvoiceCheck {
   mainInvoiceNo: string
   alreadyRaised: string | null
-  /** "MVI00000001-A" */
+  /** The cancelled additional invoice this one corrects, or null for the file's first */
+  replaces: string | null
+  /** "MVI00000001-A"; a correction takes the next letter, "-B" */
   invoiceNo: string
   blockers: { kind: string; label: string; items: string[] }[]
 }

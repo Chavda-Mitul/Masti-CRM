@@ -8,7 +8,8 @@ import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The one additional invoice per file (docs/decisions/0011-visa-at-vendor.md Decision 7): "MVI…-A", extra charges from
-// the list with the amount typed, no GST, at any step once the main invoice stands.
+// the list with the amount typed, no GST, at any step once the main invoice stands. A wrong one is cancelled with a
+// credit note and corrected ("-B"), still 1 of 1.
 
 beforeEach(async () => {
   await resetDb();
@@ -21,13 +22,15 @@ interface AdditionalDto {
   totalPaise: number;
   gstPaise: number;
   charges: { name: string; amountPaise: number }[];
-  cancelled: unknown;
+  replaces: string | null;
+  cancelled: { creditNoteNo: string; reason: string; totalPaise: number } | null;
   file: { fileName: string };
 }
 interface CaseDto {
   updatedAt: string;
-  invoice: { invoiceNo: string } | null;
+  invoice: { invoiceNo: string; cancelled: unknown } | null;
   additionalInvoice: AdditionalDto | null;
+  earlierAdditionalInvoices: AdditionalDto[];
 }
 const load = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case as CaseDto;
 const check = (agent: Agent, caseNo: string) => agent.get(`/api/visa/cases/${caseNo}/additional-invoice/check`);
@@ -70,7 +73,7 @@ async function addInvoice(agent: Agent, caseNo: string, charges: Charge[] = URGE
 describe("the additional invoice (Decision 7)", () => {
   it("is MVI…-A with several charges, no GST, its own PDF and an audit row, and leaves the main invoice alone", async () => {
     const c = await invoiced();
-    expect((await check(c.staff, c.caseNo)).body).toEqual({ mainInvoiceNo: "MVI00000001", alreadyRaised: null, invoiceNo: "MVI00000001-A", blockers: [] });
+    expect((await check(c.staff, c.caseNo)).body).toEqual({ mainInvoiceNo: "MVI00000001", alreadyRaised: null, replaces: null, invoiceNo: "MVI00000001-A", blockers: [] });
 
     const res = await addInvoice(c.staff, c.caseNo);
     expect(res.status).toBe(200);
@@ -133,6 +136,83 @@ describe("the additional invoice (Decision 7)", () => {
     expect(recalled.status).toBe(200);
     const note = await prisma.creditNote.findFirstOrThrow({ include: { invoice: { select: { invoiceNo: true } } } });
     expect(note.invoice.invoiceNo).toBe("MVI00000001");
+  });
+});
+
+/** "Cancel with a credit note" on `invoiceNo`, against what the dialog shows. */
+async function cancel(agent: Agent, caseNo: string, invoiceNo?: string) {
+  const shown = (await agent.get(`/api/visa/cases/${caseNo}/invoice/cancel/check${invoiceNo ? `?invoiceNo=${invoiceNo}` : ""}`)).body;
+  const wrong = await prisma.creditNoteReason.findUniqueOrThrow({ where: { code: "WRONG_AMOUNT" } });
+  return agent.post(`/api/visa/cases/${caseNo}/invoice/cancel`).send({ invoiceNo: shown.invoiceNo, totalPaise: shown.preview.totalPaise, reasonId: wrong.id });
+}
+
+describe("correcting it", () => {
+  it("a credit note cancels it by its number, with no GST, and the correction is MVI…-B, still 1 of 1", async () => {
+    const c = await invoiced();
+    expect((await addInvoice(c.staff, c.caseNo)).status).toBe(200);
+
+    const shown = (await c.staff.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check?invoiceNo=mvi00000001-a`)).body;
+    expect(shown).toMatchObject({
+      invoiceNo: "MVI00000001-A",
+      alreadyCancelled: null,
+      preview: { creditNoteNo: "MCN00000001", grossPaise: 200_000, serviceChargePaise: 0, cgstPaise: 0, sgstPaise: 0, igstPaise: 0, totalPaise: 200_000 },
+    });
+    expect((await c.staff.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check?invoiceNo=MVI00000009`)).status).toBe(409);
+
+    const res = await cancel(c.staff, c.caseNo, "MVI00000001-A");
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.additionalInvoice!.cancelled).toMatchObject({ creditNoteNo: "MCN00000001", reason: "Wrong amount", totalPaise: 200_000 });
+    expect(after.invoice!.cancelled).toBeNull();
+
+    const note = await prisma.creditNote.findUniqueOrThrow({
+      where: { creditNoteNo: "MCN00000001" },
+      include: { invoice: { select: { invoiceNo: true } }, lines: { orderBy: { position: "asc" } }, file: true },
+    });
+    expect(note).toMatchObject({ kind: "WHOLE", grossPaise: 200_000, serviceChargePaise: 0, cgstPaise: 0, sgstPaise: 0, igstPaise: 0, totalPaise: 200_000 });
+    expect(note.invoice.invoiceNo).toBe("MVI00000001-A");
+    expect(note.lines.map((l) => [l.invoicePosition, l.name, l.form, l.lumpSumPaise, l.totalPaise])).toEqual([
+      [1, "Urgent submission", "LUMP_SUM", 150_000, 150_000],
+      [2, "Photos", "LUMP_SUM", 50_000, 50_000],
+    ]);
+    const pdf = await PDFDocument.load(new Uint8Array(await getObject(note.file.storageKey)));
+    expect(pdf.getTitle()).toBe("Credit note MCN00000001");
+    expect((await cancel(c.staff, c.caseNo, "MVI00000001-A")).body.message).toMatch(/already cancelled by MCN00000001/);
+
+    // The correction: the next letter, replacing the cancelled one.
+    expect((await check(c.staff, c.caseNo)).body).toMatchObject({ alreadyRaised: null, replaces: "MVI00000001-A", invoiceNo: "MVI00000001-B" });
+    const fixed = await addInvoice(c.staff, c.caseNo, [{ code: "URGENT_SUBMISSION", amountPaise: 120_000 }]);
+    expect(fixed.status).toBe(200);
+    const corrected = fixed.body.case as CaseDto;
+    expect(corrected.additionalInvoice).toMatchObject({ invoiceNo: "MVI00000001-B", totalPaise: 120_000, replaces: "MVI00000001-A", cancelled: null });
+    expect(corrected.earlierAdditionalInvoices.map((e) => [e.invoiceNo, e.cancelled?.creditNoteNo])).toEqual([["MVI00000001-A", "MCN00000001"]]);
+    const a = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001-A" } });
+    const b = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001-B" }, include: { file: true } });
+    expect(b).toMatchObject({ kind: "ADDITIONAL", replacesId: a.id, totalPaise: 120_000 });
+    expect((await PDFDocument.load(new Uint8Array(await getObject(b.file.storageKey)))).getTitle()).toBe("Tax invoice MVI00000001-B");
+    expect(
+      await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.additionalInvoice.raise", after: { path: ["invoiceNo"], equals: "MVI00000001-B" } } }),
+    ).toMatchObject({ after: { replaces: "MVI00000001-A" } });
+
+    const again = await addInvoice(c.staff, c.caseNo);
+    expect(again.status).toBe(409);
+    expect(again.body.message).toMatch(/MVI00000001-B: 1 of 1 used/);
+
+    // The main invoice is still its own: cancelling it leaves the additional one standing.
+    expect((await c.staff.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check`)).body).toMatchObject({ invoiceNo: "MVI00000001", alreadyCancelled: null });
+    const mainCancelled = (await cancel(c.staff, c.caseNo)).body.case as CaseDto;
+    expect(mainCancelled.invoice!.cancelled).not.toBeNull();
+    expect(mainCancelled.additionalInvoice).toMatchObject({ invoiceNo: "MVI00000001-B", cancelled: null });
+  });
+
+  it("only by those who may raise it", async () => {
+    const c = await invoiced();
+    expect((await addInvoice(c.staff, c.caseNo)).status).toBe(200);
+    await createUser({ name: "Kiran", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const wrong = await prisma.creditNoteReason.findUniqueOrThrow({ where: { code: "WRONG_AMOUNT" } });
+    const kiran = await loginAs("kiran@masti.test");
+    expect((await kiran.post(`/api/visa/cases/${c.caseNo}/invoice/cancel`).send({ invoiceNo: "MVI00000001-A", totalPaise: 200_000, reasonId: wrong.id })).status).toBe(403);
+    expect(await prisma.creditNote.count()).toBe(0);
   });
 });
 
@@ -231,5 +311,18 @@ describe("the database", () => {
       /only on an additional invoice/,
     );
     await expect(prisma.invoiceCharge.updateMany({ where: { invoiceId: add.id }, data: { amountPaise: 1 } })).rejects.toThrow(/never edited/);
+  });
+
+  it("a correction replaces a cancelled invoice of its own kind", async () => {
+    const c = await invoiced();
+    expect((await addInvoice(c.staff, c.caseNo)).status).toBe(200);
+    expect((await cancel(c.staff, c.caseNo)).status).toBe(200);
+    const main = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001" } });
+    const add = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001-A" } });
+    const file = await prisma.caseFile.create({ data: { enquiryId: c.id, kind: "INVOICE", storageKey: "x/kind.pdf", fileName: "x.pdf", sizeBytes: 1, pageCount: 1, uploadedById: add.issuedById } });
+    const { id: _id, client, company, terms, ...rest } = add;
+    await expect(
+      prisma.invoice.create({ data: { ...rest, client: client!, company: company!, terms: terms!, invoiceNo: "TEST-KIND", fileId: file.id, replacesId: main.id } }),
+    ).rejects.toThrow(/same kind/);
   });
 });

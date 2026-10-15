@@ -22,6 +22,7 @@ import { companyPrinted, companyView, notInEnglish, preparedByPrinted, type Invo
 // amount typed. Numbered after its main invoice ("MVI00000001-A"), with no GST (decided 15 Oct 2026; M38(a) to
 // confirm). Raised by the case's owner, the Visa HOD or the Head, at any step once the main invoice stands. Locked like
 // the main invoice (the triggers), with its own PDF in the same layout. It goes to the client the main invoice went to.
+// A wrong one is cancelled with a credit note (visaCreditNote.service.ts, by its number) and replaced: "-B", still 1 of 1.
 
 /** The case's invoices, newest first, each with the WHOLE credit note that cancelled it; and what the PDF prints. */
 async function gather(enquiryId: string, db: Db) {
@@ -48,13 +49,28 @@ async function gather(enquiryId: string, db: Db) {
   });
   const [company, terms, images] = await Promise.all([getCompanyDetails(db), getInvoiceTerms(db), currentCompanyImages()]);
   const standing = (kind: "MAIN" | "ADDITIONAL") => enquiry.invoices.find((i) => i.kind === kind && i.creditNotes.length === 0) ?? null;
-  return { clientId: enquiry.clientId, main: standing("MAIN"), additional: standing("ADDITIONAL"), company, terms, images };
+  const additionals = enquiry.invoices.filter((i) => i.kind === "ADDITIONAL");
+  return {
+    clientId: enquiry.clientId,
+    main: standing("MAIN"),
+    additional: standing("ADDITIONAL"),
+    /** The cancelled additional invoice a new one replaces (still "1 of 1"), or null for the file's first. */
+    replaces: additionals[0] && additionals[0].creditNotes.length > 0 ? additionals[0] : null,
+    /** How many additional invoices the file has had: the next one's letter (A, then B for its replacement…). */
+    additionalCount: additionals.length,
+    company,
+    terms,
+    images,
+  };
 }
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
-/** Its number: the main invoice's with "-A" (the demo's INV-0412-A). */
-const numberFor = (mainInvoiceNo: string) => `${mainInvoiceNo}-A`;
+/**
+ * Its number: the main invoice's with "-A" (the demo's INV-0412-A); a replacement of a cancelled one takes the next
+ * letter ("-B"), so every number stays unique.
+ */
+const numberFor = (mainInvoiceNo: string, earlier: number) => `${mainInvoiceNo}-${String.fromCharCode(65 + earlier)}`;
 
 /** What stands in the way of printing it: Masti's details, as for the main invoice. Empty means it can be raised. */
 function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
@@ -78,7 +94,8 @@ export async function additionalInvoiceCheck(caseNo: string, user: UserWithDepar
   return {
     mainInvoiceNo: g.main.invoiceNo,
     alreadyRaised: g.additional?.invoiceNo ?? null,
-    invoiceNo: numberFor(g.main.invoiceNo),
+    replaces: g.replaces?.invoiceNo ?? null,
+    invoiceNo: numberFor(g.main.invoiceNo, g.additionalCount),
     blockers: blockersOf(g, user.name),
   };
 }
@@ -106,6 +123,7 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
     if (blockers.length) throw new HttpError(409, "The additional invoice can't be raised yet.", { code: "ADDITIONAL_BLOCKED", blockers });
     const names = new Map(found.map((c) => [c.id, c.name]));
     const charges = input.charges.map((c, i) => ({ position: i + 1, chargeId: c.chargeId, name: names.get(c.chargeId)!, amountPaise: c.amountPaise }));
+    if (g.additionalCount >= 26) throw conflict("This file has had too many additional invoices.");
     return { main, charges, totalPaise };
   };
   const pre = await gather(enquiry.id, prisma);
@@ -124,7 +142,8 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
         const g = await gather(enquiry.id, tx);
         const { main, charges, totalPaise } = await check(g, tx);
 
-        const invoiceNo = numberFor(main.invoiceNo);
+        const invoiceNo = numberFor(main.invoiceNo, g.additionalCount);
+        const replaces = g.replaces;
         const issuedOn = istToday();
         const client = main.client as unknown as InvoiceParty;
         const view: InvoiceView = {
@@ -159,6 +178,7 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
         const pdf = await renderInvoicePdf(view, images, {
           kind: "INVOICE",
           additionalTo: { invoiceNo: main.invoiceNo, issuedOn: fromDbDate(main.issuedOn) },
+          ...(replaces ? { replaces: { invoiceNo: replaces.invoiceNo, creditNoteNo: replaces.creditNotes[0]!.creditNoteNo } } : {}),
         });
         storageKey = `cases/${enquiry.id}/invoice/${randomUUID()}.pdf`;
         await putObject(storageKey, Buffer.from(pdf.bytes), "application/pdf");
@@ -180,6 +200,7 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
             kind: "ADDITIONAL",
             invoiceNo,
             enquiryId: enquiry.id,
+            replacesId: replaces?.id ?? null,
             issuedOn: toDbDate(issuedOn),
             issuedById: actor.user.id,
             client: main.client as Prisma.InputJsonValue,
@@ -207,7 +228,7 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
             entityType: "Enquiry",
             entityId: enquiry.id,
             clientId: g.clientId,
-            after: { invoiceId: invoice.id, invoiceNo, mainInvoiceNo: main.invoiceNo, charges: charges.map((c) => ({ name: c.name, amountPaise: c.amountPaise })), totalPaise, fileId: file.id },
+            after: { invoiceId: invoice.id, invoiceNo, mainInvoiceNo: main.invoiceNo, replaces: replaces?.invoiceNo ?? null, charges: charges.map((c) => ({ name: c.name, amountPaise: c.amountPaise })), totalPaise, fileId: file.id },
             ip: actor.ip,
           },
           tx,

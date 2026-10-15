@@ -16,7 +16,8 @@ interface Row {
  * The file's one additional invoice (demo screen 10 ⚠️, docs/decisions/0011-visa-at-vendor.md Decision 7): extra costs
  * after the main invoice, such as an urgent submission charge or photos. Each charge is picked from the list and its
  * amount typed; several go on the one invoice. Numbered after the main invoice ("MVI00000001-A"), with no GST, and
- * locked once raised. The main invoice and total shown are sent back, so a change meanwhile is refused.
+ * locked once raised. The main invoice and total shown are sent back, so a change meanwhile is refused. Once a credit
+ * note cancels it, the same dialog raises its correction ("-B"), still 1 of 1.
  */
 export function AdditionalInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
@@ -72,6 +73,11 @@ export function AdditionalInvoiceDialog({ visaCase: c, onClose }: { visaCase: Vi
           For extra costs after the main invoice, such as an urgent submission or photos. A file gets only one, so add every
           charge now. No GST is charged on them.
         </p>
+        {check.data?.replaces && !check.data.alreadyRaised && (
+          <div className="alert alert-warn">
+            It corrects <span className="mono">{check.data.replaces}</span>, which a credit note cancelled. It still counts as the file’s one.
+          </div>
+        )}
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
