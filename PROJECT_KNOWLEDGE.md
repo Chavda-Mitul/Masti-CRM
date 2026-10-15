@@ -867,6 +867,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - Two outcomes: **Approved** or **Refused**. The demo records them **per traveller**, with the visa sticker number and validity (§17 #3, Q11).
 - The refusal letter is a **Drive/OneDrive link**, not an attachment ("Open in Drive"): "Letters and scans stay in your Google Drive or OneDrive; the CRM keeps only the link so it stays fast."
 - If approved, the visa sticker comes back with the passport.
+- **Decided 15 Oct 2026 (project lead), `docs/decisions/0012-visa-decision.md`:** per traveller (M10 to confirm). An approved traveller needs the sticker number and valid-from / valid-to dates (an e-visa: its e-visa number). The refusal letter is a scanned PDF in our storage (rule 4), optional, uploadable at Step 6 or later. One form for the whole family, opened by "Record the decision →" at Step 5; saving it moves the case to Step 6. The processor, the Visa HOD or the Head can correct a traveller's entry while the case is at Step 6 (audited).
 
 **Step 7 · Passport back** ✅
 - Vendor collected → **In transit**. Vendors are "not systematic", so record an expected arrival date.
@@ -1601,7 +1602,7 @@ Masti CRM/
 |---|---|---|---|
 | 1 | Pending-document reminder schedule | Client: the company sets the interval (e.g. 1, 2 or 3 days); no time of day mentioned. Demo: "every 2 days at 11:00". PID: "reminders every 2 days". | **Decided 8 Oct 2026:** an admin setting (interval, send time, channel), seeded with 2 days / 11:00. Masti can still tell us their preferred values (Q5). |
 | 2 | Web check-in window | Written doc: 48 h. Meeting: Vimal said "48 hours", then settled on "give us the list 72 hours before" (8:16 PM). Demo and PID: 72 h. | Configurable, seeded with 72 h (the PID and Vimal's last word). Confirm in writing (Q21). |
-| 3 | Visa decision granularity | Client: "status only: refused or approved". Demo and PID: per traveller. Handover guide: per-traveller is our assumption. | Build per traveller (the PID's wording). Confirm (Q11). |
+| 3 | Visa decision granularity | Client: "status only: refused or approved". Demo and PID: per traveller. Handover guide: per-traveller is our assumption. | Build per traveller (the PID's wording). **Decided 15 Oct 2026 (project lead): per traveller** (0012). Masti to confirm (Q11 / M10). |
 | 4 | Hotel options per quote | Client: max 3–4 (5 tolerated). Demo and PID: up to 4. | Limit 4, configurable. |
 | 5 | Hotel markup floor | Client: nice-to-have ("no big need right now"), by category or price range. PID: "minimum markup is set by star rating". Demo: 3★ 10%, 4★ 8%, 5★ 6%. | In scope (PID), by star rating. The values are samples (Q17). |
 | 6 | Hotel competitor sites | Client: the company picks its competitors (e.g. 4; MakeMyTrip + 3). PID and demo: MakeMyTrip, Agoda, Booking.com + vendor. | A configurable list, seeded with the PID's three + vendor (Q18). |
@@ -1666,6 +1667,13 @@ Masti CRM/
 - **Not in 0009:** payments and the balance, WhatsApp sending, cross-sell leads, the accounting export, other departments' invoices.
 - **Build order:** the quote card → invoice settings → raising the invoice (+ PDF) → the Docket card's Invoice column → then the Dispatch card (0008).
 - **Built so far:** component 1, **the quote** (13 Oct 2026). "Money on this case" in the case's right rail. Per traveller a lump sum or itemised, plus the service charge and the processing speed (a master list: Normal / Express / Super priority ⚠️). GST is previewed on the service charge. It's editable from Step 1 until the file goes to the vendor, by the case owner, the Visa HOD or the Head, and audited. The `visa.invoice` setting (MVI series, 18% GST) came with it. Component 2, **the invoice settings** (13 Oct 2026): in Settings → **Company & invoice** (its own tab), the Head enters Masti's PAN, GSTIN, state, bank details, the invoice terms, and uploads the logo and signature (stored privately). A note lists what the first invoice still needs. The Visa HOD or Head sets the invoice series' **starting number** and the GST rate there. Component 3, **raising the invoice** (13 Oct 2026): "Raise invoice" in Money on this case checks first what blocks it (quote, unnamed travellers, client details, Masti's details, names not in English letters), then makes the locked tax invoice: the next `MVI` number, GST (CGST + SGST for Gujarat clients, IGST otherwise) and a stored PDF in Masti's layout (Noto Sans font). The database refuses any edit or delete; the quote freezes. Component 4, **the Docket card's Invoice column** (13 Oct 2026): each file in the docket shows "MVI… · locked" or "Raise invoice first" (on the case's own row, a link to Money on this case). Next: the Dispatch card (0008).
+
+**Decided 15 Oct 2026 (project lead), for Visa Step 6 (Decision).** The design is `docs/decisions/0012-visa-decision.md` (decided; being built).
+- **One component at a time:** record the decision → change a traveller's decision → the refusal letter scan.
+- **Per traveller,** Approved or Refused (M10 to confirm). Approved needs the sticker (or e-visa) number and its valid-from / valid-to dates; Step 7 checks the stickers against them.
+- **The refusal letter** is a scanned PDF kept with the case, optional, uploadable at Step 6 or later.
+- **One form for the family:** "Record the decision →" at Step 5, once the file is submitted (at the embassy or online). Saving it moves the case to Step 6, due the next office day at 11:00 ⚠️ (`visa.passportsBackCheck`) to check the passports are on their way back.
+- **Corrections** at Step 6 by the processor, the Visa HOD or the Head, audited. A refusal changes no money. "Passports on the way back →" comes with Step 7.
 
 **Decided 15 Oct 2026 (project lead), for Visa Step 5 (At vendor).** The design is `docs/decisions/0011-visa-at-vendor.md` (decided; being built).
 - **One component at a time, following the case:** "Vendor got it" → submitted at the embassy (file number, embassy, expected collection date, saved together) → the credit note → recall → the additional invoice.
