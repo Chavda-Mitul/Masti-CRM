@@ -54,6 +54,15 @@ export const COURIERS = [
   { code: "BY_HAND", name: "By hand (no AWB)", awbNeeded: false, sortOrder: 3 },
 ];
 
+/** Why a credit note is issued (docs/decisions/0011-visa-at-vendor.md Decision 5): ours, for Masti to approve ⚠️. */
+export const CREDIT_NOTE_REASONS = [
+  { code: "WRONG_AMOUNT", name: "Wrong amount", sortOrder: 1 },
+  { code: "WRONG_CLIENT_DETAILS", name: "Wrong client details", sortOrder: 2 },
+  { code: "WRONG_TRAVELLER_DETAILS", name: "Wrong traveller details", sortOrder: 3 },
+  { code: "CLIENT_CANCELLED", name: "Client cancelled", sortOrder: 4 },
+  { code: "RECALL", name: "Recall", sortOrder: 5 },
+];
+
 interface SeedLine {
   code: string;
   requirement: DocumentRequirement;
@@ -101,6 +110,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const courier of COURIERS) {
     await db.courier.upsert({ where: { code: courier.code }, update: {}, create: courier });
+  }
+  for (const reason of CREDIT_NOTE_REASONS) {
+    await db.creditNoteReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
   }
 
   const france = await db.country.findUniqueOrThrow({ where: { code: "FR" } });

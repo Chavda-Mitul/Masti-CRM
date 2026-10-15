@@ -1,50 +1,92 @@
 import { useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { formatDate } from '../../../lib/format'
 import { formatRupees } from '../../../lib/money'
 import type { VisaCase } from '../types'
 import { useOpenCaseFile } from '../queries'
-import { dayMonth } from './labels'
+import { CancelInvoiceDialog } from './CancelInvoiceDialog'
+import { dayMonth, liveInvoice } from './labels'
 import { QuoteDialog } from './QuoteDialog'
 import { RaiseInvoiceDialog } from './RaiseInvoiceDialog'
 
-/** The quote can change from Step 1 until the file goes to the vendor (Backend caseLock.ts QUOTING). */
+/**
+ * The quote can change from Step 1 until the file goes to the vendor (Backend caseLock.ts QUOTING), and at any step
+ * while a cancelled invoice waits for its replacement (0011 Decision 5).
+ */
 const QUOTE_STEPS = ['ENQUIRY', 'DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH']
 
 /**
  * "Money on this case" (demo screen 09 ⚠️, docs/decisions/0009-visa-invoice.md Decision 2): the quote, each traveller's
  * amount, Masti's service charge, GST on it and the total. The case's owner, its HOD or the Head add or edit it until the
  * file goes to the vendor, and raise the locked tax invoice from it. Once raised, the invoice shows here with its PDF, and
- * the quote can't change.
+ * the quote can't change. A wrong invoice is cancelled with a credit note (0011 Decision 5), at any step; the quote
+ * then reopens, and the corrected invoice raised from it replaces the cancelled one. Earlier invoices are listed below.
  */
 export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const [editing, setEditing] = useState(false)
   const [raising, setRaising] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const openFile = useOpenCaseFile(c.caseNo)
   const q = c.quote
   const invoice = c.invoice
+  const cancelled = invoice?.cancelled ?? null
   const canAct =
-    !!me && c.status === 'OPEN' && QUOTE_STEPS.includes(c.stage.code) && canActOnCase(me, { department: c.department.code, owner: c.owner })
-  const canEdit = canAct && !invoice
+    !!me &&
+    c.status === 'OPEN' &&
+    (QUOTE_STEPS.includes(c.stage.code) || !!cancelled) &&
+    canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const canEdit = canAct && !liveInvoice(c)
+  const canCancel =
+    !!me && c.status === 'OPEN' && !!invoice && !cancelled && canActOnCase(me, { department: c.department.code, owner: c.owner })
 
   return (
     <div className="rail-section money-section" id="money">
       <div className="lbl">Money on this case</div>
       {invoice && (
-        <div className="money-invoice">
+        <div className={`money-invoice${cancelled ? ' is-cancelled' : ''}`}>
           <div className="money-invoice-head">
-            <span className="chip chip-ok">
-              <span className="mono">{invoice.invoiceNo}</span> · locked
-            </span>
-            <strong>{formatRupees(invoice.totalPaise)}</strong>
+            {cancelled ? (
+              <span className="chip chip-bad">
+                <span className="mono">{invoice.invoiceNo}</span> · cancelled
+              </span>
+            ) : (
+              <span className="chip chip-ok">
+                <span className="mono">{invoice.invoiceNo}</span> · locked
+              </span>
+            )}
+            <strong className="money-invoice-total">{formatRupees(invoice.totalPaise)}</strong>
           </div>
           <span className="muted small">
             Raised by {invoice.issuedBy.name}, {dayMonth(invoice.issuedAt)}
           </span>
-          <button type="button" className="btn btn-sm" onClick={() => openFile(invoice.file.id)}>
-            Open invoice
-          </button>
+          {invoice.replaces && (
+            <span className="muted small">
+              Replaces <span className="mono">{invoice.replaces}</span>
+            </span>
+          )}
+          {cancelled && (
+            <span className="muted small">
+              Cancelled by <span className="mono">{cancelled.creditNoteNo}</span> · {cancelled.reason} · {cancelled.issuedBy.name},{' '}
+              {formatDate(cancelled.issuedOn)}
+            </span>
+          )}
+          <div className="money-invoice-actions">
+            <button type="button" className="btn btn-sm" onClick={() => openFile(invoice.file.id)}>
+              Open invoice
+            </button>
+            {cancelled && (
+              <button type="button" className="btn btn-sm" onClick={() => openFile(cancelled.file.id)}>
+                Open credit note
+              </button>
+            )}
+            {canCancel && (
+              <button type="button" className="btn btn-sm" onClick={() => setCancelling(true)}>
+                Cancel with a credit note
+              </button>
+            )}
+          </div>
         </div>
       )}
       {q ? (
@@ -88,13 +130,36 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
           </button>
           {q?.complete && (
             <button type="button" className="btn btn-sm btn-primary" onClick={() => setRaising(true)}>
-              Raise invoice
+              {cancelled ? 'Raise the corrected invoice' : 'Raise invoice'}
             </button>
           )}
         </div>
       )}
+      {c.earlierInvoices.length > 0 && (
+        <div className="money-earlier">
+          <span className="muted small">Earlier invoices</span>
+          {c.earlierInvoices.map((e) => (
+            <div key={e.invoiceNo} className="kv">
+              <span className="small">
+                <span className="mono">{e.invoiceNo}</span> · cancelled by <span className="mono">{e.cancelled?.creditNoteNo}</span>
+              </span>
+              <span className="money-earlier-actions">
+                <button type="button" className="btn-link small" onClick={() => openFile(e.file.id)}>
+                  Invoice
+                </button>
+                {e.cancelled && (
+                  <button type="button" className="btn-link small" onClick={() => openFile(e.cancelled!.file.id)}>
+                    Credit note
+                  </button>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {editing && <QuoteDialog visaCase={c} onClose={() => setEditing(false)} />}
       {raising && <RaiseInvoiceDialog visaCase={c} onClose={() => setRaising(false)} />}
+      {cancelling && <CancelInvoiceDialog visaCase={c} onClose={() => setCancelling(false)} />}
     </div>
   )
 }

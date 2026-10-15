@@ -21,6 +21,7 @@ import {
   DEFAULT_DOCKET_EMAIL,
   DEFAULT_FIRST_FOLLOW_UP,
   DEFAULT_INVOICE,
+  DEFAULT_CREDIT_NOTE,
   DEFAULT_ONLINE_CHECK,
   DEFAULT_STICKER,
   DEFAULT_SUBMISSION_CHECK,
@@ -30,6 +31,7 @@ import {
   DOCKET_KEY,
   FIRST_FOLLOW_UP_KEY,
   INVOICE_KEY,
+  CREDIT_NOTE_KEY,
   ONLINE_CHECK_KEY,
   STICKER_KEY,
   SUBMISSION_CHECK_KEY,
@@ -93,11 +95,12 @@ async function main() {
   // invoice series and GST rate (docs/decisions/0009-visa-invoice.md) ⚠️, the vendor-confirm timing and slip-number
   // lengths (0008 Decisions 6 and 9) ⚠️, the e-visa portal check (0008 Decision 11) ⚠️, the vendor email's wording
   // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, the collection reminder (0011
-  // Decision 4) ⚠️, and Masti's own details.
+  // Decision 4) ⚠️, the credit-note series (0011 Decision 5) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
     [INVOICE_KEY, DEFAULT_INVOICE],
+    [CREDIT_NOTE_KEY, DEFAULT_CREDIT_NOTE],
     [VENDOR_CONFIRM_KEY, DEFAULT_VENDOR_CONFIRM],
     [ONLINE_CHECK_KEY, DEFAULT_ONLINE_CHECK],
     [SUBMISSION_CHECK_KEY, DEFAULT_SUBMISSION_CHECK],

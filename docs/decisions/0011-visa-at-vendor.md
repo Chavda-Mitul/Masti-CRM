@@ -1,7 +1,8 @@
 # 0011 · Visa Step 5: at the vendor
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
-  it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2). A "Built" note is added under each part as its component lands.
+  it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2); correcting a wrong invoice with a credit
+  note and its replacement (15 Oct 2026, components 3a–3c). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -163,19 +164,97 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
-- **Proposed ⚠️, settled in component 3's plan:**
-  - its own number series (a prefix setting, like `MVI`)
-  - a reason from a master list (Recall, Wrong amount…), never free text
-  - amounts taken from the invoice's lines, never more than was invoiced
-  - a stored PDF, locked like the invoice (the trigger and no edit route)
-- **Open with Masti (M37):** after a credit note cancels a wrong invoice, is the correct invoice the file's one
-  additional invoice, or a new invoice that doesn't count?
+- **Masti's answer (15 Oct 2026, through the project lead):** a wrong invoice is never changed; it's corrected with a
+  credit note. Masti has **no system today:** the CRM is their first. So there's no credit-note format to match and no
+  series to continue.
+
+**Decided 15 Oct 2026 (project lead):**
+- **The corrected invoice is a replacement** (answers M37). After a credit note cancels a wrong invoice, a fresh invoice
+  is raised from the corrected quote. It doesn't use up the file's one additional invoice, which stays free for extra
+  charges such as an urgent fee.
+- **A credit note can be whole or part.**
+  - A correction cancels the whole invoice.
+  - A recall gives back part of it: the embassy fee, or more if the HOD allows (Decision 6).
+  - The total credited on an invoice can never be more than was invoiced.
+- **GST.** A credit note that cancels a whole invoice reverses everything on it, **including its exact GST**, so the
+  accountant's tax reports come back to zero. A part credit note carries **no GST**: the embassy and VFS fees it
+  returns had none. If an HOD's larger refund includes the service charge, its GST is still not touched ⚠️ (for the
+  accountant to confirm, M38).
+- **Its own number series,** since Masti has none: `MCN` + 8 digits ⚠️, starting at 1, as settings like the
+  invoice's.
+- **The PDF** follows our invoice's layout, since there's no format to copy. It's stored and locked like the invoice
+  (a trigger, and no edit route).
+
+**Decided 15 Oct 2026 (project lead), while planning component 3:**
+- **Who cancels:** the case's processor, the Visa HOD or the Head, the same people who raise the invoice. (A recall
+  that returns more than the embassy fee is the HOD's alone, Decision 6.)
+- **The reason** comes from a list the Visa HOD edits, never free text.
+
+**Built 15 Oct 2026** (component 3, in three steps):
+
+- **3a, the reasons list** (`5c2cbcf`):
+  - Table `CreditNoteReason`, with the code CHECK (migration `20261015140000_credit_note_reasons`).
+  - Seeded ⚠️: Wrong amount, Wrong client details, Wrong traveller details, Client cancelled, Recall.
+  - `GET/POST/PATCH /api/masters/credit-note-reasons`: Visa staff read; the Visa HOD or the Head edit. Audited as
+    `creditNoteReason.create` / `.update`.
+  - Settings → Masters → Lists → **Credit-note reasons**.
+- **3b, cancelling a wrong invoice** (`df0a029`):
+  - `GET /api/visa/cases/:caseNo/invoice/cancel/check` returns `{ invoiceNo, alreadyCancelled, blockers, preview }`.
+    The preview is the next number and every amount given back.
+  - `POST /api/visa/cases/:caseNo/invoice/cancel` with `{ invoiceNo, totalPaise, reasonId }`. It's for the case's
+    owner, the Visa HOD or the Head, at any step (the step rule `INVOICED`). Refused with:
+    - 409 `CREDIT_NOTE_CHANGED` when the invoice or its total isn't the one shown
+    - 409 when it's already cancelled
+    - 400 under `reasonId` for a switched-off reason
+    - 409 `CREDIT_NOTE_BLOCKED` while Masti's details can't be printed
+  - **A WHOLE credit note copies the invoice's amounts and lines,** its CGST, SGST or IGST included. Tables
+    `CreditNote`, `CreditNoteLine` and `CreditNoteCounter` (migration `20261015150000_credit_notes`), with:
+    - triggers: never edited
+    - CHECKs: the totals add up; nothing is negative; a PART note carries no GST
+    - a partial unique index: one WHOLE note per invoice
+    - a BEFORE INSERT trigger: a note is on its invoice's case, and a WHOLE one matches its invoice exactly
+  - **Its own series,** `visa.creditNote` → `{ prefix: "MCN", digits: 8, startAt: 1 }` ⚠️. Like the invoice's counter,
+    it's taken last, after the PDF is stored, with retries.
+  - **The PDF** comes from the invoice's renderer with a document type:
+    - "CREDIT NOTE"
+    - "Against Tax Invoice MVI… dated …" and "Reason: …"
+    - "Total Credit in ₹"
+    - no bank details, balance or terms
+  - Stored as `CaseFile` `CREDIT_NOTE` (`MCN00000001_Mehta.pdf`). Audited as `visa.creditNote.issue`.
+  - **A cancelled invoice no longer counts** (`liveInvoiceNo` in `visaCase.ts`): dispatch and Submitted online are
+    blocked again, and the docket table says "Raise invoice first".
+  - **Screen:**
+    - In Money on this case: **Cancel with a credit note**.
+    - A dialog with every amount given back, GST included, the reason, and "Issue credit note MCN…".
+    - Afterwards the invoice shows "MVI… · cancelled", struck through, "Cancelled by MCN… · reason", and both PDFs.
+- **3c, the replacement invoice:**
+  - **A case holds one chain of invoices** (migration `20261015160000_replacement_invoice`):
+    - `Invoice.enquiryId` is no longer unique
+    - `Invoice.replacesId` (unique) points at the cancelled invoice it replaces
+    - a partial unique index `Invoice_one_original_per_case`
+    - a BEFORE INSERT trigger: a replacement replaces an invoice of its own case that a WHOLE credit note cancelled
+
+    So only the chain's last invoice can stand.
+  - **The quote reopens while correcting:** while the case's latest invoice is cancelled, the owner, the HOD or the
+    Head can save the quote and raise the corrected invoice at any step, not only until dispatch
+    (`assertQuoteCanChange`). Otherwise the quote stays shut as before ("…once the file has gone to the vendor").
+  - **The replacement:**
+    - it records `replacesId`, and its PDF prints "Replaces Tax Invoice MVI… (cancelled by Credit Note MCN…)"
+    - the raise is audited with `replaces`
+    - it doesn't use up the file's one additional invoice
+  - **Raising it** unblocks dispatch and Submitted online again.
+  - **The case** sends `invoice` (the chain's latest, with `replaces` and `cancelled`) and `earlierInvoices`.
+  - **Screen:** after a cancellation, Money on this case offers the quote again and **Raise the corrected invoice**.
+    The Raise dialog says what it replaces, and "Earlier invoices" lists the cancelled ones with their invoice and
+    credit-note PDFs.
 
 ### 6. Recall: take the file back
 
 - **The credit note covers the embassy fee only by default:** the embassy fee lines of the invoice. VFS, the service
-  charge and the courier both ways are kept. A lump-sum invoice has no embassy fee line, so how it's handled is settled
-  in component 4's plan.
+  charge and the courier both ways are kept.
+- **A lump-sum invoice.** **Decided 15 Oct 2026 (project lead):** a lump sum has no embassy fee line, so nothing goes
+  back by default. The Visa HOD enters the refund, up to the travellers' amounts: the same "Change refund (HOD)"
+  power.
 - **Only the Visa HOD (or the Head) can return more, case by case** ("Change refund (HOD)"). The override can only
   increase the refund. The reason comes from a master list.
 - **Where the case goes.** **Decided 15 Oct 2026 (project lead):** to **Step 7 · Passport back**, marked **Recalled**,
@@ -206,7 +285,8 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 | `visa.submissionCheck` (no appointment) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | `visa.collectionCheck` (the collection reminder) | `{ daysBefore: 1, at: "11:00" }` ⚠️ |
 | The file number format | capitals, digits, "-" and "/", 3–40 ⚠️ (in the code and a CHECK) |
-| The credit-note series, the reasons list | ⚠️ (component 3) |
+| `visa.creditNote` (the credit-note series) | `{ prefix: "MCN", digits: 8, startAt: 1 }` ⚠️ |
+| The credit-note reasons | Wrong amount · Wrong client details · Wrong traveller details · Client cancelled · Recall ⚠️ |
 | The extra-charges list, with "GST applies" | Urgent submission, Photos ⚠️ (component 5) |
 | The chip wording ("With vendor · papers checked", "Submitted · …") | ours or the demo's ⚠️ |
 
@@ -219,7 +299,7 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 
 ## Still needed from Masti
 
-- **M37:** a corrected invoice after a credit note: the one additional invoice, or a new one?
 - **M38 (accountant):** is GST charged on an additional charge (urgent fee, photos), or are some pass-through fees?
+  And when an HOD's refund on a recall includes the service charge, should its GST be reversed?
 - **M39:** the e-visa flow at Step 5, and the timings: due at the appointment after "Vendor got it", reminded the day
   before the collection date.

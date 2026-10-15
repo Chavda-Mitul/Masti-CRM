@@ -324,8 +324,8 @@ copied onto the invoice. A later edit to the client or the company never changes
   is exactly what they need, and the confirm step (Decision 5) still matters.
   - **So the credit note must be possible from the moment an invoice is raised,** not only on a recall at Step 5. It
     is designed with Step 5.
-  - ❓ **Open (M37):** after a credit note, is the corrected invoice the case's one additional invoice, or a new
-    invoice of its own? Decided when the credit note is designed.
+  - ~~Open (M37)~~ **Answered 15 Oct 2026:** the corrected invoice is a replacement that doesn't use the one additional
+    invoice. Built: [0011](0011-visa-at-vendor.md) Decision 5 (cancel with a credit note, then the replacement).
 
 ### 10. Not in this record
 

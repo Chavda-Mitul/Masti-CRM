@@ -9,6 +9,7 @@ import type {
   DocketStickerData,
   DispatchCheck,
   InvoiceCheck,
+  CancelInvoiceCheck,
   SubmitOnlineCheck,
   VendorReceivedCheck,
   InvoiceTaxType,
@@ -55,6 +56,7 @@ export const enquiryKeys = {
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
+  cancelInvoiceCheck: (caseNo: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
@@ -352,6 +354,24 @@ export function useVendorReceived(caseNo: string) {
 export function useSaveSubmission(caseNo: string) {
   return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
     api(`${base}/submission`, { method: 'PUT', body }),
+  )
+}
+
+/** What cancelling the case's invoice with a credit note gives back, and what blocks it (0011 Decision 5). */
+export function useCancelInvoiceCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.cancelInvoiceCheck(caseNo),
+    queryFn: () => api<CancelInvoiceCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/invoice/cancel/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Cancel with a credit note" (0011 Decision 5): the docket table on the other cases loses this file's invoice too. */
+export function useCancelInvoice(caseNo: string) {
+  return useCaseAction<{ invoiceNo: string; totalPaise: number; reasonId: number }>(
+    caseNo,
+    (base, body) => api(`${base}/invoice/cancel`, { method: 'POST', body }),
+    { otherCases: true },
   )
 }
 

@@ -14,7 +14,7 @@ import { readinessOf } from "../clients/readiness";
 import { currentCompanyImages } from "../company/company.service";
 import { getCompanyDetails, getInvoiceTerms, invoiceMissing } from "../company/company.settings";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { findVisibleCase, loadCase, lockCase, QUOTING } from "./caseLock";
+import { findVisibleCase, INVOICED, loadCase, lockCase, QUOTING } from "./caseLock";
 import { renderInvoicePdf, unprintable, type InvoiceImages, type InvoiceView } from "./invoicePdf";
 import type { RaiseInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
@@ -26,9 +26,16 @@ import { fileSafeFamilyName, travellerLabel } from "./visaCase";
 // the database refuse it). A raised invoice can't be undone yet (Decision 9), so nothing is raised while anything is
 // missing: invoiceBlockers lists it first.
 
+/** A case's invoices, newest first, each with the WHOLE credit note that cancelled it (0011 Decision 5). */
+const invoicesArgs = {
+  orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
+  select: { id: true, invoiceNo: true, creditNotes: { where: { kind: "WHOLE" }, select: { creditNoteNo: true } } },
+} satisfies Prisma.InvoiceFindManyArgs;
+
 const caseInclude = {
   client: true,
-  invoice: { select: { invoiceNo: true } },
+  stage: { select: { code: true } },
+  invoices: invoicesArgs,
   visa: {
     include: {
       offering: { include: { country: true, visaType: true } },
@@ -103,7 +110,6 @@ function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
 
   // Everything typed in that the invoice prints must be in its font (English letters): the font has no Gujarati. The
   // rest is checked by its own format (digits, PAN, GSTIN, IFSC, the website) or comes from the code.
-  const bank = g.company.bank;
   const printed: [string, string | null | undefined][] = [
     ["Client's name", client.name],
     ["Client's contact person", client.contactPerson],
@@ -111,21 +117,37 @@ function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
     ["Client's area", client.area],
     ["Client's city", client.city],
     ...g.visa.travellers.map((t): [string, string | null] => [`${label(t)}'s name`, travellerName(t)]),
-    ["Masti's name", g.company.name],
-    ["Masti's address", g.company.address],
-    ["Masti's phone", g.company.phone],
-    ["Masti's 24/7 phone", g.company.phone2],
-    ["Masti's email", g.company.email],
+    ...companyPrinted(g.company),
+    ...g.terms.lines.map((term, i): [string, string] => [`Invoice terms, line ${i + 1}`, term]),
+    ["The visa's description", description(g)],
+    preparedByPrinted(preparedBy),
+  ];
+  const notEnglish = notInEnglish(printed);
+  if (notEnglish.length) blockers.push({ kind: "NOT_ENGLISH", label: "Enter these in English letters: the invoice can't print them.", items: notEnglish });
+  return blockers;
+}
+
+/** Masti's typed-in details a printed invoice or credit note shows. */
+export function companyPrinted(company: Gathered["company"]): [string, string | null | undefined][] {
+  const bank = company.bank;
+  return [
+    ["Masti's name", company.name],
+    ["Masti's address", company.address],
+    ["Masti's phone", company.phone],
+    ["Masti's 24/7 phone", company.phone2],
+    ["Masti's email", company.email],
     ["Masti's bank account name", bank?.accountName],
     ["Masti's bank name", bank?.bankName],
     ["Masti's bank branch", bank?.branch],
-    ...g.terms.lines.map((term, i): [string, string] => [`Invoice terms, line ${i + 1}`, term]),
-    ["The visa's description", description(g)],
-    ["Your name (printed as Prepared by)", preparedBy],
   ];
-  const notEnglish = printed.filter(([, text]) => text && unprintable(text).length > 0).map(([what]) => what);
-  if (notEnglish.length) blockers.push({ kind: "NOT_ENGLISH", label: "Enter these in English letters: the invoice can't print them.", items: notEnglish });
-  return blockers;
+}
+
+/** The name an invoice or credit note prints as "Prepared by": whoever raises it. */
+export const preparedByPrinted = (preparedBy: string): [string, string] => ["Your name (printed as Prepared by)", preparedBy];
+
+/** Which of these the PDF's font can't print (it has no Gujarati letters). */
+export function notInEnglish(printed: [string, string | null | undefined][]) {
+  return printed.filter(([, text]) => text && unprintable(text).length > 0).map(([what]) => what);
 }
 
 /** CGST + SGST when the client is in Masti's state, IGST otherwise; null until both states are known. */
@@ -152,7 +174,8 @@ function totalsOf(g: Gathered) {
   };
 }
 
-const formatInvoiceNo = (prefix: string, digits: number, value: number) => `${prefix}${String(value).padStart(digits, "0")}`;
+/** "MVI00000001": a series' prefix and its number padded to `digits` (the invoice's, and the credit note's). */
+export const formatSeriesNo = (prefix: string, digits: number, value: number) => `${prefix}${String(value).padStart(digits, "0")}`;
 
 /** The counter's next value, without taking it: the dialog's preview, and the number a raise makes its PDF with. */
 async function nextCounterValue(g: Gathered, db: Db) {
@@ -163,14 +186,14 @@ async function nextCounterValue(g: Gathered, db: Db) {
 /** The number the next invoice will get (a preview: two raises at once still get consecutive numbers). */
 async function nextInvoiceNo(g: Gathered, db: Db) {
   const { prefix, digits } = g.invoiceSetting;
-  return formatInvoiceNo(prefix, digits, await nextCounterValue(g, db));
+  return formatSeriesNo(prefix, digits, await nextCounterValue(g, db));
 }
 
-/** Another raise took the number this one's PDF was made with. */
-class NumberTaken extends Error {}
+/** Another raise (or credit note) took the number this one's PDF was made with. */
+export class NumberTaken extends Error {}
 
-/** Tries before giving up when other raises keep taking the number first. */
-const RAISE_ATTEMPTS = 3;
+/** Tries before giving up when others keep taking the number first. */
+export const RAISE_ATTEMPTS = 3;
 
 /**
  * For the Raise invoice dialog: what blocks it, or what the invoice will say. Anyone who can open the case may look.
@@ -182,7 +205,9 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
   const ready = blockers.length === 0;
   return {
     blockers,
-    alreadyRaised: g.enquiry.invoice?.invoiceNo ?? null,
+    alreadyRaised: standing(g.enquiry.invoices)?.invoiceNo ?? null,
+    /** The cancelled invoice the next one replaces (0011 Decision 5), or null for the case's first. */
+    replaces: replaced(g.enquiry.invoices)?.invoiceNo ?? null,
     // The dialog sends back the quote, the rate, the tax type and the total it showed (raiseInvoice compares them).
     preview: ready
       ? {
@@ -192,6 +217,21 @@ export async function invoiceCheck(caseNo: string, user: UserWithDepartments) {
           ...totalsOf(g),
         }
       : null,
+  };
+}
+
+/** Masti's details as an invoice or credit note prints them (and stores them, as a snapshot). */
+export function companyView(company: Gathered["company"]): InvoiceView["company"] {
+  return {
+    name: company.name,
+    address: company.address,
+    phone: company.phone,
+    phone2: company.phone2,
+    email: company.email,
+    website: company.website,
+    pan: company.pan,
+    gstin: company.gstin,
+    bank: company.bank,
   };
 }
 
@@ -220,17 +260,7 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
     invoiceNo,
     issuedOn,
     preparedBy,
-    company: {
-      name: g.company.name,
-      address: g.company.address,
-      phone: g.company.phone,
-      phone2: g.company.phone2,
-      email: g.company.email,
-      website: g.company.website,
-      pan: g.company.pan,
-      gstin: g.company.gstin,
-      bank: g.company.bank,
-    },
+    company: companyView(g.company),
     client: {
       name: client.name,
       contactPerson: client.contactPerson,
@@ -268,10 +298,12 @@ function buildView(g: Gathered, invoiceNo: string, issuedOn: string, preparedBy:
  * with the next.
  */
 export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, QUOTING);
+  const enquiry = await loadCase(caseNo, actor, INVOICED);
   const pre = await gather(enquiry.id, prisma);
   const check = (g: Gathered) => {
-    if (g.enquiry.invoice) throw conflict(`This case already has invoice ${g.enquiry.invoice.invoiceNo}.`);
+    assertInvoiceStep(g.enquiry.stage.code, g.enquiry.invoices);
+    const live = standing(g.enquiry.invoices);
+    if (live) throw conflict(`This case already has invoice ${live.invoiceNo}.`);
     const blockers = blockersOf(g, actor.user.name);
     if (blockers.length) throw new HttpError(409, "The invoice can't be raised yet.", { code: "INVOICE_BLOCKED", blockers });
     assertFresh(g.visa.quote!.updatedAt, input.quoteUpdatedAt, "quote");
@@ -294,17 +326,22 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
     try {
       await prisma.$transaction(
         async (tx) => {
-          await lockCase(tx, enquiry.id, actor, QUOTING);
+          await lockCase(tx, enquiry.id, actor, INVOICED);
           const g = await gather(enquiry.id, tx);
           check(g);
+          const replaces = replaced(g.enquiry.invoices);
 
           const { prefix, digits, startAt, gstRatePercent, sac } = g.invoiceSetting;
           const expected = await nextCounterValue(g, tx);
-          const invoiceNo = formatInvoiceNo(prefix, digits, expected);
+          const invoiceNo = formatSeriesNo(prefix, digits, expected);
           const issuedOn = istToday();
           const { view, lines } = buildView(g, invoiceNo, issuedOn, actor.user.name);
 
-          const pdf = await renderInvoicePdf(view, images);
+          const pdf = await renderInvoicePdf(
+            view,
+            images,
+            replaces ? { kind: "INVOICE", replaces: { invoiceNo: replaces.invoiceNo, creditNoteNo: replaces.creditNotes[0]!.creditNoteNo } } : undefined,
+          );
           storageKey = `cases/${enquiry.id}/invoice/${randomUUID()}.pdf`;
           await putObject(storageKey, Buffer.from(pdf.bytes), "application/pdf");
 
@@ -331,6 +368,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
             data: {
               invoiceNo,
               enquiryId: enquiry.id,
+              replacesId: replaces?.id ?? null,
               issuedOn: toDbDate(issuedOn),
               issuedById: actor.user.id,
               client: view.client as unknown as Prisma.InputJsonValue,
@@ -358,7 +396,7 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
               entityType: "Enquiry",
               entityId: enquiry.id,
               clientId: g.enquiry.clientId,
-              after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id },
+              after: { invoiceId: invoice.id, invoiceNo, totalPaise: view.totalPaise, taxType: view.taxType, fileId: file.id, replaces: replaces?.invoiceNo ?? null },
               ip: actor.ip,
             },
             tx,
@@ -380,8 +418,34 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
   return getVisaCaseById(enquiry.id);
 }
 
-/** Saving a quote (visaQuote.service.ts) calls this under the case lock: a raised invoice freezes the quote. */
-export async function assertNotInvoiced(tx: Db, enquiryId: string) {
-  const invoice = await tx.invoice.findUnique({ where: { enquiryId }, select: { invoiceNo: true } });
-  if (invoice) throw conflict(`Invoice ${invoice.invoiceNo} is raised, so the quote can't change.`);
+type CaseInvoices = { id: string; invoiceNo: string; creditNotes: { creditNoteNo: string }[] }[];
+
+/** The case's invoice that stands, if any: the one no credit note has cancelled (a case has at most one). */
+function standing(invoices: CaseInvoices) {
+  return invoices.find((i) => i.creditNotes.length === 0) ?? null;
+}
+
+/** The cancelled invoice a new one replaces: the chain's latest, once cancelled (0011 Decision 5). Null for a first. */
+function replaced(invoices: CaseInvoices) {
+  const latest = invoices[0];
+  return latest && latest.creditNotes.length > 0 ? latest : null;
+}
+
+/**
+ * The quote can change, and an invoice be raised, at the quoting steps (until the file goes to the vendor, 0009
+ * Decision 2), or at any step while a cancelled invoice waits for its replacement (0011 Decision 5).
+ */
+function assertInvoiceStep(stageCode: string, invoices: CaseInvoices) {
+  if (!QUOTING.stages.includes(stageCode) && !replaced(invoices)) throw conflict(QUOTING.wrongStage);
+}
+
+/**
+ * Saving a quote (visaQuote.service.ts) calls this under the case lock: a standing invoice freezes the quote; a
+ * cancelled one reopens it, at any step, so the corrected invoice can be raised from it (0011 Decision 5).
+ */
+export async function assertQuoteCanChange(tx: Db, enquiryId: string, stageCode: string) {
+  const invoices = await tx.invoice.findMany({ where: { enquiryId }, ...invoicesArgs });
+  assertInvoiceStep(stageCode, invoices);
+  const live = standing(invoices);
+  if (live) throw conflict(`Invoice ${live.invoiceNo} is raised, so the quote can't change.`);
 }

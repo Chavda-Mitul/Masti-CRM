@@ -10,6 +10,7 @@ import {
   createEnquirySourceSchema,
   createOfferingSchema,
   createCourierSchema,
+  createCreditNoteReasonSchema,
   createProcessingSpeedSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
@@ -22,6 +23,7 @@ import {
   updateEnquirySourceSchema,
   updateOfferingSchema,
   updateCourierSchema,
+  updateCreditNoteReasonSchema,
   updateProcessingSpeedSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
@@ -134,6 +136,20 @@ router.post("/couriers", visaEdit, async (req, res) => {
 router.patch("/couriers/:id", visaEdit, async (req, res) => {
   const body = updateCourierSchema.parse(req.body);
   res.json({ courier: await mastersService.updateCourier(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Credit-note reasons (docs/decisions/0011-visa-at-vendor.md Decision 5)
+router.get("/credit-note-reasons", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ creditNoteReasons: await mastersService.listCreditNoteReasons(active) });
+});
+router.post("/credit-note-reasons", visaEdit, async (req, res) => {
+  const body = createCreditNoteReasonSchema.parse(req.body);
+  res.status(201).json({ creditNoteReason: await mastersService.createCreditNoteReason(body, actorOf(req)) });
+});
+router.patch("/credit-note-reasons/:id", visaEdit, async (req, res) => {
+  const body = updateCreditNoteReasonSchema.parse(req.body);
+  res.json({ creditNoteReason: await mastersService.updateCreditNoteReason(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Enquiry sources ("Came in through")

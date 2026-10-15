@@ -122,6 +122,19 @@ export const updateCourierSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** Why a credit note is issued (docs/decisions/0011-visa-at-vendor.md Decision 5): picked, never typed. */
+export const createCreditNoteReasonSchema = z.object({
+  code: keyCode,
+  name: text(80),
+  sortOrder: sortOrder.default(0),
+  isActive: z.boolean().default(true),
+});
+export const updateCreditNoteReasonSchema = z.object({
+  name: text(80).optional(),
+  sortOrder: sortOrder.optional(),
+  isActive: z.boolean().optional(),
+});
+
 /** "Came in through" sources. staffSelectable = false hides one from the staff form (integrations set it). */
 export const createEnquirySourceSchema = z.object({
   code: keyCode,
@@ -185,6 +198,8 @@ export type CreateProcessingSpeedInput = z.infer<typeof createProcessingSpeedSch
 export type UpdateProcessingSpeedInput = z.infer<typeof updateProcessingSpeedSchema>;
 export type CreateCourierInput = z.infer<typeof createCourierSchema>;
 export type UpdateCourierInput = z.infer<typeof updateCourierSchema>;
+export type CreateCreditNoteReasonInput = z.infer<typeof createCreditNoteReasonSchema>;
+export type UpdateCreditNoteReasonInput = z.infer<typeof updateCreditNoteReasonSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;
 export type UpdateEnquirySourceInput = z.infer<typeof updateEnquirySourceSchema>;
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;

@@ -56,8 +56,14 @@ export function RaiseInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCas
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog invoice-dialog" role="dialog" aria-modal="true" aria-labelledby="invoice-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="invoice-title">
-          Raise the invoice
+          {check.data?.replaces ? 'Raise the corrected invoice' : 'Raise the invoice'}
         </h2>
+        {check.data?.replaces && (
+          <p className="muted small" style={{ margin: 0 }}>
+            It replaces <span className="mono">{check.data.replaces}</span>, cancelled by its credit note. It doesn’t use up the
+            file’s one additional invoice.
+          </p>
+        )}
 
         {check.isPending ? (
           <p className="muted">Checking…</p>

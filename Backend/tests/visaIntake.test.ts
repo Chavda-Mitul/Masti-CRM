@@ -283,6 +283,7 @@ describe("intake dropdowns and settings", () => {
       docket: { prefix: "D" },
       sticker: { widthMm: 100, heightMm: 150 },
       invoice: { prefix: "MVI", digits: 8, startAt: 1, gstRatePercent: 18, sac: "998559" },
+      creditNote: { prefix: "MCN", digits: 8, startAt: 1 },
       vendorConfirm: { afterDays: 1, at: "11:00" },
       onlineCheck: { afterDays: 1, at: "11:00" },
       submissionCheck: { afterDays: 1, at: "11:00" },

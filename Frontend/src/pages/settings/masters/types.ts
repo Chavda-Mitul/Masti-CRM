@@ -283,6 +283,9 @@ export interface FollowUpOption {
 export type ProcessingSpeed = FollowUpOption
 
 /** How a docket goes to the vendor: "Blue Dart", "By hand (no AWB)"… (0008 Decision 6). Picked at dispatch. */
+/** Why a credit note is issued: "Wrong amount", "Recall"… (0011 Decision 5). Picked when an invoice is cancelled. */
+export type CreditNoteReason = FollowUpOption
+
 export interface Courier extends FollowUpOption {
   /** Off for "By hand": no slip (AWB) number is asked for */
   awbNeeded: boolean
@@ -318,3 +321,4 @@ export type MasterResource =
   | 'document-problem-reasons'
   | 'processing-speeds'
   | 'couriers'
+  | 'credit-note-reasons'

@@ -326,6 +326,29 @@
   gap: 8px;
   align-self: stretch;
 }
+/* Cancelled by a credit note (0011 Decision 5): it no longer counts, so its total is struck through. */
+.money-invoice.is-cancelled .money-invoice-total {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.money-invoice-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* The chain's earlier invoices, each cancelled and replaced (0011 Decision 5). */
+.money-earlier {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+.money-earlier-actions {
+  display: flex;
+  gap: 10px;
+}
 .money-actions {
   display: flex;
   gap: 8px;

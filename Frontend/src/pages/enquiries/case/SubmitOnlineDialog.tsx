@@ -3,7 +3,7 @@ import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { enquiryKeys, useSubmitOnline, useSubmitOnlineCheck } from '../queries'
 import type { SubmitOnlineCheck, VisaCase } from '../types'
-import { dayTime, firstName } from './labels'
+import { dayTime, firstName, liveInvoice } from './labels'
 
 /**
  * "Submitted online" (docs/decisions/0008-visa-docket-dispatch.md Decision 11): an e-visa went in on the portal, so there
@@ -77,7 +77,7 @@ export function SubmitOnlineDialog({ visaCase: c, onClose }: { visaCase: VisaCas
             <div className="kv">
               <span>Invoice</span>
               <strong>
-                <span className="mono">{c.invoice?.invoiceNo}</span> · locked
+                <span className="mono">{liveInvoice(c)?.invoiceNo}</span> · locked
               </strong>
             </div>
             <p className="muted small" style={{ margin: 0 }}>
