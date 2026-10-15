@@ -2,7 +2,8 @@
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
   it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2); correcting a wrong invoice with a credit
-  note and its replacement (15 Oct 2026, components 3a–3c); recall (15 Oct 2026, components 4a–4b). A "Built" note is added under each part as its component lands.
+  note and its replacement (15 Oct 2026, components 3a–3c); recall (15 Oct 2026, components 4a–4b); the additional
+  invoice (15 Oct 2026, components 5a–5c). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -334,6 +335,51 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 - **Several charges** can go on the one additional invoice (an urgent fee and photos together), since a file gets only
   one.
 - **Who:** the case's processor, the Visa HOD or the Head, as for the main invoice.
+- **Correcting it:** as for the main invoice, a credit note cancels a wrong one and a replacement is raised. The
+  replacement takes the next letter (`MVI00000001-B`), points at the cancelled one, and still counts as "1 of 1".
+
+**Built 15 Oct 2026** (component 5, in three steps):
+
+- **5a, the extra-charges list** (`39527aa`):
+  - Table `ExtraCharge`, with the code CHECK (migration `20261015190000_extra_charges`).
+  - Seeded ⚠️: Urgent submission, Photos, Courier (extra).
+  - `GET/POST/PATCH /api/masters/extra-charges`: Visa staff read; the Visa HOD or the Head edit.
+  - Settings → Masters → Lists → **Extra charges**.
+- **5b, raising it** (`f9950e9`):
+  - **Data** (migration `20261015200000_additional_invoice`):
+    - `Invoice.kind` (`MAIN` / `ADDITIONAL`); one original of each kind per case (two partial unique indexes)
+    - its charges in `InvoiceCharge` (a snapshot of each name, the amount above 0 and at most ₹10 lakh), never
+      edited and only on an ADDITIONAL invoice
+    - a CHECK: an ADDITIONAL invoice has no service charge and no GST
+    - the replacement trigger also needs the same kind as the invoice replaced
+  - **"The invoice" means the main one** everywhere it did before: dispatch, Submitted online, the docket table, the
+    quote lock, the cancel dialog's default and recall.
+  - `GET /api/visa/cases/:caseNo/additional-invoice/check` returns the main invoice, its number, `alreadyRaised`,
+    `replaces` and the blockers. `POST /api/visa/cases/:caseNo/additional-invoice` takes `{ mainInvoiceNo, charges:
+    [{ chargeId, amountPaise }], totalPaise }` (1–10 charges). It's for whoever can act on the case, at any step while
+    it's open. Refused with:
+    - 409 with no standing main invoice ("Raise the invoice first")
+    - 409 when one stands already ("1 of 1 used")
+    - 400 under `charges` for a switched-off charge, none or more than 10, or an amount out of range
+    - 409 `ADDITIONAL_CHANGED` when the main invoice or the total isn't the one shown
+    - 409 `ADDITIONAL_BLOCKED` while Masti's details can't be printed
+  - **In one transaction under the case lock:** the PDF (same layout as the main invoice, "Additional to Tax Invoice
+    MVI…", one row per charge, no GST table), the file, the invoice and its charges, and the audit
+    `visa.additionalInvoice.raise`. No counter: its number comes from the main invoice. The client, place of supply,
+    tax type, SAC and processing speed are copied from the main invoice.
+  - **The case** sends `additionalInvoice` (with its charges) and `earlierAdditionalInvoices`.
+  - **Screen:** Money on this case shows **Additional invoice · 0 of 1 used** with **Raise additional invoice**; the
+    dialog takes charge rows (picked from the list, the amount typed), the total and the number. Afterwards: **1 of 1
+    used**, "MVI…-A · locked", each charge and Open invoice.
+- **5c, correcting it:**
+  - `GET …/invoice/cancel/check?invoiceNo=MVI00000001-A` and `POST …/invoice/cancel` with that number cancel the
+    additional invoice with a WHOLE credit note: one `LUMP_SUM` line per charge, no GST. Without a number the check is
+    about the main invoice, as before.
+  - Raising again once it's cancelled gives `MVI00000001-B` with `replacesId`; its PDF also says what it replaces.
+    The audit records `replaces`.
+  - **Screen:** the additional box gets **Cancel with a credit note**, then shows "cancelled", the credit note and
+    **Raise the corrected additional invoice**; the dialog says what it corrects. Earlier additional invoices are
+    listed under it.
 
 ### 8. E-visas at Step 5
 
@@ -352,7 +398,7 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 | `visa.recallReturn` (after a recall) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | The recall reasons | Embassy taking too long · Client cancelled the trip · Documents changed ⚠️ |
 | The credit-note reasons | Wrong amount · Wrong client details · Wrong traveller details · Client cancelled · Recall ⚠️ |
-| The extra-charges list (no GST) | Urgent submission, Photos ⚠️ (component 5) |
+| The extra-charges list (no GST) | Urgent submission · Photos · Courier (extra) ⚠️ |
 | The chip wording ("With vendor · papers checked", "Submitted · …") | ours or the demo's ⚠️ |
 
 ## Not in this record
