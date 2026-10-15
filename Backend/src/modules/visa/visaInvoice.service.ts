@@ -7,7 +7,7 @@ import { istToday, toDbDate } from "../../lib/dates";
 import { conflict, HttpError, notFound } from "../../lib/httpError";
 import { gstPaise, lineTotalPaise, quoteTotals, rateBasisPoints, splitIntraState } from "../../lib/money";
 import { deleteObject, getObject, putObject } from "../../lib/storage";
-import { GST_STATES } from "../clients/clients.schemas";
+import { GST_STATES } from "../../lib/shared.schemas";
 import { getClientSettings } from "../clients/clients.settings";
 import { readinessOf } from "../clients/readiness";
 import { currentCompanyImages } from "../company/company.service";

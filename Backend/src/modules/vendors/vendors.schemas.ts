@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../clients/clients.schemas";
+import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
 
-// Only zod and plain rules are imported here, so these schemas can later be shared with the frontend.
+// Only zod and the shared fields (src/lib/shared.schemas.ts, zod only) are imported here, so these schemas can later be
+// shared with the frontend.
 // Mobile numbers and emails are normalised in the service (src/lib/contact.ts), as for clients and users.
 
 /** The most countries one vendor can cover. Mirrored in the frontend (tests/frontendRules.test.ts). */

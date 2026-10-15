@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { istToday } from '../../lib/format'
 
-// Form validation for the client screens. Mirrors Backend/src/modules/clients/clients.schemas.ts (and normaliseMobile
-// in Backend/src/modules/auth/identifier.ts) so mistakes show up before saving. The backend checks everything again.
+// Form validation for the client screens. Mirrors Backend/src/modules/clients/clients.schemas.ts and
+// Backend/src/lib/shared.schemas.ts (and normaliseMobile in Backend/src/modules/auth/identifier.ts) so mistakes show
+// up before saving. The backend checks everything again.
 // Form values are the strings in the inputs; the payload builders in forms.ts turn them into the API body.
 
 export const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/

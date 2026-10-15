@@ -11,12 +11,10 @@ import { listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
 import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
+import { GST_STATES, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
 import {
   COMPANY_NAME_MESSAGE,
   COMPANY_NAME_PATTERN,
-  GST_STATES,
-  PERSON_NAME_MESSAGE,
-  PERSON_NAME_PATTERN,
   type AddNoteInput,
   type AddPhoneInput,
   type ChangeMobileInput,

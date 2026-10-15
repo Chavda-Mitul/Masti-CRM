@@ -1552,7 +1552,7 @@ Masti CRM/
 - Backend features live in `src/modules/<feature>/`, mounted under `/api/...` in `app.ts`:
   - `<feature>.routes.ts` handles HTTP only: middleware, `schema.parse(req.body)`, call the service, send the response (and cookies). Express 5 async handlers, no controller layer.
   - `<feature>.service.ts` holds the business rules, every Prisma query and `$transaction`, and the `audit()` calls. It takes plain inputs (parsed body, ids, the acting user and IP), never `req`/`res`, and returns DTOs.
-  - `<feature>.schemas.ts` holds the zod schemas and their inferred input types. It imports only `zod`, the generated enums (`generated/prisma/enums`) and other schema files, so it can later be shared with the frontend.
+  - `<feature>.schemas.ts` holds the zod schemas and their inferred input types. It imports only `zod`, the generated enums (`generated/prisma/enums`) and other schema files, so it can later be shared with the frontend. Fields several modules validate alike (PAN, GSTIN, the GST states, a person's name) live in `src/lib/shared.schemas.ts` (15 Oct 2026), not in one module's schemas.
   - Shared infrastructure stays outside modules: `config/`, `lib/` (audit, httpError), `middleware/`, `types/`.
 - The backend compiles to **CommonJS**, so relative imports stay extensionless.
 - **Prisma 7:**

@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
-import { gstinChecksumOk } from "../src/modules/clients/clients.schemas";
+import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,

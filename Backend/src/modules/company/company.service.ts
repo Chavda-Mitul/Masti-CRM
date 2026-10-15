@@ -6,7 +6,7 @@ import { audit } from "../../lib/audit";
 import { badRequest, fieldError, notFound } from "../../lib/httpError";
 import { saveSetting } from "../../lib/settings";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
-import { GST_STATES } from "../clients/clients.schemas";
+import { GST_STATES } from "../../lib/shared.schemas";
 import type { Actor } from "../users/user";
 import type { CompanyDetails, CompanyImageKindParam, InvoiceTerms, UpdateCompanyDetailsInput } from "./company.schemas";
 import { COMPANY_DETAILS_KEY, getCompanyDetails, getInvoiceTerms, INVOICE_TERMS_KEY, invoiceMissing } from "./company.settings";

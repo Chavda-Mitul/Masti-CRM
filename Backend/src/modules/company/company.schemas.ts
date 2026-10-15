@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { gstin, pan, stateCode } from "../clients/clients.schemas";
+import { gstin, pan, stateCode, upperNoSpaces } from "../../lib/shared.schemas";
 
-// Only zod (and the shared client validators, themselves zod only) are imported here, so these schemas can later be
+// Only zod and the shared fields (src/lib/shared.schemas.ts, zod only) are imported here, so these schemas can later be
 // shared with the frontend.
 
 const line = (max: number) => z.string().trim().min(1, "Can't be blank.").max(max, `${max} characters at most.`);
@@ -30,8 +30,6 @@ const website = z
       .max(100, "100 characters at most.")
       .regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i, "Enter a website like www.example.com."),
   );
-
-const upperNoSpaces = z.string().transform((s) => s.replace(/\s+/g, "").toUpperCase());
 
 /** Masti's bank account, printed on every invoice. SWIFT is optional (only needed for payments from abroad). */
 export const bankSchema = z.object({
