@@ -32,7 +32,7 @@ function dayParts(value: string) {
 }
 
 /** "Fri 2 Oct 2026" */
-function longDay(value: string) {
+export function longDay(value: string) {
   const { year, month, day } = dayParts(value);
   return `${WEEKDAYS[isoWeekday(value) - 1]!.slice(0, 3)} ${day} ${month} ${year}`;
 }

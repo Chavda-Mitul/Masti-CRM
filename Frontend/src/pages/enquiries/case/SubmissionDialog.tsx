@@ -3,10 +3,12 @@ import { Link } from 'react-router'
 import { canEditEmbassies } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorBody, errorText } from '../../../lib/apiErrors'
+import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useSaveSubmission } from '../queries'
 import type { VisaCase } from '../types'
+import { dayTime } from './labels'
 import { OpenDayCalendar } from './OpenDayCalendar'
 
 /**
@@ -27,6 +29,12 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
   const [errors, setErrors] = useState<Record<string, string>>({})
   // The only embassy for the country is filled in (Decision 3).
   const embassyId = picked ?? (options.length === 1 ? options[0]!.id : null)
+  // The travellers' embassy appointments (decided 16 Oct 2026): the file is marked submitted from the earliest one's
+  // day, and collected after the latest one's.
+  const appointments = c.travellers.flatMap((t) => (t.appointmentAt ? [t.appointmentAt] : [])).sort()
+  const earliestAt = appointments[0] ?? null
+  const latestDay = appointments.length ? istParts(appointments.at(-1)!).date : null
+  const tooEarly = !s && !!earliestAt && istToday() < istParts(earliestAt).date
 
   const press = () => {
     const missing: Record<string, string> = {}
@@ -112,24 +120,28 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
         <div className="field">
           <span className="lbl">Expected collection date</span>
           <span className="hint" style={{ marginTop: 0 }}>
-            Holidays and Sundays at this embassy can’t be picked.
+            Holidays and Sundays at this embassy can’t be picked{latestDay ? ', nor days up to the appointment' : ''}.
           </span>
           <OpenDayCalendar
             target={embassyId ? { embassyId } : null}
             label="Expected collection"
             value={collectionOn}
             onChange={setCollectionOn}
+            after={latestDay}
             disabled={save.isPending}
           />
           {errors.collectionOn && <span className="field-error">{errors.collectionOn}</span>}
         </div>
 
+        {tooEarly && (
+          <div className="alert alert-warn">The appointment is {dayTime(earliestAt!)}. Mark it submitted on that day or after.</div>
+        )}
         {message && <div className="alert alert-bad">{message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary" disabled={save.isPending || options.length === 0} onClick={press}>
+          <button type="button" className="btn btn-primary" disabled={save.isPending || options.length === 0 || tooEarly} onClick={press}>
             {save.isPending ? 'Saving…' : 'Save'}
           </button>
         </div>

@@ -5,7 +5,7 @@ import { previousOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, untilWaitingOnLock, type Agent } from "./visaHelpers";
+import { appointmentsHeld, dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // Visa Step 5, "Submitted at the embassy" (docs/decisions/0011-visa-at-vendor.md Decisions 3 and 4): the vendor's file
 // number, the embassy and the expected collection date, saved together and changeable at Step 5. The date can't be a day
@@ -61,8 +61,11 @@ async function raise(agent: Agent, c: Case, clientName = "Rakesh Mehta") {
   expect((await agent.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
 }
 
-/** Mehta's file, Neha's, dispatched alone to Global Visa Services; the vendor got it unless `received` is false. */
-async function withVendor({ received = true } = {}) {
+/**
+ * Mehta's file, Neha's, dispatched alone to Global Visa Services; the vendor got it unless `received` is false. Its
+ * appointments have been (yesterday) unless `held` is false.
+ */
+async function withVendor({ received = true, held = true } = {}) {
   await mastiReady();
   const c = await dispatchCase();
   const processor = await neha();
@@ -75,6 +78,7 @@ async function withVendor({ received = true } = {}) {
     const { updatedAt } = await load(processor, c.caseNo);
     expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt })).status).toBe(200);
   }
+  if (held) await appointmentsHeld(c.id);
   return { c, processor };
 }
 
@@ -169,6 +173,43 @@ describe("the collection date", () => {
     // A holiday at another post, or only at our office, doesn't block it.
     await closed(addDays(on, 5), [{ kind: "MASTI_OFFICE" }], "Office closed");
     expect((await submit(processor, c.caseNo, { collectionOn: addDays(on, 5) })).status).toBe(200);
+  });
+
+  it("waits for the appointment: submitted from its day, and collected after the latest one", async () => {
+    const { c, processor } = await withVendor({ held: false });
+    const [first, second] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+    const soon = addDays(istToday(), 2);
+    const later = addDays(istToday(), 5);
+    await prisma.visaCaseTraveller.update({ where: { id: first!.id }, data: { appointmentAt: istDateTimeToUtc(soon, "10:30") } });
+    await prisma.visaCaseTraveller.update({ where: { id: second!.id }, data: { appointmentAt: istDateTimeToUtc(later, "09:00") } });
+
+    // Before the earliest appointment day: not yet.
+    const early = await submit(processor, c.caseNo, { collectionOn: aWednesday() });
+    expect(early.status).toBe(409);
+    expect(early.body.message).toMatch(/^The embassy appointment is \w{3} \d{1,2} \w{3} \d{4}\. Mark it submitted on that day or after\.$/);
+
+    // From the earliest appointment day (today), with a collection after the latest one.
+    await prisma.visaCaseTraveller.update({ where: { id: first!.id }, data: { appointmentAt: istDateTimeToUtc(istToday(), "00:00") } });
+    for (const collectionOn of [later, addDays(istToday(), 3)]) {
+      const res = await submit(processor, c.caseNo, { collectionOn });
+      expect(res.status).toBe(400);
+      expect(res.body.issues.collectionOn[0]).toMatch(/^Pick a day after the appointment \(/);
+    }
+    let after = addDays(later, 1);
+    while (isoWeekday(after) === 7) after = addDays(after, 1);
+    const ok = await submit(processor, c.caseNo, { collectionOn: after });
+    expect(ok.status).toBe(200);
+
+    // A change later: the submission stays, but the date still can't move before the latest appointment.
+    const moved = await submit(processor, c.caseNo, { collectionOn: later });
+    expect(moved.status).toBe(400);
+    expect(await prisma.auditLog.count({ where: { action: "visa.submission.update" } })).toBe(0);
+  });
+
+  it("has no appointment rule when none is booked", async () => {
+    const { c, processor } = await withVendor({ held: false });
+    await prisma.visaCaseTraveller.updateMany({ where: { caseId: c.id }, data: { appointmentAt: null } });
+    expect((await submit(processor, c.caseNo, { collectionOn: addDays(istToday(), 1) })).status).toBe(200);
   });
 
   it("is after today and within a year", async () => {
