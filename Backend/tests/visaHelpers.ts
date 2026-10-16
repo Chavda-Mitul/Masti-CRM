@@ -1,10 +1,10 @@
 import { expect } from "vitest";
-import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { addDays, addMonths, isoWeekday, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
-// Step 4 in visaDocket.test.ts).
+// Step 4 in visaDocket.test.ts, Steps 6 and 7 in visaRefusalLetter.test.ts and visaPassportsBack.test.ts).
 
 export type Agent = Awaited<ReturnType<typeof loginAs>>;
 
@@ -202,4 +202,78 @@ export async function makeInvoiceable(
   });
   expect(quote.status).toBe(200);
   return { travellers };
+}
+
+// Steps 6 and 7 (docs/decisions/0012-visa-decision.md, 0013-visa-passport-back.md): a decided file, and a recalled one.
+
+/** A Wednesday at least 10 days out: an open day for the French embassy in Mumbai. */
+export function aWednesday() {
+  let day = addDays(istToday(), 10);
+  while (isoWeekday(day) !== 3) day = addDays(day, 1);
+  return day;
+}
+
+const updatedAtOf = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case.updatedAt as string;
+
+/** Raises the case's invoice from its quote, as the Raise dialog does. */
+async function raiseInvoice(agent: Agent, caseNo: string) {
+  const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await agent.get(`/api/visa/cases/${caseNo}/invoice/check`)).body.preview;
+  expect((await agent.post(`/api/visa/cases/${caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
+}
+
+/**
+ * Mehta's file, Neha's, submitted at the embassy (unless `decided` is false, the decision recorded too: Rakesh approved,
+ * valid 20–60 days from today, Aarav refused). `extra` and `vendorId` make another family's file.
+ */
+export async function decidedCase({ decided = true, extra, vendorId }: { decided?: boolean; extra?: Record<string, unknown>; vendorId?: number } = {}) {
+  if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
+  const c = await dispatchCase({ ...(vendorId ? { vendorId } : {}), ...(extra ? { extra } : {}) });
+  const processor = await loginAs("neha@masti.test");
+  const seen = await updatedAtOf(processor, c.caseNo);
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "OWN", updatedAt: seen })).status).toBe(200);
+  await makeInvoiceable(processor, c, { clientName: "Rakesh Mehta" });
+  await raiseInvoice(processor, c.caseNo);
+  const courier = await prisma.courier.findUniqueOrThrow({ where: { code: "BLUE_DART" } });
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: "12345678", caseNos: [c.caseNo] })).status).toBe(200);
+  const received = await updatedAtOf(processor, c.caseNo);
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt: received })).status).toBe(200);
+  const embassy = await prisma.embassy.findUniqueOrThrow({ where: { code: "FR-MUM" } });
+  const now = await updatedAtOf(processor, c.caseNo);
+  const sub = await processor
+    .put(`/api/visa/cases/${c.caseNo}/submission`)
+    .send({ vendorFileNo: "FR-MUM88421", embassyId: embassy.id, collectionOn: aWednesday(), updatedAt: now });
+  expect(sub.status).toBe(200);
+
+  const [a, k] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+  await prisma.visaCaseTraveller.update({ where: { id: a!.id }, data: { name: "Rakesh Mehta" } });
+  await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
+  if (decided) {
+    const outcomes = [
+      { travellerId: a!.id, outcome: "APPROVED", visaNo: "0182 4471", validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) },
+      { travellerId: k!.id, outcome: "REFUSED" },
+    ];
+    const updatedAt = await updatedAtOf(processor, c.caseNo);
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt })).status).toBe(200);
+  }
+  return { c, processor, adult: a!.id, child: k!.id };
+}
+
+/**
+ * Mehta's file, Neha's, invoiced, sent to the vendor on its own By hand and taken back ("Embassy taking too long",
+ * the embassy fee credited): at Passport back, recalled, with no decision.
+ */
+export async function recalledCase({ extra, vendorId }: { extra?: Record<string, unknown>; vendorId?: number } = {}) {
+  if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
+  const c = await dispatchCase({ ...(vendorId ? { vendorId } : {}), ...(extra ? { extra } : {}) });
+  const processor = await loginAs("neha@masti.test");
+  await makeInvoiceable(processor, c, { clientName: "Rakesh Mehta" });
+  await raiseInvoice(processor, c.caseNo);
+  const seen = await updatedAtOf(processor, c.caseNo);
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "OWN", updatedAt: seen })).status).toBe(200);
+  const courier = await prisma.courier.findUniqueOrThrow({ where: { code: "BY_HAND" } });
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: null, caseNos: [c.caseNo] })).status).toBe(200);
+  const reasonId = (await prisma.recallReason.findUniqueOrThrow({ where: { code: "EMBASSY_DELAY" } })).id;
+  const { invoice, updatedAt } = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/recall`).send({ invoiceNo: invoice.invoiceNo, reasonId, updatedAt })).status).toBe(200);
+  return { c, processor };
 }

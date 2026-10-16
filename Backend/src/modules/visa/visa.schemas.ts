@@ -86,6 +86,12 @@ export const recallReturnSchema = firstFollowUpSchema;
 export const passportsBackCheckSchema = firstFollowUpSchema;
 
 /**
+ * When passports on their way back come back to their processor (docs/decisions/0013-visa-passport-back.md
+ * Decision 3): the next open office day, afterDays after the expected day, at `at` (IST).
+ */
+export const arrivalCheckSchema = firstFollowUpSchema;
+
+/**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
  */
@@ -136,6 +142,7 @@ export const visaSettingsSchema = z.object({
   submissionCheck: submissionCheckSchema,
   recallReturn: recallReturnSchema,
   passportsBackCheck: passportsBackCheckSchema,
+  arrivalCheck: arrivalCheckSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -174,6 +181,7 @@ export type OnlineCheckSetting = z.infer<typeof onlineCheckSchema>;
 export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
 export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
+export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -419,7 +427,19 @@ export const changeDecisionSchema = z.object({
   ...decisionDetails,
 });
 
+/**
+ * "Passports on the way back" (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor collected
+ * them and the day they're expected at our office. The service checks both against today, the dispatch and the
+ * office calendar.
+ */
+export const sendPassportsBackSchema = z.object({
+  collectedOn: z.iso.date("Pick the day the vendor collected the passports."),
+  expectedOn: z.iso.date("Pick the day the passports are expected at our office."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
+export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type RecallInput = z.infer<typeof recallSchema>;

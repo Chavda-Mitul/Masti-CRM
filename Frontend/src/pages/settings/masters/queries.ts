@@ -5,6 +5,7 @@ import { useToast } from '../../../lib/toast'
 import { enquiryKeys } from '../../enquiries/queries'
 import type {
   BlockedDay,
+  BlockTarget,
   Checklist,
   ChecklistLineBody,
   Country,
@@ -48,7 +49,7 @@ export const holidayKeys = {
   targets: ['holidays', 'targets'] as const,
   settings: ['holidays', 'settings'] as const,
   /** Under all, so a holiday change greys out the right days on every open calendar. */
-  blocked: (embassyId: number, from: string, to: string) => ['holidays', 'blocked', embassyId, from, to] as const,
+  blocked: (target: number | 'office', from: string, to: string) => ['holidays', 'blocked', target, from, to] as const,
 }
 
 export const masterKeys = {
@@ -96,13 +97,18 @@ export function useHolidayTargets() {
   })
 }
 
-/** The days an embassy is closed in from…to, with the holidays that close it (0005 §3): the date pickers grey them out. */
-export function useBlockedDays(embassyId: number | null, from: string, to: string) {
+/**
+ * The days an embassy, or our office, is closed in from…to, with the holidays that close it (0005 §3): the date pickers
+ * grey them out.
+ */
+export function useBlockedDays(target: BlockTarget | null, from: string, to: string) {
+  const office = !!target && 'office' in target
+  const embassyId = target && 'embassyId' in target ? target.embassyId : 0
   return useQuery({
-    enabled: embassyId !== null,
-    queryKey: holidayKeys.blocked(embassyId ?? 0, from, to),
+    enabled: target !== null,
+    queryKey: holidayKeys.blocked(office ? 'office' : embassyId, from, to),
     queryFn: async () =>
-      (await api<{ days: BlockedDay[] }>(`/holidays/blocked?from=${from}&to=${to}&embassyId=${embassyId}`)).days,
+      (await api<{ days: BlockedDay[] }>(`/holidays/blocked?from=${from}&to=${to}&${office ? 'office=true' : `embassyId=${embassyId}`}`)).days,
   })
 }
 

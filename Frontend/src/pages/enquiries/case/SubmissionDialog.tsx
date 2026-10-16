@@ -7,7 +7,7 @@ import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useSaveSubmission } from '../queries'
 import type { VisaCase } from '../types'
-import { CollectionCalendar } from './CollectionCalendar'
+import { OpenDayCalendar } from './OpenDayCalendar'
 
 /**
  * "Submitted at the embassy" (docs/decisions/0011-visa-at-vendor.md Decisions 3 and 4): the vendor's file number, the
@@ -114,7 +114,13 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
           <span className="hint" style={{ marginTop: 0 }}>
             Holidays and Sundays at this embassy can’t be picked.
           </span>
-          <CollectionCalendar embassyId={embassyId} value={collectionOn} onChange={setCollectionOn} disabled={save.isPending} />
+          <OpenDayCalendar
+            target={embassyId ? { embassyId } : null}
+            label="Expected collection"
+            value={collectionOn}
+            onChange={setCollectionOn}
+            disabled={save.isPending}
+          />
           {errors.collectionOn && <span className="field-error">{errors.collectionOn}</span>}
         </div>
 

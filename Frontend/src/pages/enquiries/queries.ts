@@ -377,6 +377,16 @@ export function useRecordDecision(caseNo: string) {
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
 }
 
+/**
+ * "Passports on the way back" (0013 Decision 3): the case moves to Passport back, in transit. 400 under `collectedOn` or
+ * `expectedOn`.
+ */
+export function useSendPassportsBack(caseNo: string) {
+  return useCaseAction<{ collectedOn: string; expectedOn: string; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/passports-back`, { method: 'POST', body }),
+  )
+}
+
 /** "Change" one traveller's decision while the case is at Decision (0012 Decision 6). 400 under `decision`. */
 export function useChangeDecision(caseNo: string) {
   return useCaseAction<{ travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }>(

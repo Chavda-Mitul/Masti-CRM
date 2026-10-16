@@ -1,12 +1,12 @@
 import { HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, addMonths, isoWeekday, istToday, toDbDate } from "../src/lib/dates";
+import { addDays, addMonths, istToday, toDbDate } from "../src/lib/dates";
 import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, untilWaitingOnLock, type Agent } from "./visaHelpers";
+import { decidedCase, holdCaseLock, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // Visa Step 6, the refusal letter (docs/decisions/0012-visa-decision.md Decision 4): a refused traveller's letter,
 // scanned as one PDF and kept in the test bucket (MinIO, emptied by globalSetup). Optional; added any time once the
@@ -50,51 +50,6 @@ const objectsOf = async (enquiryId: string) =>
   (await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: `cases/${enquiryId}/refusal/` }))).Contents ?? [];
 const change = (agent: Agent, caseNo: string, travellerId: string, body: Record<string, unknown>) =>
   agent.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/decision`).send(body);
-
-/** A Wednesday at least 10 days out: an open day for the French embassy in Mumbai. */
-function aWednesday() {
-  let day = addDays(istToday(), 10);
-  while (isoWeekday(day) !== 3) day = addDays(day, 1);
-  return day;
-}
-
-/**
- * Mehta's file, Neha's, submitted at the embassy (unless `decided` is false, the decision recorded too: Rakesh approved,
- * Aarav refused). `extra` and `vendorId` make another family's file.
- */
-async function decidedCase({ decided = true, extra, vendorId }: { decided?: boolean; extra?: Record<string, unknown>; vendorId?: number } = {}) {
-  if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
-  const c = await dispatchCase({ ...(vendorId ? { vendorId } : {}), ...(extra ? { extra } : {}) });
-  const processor = await neha();
-  const seen = (await load(processor, c.caseNo)).updatedAt;
-  expect((await processor.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "OWN", updatedAt: seen })).status).toBe(200);
-  await makeInvoiceable(processor, c, { clientName: "Rakesh Mehta" });
-  const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await processor.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body.preview;
-  expect((await processor.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
-  const courier = await prisma.courier.findUniqueOrThrow({ where: { code: "BLUE_DART" } });
-  expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: "12345678", caseNos: [c.caseNo] })).status).toBe(200);
-  const received = (await load(processor, c.caseNo)).updatedAt;
-  expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt: received })).status).toBe(200);
-  const embassy = await prisma.embassy.findUniqueOrThrow({ where: { code: "FR-MUM" } });
-  const now = (await load(processor, c.caseNo)).updatedAt;
-  const sub = await processor
-    .put(`/api/visa/cases/${c.caseNo}/submission`)
-    .send({ vendorFileNo: "FR-MUM88421", embassyId: embassy.id, collectionOn: aWednesday(), updatedAt: now });
-  expect(sub.status).toBe(200);
-
-  const [a, k] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
-  await prisma.visaCaseTraveller.update({ where: { id: a!.id }, data: { name: "Rakesh Mehta" } });
-  await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
-  if (decided) {
-    const outcomes = [
-      { travellerId: a!.id, outcome: "APPROVED", visaNo: "0182 4471", validFrom: FROM, validTo: TO },
-      { travellerId: k!.id, outcome: "REFUSED" },
-    ];
-    const updatedAt = (await load(processor, c.caseNo)).updatedAt;
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt })).status).toBe(200);
-  }
-  return { c, processor, adult: a!.id, child: k!.id };
-}
 
 describe("the refusal letter (Decision 4)", () => {
   it("stores a refused traveller's PDF in the bucket: pages counted, named after the case and the traveller, audited", async () => {

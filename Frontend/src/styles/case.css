@@ -999,6 +999,45 @@ button.tick:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Passports coming back (demo screen 12, 0013): Vendor collected → In transit to us → In our passport stock. */
+.passports-back-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.return-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.return-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--fill-tile);
+  color: var(--text-muted);
+}
+.return-tile strong {
+  font-size: 14px;
+}
+.return-tile.done {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.return-tile.done strong {
+  color: var(--ink);
+}
+.return-tile.now {
+  background: var(--ink);
+  color: var(--on-fill);
+}
+@media (max-width: 640px) {
+  .return-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 /* A refused traveller's refusal letter (0012 Decision 4): the chip, its pages, Open and Upload / Replace. */
 .refusal-letter {
   display: flex;

@@ -9,8 +9,9 @@ import type { VisaCase } from '../types'
 import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
-import { dayMonth } from './labels'
+import { dayMonth, weekdayDay } from './labels'
 import { MatureDialog } from './MatureDialog'
+import { PassportsBackDialog } from './PassportsBackDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
@@ -58,6 +59,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
       </span>
     )
   }
+  // On the way back (0013 Decision 2) ⚠️: the step's "Passports in our stock" isn't true until they're received.
+  if (c.stage.code === 'PASSPORT_BACK' && c.passportsBack) return <span className="chip chip-warn">In transit · expected {weekdayDay(c.passportsBack.expectedOn)}</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
 }
 
@@ -65,7 +68,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
- * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6). The later steps show as "Soon" until they are built.
+ * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3).
+ * The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -78,6 +82,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [confirming, setConfirming] = useState(false)
   const [recording, setRecording] = useState(false)
   const [deciding, setDeciding] = useState(false)
+  const [sending, setSending] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -185,6 +190,20 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.nextStepLabel} →
         </button>
         {deciding && <DecisionDialog visaCase={c} onClose={() => setDeciding(false)} />}
+      </>
+    )
+  }
+  // After a paper visa's decision, or at Passport back for a recalled file: "Passports on the way back" (0013 Decision
+  // 3). An e-visa's passports never left the office, so it waits at Decision with no button (Decision 4, M39).
+  if (c.stage.code === 'DECISION' && c.submittedOnline) return null
+  const returning = c.stage.code === 'DECISION' || (c.stage.code === 'PASSPORT_BACK' && !!c.recall)
+  if (returning && !c.passportsBack && c.status === 'OPEN' && canAct) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setSending(true)}>
+          {c.stage.code === 'DECISION' ? c.stage.nextStepLabel : 'Passports on the way back'} →
+        </button>
+        {sending && <PassportsBackDialog visaCase={c} onClose={() => setSending(false)} />}
       </>
     )
   }

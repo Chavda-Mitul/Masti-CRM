@@ -10,6 +10,7 @@ import {
   recallSchema,
   recordDecisionSchema,
   changeDecisionSchema,
+  sendPassportsBackSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -41,6 +42,7 @@ import * as refusalLetterService from "./visaRefusalLetter.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
+import * as passportsBackService from "./visaPassportsBack.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -286,6 +288,15 @@ router.put("/cases/:caseNo/travellers/:travellerId/decision", visaEdit, async (r
   const body = changeDecisionSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await decisionService.changeDecision(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/**
+ * "Passports on the way back" (0013 Decision 3): the day the vendor collected them and the day they're expected at
+ * our office; the case moves to Passport back, in transit. 400 under `collectedOn` or `expectedOn`.
+ */
+router.post("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
+  const body = sendPassportsBackSchema.parse(req.body);
+  res.json({ case: await passportsBackService.sendPassportsBack(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

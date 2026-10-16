@@ -131,6 +131,7 @@ export const visaCaseInclude = {
       recalledBy: personSelect,
       recallReason: { select: { name: true } },
       decidedBy: personSelect,
+      passportsInTransitBy: personSelect,
       vendor: {
         select: {
           id: true,
@@ -460,6 +461,13 @@ export function toVisaCaseDto(
     },
     /** "Record the decision" (0012 Decision 6): who and when; each traveller's outcome is on the traveller. */
     decision: visa.decidedAt && { at: visa.decidedAt, by: visa.decidedBy },
+    /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when. */
+    passportsBack: visa.passportsInTransitAt && {
+      collectedOn: fromDbDate(visa.passportsCollectedOn!),
+      expectedOn: fromDbDate(visa.passportsExpectedOn!),
+      at: visa.passportsInTransitAt,
+      by: visa.passportsInTransitBy,
+    },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */

@@ -17,6 +17,7 @@ import { DispatchCard } from './DispatchCard'
 import { DocketCard } from './DocketCard'
 import { FollowUpsCard } from './FollowUpsCard'
 import { MaturedBanner } from './MaturedBanner'
+import { PassportsBackCard } from './PassportsBackCard'
 import { RecallCard } from './RecallCard'
 import { SavedFileCard } from './SavedFileCard'
 import { StickerCard } from './StickerCard'
@@ -63,6 +64,7 @@ export function VisaCasePage() {
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">
+          <PassportsBackCard visaCase={c} />
           <DecisionCard visaCase={c} />
           <DocketCard visaCase={c} />
           <SubmitOnlineCard visaCase={c} />
