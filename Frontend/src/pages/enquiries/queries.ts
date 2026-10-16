@@ -228,6 +228,13 @@ export function useUploadFinalFile(caseNo: string) {
   return useCaseAction<{ file: File }>(caseNo, (base, { file }) => uploadPdf(`${base}/files/final`, file))
 }
 
+/** A refused traveller's refusal letter (0012 Decision 4): any time once refused, whatever the case's status. */
+export function useUploadRefusalLetter(caseNo: string) {
+  return useCaseAction<{ travellerId: string; file: File }>(caseNo, (base, { travellerId, file }) =>
+    uploadPdf(`${base}/travellers/${travellerId}/refusal-letter`, file),
+  )
+}
+
 /**
  * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
  * click itself, so popup blockers allow it, and pointed at the file once the link arrives.
@@ -368,6 +375,14 @@ export function useRecordDecision(caseNo: string) {
     outcomes: { travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }[]
     updatedAt: string
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
+}
+
+/** "Change" one traveller's decision while the case is at Decision (0012 Decision 6). 400 under `decision`. */
+export function useChangeDecision(caseNo: string) {
+  return useCaseAction<{ travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }>(
+    caseNo,
+    (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/decision`, { method: 'PUT', body }),
+  )
 }
 
 /** What cancelling the case's invoice with a credit note gives back, and what blocks it (0011 Decision 5). */

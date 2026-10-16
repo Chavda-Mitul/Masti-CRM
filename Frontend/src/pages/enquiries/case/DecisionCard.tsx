@@ -1,16 +1,28 @@
+import { useState } from 'react'
+import { canActOnCase } from '../../../auth/permissions'
+import { useMe } from '../../../auth/useAuth'
 import { formatDate } from '../../../lib/format'
 import type { VisaCase } from '../types'
+import { ChangeDecisionDialog } from './ChangeDecisionDialog'
 import { dayTime, firstName, weekdayDay } from './labels'
+import { RefusalLetterLine } from './RefusalLetterLine'
 
 /**
  * "Decision" (demo screen 11 ⚠️, docs/decisions/0012-visa-decision.md), once it's recorded: each traveller Approved,
  * with the sticker (or e-visa) number and the dates it's valid, or Refused. While the case is at Step 6 it's due back to
- * check the passports are on their way (an e-visa: to let the client know).
+ * check the passports are on their way (an e-visa: to let the client know), and whoever can act on the case can correct
+ * a traveller's entry (Change, Decision 6). A refused traveller's refusal letter is uploaded and opened on their row, at
+ * any step and status once decided (Decision 4).
  */
 export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
+  const { data: me } = useMe()
+  const [changing, setChanging] = useState<string | null>(null)
   const d = c.decision
   if (!d) return null
   const number = c.submittedOnline ? 'e-Visa' : 'Sticker'
+  const canAct = !!me && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const canChange = canAct && c.stage.code === 'DECISION' && c.status === 'OPEN'
+  const traveller = c.travellers.find((t) => t.id === changing)
 
   return (
     <section className="card pad decision-card">
@@ -33,10 +45,15 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           ) : t.decision?.outcome === 'REFUSED' ? (
             <>
               <span className="chip chip-bad">Refused</span>
-              <span className="muted small">The refusal letter is scanned in when it comes back.</span>
+              <RefusalLetterLine visaCase={c} traveller={t} canUpload={canAct} />
             </>
           ) : (
             <span className="muted small">Not recorded</span>
+          )}
+          {canChange && (
+            <button type="button" className="btn btn-sm" onClick={() => setChanging(t.id)}>
+              Change
+            </button>
           )}
         </div>
       ))}
@@ -50,6 +67,7 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           <strong>{c.submittedOnline ? 'Let the client know' : 'Check the passports are on their way back'}</strong>
         </div>
       )}
+      {traveller && <ChangeDecisionDialog visaCase={c} traveller={traveller} onClose={() => setChanging(null)} />}
     </section>
   )
 }

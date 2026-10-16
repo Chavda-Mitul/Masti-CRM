@@ -8,15 +8,7 @@ import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useOpenCaseFile, useSetVendor, useUploadFinalFile } from '../queries'
 import type { CaseVendor, VisaCase } from '../types'
-
-const MB = 1024 * 1024
-
-/** "12.4 MB", "820 KB" */
-function fileSize(bytes: number) {
-  return bytes >= MB ? `${(bytes / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
-}
-
-const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+import { fileSize, pdfProblem } from './pdfFiles'
 
 /**
  * "Saved file — kept as proof" (demo screen 08 ⚠️, docs/decisions/0007-visa-file-prep.md Decision 8): the whole file as
@@ -41,12 +33,9 @@ export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
   const send = (picked: File | undefined) => {
     if (input.current) input.current.value = '' // picking the same file again still triggers a change
     if (!picked) return
-    if (!isPdf(picked)) {
-      toast({ tone: 'bad', message: `${picked.name} isn’t a PDF. Save the scan as a PDF and upload that.` })
-      return
-    }
-    if (picked.size > c.finalFileMaxMb * MB) {
-      toast({ tone: 'bad', message: `${picked.name} is ${fileSize(picked.size)}: the limit is ${c.finalFileMaxMb} MB. Scan it at a lower resolution.` })
+    const problem = pdfProblem(picked, c.finalFileMaxMb)
+    if (problem) {
+      toast({ tone: 'bad', message: problem })
       return
     }
     upload.mutate(

@@ -9,6 +9,7 @@ import {
   raiseAdditionalInvoiceSchema,
   recallSchema,
   recordDecisionSchema,
+  changeDecisionSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -36,6 +37,7 @@ import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as decisionService from "./visaDecision.service";
+import * as refusalLetterService from "./visaRefusalLetter.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -277,6 +279,16 @@ router.post("/cases/:caseNo/decision", visaEdit, async (req, res) => {
 });
 
 /**
+ * "Change" one traveller's decision while the case is at Decision (0012 Decision 6): the outcome, or the number and
+ * dates. 400 under `decision`, naming the traveller.
+ */
+router.put("/cases/:caseNo/travellers/:travellerId/decision", visaEdit, async (req, res) => {
+  const body = changeDecisionSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await decisionService.changeDecision(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/**
  * Upload the final file: the PDF itself is the body (Content-Type: application/pdf), not a form. The case and the size
  * limit are checked before the body is read.
  */
@@ -289,6 +301,23 @@ router.post("/cases/:caseNo/files/final", visaEdit, async (req, res) => {
   const { maxBytes, tooBig } = await filePrepService.finalFileLimit(caseNo, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await filePrepService.uploadFinalFile(caseNo, bytes, actor) });
+});
+
+/**
+ * Upload a refused traveller's refusal letter (0012 Decision 4): the PDF itself is the body, as for the final file. Any
+ * time once the traveller is refused, whatever the case's status. The case, the traveller and the size limit are
+ * checked before the body is read.
+ */
+router.post("/cases/:caseNo/travellers/:travellerId/refusal-letter", visaEdit, async (req, res) => {
+  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+    throw new HttpError(415, "Upload the file as a PDF.");
+  }
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const travellerId = idParam.parse(req.params.travellerId);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await refusalLetterService.refusalLetterLimit(caseNo, travellerId, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await refusalLetterService.uploadRefusalLetter(caseNo, travellerId, bytes, actor) });
 });
 
 /** A short-lived link that opens one of the case's files ({ url, expiresAt }). Opening is audited. */

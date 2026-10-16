@@ -987,7 +987,7 @@ button.tick:focus-visible {
 }
 .decision-line {
   display: grid;
-  grid-template-columns: 160px auto minmax(0, 1fr);
+  grid-template-columns: 160px auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 8px 0;
@@ -998,6 +998,13 @@ button.tick:focus-visible {
   .decision-line {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+/* A refused traveller's refusal letter (0012 Decision 4): the chip, its pages, Open and Upload / Replace. */
+.refusal-letter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Part 6: how documents arrive, booklets */

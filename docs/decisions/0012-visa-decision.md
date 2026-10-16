@@ -1,7 +1,8 @@
 # 0012 · Visa Step 6: the decision
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: recording
-  the decision (15 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
+  the decision (15 Oct 2026, component 1); changing a traveller's decision (16 Oct 2026, component 2); the refusal
+  letter (16 Oct 2026, component 3). A "Built" note is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** recording whether each traveller's visa was approved or refused, from the moment the file was submitted
   (at the embassy, or online for an e-visa) until the passports start back (Step 7):
@@ -71,6 +72,36 @@ required. Step 7 checks each sticker against the passport's name and dates when 
 not a Drive link. It's **optional**: it often comes back inside the passport, so it can be uploaded at Step 6 or
 later. One letter per refused traveller; a newer upload becomes the current one and the older stays as proof.
 
+**Decided 16 Oct 2026 (project lead):**
+- **When:** any time once the traveller is refused, whatever the case's status (open, postponed, closed or
+  cancelled): a letter can come back late.
+- **Refused changed to Approved** after a letter was uploaded: the change is allowed. The letter is **kept but not
+  shown** (files are never deleted); the card shows a letter only while its traveller is refused, so changing them
+  back to Refused shows it again.
+
+**Built 16 Oct 2026** (component 3, the refusal letter):
+- **Data** (migration `20261016120000_refusal_letters`): a case file of kind `REFUSAL_LETTER`, with
+  `CaseFile.travellerId` (set for a refusal letter and only for it, a CHECK). The service keeps it to a traveller of the
+  same case.
+- `POST /api/visa/cases/:caseNo/travellers/:travellerId/refusal-letter`, the PDF itself as the body (like the final
+  file), for whoever can act on the case, at Decision, Passport back or Delivered, **whatever its status**. Refused with:
+  - 409 before the decision ("A refusal letter is added once the decision is recorded."), or for a traveller who
+    wasn't refused; 404 for a traveller of another case
+  - 400 for an empty, non-PDF or broken file; 413 over the size limit; 415 unless sent as a PDF
+- Its pages are counted, and it's kept in the private bucket under `cases/<id>/refusal/`, uploaded before the case
+  lock and removed again if the checks under the lock fail. Audited as `visa.file.upload` (kind, traveller,
+  replaces). It opens like any case file: a link that works for a few minutes, audited (`visa.file.open`).
+- **The case** sends each traveller's `refusalLetter` (the current one, with how many were uploaded), only while the
+  traveller is refused.
+- **Defaults (not asked; say if any is wrong):**
+  - **Who:** the processor, the Visa HOD or the Head.
+  - **Size limit:** the final file's setting, `visa.finalFile.maxMb` (50 MB); no new setting.
+  - **File name** ⚠️: `VISA-2026-0001_Aarav-Mehta_refusal.pdf`.
+  - A letter changes no money and sends no message.
+- **Screen:** on a refused traveller's row of the Decision card, the demo's "Refusal letter" chip with its pages and
+  who uploaded it, **Open**, and **Upload letter** / **Replace** ("1 earlier copy kept"). Without one: "No refusal
+  letter yet".
+
 ### 5. E-visas
 
 **Decided 15 Oct 2026 (project lead):** the same screen. An approved e-visa records the **e-visa number** and its
@@ -108,6 +139,23 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
   - At Step 6, the **Decision** card: each traveller's outcome and "Sticker FRA 0182 4471 · valid 1 Dec 2026 – 14 Jan
     2027", and when it's due back. The chip reads "Approved", "Refused" or "Approved 1 · Refused 1"; "Passports on the
     way back →" stays "Soon" until Step 7.
+
+**Built 16 Oct 2026** (component 2, changing a traveller's decision):
+- `PUT /api/visa/cases/:caseNo/travellers/:travellerId/decision` with `{ outcome, visaNo?, validFrom?, validTo? }`, for
+  whoever can act on the case, only while it's at Decision (open, not postponed): "The decision can only be changed
+  while the case is at Decision." It's checked as when recorded, with the messages under `decision`; a traveller of
+  another case is a 404.
+- **In one transaction under the case lock:** the traveller's entry (Approved ↔ Refused, or just the number or dates;
+  a refused one loses its number and dates) and the audit `visa.decision.change` with the old and new values.
+- **Defaults (not asked; say if any is wrong):**
+  - **One traveller at a time:** each row has its own Change, already filled in.
+  - **The last save wins**, as with the other one-traveller edits (the portal details, the checklist): a change doesn't
+    make anyone else's open page stale. A save that changes nothing writes nothing.
+  - **The case stays as it was:** its step, its due time and "recorded {day} · {name}" on the card. Changes show only in
+    the audit log; the demo has no "changed by" line. A change moves no money and sends no message.
+  - A traveller changed to Approved keeps their refusal letters, which the case then doesn't show (Decision 4).
+- **Screen:** "Change" at the end of each row of the Decision card, while the case is at Step 6 and open, for whoever
+  can act on it. It opens "Change the decision" with that traveller's row (the same toggle and fields as recording).
 
 ### 7. Settings and seed data (golden rule 1)
 
