@@ -12,6 +12,7 @@ import type {
   CancelInvoiceCheck,
   RecallCheck,
   AdditionalInvoiceCheck,
+  VisaOutcome,
   SubmitOnlineCheck,
   VendorReceivedCheck,
   InvoiceTaxType,
@@ -359,6 +360,14 @@ export function useSaveSubmission(caseNo: string) {
   return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
     api(`${base}/submission`, { method: 'PUT', body }),
   )
+}
+
+/** "Record the decision" (0012 Decision 6): every traveller's outcome at once; the case moves to Decision. */
+export function useRecordDecision(caseNo: string) {
+  return useCaseAction<{
+    outcomes: { travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }[]
+    updatedAt: string
+  }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
 }
 
 /** What cancelling the case's invoice with a credit note gives back, and what blocks it (0011 Decision 5). */

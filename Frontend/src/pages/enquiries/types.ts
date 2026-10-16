@@ -176,6 +176,17 @@ export interface CaseFile {
 /** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
 export type CaseConsent = { state: 'UNLINKED' } | { state: 'NONE' } | { state: 'ON_FILE'; agreedAt: string }
 
+/** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
+export type VisaOutcome = 'APPROVED' | 'REFUSED'
+
+/** Approved with the sticker (or e-visa) number and the dates it's valid (YYYY-MM-DD), or Refused with none. */
+export interface TravellerDecision {
+  outcome: VisaOutcome
+  visaNo: string | null
+  validFrom: string | null
+  validTo: string | null
+}
+
 export interface CaseTraveller {
   id: string
   position: number
@@ -197,6 +208,8 @@ export interface CaseTraveller {
   /** Step 3, from the government portal (0007 Decision 5). */
   ackNo: string | null
   appointmentAt: string | null
+  /** Step 6 (0012): null until the decision is recorded */
+  decision: TravellerDecision | null
   documents: CaseDocument[]
   /** In or made */
   done: number
@@ -549,6 +562,8 @@ export interface VisaCase {
     reason: string
     creditNote: { creditNoteNo: string; totalPaise: number; file: { id: string; fileName: string } } | null
   } | null
+  /** "Record the decision" (0012 Decision 6): who and when; each traveller's outcome is on the traveller */
+  decision: { at: string; by: PersonRef | null } | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

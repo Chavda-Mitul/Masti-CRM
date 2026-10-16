@@ -130,6 +130,7 @@ export const visaCaseInclude = {
       embassy: { select: { id: true, name: true, city: true } },
       recalledBy: personSelect,
       recallReason: { select: { name: true } },
+      decidedBy: personSelect,
       vendor: {
         select: {
           id: true,
@@ -436,6 +437,8 @@ export function toVisaCaseDto(
         return n ? { creditNoteNo: n.creditNoteNo, totalPaise: n.totalPaise, file: n.file } : null;
       })(),
     },
+    /** "Record the decision" (0012 Decision 6): who and when; each traveller's outcome is on the traveller. */
+    decision: visa.decidedAt && { at: visa.decidedAt, by: visa.decidedBy },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */
@@ -462,6 +465,13 @@ export function toVisaCaseDto(
         /** Step 3, from the government portal (0007 Decision 5). */
         ackNo: t.ackNo,
         appointmentAt: t.appointmentAt,
+        /** Step 6 (0012): Approved with the sticker (or e-visa) number and dates, or Refused; null until recorded. */
+        decision: t.outcome && {
+          outcome: t.outcome,
+          visaNo: t.visaNo,
+          validFrom: t.validFrom && fromDbDate(t.validFrom),
+          validTo: t.validTo && fromDbDate(t.validTo),
+        },
         documents: t.documents.map((d) => ({
           id: d.id,
           name: d.name,

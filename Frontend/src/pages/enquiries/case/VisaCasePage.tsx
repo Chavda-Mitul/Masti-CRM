@@ -12,6 +12,7 @@ import { CaseRail } from './CaseRail'
 import { CollectionCard } from './CollectionCard'
 import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
+import { DecisionCard } from './DecisionCard'
 import { DispatchCard } from './DispatchCard'
 import { DocketCard } from './DocketCard'
 import { FollowUpsCard } from './FollowUpsCard'
@@ -62,6 +63,7 @@ export function VisaCasePage() {
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">
+          <DecisionCard visaCase={c} />
           <DocketCard visaCase={c} />
           <SubmitOnlineCard visaCase={c} />
           {/* Step 4: the courier and the parcel label. Step 5 (demo screen 10): the vendor's progress beside the courier. */}

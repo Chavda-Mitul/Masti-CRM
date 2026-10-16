@@ -941,6 +941,65 @@ button.tick:focus-visible {
   outline: 2px solid var(--primary);
 }
 
+/* The decision (0012): Approved in green, Refused in red, as the demo. */
+.seg-btn button.on.ok {
+  background: var(--ok);
+  color: var(--on-fill);
+}
+.seg-btn button.on.bad {
+  background: var(--bad);
+  color: var(--on-fill);
+}
+.decision-dialog {
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.decision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.decision-details {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.decision-error {
+  grid-column: 1 / -1;
+}
+.decision-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.decision-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+.decision-line {
+  display: grid;
+  grid-template-columns: 160px auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+}
+@media (max-width: 640px) {
+  .decision-details,
+  .decision-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Part 6: how documents arrive, booklets */
 .arrival-toggle {
   margin-bottom: 4px;

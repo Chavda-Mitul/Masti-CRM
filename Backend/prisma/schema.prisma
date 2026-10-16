@@ -84,6 +84,7 @@ model User {
   visaCasesReceived  VisaCase[]         @relation("VisaCaseVendorReceivedBy")
   visaCasesSubmitted VisaCase[]         @relation("VisaCaseSubmittedBy")
   visaCasesRecalled  VisaCase[]         @relation("VisaCaseRecalledBy")
+  visaCasesDecided   VisaCase[]         @relation("VisaCaseDecidedBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
@@ -920,6 +921,11 @@ model VisaCase {
   recalledAt          DateTime?           @db.Timestamptz(3)
   recalledById        String?
   recallReasonId      Int?
+  /// "Record the decision" (docs/decisions/0012-visa-decision.md Decision 6): every traveller's outcome was saved and
+  /// the case moved to Decision, by whom and when. Set together, only after the embassy submission or "Submitted
+  /// online", and never on a recalled file (checked in the migration).
+  decidedAt           DateTime?           @db.Timestamptz(3)
+  decidedById         String?
   enquiry             Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering            VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy           User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
@@ -928,6 +934,7 @@ model VisaCase {
   vendorReceivedBy    User?               @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
   submittedBy         User?               @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
   recalledBy          User?               @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
+  decidedBy           User?               @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
   recallReason        RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
   embassy             Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor              Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
@@ -940,6 +947,12 @@ model VisaCase {
   @@index([vendorId])
   @@index([fileReadyById])
   @@index([docketId])
+}
+
+/// The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2): two outcomes.
+enum VisaOutcome {
+  APPROVED
+  REFUSED
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
@@ -958,6 +971,13 @@ model VisaCaseTraveller {
   ackNo         String?
   /// The portal appointment, entered as a day and a time in India.
   appointmentAt DateTime?          @db.Timestamptz(3)
+  /// The embassy's decision (docs/decisions/0012-visa-decision.md): null until recorded.
+  outcome       VisaOutcome?
+  /// An approved visa's sticker number (an e-visa's number), and the dates it's valid. All three set for APPROVED and
+  /// none otherwise; the number in capitals with single spaces; validTo on or after validFrom (checked in the migration).
+  visaNo        String?
+  validFrom     DateTime?          @db.Date
+  validTo       DateTime?          @db.Date
   visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents     VisaCaseDocument[]
