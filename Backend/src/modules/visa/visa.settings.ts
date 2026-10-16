@@ -15,6 +15,7 @@ import {
   submissionCheckSchema,
   recallReturnSchema,
   passportsBackCheckSchema,
+  arrivalCheckSchema,
   collectionCheckSchema,
   type AwbSetting,
   type CollectionCheckSetting,
@@ -29,6 +30,7 @@ import {
   type SubmissionCheckSetting,
   type RecallReturnSetting,
   type PassportsBackCheckSetting,
+  type ArrivalCheckSetting,
   type VendorConfirmSetting,
   type VisaSettings,
 } from "./visa.schemas";
@@ -47,6 +49,7 @@ export const ONLINE_CHECK_KEY = "visa.onlineCheck";
 export const SUBMISSION_CHECK_KEY = "visa.submissionCheck";
 export const RECALL_RETURN_KEY = "visa.recallReturn";
 export const PASSPORTS_BACK_CHECK_KEY = "visa.passportsBackCheck";
+export const ARRIVAL_CHECK_KEY = "visa.arrivalCheck";
 export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
@@ -87,6 +90,9 @@ export const DEFAULT_RECALL_RETURN: RecallReturnSetting = { afterDays: 1, at: "1
 /** ⚠️ 0012 Decision 7: after the decision, the processor checks the passports are on their way back the next office day at 11:00. */
 export const DEFAULT_PASSPORTS_BACK_CHECK: PassportsBackCheckSetting = { afterDays: 1, at: "11:00" };
 
+/** ⚠️ 0013 Decision 3: passports on their way back come back to the processor on the expected day, at 11:00. */
+export const DEFAULT_ARRIVAL_CHECK: ArrivalCheckSetting = { afterDays: 0, at: "11:00" };
+
 /** ⚠️ 0011 Decision 4 and §10.9: reminded the office day before the expected collection date, at 11:00. */
 export const DEFAULT_COLLECTION_CHECK: CollectionCheckSetting = { daysBefore: 1, at: "11:00" };
 
@@ -103,11 +109,11 @@ export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
 
 /**
  * When a case comes back due on its processor's desk after a step: the next open office day (skipping Sundays and
- * office holidays), `afterDays` from today, at `at` (IST). For the vendor confirmation, the e-visa portal check, the
- * file number and a recalled file's papers.
+ * office holidays), `afterDays` from `from` (today unless given), at `at` (IST). For the vendor confirmation, the
+ * e-visa portal check, the file number, a recalled file's papers, and passports expected back on a day.
  */
-export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma) {
-  const day = await nextOpenDay(addDays(istToday(), timing.afterDays), { office: true }, db);
+export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma, from: string = istToday()) {
+  const day = await nextOpenDay(addDays(from, timing.afterDays), { office: true }, db);
   return istDateTimeToUtc(day, timing.at);
 }
 
@@ -123,7 +129,7 @@ export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: num
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -137,6 +143,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const submissionCheck = submissionCheckSchema.safeParse(value(SUBMISSION_CHECK_KEY));
   const recallReturn = recallReturnSchema.safeParse(value(RECALL_RETURN_KEY));
   const passportsBackCheck = passportsBackCheckSchema.safeParse(value(PASSPORTS_BACK_CHECK_KEY));
+  const arrivalCheck = arrivalCheckSchema.safeParse(value(ARRIVAL_CHECK_KEY));
   const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
@@ -152,6 +159,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     submissionCheck: submissionCheck.success ? submissionCheck.data : DEFAULT_SUBMISSION_CHECK,
     recallReturn: recallReturn.success ? recallReturn.data : DEFAULT_RECALL_RETURN,
     passportsBackCheck: passportsBackCheck.success ? passportsBackCheck.data : DEFAULT_PASSPORTS_BACK_CHECK,
+    arrivalCheck: arrivalCheck.success ? arrivalCheck.data : DEFAULT_ARRIVAL_CHECK,
     collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,

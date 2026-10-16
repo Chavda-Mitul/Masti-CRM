@@ -35,6 +35,15 @@ export const DECIDING: StepRule = { stages: ["AT_VENDOR"], wrongStage: "The deci
 /** Step 6 (0012 Decision 6): a recorded decision is corrected while the case is at Decision, and locked once it moves on. */
 export const DECIDED: StepRule = { stages: ["DECISION"], wrongStage: "The decision can only be changed while the case is at Decision." };
 
+/**
+ * Step 7 (docs/decisions/0013-visa-passport-back.md Decision 3): "Passports on the way back", from Decision, or at
+ * Passport back for a recalled file.
+ */
+export const RETURNING: StepRule = {
+  stages: ["DECISION", "PASSPORT_BACK"],
+  wrongStage: "Passports go back after the decision, or after a recall.",
+};
+
 /** The refusal letter (0012 Decision 4): once the decision is recorded, at any later step, whatever the case's status. */
 export const LETTERS: StepRule = {
   stages: ["DECISION", "PASSPORT_BACK", "DELIVERED"],

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { istToday } from '../../../lib/format'
 import { useBlockedDays } from '../../settings/masters/queries'
+import type { BlockTarget } from '../../settings/masters/types'
 import { longDate } from './labels'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTH = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-/** The furthest ahead a collection date may be, as the server allows (a sanity limit). */
+/** The furthest ahead a day may be, as the server allows (a sanity limit). */
 const MAX_DAYS_AHEAD = 366
 
 const utc = (day: string) => new Date(`${day}T00:00:00Z`)
@@ -26,27 +27,36 @@ function shiftMonth(ym: string, by: number) {
 }
 
 /**
- * The expected collection date (demo screen 10 ⚠️, docs/decisions/0011-visa-at-vendor.md Decision 4): a month of days
- * for one embassy, Monday first. The days it's closed are struck through with the holiday's name (its holidays and the
- * weekly Sunday, from the holiday calendar), and so are today and earlier: none of them can be picked. The server checks
- * the same days again when the date is saved.
+ * A month of days, Monday first, to pick one that an embassy or our office is open: the expected collection date (demo
+ * screen 10 ⚠️, docs/decisions/0011-visa-at-vendor.md Decision 4) and the day passports are expected back
+ * (docs/decisions/0013-visa-passport-back.md Decision 3). The days it's closed are struck through with the holiday's
+ * name (its holidays and the weekly Sunday, from the holiday calendar), and so are the days before the first one allowed
+ * (tomorrow, or today with `allowToday`): none of them can be picked. The server checks the same days again when the
+ * date is saved.
  */
-export function CollectionCalendar({
-  embassyId,
+export function OpenDayCalendar({
+  target,
+  label,
   value,
   onChange,
+  allowToday = false,
   disabled = false,
 }: {
-  embassyId: number | null
+  /** Whose closed days to strike out; nothing can be picked until it's known */
+  target: BlockTarget | null
+  /** What the picked day is, under the month: "Expected collection" */
+  label: string
   value: string | null
   onChange: (day: string) => void
+  allowToday?: boolean
   disabled?: boolean
 }) {
   const today = istToday()
+  const first = allowToday ? today : addDays(today, 1)
   const latest = addDays(today, MAX_DAYS_AHEAD)
-  const [month, setMonth] = useState((value ?? addDays(today, 1)).slice(0, 7))
+  const [month, setMonth] = useState((value ?? first).slice(0, 7))
   const m = monthOf(month)
-  const blocked = useBlockedDays(embassyId, m.from, m.to)
+  const blocked = useBlockedDays(target, m.from, m.to)
   const closed = new Map((blocked.data ?? []).map((d) => [d.date, d.holidays.map((h) => h.name).join(', ')]))
 
   return (
@@ -56,7 +66,7 @@ export function CollectionCalendar({
           type="button"
           className="btn btn-sm"
           aria-label="Previous month"
-          disabled={month <= today.slice(0, 7)}
+          disabled={month <= first.slice(0, 7)}
           onClick={() => setMonth(shiftMonth(month, -1))}
         >
           ‹
@@ -84,7 +94,7 @@ export function CollectionCalendar({
         {Array.from({ length: m.length }, (_, i) => {
           const day = addDays(m.from, i)
           const holiday = closed.get(day)
-          const off = disabled || !embassyId || blocked.isPending || day <= today || day > latest || !!holiday
+          const off = disabled || !target || blocked.isPending || day < first || day > latest || !!holiday
           const picked = day === value
           return (
             <button
@@ -102,9 +112,9 @@ export function CollectionCalendar({
           )
         })}
       </div>
-      {blocked.isError && <p className="field-error">Couldn’t load the embassy’s holidays. Please try again.</p>}
+      {blocked.isError && <p className="field-error">Couldn’t load the holidays. Please try again.</p>}
       <div className="collection-picked">
-        <span className="muted small">Expected collection</span>
+        <span className="muted small">{label}</span>
         <strong>{value ? longDate(value) : 'Pick a day'}</strong>
       </div>
     </div>

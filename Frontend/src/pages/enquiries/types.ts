@@ -566,6 +566,8 @@ export interface VisaCase {
   } | null
   /** "Record the decision" (0012 Decision 6): who and when; each traveller's outcome is on the traveller */
   decision: { at: string; by: PersonRef | null } | null
+  /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when */
+  passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

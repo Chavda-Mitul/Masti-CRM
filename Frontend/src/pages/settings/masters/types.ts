@@ -163,6 +163,9 @@ export interface VisaType {
 }
 
 /** GET /api/holidays/blocked: a day a target is closed, and the holidays that close it (0005 §3). */
+/** Whose closed days GET /api/holidays/blocked returns: an embassy's, or our office's (0005 §3). */
+export type BlockTarget = { embassyId: number } | { office: true }
+
 export interface BlockedDay {
   date: string
   holidays: { id: string; name: string }[]

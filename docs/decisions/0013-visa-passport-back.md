@@ -1,7 +1,7 @@
 # 0013 · Visa Step 7: passport back
 
-- **Status:** decided (16 Oct 2026, project lead). Being built one component at a time (Decision 1). A "Built" note is
-  added under each part as its component lands.
+- **Status:** decided (16 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: passports
+  on the way back (16 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
 - **Date:** 16 Oct 2026
 - **Scope:** the passports' way back from the vendor to our office, until they're in our passport stock and ready to
   hand over (Step 8):
@@ -77,6 +77,31 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
 - **From Step 6:** "Passports on the way back →" in the header.
 - **A recalled file** is already at Step 7, so the same button shows there until it's in transit. Everything else is
   the same, with no stickers to check later.
+
+**Built 16 Oct 2026** (component 1, passports on the way back):
+- **Data** (migration `20261016130000_passports_back`): `VisaCase.passportsCollectedOn`, `passportsExpectedOn`,
+  `passportsInTransitAt`, `passportsInTransitById`, with CHECKs: all four together; expected on or after collected,
+  collected no later than the day it was recorded (IST); only once decided or recalled; never for an e-visa.
+- `POST /api/visa/cases/:caseNo/passports-back` with `{ collectedOn, expectedOn, updatedAt }`, for whoever can act on
+  the case, while it's open, at Decision or (recalled) at Passport back (step rule `RETURNING`). Refused with:
+  - 409 for an e-visa ("An e-visa's passports never left the office."), once already in transit, at another step
+    ("Passports go back after the decision, or after a recall."), STALE, postponed
+  - 400 under `collectedOn`: after today, or before the file was dispatched
+  - 400 under `expectedOn`: before today, more than a year ahead, or a day our office is closed ("Weekly off: our
+    office is closed that day. Pick another.")
+- **In one transaction under the case lock:** the two days, who and when; the case moves to Passport back, due on the
+  expected day at 11:00 ⚠️ (`visa.arrivalCheck`, the next open office day `afterDays` after it); audit
+  `visa.passports.inTransit`.
+- **The case** sends `passportsBack { collectedOn, expectedOn, at, by }`.
+- **Screen:**
+  - **Header:** "Passports on the way back →" at Step 6 (a paper visa), or at Step 7 for a recalled file until it's
+    in transit. An e-visa at Step 6 has no button. While in transit the chip reads "In transit · expected Tue 20 Oct"
+    (a recalled file keeps its "Recalled" chip), and "Hand over to the client →" stays "Soon".
+  - **The form:** "Vendor collected them on" (today by default) and "Expected at our office", a month calendar with
+    Sundays and office holidays struck through. The calendar is shared with the expected collection date
+    (`OpenDayCalendar`, an embassy's days or the office's).
+  - **The Passports coming back card**, above the Decision card: the demo's three tiles, when it's due back ("Check the
+    passports have arrived") and the demo's footer.
 
 ### 4. E-visas skip this step for now
 

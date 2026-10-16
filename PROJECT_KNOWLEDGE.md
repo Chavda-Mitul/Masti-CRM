@@ -1676,6 +1676,7 @@ Masti CRM/
 - **Mark received:** booklets counted against intake (a mismatch is allowed, shown red, audited, no reason list); each approved traveller's sticker Matches / Doesn't match (a mismatch is shown red, still received); received by whoever records it, at that moment.
 - **A recalled file** uses the same flow, with no stickers. **E-visas** skip Step 7 and wait at Step 6 (M39).
 - **Not here:** the WhatsApp "Passports are at our office", booking the delivery (Step 8), a passport stock list across cases (a change request if wanted).
+- **Built so far:** component 1, **passports on the way back** (16 Oct 2026). "Passports on the way back →" at Step 6 (a paper visa; an e-visa has no button), or at Step 7 for a recalled file, saves the day the vendor collected them and the expected day (a calendar with Sundays and office holidays struck through, checked again by the server). The case moves to Passport back, due that day at 11:00 ⚠️ (`visa.arrivalCheck`); the chip reads "In transit · expected Tue 20 Oct"; the Passports coming back card shows the demo's three tiles. Next: component 2, change the expected day.
 
 **Decided 15 Oct 2026 (project lead), for Visa Step 6 (Decision).** The design is `docs/decisions/0012-visa-decision.md` (decided; being built).
 - **One component at a time:** record the decision → change a traveller's decision → the refusal letter scan.

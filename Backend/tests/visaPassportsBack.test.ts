@@ -1,0 +1,265 @@
+import { PDFDocument } from "pdf-lib";
+import { beforeEach, describe, expect, it } from "vitest";
+import { addDays, addMonths, isoWeekday, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { nextOpenDay } from "../src/modules/holidays/blockedDays";
+import { seedHolidays } from "../src/modules/holidays/holidays.seed";
+import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
+import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { decidedCase, dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, recalledCase, untilWaitingOnLock, type Agent } from "./visaHelpers";
+
+// Visa Step 7, passports on the way back (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor
+// collected them and the day they're expected at our office, an open office day. The case moves to Passport back, in
+// transit, due that day at 11:00 ⚠️ (visa.arrivalCheck). A recalled file does the same at Passport back; an e-visa,
+// whose passports never left, doesn't (Decision 4).
+
+beforeEach(async () => {
+  await resetDb();
+  await seedVisaMasters(prisma);
+  await seedEnquiryMasters(prisma);
+});
+
+interface CaseDto {
+  updatedAt: string;
+  dueAt: string;
+  stage: { code: string };
+  recall: { reason: string } | null;
+  decision: { at: string } | null;
+  passportsBack: { collectedOn: string; expectedOn: string; at: string; by: { name: string } | null } | null;
+}
+type Body = { collectedOn?: string; expectedOn?: string; updatedAt?: string };
+
+const load = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case as CaseDto;
+const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
+/** Two days out, or the first day after that our office is open. */
+const anOpenDay = () => nextOpenDay(addDays(istToday(), 2), { office: true });
+/** The next Sunday after today. */
+function nextSunday() {
+  let day = addDays(istToday(), 1);
+  while (isoWeekday(day) !== 7) day = addDays(day, 1);
+  return day;
+}
+
+/** "Passports on the way back": collected today and expected on an open day, unless `body` says otherwise. */
+async function send(agent: Agent, caseNo: string, body: Body = {}) {
+  // Read first: a request awaited inside another's .send(...) breaks supertest.
+  const updatedAt = body.updatedAt ?? (await load(agent, caseNo)).updatedAt;
+  const expectedOn = body.expectedOn ?? (await anOpenDay());
+  return agent.post(`/api/visa/cases/${caseNo}/passports-back`).send({ collectedOn: istToday(), ...body, expectedOn, updatedAt });
+}
+
+/** An e-visa (Vendor needed off), Neha's, invoiced, "Submitted online" and decided (both refused): at Decision. */
+async function eVisaDecided() {
+  if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
+  // Another file may already have made the vendor: readyCase would add it again otherwise.
+  const vendorId = (await prisma.vendor.findFirst())?.id;
+  const c = await dispatchCase({ ...(vendorId ? { vendorId } : {}), extra: { mobile: "98250 41299", clientName: "Asha Desai" } });
+  const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
+  await prisma.visaOffering.update({ where: { id: offeringId }, data: { vendorNeeded: false } });
+  await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { vendorId: null } });
+  const processor = await loginAs("neha@masti.test");
+  const { travellers } = await makeInvoiceable(processor, c, { clientName: "Asha Desai" });
+  const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await processor.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body.preview;
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
+  const seen = (await load(processor, c.caseNo)).updatedAt;
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/submit-online`).send({ updatedAt: seen })).status).toBe(200);
+  const outcomes = travellers.map((t) => ({ travellerId: t.id, outcome: "REFUSED" }));
+  const decidedAt = (await load(processor, c.caseNo)).updatedAt;
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt: decidedAt })).status).toBe(200);
+  return { c, processor };
+}
+
+describe("passports on the way back (Decision 3)", () => {
+  it("moves a decided case to Passport back, in transit, due on the expected day at 11:00, audited", async () => {
+    const { c, processor } = await decidedCase();
+    const expectedOn = await anOpenDay();
+    const res = await send(processor, c.caseNo, { expectedOn });
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.stage.code).toBe("PASSPORT_BACK");
+    expect(after.passportsBack).toMatchObject({ collectedOn: istToday(), expectedOn, by: { name: "Neha Joshi" } });
+    expect(after.dueAt).toBe(istDateTimeToUtc(expectedOn, "11:00").toISOString());
+
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.inTransit" } });
+    expect(row).toMatchObject({ entityType: "Enquiry", entityId: c.id, clientId: c.client.id });
+    expect(row.before).toMatchObject({ stage: "DECISION" });
+    expect(row.after).toMatchObject({ stage: "PASSPORT_BACK", collectedOn: istToday(), expectedOn, dueAt: after.dueAt });
+  });
+
+  it("the due time follows visa.arrivalCheck, on an open office day", async () => {
+    const { c, processor } = await decidedCase();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await (await loginAs("riya@masti.test")).put("/api/visa/settings").send({ arrivalCheck: { afterDays: 1, at: "10:00" } })).status).toBe(200);
+    await seedHolidays(prisma); // the weekly Sunday off
+    const expectedOn = await anOpenDay();
+    const res = await send(processor, c.caseNo, { expectedOn });
+    expect(res.status).toBe(200);
+    const due = await nextOpenDay(addDays(expectedOn, 1), { office: true });
+    expect((res.body.case as CaseDto).dueAt).toBe(istDateTimeToUtc(due, "10:00").toISOString());
+  });
+
+  it("a recalled file does the same at Passport back, still with no decision", async () => {
+    const { c, processor } = await recalledCase();
+    const before = await load(processor, c.caseNo);
+    expect(before).toMatchObject({ stage: { code: "PASSPORT_BACK" }, recall: { reason: "Embassy taking too long" }, passportsBack: null });
+    const expectedOn = await anOpenDay();
+    const res = await send(processor, c.caseNo, { expectedOn });
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after).toMatchObject({ stage: { code: "PASSPORT_BACK" }, decision: null, passportsBack: { expectedOn } });
+    expect(after.dueAt).toBe(istDateTimeToUtc(expectedOn, "11:00").toISOString());
+    expect((await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.inTransit" } })).before).toMatchObject({ stage: "PASSPORT_BACK" });
+  });
+});
+
+describe("what is refused", () => {
+  it("the collected day: after today, or before the file was dispatched", async () => {
+    const { c, processor } = await decidedCase();
+    const issue = async (collectedOn: string) => {
+      const res = await send(processor, c.caseNo, { collectedOn });
+      expect(res.status).toBe(400);
+      return res.body.issues.collectedOn as string[];
+    };
+    expect(await issue(addDays(istToday(), 1))).toEqual(["Pick today or an earlier day."]);
+    // The fixture dispatched the file today.
+    expect(await issue(addDays(istToday(), -1))).toEqual(["Pick a day on or after the file was dispatched."]);
+    expect((await send(processor, c.caseNo, { collectedOn: "not a day" })).body.issues.collectedOn).toEqual(["Pick the day the vendor collected the passports."]);
+  });
+
+  it("the expected day: before today, more than a year ahead, a Sunday or an office holiday", async () => {
+    const { c, processor } = await decidedCase();
+    await seedHolidays(prisma); // the weekly Sunday off
+    const holiday = await anOpenDay();
+    await prisma.holiday.create({
+      data: { name: "Diwali office closure", repeat: "NONE", startDate: toDbDate(holiday), endDate: toDbDate(holiday), targets: { create: [{ kind: "MASTI_OFFICE" }] } },
+    });
+    const issue = async (expectedOn: string) => {
+      const res = await send(processor, c.caseNo, { expectedOn });
+      expect(res.status).toBe(400);
+      return res.body.issues.expectedOn as string[];
+    };
+    expect(await issue(addDays(istToday(), -1))).toEqual(["Pick today or a later day."]);
+    expect(await issue(addDays(istToday(), 400))).toEqual(["Pick a day within the next year."]);
+    expect(await issue(nextSunday())).toEqual(["Weekly off: our office is closed that day. Pick another."]);
+    expect(await issue(holiday)).toEqual(["Diwali office closure: our office is closed that day. Pick another."]);
+    expect((await load(processor, c.caseNo)).stage.code).toBe("DECISION");
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.inTransit" } })).toBe(0);
+  });
+
+  it("before the decision, twice, on a stale page and when postponed", async () => {
+    const { c, processor } = await decidedCase({ decided: false });
+    const early = await send(processor, c.caseNo);
+    expect(early.status).toBe(409);
+    expect(early.body.message).toBe("Passports go back after the decision, or after a recall.");
+
+    const done = await decidedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
+    expect((await send(processor, done.c.caseNo)).status).toBe(200);
+    const again = await send(processor, done.c.caseNo);
+    expect(again.status).toBe(409);
+    expect(again.body.message).toBe("The passports are already on their way back.");
+
+    const other = await decidedCase({ extra: { mobile: "98250 41237", clientName: "Sunil Shah" }, vendorId: c.vendor.id });
+    const fresh = (await load(processor, other.c.caseNo)).updatedAt;
+    expect((await send(processor, other.c.caseNo, { updatedAt: "2026-01-01T00:00:00.000Z" })).body.details.code).toBe("STALE");
+    await prisma.enquiry.update({
+      where: { id: other.c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addMonths(istToday(), 1)) },
+    });
+    expect((await send(processor, other.c.caseNo, { updatedAt: fresh })).body.message).toMatch(/postponed/);
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.inTransit" } })).toBe(1);
+  });
+
+  it("an e-visa: its passports never left the office (Decision 4)", async () => {
+    const { c, processor } = await eVisaDecided();
+    const res = await send(processor, c.caseNo);
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe("An e-visa's passports never left the office.");
+    expect((await load(processor, c.caseNo)).stage.code).toBe("DECISION");
+  });
+});
+
+describe("who may send them back", () => {
+  it("its processor, the Visa HOD and the Head; not other staff, view-only users or other departments", async () => {
+    const { c, processor } = await decidedCase();
+    await createUser({ name: "Kiran", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    await createUser({ name: "Hetal", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const seen = (await load(processor, c.caseNo)).updatedAt;
+    for (const email of ["kiran@masti.test", "meena@masti.test", "hetal@masti.test"]) {
+      expect((await send(await loginAs(email), c.caseNo, { updatedAt: seen })).status).toBe(403);
+    }
+    const hod = await send(await loginAs("riya@masti.test"), c.caseNo, { updatedAt: seen });
+    expect(hod.status).toBe(200);
+    expect((hod.body.case as CaseDto).passportsBack!.by!.name).toBe("Riya");
+
+    const other = await decidedCase({ extra: { mobile: "98250 41237", clientName: "Sunil Shah" }, vendorId: c.vendor.id });
+    expect((await send(await loginAs("vimal@masti.test"), other.c.caseNo)).status).toBe(200);
+  });
+});
+
+describe("the database", () => {
+  it("keeps the two days, who and when together and in order, only after a decision or recall, never for an e-visa", async () => {
+    const { c } = await decidedCase({ decided: false });
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    const today = istToday();
+    const inTransit = { passportsCollectedOn: toDbDate(today), passportsExpectedOn: toDbDate(addDays(today, 2)), passportsInTransitAt: new Date(), passportsInTransitById: neha.id };
+    const set = (enquiryId: string, data: Record<string, unknown>) => prisma.visaCase.update({ where: { enquiryId }, data });
+    // Not decided yet.
+    await expect(set(c.id, inTransit)).rejects.toThrow(/VisaCase_in_transit_after_decision/);
+
+    const decided = await decidedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
+    const { passportsInTransitById: _by, ...withoutWho } = inTransit;
+    await expect(set(decided.c.id, withoutWho)).rejects.toThrow(/VisaCase_in_transit_together/);
+    await expect(set(decided.c.id, { ...inTransit, passportsExpectedOn: toDbDate(addDays(today, -1)) })).rejects.toThrow(/VisaCase_in_transit_dates/);
+    await expect(set(decided.c.id, { ...inTransit, passportsCollectedOn: toDbDate(addDays(today, 1)) })).rejects.toThrow(/VisaCase_in_transit_dates/);
+    await set(decided.c.id, inTransit);
+
+    const online = await eVisaDecided();
+    await expect(set(online.c.id, inTransit)).rejects.toThrow(/VisaCase_in_transit_not_online/);
+  });
+});
+
+describe("races", () => {
+  it("waits for a send already in flight, then refuses the second", async () => {
+    const { c, processor } = await decidedCase();
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    const today = istToday();
+    const first = holdCaseLock(c.id, (tx) =>
+      tx.visaCase.update({
+        where: { enquiryId: c.id },
+        data: { passportsCollectedOn: toDbDate(today), passportsExpectedOn: toDbDate(addDays(today, 2)), passportsInTransitAt: new Date(), passportsInTransitById: neha.id },
+      }),
+    );
+    await first.ready;
+    const pending = send(processor, c.caseNo).then((r) => r);
+    try {
+      await untilWaitingOnLock();
+    } finally {
+      first.release();
+    }
+    await first.done;
+    const res = await pending;
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe("The passports are already on their way back.");
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.inTransit" } })).toBe(0);
+  });
+});
+
+describe("once the passports are on their way back", () => {
+  it("the decision can't be changed, and a refusal letter can still be added", async () => {
+    const { c, processor, adult, child } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const change = await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`).send({ outcome: "REFUSED" });
+    expect(change.status).toBe(409);
+    expect(change.body.message).toBe("The decision can only be changed while the case is at Decision.");
+
+    const doc = await PDFDocument.create();
+    doc.addPage();
+    const letter = await processor
+      .post(`/api/visa/cases/${c.caseNo}/travellers/${child}/refusal-letter`)
+      .set("Content-Type", "application/pdf")
+      .send(Buffer.from(await doc.save()));
+    expect(letter.status).toBe(200);
+  });
+});
