@@ -300,6 +300,15 @@ router.post("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 });
 
 /**
+ * "Change" either day while the passports are on their way back (0013 component 2), checked as when first saved; the
+ * due time moves with the expected day. 400 under `collectedOn` or `expectedOn`.
+ */
+router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
+  const body = sendPassportsBackSchema.parse(req.body);
+  res.json({ case: await passportsBackService.changePassportsBack(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
  * Upload the final file: the PDF itself is the body (Content-Type: application/pdf), not a form. The case and the size
  * limit are checked before the body is read.
  */

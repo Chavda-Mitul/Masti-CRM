@@ -11,7 +11,7 @@ import { decidedCase, dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, r
 // Visa Step 7, passports on the way back (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor
 // collected them and the day they're expected at our office, an open office day. The case moves to Passport back, in
 // transit, due that day at 11:00 ⚠️ (visa.arrivalCheck). A recalled file does the same at Passport back; an e-visa,
-// whose passports never left, doesn't (Decision 4).
+// whose passports never left, doesn't (Decision 4). While they're in transit, "Change" corrects either day (component 2).
 
 beforeEach(async () => {
   await resetDb();
@@ -261,5 +261,116 @@ describe("once the passports are on their way back", () => {
       .set("Content-Type", "application/pdf")
       .send(Buffer.from(await doc.save()));
     expect(letter.status).toBe(200);
+  });
+});
+
+describe("Change the dates (component 2)", () => {
+  /** "Change" on the card: the dates the page shows, with `body` over them. */
+  async function change(agent: Agent, caseNo: string, body: Body = {}) {
+    const c = await load(agent, caseNo);
+    const dates = { collectedOn: c.passportsBack?.collectedOn ?? istToday(), expectedOn: c.passportsBack?.expectedOn ?? (await anOpenDay()) };
+    return agent.put(`/api/visa/cases/${caseNo}/passports-back`).send({ ...dates, updatedAt: c.updatedAt, ...body });
+  }
+
+  it("moves the expected day: the due time follows, the step and who first recorded it stay, audited", async () => {
+    const { c, processor } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const before = await load(processor, c.caseNo);
+    const later = await nextOpenDay(addDays(before.passportsBack!.expectedOn, 3), { office: true });
+    const res = await change(processor, c.caseNo, { expectedOn: later });
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.stage.code).toBe("PASSPORT_BACK");
+    expect(after.passportsBack).toEqual({ ...before.passportsBack, expectedOn: later });
+    expect(after.dueAt).toBe(istDateTimeToUtc(later, "11:00").toISOString());
+
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.update" } });
+    expect(row).toMatchObject({ entityType: "Enquiry", entityId: c.id });
+    expect(row.before).toMatchObject({ collectedOn: istToday(), expectedOn: before.passportsBack!.expectedOn, dueAt: before.dueAt });
+    expect(row.after).toMatchObject({ collectedOn: istToday(), expectedOn: later, dueAt: after.dueAt });
+  });
+
+  it("corrects the collected day: not before the dispatch, nor after the day they were recorded on the way back", async () => {
+    const { c, processor } = await decidedCase();
+    // The file went to the vendor five days ago.
+    const { docketId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { docketId: true } });
+    await prisma.docket.update({ where: { id: docketId! }, data: { dispatchedAt: new Date(Date.now() - 5 * 86_400_000) } });
+    expect((await send(processor, c.caseNo, { collectedOn: addDays(istToday(), -2) })).status).toBe(200);
+
+    const res = await change(processor, c.caseNo, { collectedOn: addDays(istToday(), -3) });
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).passportsBack!.collectedOn).toBe(addDays(istToday(), -3));
+    expect((await change(processor, c.caseNo, { collectedOn: addDays(istToday(), -6) })).body.issues.collectedOn).toEqual([
+      "Pick a day on or after the file was dispatched.",
+    ]);
+
+    // Recorded on the way back yesterday: the vendor had them by then.
+    const yesterday = addDays(istToday(), -1);
+    await prisma.visaCase.update({
+      where: { enquiryId: c.id },
+      data: { passportsCollectedOn: toDbDate(yesterday), passportsInTransitAt: istDateTimeToUtc(yesterday, "15:00") },
+    });
+    const late = await change(processor, c.caseNo, { collectedOn: istToday() });
+    expect(late.status).toBe(400);
+    expect(late.body.issues.collectedOn).toEqual(["Pick a day on or before the day they were recorded on the way back."]);
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.update" } })).toBe(1);
+  });
+
+  it("a save that changes nothing writes nothing", async () => {
+    const { c, processor } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const before = await load(processor, c.caseNo);
+    const res = await change(processor, c.caseNo);
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).updatedAt).toBe(before.updatedAt);
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.update" } })).toBe(0);
+  });
+
+  it("before they're on the way back, at another step, on a closed or past day, on a stale page and when postponed", async () => {
+    await seedHolidays(prisma); // the weekly Sunday off
+    const { c, processor } = await recalledCase();
+    const early = await change(processor, c.caseNo);
+    expect(early.status).toBe(409);
+    expect(early.body.message).toBe("Mark the passports on the way back first.");
+
+    const decided = await decidedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
+    const atDecision = await change(processor, decided.c.caseNo);
+    expect(atDecision.status).toBe(409);
+    expect(atDecision.body.message).toBe("The dates can only be changed while the passports are on their way back.");
+
+    expect((await send(processor, decided.c.caseNo)).status).toBe(200);
+    expect((await change(processor, decided.c.caseNo, { expectedOn: nextSunday() })).body.issues.expectedOn).toEqual([
+      "Weekly off: our office is closed that day. Pick another.",
+    ]);
+    expect((await change(processor, decided.c.caseNo, { expectedOn: addDays(istToday(), -1) })).body.issues.expectedOn).toEqual([
+      "Pick today or a later day.",
+    ]);
+    const later = await nextOpenDay(addDays(istToday(), 9), { office: true });
+    expect((await change(processor, decided.c.caseNo, { expectedOn: later, updatedAt: "2026-01-01T00:00:00.000Z" })).body.details.code).toBe("STALE");
+    const fresh = (await load(processor, decided.c.caseNo)).updatedAt;
+    await prisma.enquiry.update({
+      where: { id: decided.c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addMonths(istToday(), 1)) },
+    });
+    expect((await change(processor, decided.c.caseNo, { expectedOn: later, updatedAt: fresh })).body.message).toMatch(/postponed/);
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.update" } })).toBe(0);
+  });
+
+  it("its processor, the Visa HOD and the Head; not other staff", async () => {
+    const { c, processor } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    await createUser({ name: "Kiran", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const seen = await load(processor, c.caseNo);
+    const later = await nextOpenDay(addDays(seen.passportsBack!.expectedOn, 2), { office: true });
+    const body = { collectedOn: seen.passportsBack!.collectedOn, expectedOn: later, updatedAt: seen.updatedAt };
+    const put = (agent: Agent) => agent.put(`/api/visa/cases/${c.caseNo}/passports-back`).send(body);
+    expect((await put(await loginAs("kiran@masti.test"))).status).toBe(403);
+    const hod = await put(await loginAs("riya@masti.test"));
+    expect(hod.status).toBe(200);
+    // Who recorded them on the way back stays.
+    expect((hod.body.case as CaseDto).passportsBack).toMatchObject({ expectedOn: later, by: { name: "Neha Joshi" } });
+    const audited = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.update" }, include: { actor: { select: { name: true } } } });
+    expect(audited.actor?.name).toBe("Riya");
   });
 });

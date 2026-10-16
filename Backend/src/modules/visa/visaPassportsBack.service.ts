@@ -1,11 +1,11 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { addDays, istToday, toDbDate } from "../../lib/dates";
+import { addDays, fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
 import type { Actor } from "../users/user";
-import { loadCase, lockCase, RETURNING, visaStage } from "./caseLock";
+import { IN_TRANSIT, loadCase, lockCase, RETURNING, visaStage } from "./caseLock";
 import { MAX_COLLECTION_DAYS_AHEAD, type SendPassportsBackInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
@@ -13,15 +13,17 @@ import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 // Visa Step 7, passport back (docs/decisions/0013-visa-passport-back.md). "Passports on the way back" records the day
 // the vendor collected the passports and the day they're expected at our office (Decision 3), from Decision, or at
 // Passport back for a recalled file. The passports are then in transit until they're marked received, and the case is
-// due on the expected day at 11:00 ⚠️ (visa.arrivalCheck). An e-visa's passports never left the office, so it waits at
-// Decision (Decision 4).
+// due on the expected day at 11:00 ⚠️ (visa.arrivalCheck). While they're in transit, "Change" corrects either day
+// (component 2). An e-visa's passports never left the office, so it waits at Decision (Decision 4).
 
-/** What sending the passports back checks, read again under the lock. */
+/** What sending the passports back, or changing their dates, checks, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
   return db.visaCase.findUniqueOrThrow({
     where: { enquiryId },
     select: {
       submittedOnlineAt: true,
+      passportsCollectedOn: true,
+      passportsExpectedOn: true,
       passportsInTransitAt: true,
       docket: { select: { dispatchedAt: true } },
     },
@@ -39,14 +41,24 @@ function assertCanSend(g: Gathered) {
   if (g.passportsInTransitAt) throw conflict("The passports are already on their way back.");
 }
 
+/** On their way back and not yet received. */
+function assertInTransit(g: Gathered) {
+  if (!g.passportsInTransitAt) throw conflict("Mark the passports on the way back first.");
+}
+
 /**
- * The vendor collected them today or earlier, not before the file was dispatched. They're expected today or later (so
- * never before they were collected), within a year, on a day our office is open (Sundays and office holidays are
+ * The vendor collected them today or earlier (on a change, no later than the day they were recorded on the way back,
+ * as the CHECK VisaCase_in_transit_dates keeps), not before the file was dispatched. They're expected today or later
+ * (so never before they were collected), within a year, on a day our office is open (Sundays and office holidays are
  * refused, by name).
  */
 async function checkDates(db: Db, input: SendPassportsBackInput, g: Gathered) {
   const today = istToday();
   const dispatchedOn = g.docket?.dispatchedAt ? istToday(g.docket.dispatchedAt) : null;
+  const recordedOn = g.passportsInTransitAt ? istToday(g.passportsInTransitAt) : null;
+  if (recordedOn && input.collectedOn > recordedOn) {
+    throw fieldError("collectedOn", "Pick a day on or before the day they were recorded on the way back.");
+  }
   if (input.collectedOn > today) throw fieldError("collectedOn", "Pick today or an earlier day.");
   if (dispatchedOn && input.collectedOn < dispatchedOn) throw fieldError("collectedOn", "Pick a day on or after the file was dispatched.");
   if (input.expectedOn < today) throw fieldError("expectedOn", "Pick today or a later day.");
@@ -98,6 +110,52 @@ export async function sendPassportsBack(caseNo: string, input: SendPassportsBack
         clientId: enquiry.clientId,
         before: { stage: locked.stage.code, dueAt: locked.dueAt },
         after: { stage: "PASSPORT_BACK", dueAt, collectedOn: input.collectedOn, expectedOn: input.expectedOn },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * "Change" on the Passports coming back card (component 2): either day, checked as when first saved, while the case is
+ * at Passport back and the passports are in transit. In one transaction under the case lock: the two days, the due time
+ * moved with the expected day, and the audit (visa.passports.update, with the old and new values). Who recorded them on
+ * the way back, and when, stay. A save that changes nothing writes nothing.
+ */
+export async function changePassportsBack(caseNo: string, input: SendPassportsBackInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, IN_TRANSIT);
+  assertFresh(enquiry.updatedAt, input.updatedAt, "case");
+  const pre = await gather(prisma, enquiry.id);
+  assertInTransit(pre);
+  await checkDates(prisma, input, pre);
+
+  await prisma.$transaction(async (tx) => {
+    const locked = await lockCase(tx, enquiry.id, actor, IN_TRANSIT);
+    assertFresh(locked.updatedAt, input.updatedAt, "case");
+    const g = await gather(tx, enquiry.id);
+    assertInTransit(g);
+    await checkDates(tx, input, g);
+
+    const was = { collectedOn: fromDbDate(g.passportsCollectedOn!), expectedOn: fromDbDate(g.passportsExpectedOn!) };
+    if (was.collectedOn === input.collectedOn && was.expectedOn === input.expectedOn) return;
+
+    const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).arrivalCheck, tx, input.expectedOn);
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
+    await tx.visaCase.update({
+      where: { enquiryId: enquiry.id },
+      data: { passportsCollectedOn: toDbDate(input.collectedOn), passportsExpectedOn: toDbDate(input.expectedOn) },
+    });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.passports.update",
+        entityType: "Enquiry",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { ...was, dueAt: locked.dueAt },
+        after: { collectedOn: input.collectedOn, expectedOn: input.expectedOn, dueAt },
         ip: actor.ip,
       },
       tx,

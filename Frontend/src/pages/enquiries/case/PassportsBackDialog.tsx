@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
-import { useSendPassportsBack } from '../queries'
+import { useChangePassportsBack, useSendPassportsBack } from '../queries'
 import type { VisaCase } from '../types'
 import { firstName, longDate, passportTotal } from './labels'
 import { OpenDayCalendar } from './OpenDayCalendar'
@@ -10,15 +10,21 @@ import { OpenDayCalendar } from './OpenDayCalendar'
 /**
  * "Passports on the way back" (docs/decisions/0013-visa-passport-back.md Decision 3), at Step 6, or at Step 7 for a
  * recalled file: the day the vendor collected the passports and the day they're expected at our office, an open office
- * day. The case moves to Passport back, in transit, due back on its processor's desk that day.
+ * day. The case moves to Passport back, in transit, due back on its processor's desk that day. While they're in transit
+ * the same form, filled in, changes either day ("Change" on the Passports coming back card, component 2).
  */
 export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
-  const send = useSendPassportsBack(c.caseNo)
+  const p = c.passportsBack
+  const first = useSendPassportsBack(c.caseNo)
+  const change = useChangePassportsBack(c.caseNo)
+  const send = p ? change : first
   const today = istToday()
   const dispatchedOn = c.docket?.dispatchedAt ? istParts(c.docket.dispatchedAt).date : undefined
-  const [collectedOn, setCollectedOn] = useState(today)
-  const [expectedOn, setExpectedOn] = useState<string | null>(null)
+  // The vendor had them before they were recorded on the way back.
+  const latestCollected = p ? istParts(p.at).date : today
+  const [collectedOn, setCollectedOn] = useState(p?.collectedOn ?? today)
+  const [expectedOn, setExpectedOn] = useState<string | null>(p?.expectedOn ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   // What intake counted (0006), or one per traveller when nobody did: the same booklets come back.
   const booklets = passportTotal(c.booklets.current ?? c.travellers.length, c.booklets.old ?? 0)
@@ -33,7 +39,10 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
       { collectedOn, expectedOn, updatedAt: c.updatedAt },
       {
         onSuccess: () => {
-          toast({ tone: 'ok', message: `${c.caseNo}: passports on the way back, expected ${longDate(expectedOn)}.` })
+          toast({
+            tone: 'ok',
+            message: p ? `Dates saved. Expected ${longDate(expectedOn)}.` : `${c.caseNo}: passports on the way back, expected ${longDate(expectedOn)}.`,
+          })
           onClose()
         },
         onError: (err) => {
@@ -49,7 +58,7 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog submission-dialog" role="dialog" aria-modal="true" aria-labelledby="passports-back-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="passports-back-title">
-          Passports on the way back
+          {p ? 'Change the dates' : 'Passports on the way back'}
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
           {booklets} for {c.client.name}. Vendors don’t always send a docket number, so we keep the day we expect them.
@@ -63,7 +72,7 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
             className="input"
             value={collectedOn}
             min={dispatchedOn}
-            max={today}
+            max={latestCollected}
             onChange={(e) => setCollectedOn(e.target.value)}
             disabled={send.isPending}
           />
