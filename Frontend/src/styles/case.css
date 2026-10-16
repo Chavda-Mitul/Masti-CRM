@@ -987,7 +987,7 @@ button.tick:focus-visible {
 }
 .decision-line {
   display: grid;
-  grid-template-columns: 160px auto minmax(0, 1fr);
+  grid-template-columns: 160px auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 8px 0;

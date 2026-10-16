@@ -1,7 +1,8 @@
 # 0012 · Visa Step 6: the decision
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: recording
-  the decision (15 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
+  the decision (15 Oct 2026, component 1); changing a traveller's decision (16 Oct 2026, component 2). A "Built" note
+  is added under each part as its component lands.
 - **Date:** 15 Oct 2026
 - **Scope:** recording whether each traveller's visa was approved or refused, from the moment the file was submitted
   (at the embassy, or online for an e-visa) until the passports start back (Step 7):
@@ -108,6 +109,23 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
   - At Step 6, the **Decision** card: each traveller's outcome and "Sticker FRA 0182 4471 · valid 1 Dec 2026 – 14 Jan
     2027", and when it's due back. The chip reads "Approved", "Refused" or "Approved 1 · Refused 1"; "Passports on the
     way back →" stays "Soon" until Step 7.
+
+**Built 16 Oct 2026** (component 2, changing a traveller's decision):
+- `PUT /api/visa/cases/:caseNo/travellers/:travellerId/decision` with `{ outcome, visaNo?, validFrom?, validTo? }`, for
+  whoever can act on the case, only while it's at Decision (open, not postponed): "The decision can only be changed
+  while the case is at Decision." It's checked as when recorded, with the messages under `decision`; a traveller of
+  another case is a 404.
+- **In one transaction under the case lock:** the traveller's entry (Approved ↔ Refused, or just the number or dates;
+  a refused one loses its number and dates) and the audit `visa.decision.change` with the old and new values.
+- **Defaults (not asked; say if any is wrong):**
+  - **One traveller at a time:** each row has its own Change, already filled in.
+  - **The last save wins**, as with the other one-traveller edits (the portal details, the checklist): a change doesn't
+    make anyone else's open page stale. A save that changes nothing writes nothing.
+  - **The case stays as it was:** its step, its due time and "recorded {day} · {name}" on the card. Changes show only in
+    the audit log; the demo has no "changed by" line. A change moves no money and sends no message.
+  - What a Refused → Approved change does to a refusal letter is settled with the letter (component 3).
+- **Screen:** "Change" at the end of each row of the Decision card, while the case is at Step 6 and open, for whoever
+  can act on it. It opens "Change the decision" with that traveller's row (the same toggle and fields as recording).
 
 ### 7. Settings and seed data (golden rule 1)
 

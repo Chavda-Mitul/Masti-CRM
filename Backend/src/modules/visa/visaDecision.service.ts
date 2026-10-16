@@ -1,11 +1,11 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { toDbDate } from "../../lib/dates";
-import { conflict, fieldError } from "../../lib/httpError";
+import { fromDbDate, toDbDate } from "../../lib/dates";
+import { conflict, fieldError, notFound } from "../../lib/httpError";
 import type { Actor } from "../users/user";
-import { DECIDING, loadCase, lockCase, visaStage } from "./caseLock";
-import type { RecordDecisionInput } from "./visa.schemas";
+import { DECIDED, DECIDING, loadCase, lockCase, visaStage } from "./caseLock";
+import type { ChangeDecisionInput, RecordDecisionInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { travellerLabel } from "./visaCase";
@@ -14,7 +14,7 @@ import { travellerLabel } from "./visaCase";
 // online for an e-visa), "Record the decision" saves every traveller's outcome at once (Decision 6): Approved, with the
 // sticker (or e-visa) number and the dates it's valid (Decisions 3 and 5), or Refused. The case moves to Decision, due
 // the next open office day at 11:00 ⚠️ (visa.passportsBackCheck) to check the passports are on their way back. A refusal
-// changes no money.
+// changes no money. While the case is at Decision, "Change" corrects one traveller's entry; the audit log keeps both.
 
 /** What recording checks, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
@@ -35,14 +35,35 @@ function assertSubmitted(g: Gathered) {
   if (!g.submittedAt && !g.submittedOnlineAt) throw conflict("Mark it submitted at the embassy first.");
 }
 
+/** How the case names a traveller (the passport name, else "Adult 1"), and what its visas' numbers are called. */
+function wording(g: Gathered) {
+  const adults = g.travellers.filter((t) => !t.isChild).length;
+  return {
+    who: (t: Gathered["travellers"][number]) => t.name ?? travellerLabel(t, adults),
+    number: g.submittedOnlineAt ? "e-visa number" : "sticker number",
+  };
+}
+
 /**
- * Every traveller of the case exactly once, an approved one with the number and both dates (valid-to on or after
- * valid-from), a refused one with none. Messages name the traveller, as the dialog lists them.
+ * One traveller's outcome (Decision 3): an approved one with the number and both dates (valid-to on or after
+ * valid-from), a refused one with none. The message names the traveller and goes under `field`.
+ */
+function checkOne(field: string, name: string, number: string, o: ChangeDecisionInput) {
+  if (o.outcome === "APPROVED") {
+    if (!o.visaNo) throw fieldError(field, `Enter ${name}'s ${number}.`);
+    if (!o.validFrom || !o.validTo) throw fieldError(field, `Enter the dates ${name}'s visa is valid.`);
+    if (o.validTo < o.validFrom) throw fieldError(field, `${name}'s visa can't end before it starts.`);
+  } else if (o.visaNo || o.validFrom || o.validTo) {
+    throw fieldError(field, `${name} was refused: leave the ${number} and dates empty.`);
+  }
+}
+
+/**
+ * Every traveller of the case exactly once, each checked by checkOne. Messages name the traveller, as the dialog lists
+ * them.
  */
 function checkOutcomes(g: Gathered, outcomes: RecordDecisionInput["outcomes"]) {
-  const adults = g.travellers.filter((t) => !t.isChild).length;
-  const who = (t: Gathered["travellers"][number]) => t.name ?? travellerLabel(t, adults);
-  const number = g.submittedOnlineAt ? "e-visa number" : "sticker number";
+  const { who, number } = wording(g);
   const byId = new Map(g.travellers.map((t) => [t.id, t]));
   const seen = new Set<string>();
   for (const o of outcomes) {
@@ -50,13 +71,7 @@ function checkOutcomes(g: Gathered, outcomes: RecordDecisionInput["outcomes"]) {
     if (!t) throw fieldError("outcomes", "Someone on this list isn't on the case. Reload and try again.");
     if (seen.has(t.id)) throw fieldError("outcomes", `${who(t)} is on the list twice.`);
     seen.add(t.id);
-    if (o.outcome === "APPROVED") {
-      if (!o.visaNo) throw fieldError("outcomes", `Enter ${who(t)}'s ${number}.`);
-      if (!o.validFrom || !o.validTo) throw fieldError("outcomes", `Enter the dates ${who(t)}'s visa is valid.`);
-      if (o.validTo < o.validFrom) throw fieldError("outcomes", `${who(t)}'s visa can't end before it starts.`);
-    } else if (o.visaNo || o.validFrom || o.validTo) {
-      throw fieldError("outcomes", `${who(t)} was refused: leave the ${number} and dates empty.`);
-    }
+    checkOne("outcomes", who(t), number, o);
   }
   const missing = g.travellers.find((t) => !seen.has(t.id));
   if (missing) throw fieldError("outcomes", `Record ${who(missing)}'s decision too.`);
@@ -114,6 +129,65 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
             return { name: who(t), outcome: o.outcome, visaNo: o.visaNo ?? null, validFrom: o.validFrom ?? null, validTo: o.validTo ?? null };
           }),
         },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision: the outcome, or
+ * just the number or dates. In one transaction under the case lock: the traveller's entry and the audit
+ * (visa.decision.change, with the old and new values). The last save wins, as with the other one-traveller edits, and
+ * the case's step, due time and "recorded by" stay. A save that changes nothing writes nothing.
+ */
+export async function changeDecision(caseNo: string, travellerId: string, input: ChangeDecisionInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, DECIDED);
+  const check = (g: Gathered) => {
+    const t = g.travellers.find((x) => x.id === travellerId);
+    if (!t) throw notFound("Traveller not found on this case.");
+    const { who, number } = wording(g);
+    checkOne("decision", who(t), number, input);
+    return who(t);
+  };
+  check(await gather(prisma, enquiry.id));
+
+  await prisma.$transaction(async (tx) => {
+    await lockCase(tx, enquiry.id, actor, DECIDED);
+    const name = check(await gather(tx, enquiry.id));
+    const row = await tx.visaCaseTraveller.findUniqueOrThrow({
+      where: { id: travellerId },
+      select: { outcome: true, visaNo: true, validFrom: true, validTo: true },
+    });
+    const was = {
+      outcome: row.outcome,
+      visaNo: row.visaNo,
+      validFrom: row.validFrom && fromDbDate(row.validFrom),
+      validTo: row.validTo && fromDbDate(row.validTo),
+    };
+    const now = { outcome: input.outcome, visaNo: input.visaNo ?? null, validFrom: input.validFrom ?? null, validTo: input.validTo ?? null };
+    if (was.outcome === now.outcome && was.visaNo === now.visaNo && was.validFrom === now.validFrom && was.validTo === now.validTo) return;
+
+    await tx.visaCaseTraveller.update({
+      where: { id: travellerId },
+      data: {
+        outcome: now.outcome,
+        visaNo: now.visaNo,
+        validFrom: now.validFrom ? toDbDate(now.validFrom) : null,
+        validTo: now.validTo ? toDbDate(now.validTo) : null,
+      },
+    });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.decision.change",
+        entityType: "VisaCaseTraveller",
+        entityId: travellerId,
+        clientId: enquiry.clientId,
+        before: { name, ...was },
+        after: { name, ...now },
         ip: actor.ip,
       },
       tx,

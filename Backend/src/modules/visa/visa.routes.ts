@@ -9,6 +9,7 @@ import {
   raiseAdditionalInvoiceSchema,
   recallSchema,
   recordDecisionSchema,
+  changeDecisionSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -274,6 +275,16 @@ router.post("/cases/:caseNo/recall", visaEdit, async (req, res) => {
 router.post("/cases/:caseNo/decision", visaEdit, async (req, res) => {
   const body = recordDecisionSchema.parse(req.body);
   res.json({ case: await decisionService.recordDecision(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Change" one traveller's decision while the case is at Decision (0012 Decision 6): the outcome, or the number and
+ * dates. 400 under `decision`, naming the traveller.
+ */
+router.put("/cases/:caseNo/travellers/:travellerId/decision", visaEdit, async (req, res) => {
+  const body = changeDecisionSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await decisionService.changeDecision(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /**

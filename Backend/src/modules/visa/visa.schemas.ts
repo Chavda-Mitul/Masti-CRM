@@ -384,6 +384,17 @@ export const recallSchema = z.object({
  */
 export const VISA_NO_PATTERN = /^[A-Z0-9][A-Z0-9 /-]{1,38}[A-Z0-9]$/;
 
+/** An approved visa's details (Decision 3), as typed: the number cleaned up, and the dates it's valid. */
+const decisionDetails = {
+  visaNo: z
+    .string()
+    .transform((s) => s.trim().replace(/\s+/g, " ").toUpperCase())
+    .pipe(z.string().regex(VISA_NO_PATTERN, "Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."))
+    .nullish(),
+  validFrom: z.iso.date("Pick the date the visa is valid from.").nullish(),
+  validTo: z.iso.date("Pick the date the visa is valid to.").nullish(),
+};
+
 /**
  * "Record the decision" (Decisions 2, 3 and 6): every traveller's outcome at once, with an approved one's number and
  * dates. The service checks each traveller is the case's, once, and that the details match the outcome.
@@ -394,13 +405,7 @@ export const recordDecisionSchema = z.object({
       z.object({
         travellerId: z.string().trim().min(1).max(64),
         outcome: z.enum(VisaOutcome, "Pick Approved or Refused for everyone."),
-        visaNo: z
-          .string()
-          .transform((s) => s.trim().replace(/\s+/g, " ").toUpperCase())
-          .pipe(z.string().regex(VISA_NO_PATTERN, "Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."))
-          .nullish(),
-        validFrom: z.iso.date("Pick the date the visa is valid from.").nullish(),
-        validTo: z.iso.date("Pick the date the visa is valid to.").nullish(),
+        ...decisionDetails,
       }),
     )
     .min(1, "Record a decision for everyone.")
@@ -408,7 +413,14 @@ export const recordDecisionSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/** "Change" on one traveller's row at Step 6 (Decision 6): the outcome and details, checked as when recorded. */
+export const changeDecisionSchema = z.object({
+  outcome: z.enum(VisaOutcome, "Pick Approved or Refused."),
+  ...decisionDetails,
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
+export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type RecallInput = z.infer<typeof recallSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;

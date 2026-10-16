@@ -370,6 +370,14 @@ export function useRecordDecision(caseNo: string) {
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
 }
 
+/** "Change" one traveller's decision while the case is at Decision (0012 Decision 6). 400 under `decision`. */
+export function useChangeDecision(caseNo: string) {
+  return useCaseAction<{ travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }>(
+    caseNo,
+    (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/decision`, { method: 'PUT', body }),
+  )
+}
+
 /** What cancelling the case's invoice with a credit note gives back, and what blocks it (0011 Decision 5). */
 export function useCancelInvoiceCheck(caseNo: string, invoiceNo?: string) {
   const which = invoiceNo ? `?invoiceNo=${encodeURIComponent(invoiceNo)}` : ''
