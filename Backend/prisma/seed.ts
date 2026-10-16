@@ -41,6 +41,8 @@ import {
   RECALL_RETURN_KEY,
   PASSPORTS_BACK_CHECK_KEY,
   ARRIVAL_CHECK_KEY,
+  ASSIGN_CHECK_KEY,
+  DEFAULT_ASSIGN_CHECK,
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
@@ -103,7 +105,7 @@ async function main() {
   // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, the collection reminder (0011
   // Decision 4) ⚠️, the credit-note series (0011 Decision 5) ⚠️, the recall's
   // follow-up (0011 Decision 6) ⚠️, the check after the decision (0012 Decision 7) ⚠️, the check on the day passports are expected back (0013
-  // Decision 3) ⚠️, and Masti's own details.
+  // Decision 3) ⚠️, when a matured case is due to be assigned (0006, amended 16 Oct 2026) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -115,6 +117,7 @@ async function main() {
     [RECALL_RETURN_KEY, DEFAULT_RECALL_RETURN],
     [PASSPORTS_BACK_CHECK_KEY, DEFAULT_PASSPORTS_BACK_CHECK],
     [ARRIVAL_CHECK_KEY, DEFAULT_ARRIVAL_CHECK],
+    [ASSIGN_CHECK_KEY, DEFAULT_ASSIGN_CHECK],
     [COLLECTION_CHECK_KEY, DEFAULT_COLLECTION_CHECK],
     [AWB_KEY, DEFAULT_AWB],
     [DOCKET_EMAIL_KEY, DEFAULT_DOCKET_EMAIL],

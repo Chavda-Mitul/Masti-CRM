@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addMonths, istToday } from "../src/lib/dates";
+import { addDays, addMonths, istDateTimeToUtc, istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { holdCaseLock, saveCase, untilWaitingOnLock, visaStaff, type Agent } from "./visaHelpers";
@@ -389,8 +390,9 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(res.status).toBe(200);
       const after: FullCase = res.body.case;
       expect(after).toMatchObject({ stage: { code: "FILE_PREPARATION", step: 3 }, status: "OPEN", owner: null, maturedBy: { name: "Aarti Patel" } });
-      expect(Math.abs(Date.parse(after.dueAt!) - Date.now())).toBeLessThan(60_000);
-      expect(after.maturedAt).toBe(after.dueAt);
+      // Due with the HOD the next open office day at 11:00 ⚠️ (visa.assignCheck), not late the moment it's handed over.
+      expect(Math.abs(Date.parse(after.maturedAt!) - Date.now())).toBeLessThan(60_000);
+      expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 1), { office: true }), "11:00").toISOString());
 
       const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
       const entries = await prisma.auditLog.findMany({ where: { action: "visa.mature" } });
@@ -405,6 +407,16 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
 
       // The owner is cleared, so whoever matured it no longer opens it: it is the HOD's to assign.
       expect((await staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+    });
+
+    it("is due with the HOD as the setting says (visa.assignCheck)", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const complete = await completeCase(staff, c);
+      await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+      expect((await (await loginAs("riya@masti.test")).put("/api/visa/settings").send({ assignCheck: { afterDays: 2, at: "10:00" } })).status).toBe(200);
+      const after: FullCase = (await mature(staff, c, complete.updatedAt)).body.case;
+      expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 2), { office: true }), "10:00").toISOString());
     });
 
     it("lets only the owner, the Visa HOD and the Head mark it complete", async () => {

@@ -8,6 +8,7 @@ import type { Actor } from "../users/user";
 import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
 import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
+import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
@@ -237,7 +238,8 @@ async function missingForMaturity(db: Db, enquiryId: string) {
 /**
  * "Mark documents complete" (Decision 8): every traveller named and every paper in, made or not needed (booklets are
  * optional, amended 10 Oct 2026). The case moves to File preparation with no owner, "Matured · to assign", for the HOD
- * to give to a processor, who can't be the person who matured it. Returns the case by id: once its owner is cleared,
+ * to give to a processor, who can't be the person who matured it. It's due the next open office day at 11:00 ⚠️
+ * (visa.assignCheck, amended 16 Oct 2026), so it isn't late the moment it's handed over. Returns the case by id: once its owner is cleared,
  * the staff member who pressed it may no longer be able to open it.
  *
  * The checklist is checked under the case's lock, in the same transaction as the move (lockCase), so a paper
@@ -261,7 +263,8 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
     }
 
     const filePrep = await visaStage(tx, enquiry.departmentId, "FILE_PREPARATION");
-    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: filePrep.id, ownerId: null, dueAt: now } });
+    const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).assignCheck, tx);
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: filePrep.id, ownerId: null, dueAt } });
     await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { maturedAt: now, maturedById: actor.user.id } });
     await audit(
       {
@@ -271,7 +274,7 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: { stage: locked.stage.code, ownerId: locked.ownerId, dueAt: locked.dueAt },
-        after: { stage: "FILE_PREPARATION", ownerId: null, dueAt: now, maturedAt: now, maturedById: actor.user.id },
+        after: { stage: "FILE_PREPARATION", ownerId: null, dueAt, maturedAt: now, maturedById: actor.user.id },
         ip: actor.ip,
       },
       tx,
