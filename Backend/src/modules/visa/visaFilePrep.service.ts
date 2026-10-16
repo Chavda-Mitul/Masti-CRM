@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { PDFDocument } from "pdf-lib";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { istDateTimeToUtc } from "../../lib/dates";
-import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
+import { MB, pdfPageCount, tooBigMessage } from "./casePdf";
 import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -171,9 +171,6 @@ export async function setVendor(caseNo: string, input: SetVendorInput, actor: Ac
 // The saved file, kept as proof (Decision 8)
 // ---------------------------------------------------------------------------
 
-const MB = 1024 * 1024;
-const PDF_MAGIC = Buffer.from("%PDF-");
-
 /**
  * Before the upload is read: the case must be one this user may change at File preparation, and the setting gives
  * the size limit. Refusing here means a wrong upload is never held in memory.
@@ -181,7 +178,7 @@ const PDF_MAGIC = Buffer.from("%PDF-");
 export async function finalFileLimit(caseNo: string, actor: Actor) {
   await loadCase(caseNo, actor, PREPARING);
   const { maxMb } = (await getVisaSettings()).finalFile;
-  return { maxBytes: maxMb * MB, tooBig: `This PDF is over ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
+  return { maxBytes: maxMb * MB, tooBig: tooBigMessage(maxMb) };
 }
 
 /** "VISA-2026-0001_Mehta_file.pdf" ⚠️ (demo screen 08): the case number and the client's last name, letters and digits only. */
@@ -200,15 +197,7 @@ function finalFileName(caseNo: string, clientName: string) {
  */
 export async function uploadFinalFile(caseNo: string, bytes: Buffer, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, PREPARING);
-  if (bytes.length === 0) throw badRequest("Pick the PDF to upload.");
-  if (!bytes.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)) throw badRequest("This isn't a PDF. Save the scan as a PDF and upload that.");
-  let pageCount: number;
-  try {
-    pageCount = (await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })).getPageCount();
-  } catch {
-    throw badRequest("This PDF can't be opened. Save it again and upload the new copy.");
-  }
-  if (pageCount === 0) throw badRequest("This PDF has no pages.");
+  const pageCount = await pdfPageCount(bytes);
 
   const client = await prisma.client.findUniqueOrThrow({ where: { id: enquiry.clientId }, select: { name: true } });
   const fileName = finalFileName(enquiry.caseNo, client.name);

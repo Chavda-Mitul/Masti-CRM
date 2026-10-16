@@ -159,6 +159,9 @@ export const visaCaseInclude = {
             orderBy: { sortOrder: "asc" },
             include: { receivedBy: personSelect, checkedBy: personSelect, checkReason: { select: { id: true, name: true } } },
           },
+          /** The current refusal letter (0012 Decision 4): the newest upload. Older ones are counted, not loaded. */
+          refusalLetters: { orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
+          _count: { select: { refusalLetters: true } },
         },
       },
     },
@@ -195,6 +198,24 @@ export function travellersLabel(adults: number, children: number) {
 }
 
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
+
+/**
+ * A refused traveller's current refusal letter, and how many were uploaded. A traveller changed to Approved keeps their
+ * letters, which aren't shown; changed back to Refused, they show again (0012 Decision 4).
+ */
+function refusalLetterOf(t: TravellerRow) {
+  const file = t.refusalLetters[0];
+  if (t.outcome !== "REFUSED" || !file) return null;
+  return {
+    id: file.id,
+    fileName: file.fileName,
+    sizeBytes: file.sizeBytes,
+    pageCount: file.pageCount,
+    uploadedAt: file.uploadedAt,
+    uploadedBy: file.uploadedBy,
+    copies: t._count.refusalLetters,
+  };
+}
 
 type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
 
@@ -472,6 +493,8 @@ export function toVisaCaseDto(
           validFrom: t.validFrom && fromDbDate(t.validFrom),
           validTo: t.validTo && fromDbDate(t.validTo),
         },
+        /** The refusal letter (0012 Decision 4): the current upload, shown only while the traveller is refused. */
+        refusalLetter: refusalLetterOf(t),
         documents: t.documents.map((d) => ({
           id: d.id,
           name: d.name,

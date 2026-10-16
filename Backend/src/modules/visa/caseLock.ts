@@ -13,6 +13,8 @@ import type { Actor, UserWithDepartments } from "../users/user";
 export interface StepRule {
   stages: readonly string[];
   wrongStage: string;
+  /** Allowed whatever the case's status: postponed, closed or cancelled too. Who may, and at which step, still hold. */
+  anyStatus?: boolean;
 }
 
 /** Step 2: the checklist can change until maturity. After that it is the processor's to check. */
@@ -32,6 +34,13 @@ export const DECIDING: StepRule = { stages: ["AT_VENDOR"], wrongStage: "The deci
 
 /** Step 6 (0012 Decision 6): a recorded decision is corrected while the case is at Decision, and locked once it moves on. */
 export const DECIDED: StepRule = { stages: ["DECISION"], wrongStage: "The decision can only be changed while the case is at Decision." };
+
+/** The refusal letter (0012 Decision 4): once the decision is recorded, at any later step, whatever the case's status. */
+export const LETTERS: StepRule = {
+  stages: ["DECISION", "PASSPORT_BACK", "DELIVERED"],
+  anyStatus: true,
+  wrongStage: "A refusal letter is added once the decision is recorded.",
+};
 
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): from Step 1 until the file goes to the vendor. */
 export const QUOTING: StepRule = {
@@ -64,13 +73,16 @@ export type LockedCase = Prisma.EnquiryGetPayload<{ include: typeof caseInclude 
 
 /**
  * Refuses unless this user may change the case and it is at one of the rule's steps: its owner, its HOD and the Head
- * may (only the HOD and the Head before a processor is assigned), and only while the case is open.
+ * may (only the HOD and the Head before a processor is assigned), and only while the case is open (unless the rule
+ * allows any status).
  */
 function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
   assertCanSeeEnquiry(actor.user, enquiry);
   assertCanActOnEnquiry(actor.user, enquiry);
-  if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
-  if (enquiry.status !== "OPEN") throw conflict("This case is closed, so it can't change.");
+  if (!rule.anyStatus) {
+    if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
+    if (enquiry.status !== "OPEN") throw conflict("This case is closed, so it can't change.");
+  }
   if (!rule.stages.includes(enquiry.stage.code)) throw conflict(rule.wrongStage);
 }
 

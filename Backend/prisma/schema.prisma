@@ -805,28 +805,35 @@ enum CaseFileKind {
   INVOICE
   /// A credit note against one of its invoices, as issued (docs/decisions/0011-visa-at-vendor.md Decision 5).
   CREDIT_NOTE
+  /// A refused traveller's refusal letter, scanned (docs/decisions/0012-visa-decision.md Decision 4). Has a traveller.
+  REFUSAL_LETTER
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
 /// same kind becomes the current one, and the older ones stay as proof.
 model CaseFile {
-  id           String       @id @default(uuid())
+  id           String             @id @default(uuid())
   enquiryId    String
   kind         CaseFileKind
   /// cases/<enquiryId>/final/<uuid>.pdf: no two uploads ever share a key.
-  storageKey   String       @unique
+  storageKey   String             @unique
   /// The name it opens and saves under: VISA-2026-0001_Mehta_file.pdf.
   fileName     String
   sizeBytes    Int
   pageCount    Int
   uploadedById String
-  uploadedAt   DateTime     @default(now()) @db.Timestamptz(3)
-  enquiry      Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  uploadedBy   User         @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
+  /// The traveller a refusal letter is for (0012 Decision 4): set for REFUSAL_LETTER and only for it (checked in the
+  /// migration). The service keeps it to a traveller of the same case.
+  travellerId  String?
+  enquiry      Enquiry            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  uploadedBy   User               @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  traveller    VisaCaseTraveller? @relation(fields: [travellerId], references: [id], onDelete: Restrict)
   invoice      Invoice?
   creditNote   CreditNote?
 
   @@index([enquiryId, kind, uploadedAt])
+  @@index([travellerId, uploadedAt])
 }
 
 /// A logged follow-up: What happened → Next step → When (0006 Decision 6). Append-only. Logging one sets the
@@ -958,31 +965,33 @@ enum VisaOutcome {
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
 /// the client's family member (0006 Decision 3), which brings the passport and the consent.
 model VisaCaseTraveller {
-  id            String             @id @default(uuid())
-  caseId        String
+  id             String             @id @default(uuid())
+  caseId         String
   /// 1, 2, 3… Adults first, then children.
-  position      Int
-  isChild       Boolean
+  position       Int
+  isChild        Boolean
   /// Passport name, copied from the member when linked: what the case was filed under.
-  name          String?
-  memberId      String?
+  name           String?
+  memberId       String?
   /// From the government portal, typed in at File preparation (0007 Decision 5). Capitals and digits, 4–40 (checked
   /// in the migration).
-  ackNo         String?
+  ackNo          String?
   /// The portal appointment, entered as a day and a time in India.
-  appointmentAt DateTime?          @db.Timestamptz(3)
+  appointmentAt  DateTime?          @db.Timestamptz(3)
   /// The embassy's decision (docs/decisions/0012-visa-decision.md): null until recorded.
-  outcome       VisaOutcome?
+  outcome        VisaOutcome?
   /// An approved visa's sticker number (an e-visa's number), and the dates it's valid. All three set for APPROVED and
   /// none otherwise; the number in capitals with single spaces; validTo on or after validFrom (checked in the migration).
-  visaNo        String?
-  validFrom     DateTime?          @db.Date
-  validTo       DateTime?          @db.Date
-  visaCase      VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
-  member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  documents     VisaCaseDocument[]
-  quoteLine     VisaQuoteLine?
-  invoiceLines  InvoiceLine[]
+  visaNo         String?
+  validFrom      DateTime?          @db.Date
+  validTo        DateTime?          @db.Date
+  visaCase       VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  member         ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  documents      VisaCaseDocument[]
+  quoteLine      VisaQuoteLine?
+  invoiceLines   InvoiceLine[]
+  /// Scanned refusal letters, newest current (0012 Decision 4); kept when the outcome changes.
+  refusalLetters CaseFile[]
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])

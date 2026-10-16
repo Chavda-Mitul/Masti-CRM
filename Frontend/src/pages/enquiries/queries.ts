@@ -228,6 +228,13 @@ export function useUploadFinalFile(caseNo: string) {
   return useCaseAction<{ file: File }>(caseNo, (base, { file }) => uploadPdf(`${base}/files/final`, file))
 }
 
+/** A refused traveller's refusal letter (0012 Decision 4): any time once refused, whatever the case's status. */
+export function useUploadRefusalLetter(caseNo: string) {
+  return useCaseAction<{ travellerId: string; file: File }>(caseNo, (base, { travellerId, file }) =>
+    uploadPdf(`${base}/travellers/${travellerId}/refusal-letter`, file),
+  )
+}
+
 /**
  * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
  * click itself, so popup blockers allow it, and pointed at the file once the link arrives.

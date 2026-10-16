@@ -999,6 +999,13 @@ button.tick:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* A refused traveller's refusal letter (0012 Decision 4): the chip, its pages, Open and Upload / Replace. */
+.refusal-letter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 /* Part 6: how documents arrive, booklets */
 .arrival-toggle {

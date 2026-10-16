@@ -210,6 +210,8 @@ export interface CaseTraveller {
   appointmentAt: string | null
   /** Step 6 (0012): null until the decision is recorded */
   decision: TravellerDecision | null
+  /** The current refusal letter (0012 Decision 4), and how many were uploaded; only while the traveller is refused. */
+  refusalLetter: (CaseFile & { copies: number }) | null
   documents: CaseDocument[]
   /** In or made */
   done: number
