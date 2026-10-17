@@ -31,6 +31,7 @@ import type {
   IntakeCountry,
   LogFollowUpBody,
   ReceivedAs,
+  StickerCheck,
   VisaCase,
 } from './types'
 
@@ -385,6 +386,18 @@ export function useSendPassportsBack(caseNo: string) {
   return useCaseAction<{ collectedOn: string; expectedOn: string; updatedAt: string }>(caseNo, (base, body) =>
     api(`${base}/passports-back`, { method: 'POST', body }),
   )
+}
+
+/**
+ * "Mark received" (0013 Decision 5): the booklets counted and each approved traveller's sticker checked; whatever the
+ * case's status. 400 under `booklets` or `stickers`.
+ */
+export function useReceivePassports(caseNo: string) {
+  return useCaseAction<{
+    booklets: { current: number; old: number }
+    stickers: { travellerId: string; check: StickerCheck }[]
+    updatedAt: string
+  }>(caseNo, (base, body) => api(`${base}/passports-received`, { method: 'POST', body }))
 }
 
 /** "Change" either day while the passports are on their way back (0013 component 2); the due time moves too. */

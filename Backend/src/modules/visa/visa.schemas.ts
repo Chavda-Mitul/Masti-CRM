@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, VisaOutcome } from "../../../generated/prisma/enums";
+import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -92,6 +92,12 @@ export const passportsBackCheckSchema = firstFollowUpSchema;
 export const arrivalCheckSchema = firstFollowUpSchema;
 
 /**
+ * When received passports come back to their processor to arrange the handover (0013 Decision 5): the next open
+ * office day, afterDays after they were received, at `at` (IST).
+ */
+export const handoverCheckSchema = firstFollowUpSchema;
+
+/**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
  */
@@ -143,6 +149,7 @@ export const visaSettingsSchema = z.object({
   recallReturn: recallReturnSchema,
   passportsBackCheck: passportsBackCheckSchema,
   arrivalCheck: arrivalCheckSchema,
+  handoverCheck: handoverCheckSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -182,6 +189,7 @@ export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
 export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
 export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
+export type HandoverCheckSetting = z.infer<typeof handoverCheckSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -438,7 +446,25 @@ export const sendPassportsBackSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/** A booklet count at receipt: whole booklets, 0–50 (as at intake). */
+const bookletsBack = (what: string) =>
+  z.number(`Count the ${what} booklets.`).int("Count whole booklets.").min(0, "Can't be below 0.").max(50, "50 at most.");
+
+/**
+ * "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the booklets counted at the office, current
+ * and old, and each approved traveller's sticker checked against their name and dates. The service checks the
+ * travellers.
+ */
+export const receivePassportsSchema = z.object({
+  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
+  stickers: z
+    .array(z.object({ travellerId: z.string().trim().min(1).max(64), check: z.enum(StickerCheck, "Pick Matches or Doesn't match.") }))
+    .max(60),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
+export type ReceivePassportsInput = z.infer<typeof receivePassportsSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

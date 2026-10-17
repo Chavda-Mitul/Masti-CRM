@@ -290,6 +290,7 @@ describe("intake dropdowns and settings", () => {
       recallReturn: { afterDays: 1, at: "11:00" },
       passportsBackCheck: { afterDays: 1, at: "11:00" },
       arrivalCheck: { afterDays: 0, at: "11:00" },
+      handoverCheck: { afterDays: 1, at: "11:00" },
       collectionCheck: { daysBefore: 1, at: "11:00" },
       awb: { minLength: 4, maxLength: 30 },
       docketEmail: {

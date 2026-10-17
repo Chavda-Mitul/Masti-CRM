@@ -12,6 +12,7 @@ import { decidedCase, dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, r
 // collected them and the day they're expected at our office, an open office day. The case moves to Passport back, in
 // transit, due that day at 11:00 ⚠️ (visa.arrivalCheck). A recalled file does the same at Passport back; an e-visa,
 // whose passports never left, doesn't (Decision 4). While they're in transit, "Change" corrects either day (component 2).
+// "Mark received" puts them in our stock, with the booklets counted and the stickers checked (Decision 5, component 3).
 
 beforeEach(async () => {
   await resetDb();
@@ -21,11 +22,14 @@ beforeEach(async () => {
 
 interface CaseDto {
   updatedAt: string;
-  dueAt: string;
+  dueAt: string | null;
+  status: string;
   stage: { code: string };
   recall: { reason: string } | null;
   decision: { at: string } | null;
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: { name: string } | null } | null;
+  passportsReceived: { at: string; by: { name: string } | null; booklets: { current: number; old: number } } | null;
+  travellers: { id: string; decision: { outcome: string } | null; stickerCheck: string | null }[];
 }
 type Body = { collectedOn?: string; expectedOn?: string; updatedAt?: string };
 
@@ -372,5 +376,180 @@ describe("Change the dates (component 2)", () => {
     expect((hod.body.case as CaseDto).passportsBack).toMatchObject({ expectedOn: later, by: { name: "Neha Joshi" } });
     const audited = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.update" }, include: { actor: { select: { name: true } } } });
     expect(audited.actor?.name).toBe("Riya");
+  });
+});
+
+describe("Mark received (component 3)", () => {
+  type Receipt = { booklets?: { current: number; old: number }; stickers?: { travellerId: string; check: string }[]; updatedAt?: string };
+  /** "Mark received": as counted (2 current, 0 old, what went to the vendor), every approved sticker matching, unless `body` says otherwise. */
+  async function receive(agent: Agent, caseNo: string, body: Receipt = {}) {
+    const c = await load(agent, caseNo);
+    const stickers = c.travellers.filter((t) => t.decision?.outcome === "APPROVED").map((t) => ({ travellerId: t.id, check: "MATCHES" }));
+    return agent.post(`/api/visa/cases/${caseNo}/passports-received`).send({ booklets: { current: 2, old: 0 }, stickers, updatedAt: c.updatedAt, ...body });
+  }
+  const received = () => prisma.auditLog.findFirstOrThrow({ where: { action: "visa.passports.received" } });
+
+  it("puts them in our stock: who and when, the booklets, the approved sticker; due to arrange the handover; audited", async () => {
+    const { c, processor } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const res = await receive(processor, c.caseNo);
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.stage.code).toBe("PASSPORT_BACK");
+    expect(after.passportsReceived).toMatchObject({ by: { name: "Neha Joshi" }, booklets: { current: 2, old: 0 } });
+    // Rakesh approved (checked), Aarav refused (no sticker).
+    expect(after.travellers.map((t) => t.stickerCheck)).toEqual(["MATCHES", null]);
+    expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 1), { office: true }), "11:00").toISOString());
+
+    const row = await received();
+    expect(row).toMatchObject({ entityType: "Enquiry", entityId: c.id, clientId: c.client.id });
+    expect(row.after).toMatchObject({
+      booklets: { current: 2, old: 0 },
+      intake: { current: 2, old: 0 },
+      matchesIntake: true,
+      stickers: [{ name: "Rakesh Mehta", check: "MATCHES" }],
+      dueAt: after.dueAt,
+    });
+  });
+
+  it("a short count and a sticker that doesn't match are recorded, not refused; the due time follows visa.handoverCheck", async () => {
+    const { c, processor, adult } = await decidedCase();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await (await loginAs("riya@masti.test")).put("/api/visa/settings").send({ handoverCheck: { afterDays: 2, at: "10:00" } })).status).toBe(200);
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const res = await receive(processor, c.caseNo, { booklets: { current: 1, old: 0 }, stickers: [{ travellerId: adult, check: "MISMATCH" }] });
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.passportsReceived!.booklets).toEqual({ current: 1, old: 0 });
+    expect(after.travellers[0]!.stickerCheck).toBe("MISMATCH");
+    expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 2), { office: true }), "10:00").toISOString());
+    expect((await received()).after).toMatchObject({ intake: { current: 2, old: 0 }, matchesIntake: false, stickers: [{ name: "Rakesh Mehta", check: "MISMATCH" }] });
+  });
+
+  it("a recalled file has no stickers: booklets only", async () => {
+    const { c, processor } = await recalledCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const [first] = (await load(processor, c.caseNo)).travellers;
+    const listed = await receive(processor, c.caseNo, { stickers: [{ travellerId: first!.id, check: "MATCHES" }] });
+    expect(listed.status).toBe(400);
+    expect(listed.body.issues.stickers).toEqual(["Rakesh Mehta has no visa: there's no sticker to check."]);
+    const res = await receive(processor, c.caseNo, { stickers: [] });
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).passportsReceived).toMatchObject({ booklets: { current: 2, old: 0 } });
+  });
+
+  it("a postponed or cancelled case is received too, keeping its status and its due time", async () => {
+    const { c, processor } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    await prisma.enquiry.update({
+      where: { id: c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addMonths(istToday(), 1)) },
+    });
+    const before = await load(processor, c.caseNo);
+    const res = await receive(processor, c.caseNo);
+    expect(res.status).toBe(200);
+    expect(res.body.case as CaseDto).toMatchObject({ status: "POSTPONED", dueAt: before.dueAt, passportsReceived: { booklets: { current: 2, old: 0 } } });
+
+    const other = await decidedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
+    expect((await send(processor, other.c.caseNo)).status).toBe(200);
+    await prisma.enquiry.update({ where: { id: other.c.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED"), resumeOn: null, dueAt: null } });
+    const cancelled = await receive(processor, other.c.caseNo);
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.case as CaseDto).toMatchObject({ status: "CANCELLED", dueAt: null });
+  });
+
+  it("before they're on the way back, at another step, the wrong stickers or booklets, a stale page, and twice", async () => {
+    const { c, processor, adult, child } = await decidedCase();
+    const atDecision = await receive(processor, c.caseNo);
+    expect(atDecision.status).toBe(409);
+    expect(atDecision.body.message).toBe("Passports are received at Passport back.");
+    const recalled = await recalledCase({ extra: { mobile: "98250 41237", clientName: "Sunil Shah" }, vendorId: c.vendor.id });
+    const notSent = await receive(processor, recalled.c.caseNo, { stickers: [] });
+    expect(notSent.status).toBe(409);
+    expect(notSent.body.message).toBe("Mark the passports on the way back first.");
+
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const issue = async (body: Receipt, field: "stickers" | "booklets") => {
+      const res = await receive(processor, c.caseNo, body);
+      expect(res.status).toBe(400);
+      return res.body.issues[field] as string[];
+    };
+    expect(await issue({ stickers: [] }, "stickers")).toEqual(["Check Rakesh Mehta's sticker."]);
+    expect(await issue({ stickers: [{ travellerId: adult, check: "MATCHES" }, { travellerId: child, check: "MATCHES" }] }, "stickers")).toEqual([
+      "Aarav Mehta was refused: there's no sticker to check.",
+    ]);
+    expect(await issue({ stickers: [{ travellerId: adult, check: "MATCHES" }, { travellerId: adult, check: "MATCHES" }] }, "stickers")).toEqual([
+      "Rakesh Mehta is on the list twice.",
+    ]);
+    expect(await issue({ stickers: [{ travellerId: "not-a-traveller", check: "MATCHES" }] }, "stickers")).toEqual([
+      "Someone on this list isn't on the case. Reload and try again.",
+    ]);
+    expect(await issue({ stickers: [{ travellerId: adult, check: "MAYBE" }] }, "stickers")).toEqual(["Pick Matches or Doesn't match."]);
+    expect(await issue({ booklets: { current: 0, old: 0 } }, "booklets")).toEqual(["Count at least one booklet."]);
+    expect(await issue({ booklets: { current: 51, old: 0 } }, "booklets")).toEqual(["50 at most."]);
+    expect((await receive(processor, c.caseNo, { updatedAt: "2026-01-01T00:00:00.000Z" })).body.details.code).toBe("STALE");
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.received" } })).toBe(0);
+
+    expect((await receive(processor, c.caseNo)).status).toBe(200);
+    const twice = await receive(processor, c.caseNo);
+    expect(twice.status).toBe(409);
+    expect(twice.body.message).toBe("The passports are already in our stock.");
+    expect(await prisma.auditLog.count({ where: { action: "visa.passports.received" } })).toBe(1);
+  });
+
+  it("its processor, the Visa HOD and the Head; not other staff", async () => {
+    const { c, processor, adult } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    await createUser({ name: "Kiran", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const { updatedAt } = await load(processor, c.caseNo);
+    const body = { booklets: { current: 2, old: 0 }, stickers: [{ travellerId: adult, check: "MATCHES" }], updatedAt };
+    const post = (agent: Agent) => agent.post(`/api/visa/cases/${c.caseNo}/passports-received`).send(body);
+    expect((await post(await loginAs("kiran@masti.test"))).status).toBe(403);
+    const hod = await post(await loginAs("riya@masti.test"));
+    expect(hod.status).toBe(200);
+    expect((hod.body.case as CaseDto).passportsReceived!.by!.name).toBe("Riya");
+  });
+
+  it("once received, the dates can't change, and a refusal letter can still be added", async () => {
+    const { c, processor, child } = await decidedCase();
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    expect((await receive(processor, c.caseNo)).status).toBe(200);
+    const seen = await load(processor, c.caseNo);
+    const later = await nextOpenDay(addDays(seen.passportsBack!.expectedOn, 2), { office: true });
+    const change = await processor
+      .put(`/api/visa/cases/${c.caseNo}/passports-back`)
+      .send({ collectedOn: seen.passportsBack!.collectedOn, expectedOn: later, updatedAt: seen.updatedAt });
+    expect(change.status).toBe(409);
+    expect(change.body.message).toBe("The passports are already in our stock.");
+
+    const doc = await PDFDocument.create();
+    doc.addPage();
+    const letter = await processor
+      .post(`/api/visa/cases/${c.caseNo}/travellers/${child}/refusal-letter`)
+      .set("Content-Type", "application/pdf")
+      .send(Buffer.from(await doc.save()));
+    expect(letter.status).toBe(200);
+  });
+
+  it("the database keeps who, when and the counts together, after the transit, in range, and stickers for the approved only", async () => {
+    const { c, processor, adult, child } = await decidedCase();
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    const set = (data: Record<string, unknown>) => prisma.visaCase.update({ where: { enquiryId: c.id }, data });
+    const stock = { passportsReceivedAt: new Date(), passportsReceivedById: neha.id, bookletsBackCurrent: 2, bookletsBackOld: 0 };
+    // Not on its way back yet.
+    await expect(set(stock)).rejects.toThrow(/VisaCase_received_after_transit/);
+
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const now = { ...stock, passportsReceivedAt: new Date() };
+    await expect(set({ ...now, bookletsBackOld: null })).rejects.toThrow(/VisaCase_received_together/);
+    await expect(set({ ...now, bookletsBackCurrent: 0 })).rejects.toThrow(/VisaCase_booklets_back_range/);
+    await expect(set({ ...now, bookletsBackCurrent: 51 })).rejects.toThrow(/VisaCase_booklets_back_range/);
+    await expect(set({ ...now, passportsReceivedAt: new Date(Date.now() - 86_400_000) })).rejects.toThrow(/VisaCase_received_after_transit/);
+    await set(now);
+
+    const sticker = (id: string, stickerCheck: "MATCHES" | "MISMATCH") => prisma.visaCaseTraveller.update({ where: { id }, data: { stickerCheck } });
+    await expect(sticker(child, "MATCHES")).rejects.toThrow(/VisaCaseTraveller_sticker_check_approved/);
+    await sticker(adult, "MISMATCH");
   });
 });

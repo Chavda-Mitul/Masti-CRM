@@ -132,6 +132,7 @@ export const visaCaseInclude = {
       recallReason: { select: { name: true } },
       decidedBy: personSelect,
       passportsInTransitBy: personSelect,
+      passportsReceivedBy: personSelect,
       vendor: {
         select: {
           id: true,
@@ -468,6 +469,12 @@ export function toVisaCaseDto(
       at: visa.passportsInTransitAt,
       by: visa.passportsInTransitBy,
     },
+    /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted. */
+    passportsReceived: visa.passportsReceivedAt && {
+      at: visa.passportsReceivedAt,
+      by: visa.passportsReceivedBy,
+      booklets: { current: visa.bookletsBackCurrent!, old: visa.bookletsBackOld! },
+    },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
     /** The price (0009): null until someone enters it. */
@@ -501,6 +508,8 @@ export function toVisaCaseDto(
           validFrom: t.validFrom && fromDbDate(t.validFrom),
           validTo: t.validTo && fromDbDate(t.validTo),
         },
+        /** An approved traveller's sticker, checked when the passports were received (0013 Decision 5); null until then. */
+        stickerCheck: t.stickerCheck,
         /** The refusal letter (0012 Decision 4): the current upload, shown only while the traveller is refused. */
         refusalLetter: refusalLetterOf(t),
         documents: t.documents.map((d) => ({
