@@ -187,6 +187,30 @@ export interface TravellerDecision {
   validTo: string | null
 }
 
+/** One stop on the collection or delivery boy's run (docs/decisions/0015-field-staff-app.md). */
+export interface FieldJob {
+  id: string
+  kind: 'PICKUP' | 'DELIVERY'
+  status: 'BOOKED' | 'DONE' | 'FAILED' | 'CANCELLED'
+  assignee: { id: string; name: string; mobile: string }
+  day: string
+  slot: { id: number; name: string; startsAt: string; endsAt: string }
+  address: string
+  mapLink: string | null
+  mobile: string
+  bookedAt: string
+  bookedBy: PersonRef | null
+  cancelledAt: string | null
+  cancelledBy: PersonRef | null
+}
+
+/** Who can be sent: the active field staff (GET /api/visa/field-staff). */
+export interface FieldStaff {
+  id: string
+  name: string
+  mobile: string
+}
+
 /** The passports handed back to the client (docs/decisions/0014-visa-delivered.md): how, when and by whom, the booklets, who collected them, their photo. */
 export interface Handover {
   mode: 'OFFICE' | 'DELIVERY'
@@ -513,7 +537,10 @@ export interface VisaCase {
   reason: { id: number; code: string; name: string; kind: 'POSTPONE' | 'CANCEL' } | null
   /** YYYY-MM-DD, while postponed */
   resumeOn: string | null
-  client: { id: string; name: string; mobile: string }
+  /** With their email (the field boy's one-time code goes there, 0015) and address in one line */
+  client: { id: string; name: string; mobile: string; email: string | null; address: string }
+  /** The collection and delivery boy's jobs (0015), newest first */
+  fieldJobs: FieldJob[]
   source: { code: string; name: string }
   origin: EnquiryOrigin
   country: { id: number; name: string; zone: string | null; label: string }

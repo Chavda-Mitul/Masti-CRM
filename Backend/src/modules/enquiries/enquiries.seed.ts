@@ -61,6 +61,13 @@ export const ENQUIRY_REASONS = [
   { kind: "CANCEL", code: "NO_REPLY", name: "No reply", sortOrder: 8 },
 ] as const;
 
+/** ⚠️ 0015 Decision 2: the demo's slots for the collection and delivery boy ("Tue 6 Oct, 4–6 pm", "11–1", "2–4 pm"). */
+export const FIELD_SLOTS = [
+  { code: "MORNING", name: "11 am – 1 pm", startsAt: "11:00", endsAt: "13:00", sortOrder: 1 },
+  { code: "AFTERNOON", name: "2–4 pm", startsAt: "14:00", endsAt: "16:00", sortOrder: 2 },
+  { code: "EVENING", name: "4–6 pm", startsAt: "16:00", endsAt: "18:00", sortOrder: 3 },
+] as const;
+
 export async function seedEnquiryMasters(db: Db) {
   for (const source of ENQUIRY_SOURCES) {
     await db.enquirySource.upsert({ where: { code: source.code }, update: {}, create: source });
@@ -73,6 +80,9 @@ export async function seedEnquiryMasters(db: Db) {
   }
   for (const reason of ENQUIRY_REASONS) {
     await db.enquiryReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  }
+  for (const slot of FIELD_SLOTS) {
+    await db.fieldSlot.upsert({ where: { code: slot.code }, update: {}, create: slot });
   }
 
   const visa = await db.department.findUniqueOrThrow({ where: { code: "VISA" } });

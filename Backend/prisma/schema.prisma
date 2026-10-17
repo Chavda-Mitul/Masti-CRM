@@ -68,6 +68,8 @@ model User {
   sessions              Session[]
   auditEntries          AuditLog[]
   assignedFieldJobs     FieldJob[]         @relation("FieldJobAssignee")
+  fieldJobsBooked       FieldJob[]         @relation("FieldJobBookedBy")
+  fieldJobsCancelled    FieldJob[]         @relation("FieldJobCancelledBy")
   clientsCreated        Client[]           @relation("ClientCreatedBy")
   clientPhonesAdded     ClientPhone[]      @relation("ClientPhoneCreatedBy")
   clientMembersAdded    ClientMember[]     @relation("ClientMemberCreatedBy")
@@ -119,17 +121,70 @@ model UserDepartment {
 /// A field worker sees the jobs assigned to them, whatever department raised them.
 /// Skeleton only: job type and status (master tables), slot, address, amount and handover proof
 /// (OTP, photo/selfie links, lat/long, time) are added when the field module is built.
-model FieldJob {
-  id           String     @id @default(uuid())
-  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
-  departmentId Int
-  assigneeId   String?
-  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  assignee     User?      @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+/// What a field job is (docs/decisions/0015-field-staff-app.md): picking a case's documents up from the client, or
+/// delivering its passports. Fixed in code: the screens and the rules branch on it. (Collecting money comes with
+/// Accounts.)
+enum FieldJobKind {
+  PICKUP
+  DELIVERY
+}
 
-  @@index([assigneeId])
+/// Where a field job stands (0015): booked; done at the door; failed (a reason from a list, phase 4); or called off by
+/// the office.
+enum FieldJobStatus {
+  BOOKED
+  DONE
+  FAILED
+  CANCELLED
+}
+
+/// A time slot the boy is booked for (0015 Decision 2): a list the Head or an HOD edits, seeded with the demo's ⚠️.
+/// Times are IST, "HH:mm", ending after they start (checked in the migration). Switched off, never deleted.
+model FieldSlot {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  /// "4–6 pm"
+  name      String
+  startsAt  String
+  endsAt    String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  jobs      FieldJob[]
+}
+
+/// One stop on the boy's run (0002, 0015): which desk raised it, for which case, who goes, on which day and slot, where
+/// to (the client's address, copied at booking and correctable, with an optional Google Maps link) and the client's
+/// mobile for his Call button. One booked job of each kind per case, kept by the case lock. Cancelled: who and when,
+/// together (checked in the migration).
+model FieldJob {
+  id            String         @id @default(uuid())
+  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
+  departmentId  Int
+  kind          FieldJobKind
+  status        FieldJobStatus @default(BOOKED)
+  enquiryId     String
+  /// An active FIELD user when booked (the service checks).
+  assigneeId    String
+  day           DateTime       @db.Date
+  slotId        Int
+  address       String
+  /// The client's location in Google Maps, when they shared one (0015 Decision 3).
+  mapLink       String?
+  mobile        String
+  createdById   String
+  cancelledAt   DateTime?      @db.Timestamptz(3)
+  cancelledById String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  department    Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  enquiry       Enquiry        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  assignee      User           @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  slot          FieldSlot      @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  createdBy     User           @relation("FieldJobBookedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy   User?          @relation("FieldJobCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  @@index([assigneeId, day])
+  @@index([enquiryId])
   @@index([departmentId])
 }
 
@@ -793,6 +848,8 @@ model Enquiry {
   followUps      FollowUp[]
   files          CaseFile[]
   invoices       Invoice[]
+  /// The collection and delivery boy's jobs for it (0015).
+  fieldJobs      FieldJob[]
   creditNotes    CreditNote[]
 
   @@index([status, dueAt])

@@ -4,14 +4,17 @@ import { actorOf, requireAuth, requirePasswordChanged, requireUserType } from ".
 import {
   createOptionSchema,
   createReasonSchema,
+  createSlotSchema,
   listQuerySchema,
   updateOptionSchema,
   updateReasonSchema,
+  updateSlotSchema,
 } from "./enquiryMasters.schemas";
 import * as service from "./enquiryMasters.service";
 
 /**
- * Follow-up outcomes, next steps and postpone/cancel reasons (docs/decisions/0006-visa-documents.md Decision 7).
+ * Follow-up outcomes, next steps and postpone/cancel reasons (docs/decisions/0006-visa-documents.md Decision 7), and the
+ * collection and delivery boy's time slots (docs/decisions/0015-field-staff-app.md Decision 2).
  * The Head and office staff read them (the dropdowns on every case); the service lets the Head or any HOD write.
  */
 const router = Router();
@@ -59,6 +62,20 @@ router.post("/enquiry-reasons", async (req, res) => {
 router.patch("/enquiry-reasons/:id", async (req, res) => {
   const body = updateReasonSchema.parse(req.body);
   res.json({ reason: await service.updateReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// The collection and delivery boy's time slots
+router.get("/field-slots", async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ slots: await service.listSlots(active) });
+});
+router.post("/field-slots", async (req, res) => {
+  const body = createSlotSchema.parse(req.body);
+  res.status(201).json({ slot: await service.createSlot(body, actorOf(req)) });
+});
+router.patch("/field-slots/:id", async (req, res) => {
+  const body = updateSlotSchema.parse(req.body);
+  res.json({ slot: await service.updateSlot(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 export default router;

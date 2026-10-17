@@ -13,6 +13,7 @@ import { DocumentsTable } from './DocumentsTable'
 import { EmbassiesTable } from './EmbassiesTable'
 import { EnquiryReasonsTable } from './EnquiryReasonsTable'
 import { EnquirySourcesTable } from './EnquirySourcesTable'
+import { FieldSlotsTable } from './FieldSlotsTable'
 import { FollowUpOptionsTable } from './FollowUpOptionsTable'
 import { VendorsTable } from './VendorsTable'
 import { VisaTypesTable } from './VisaTypesTable'
@@ -33,6 +34,7 @@ type ListTab =
   | 'credit-note-reasons'
   | 'recall-reasons'
   | 'extra-charges'
+  | 'field-slots'
 
 /** `visa`: read with Visa access, changed by the Visa HOD or the Head. `shared`: every department's, changed by any HOD. */
 const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User) => boolean; editors: string }[] = [
@@ -57,12 +59,14 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
+  { value: 'field-slots', label: 'Time slots', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
 ]
 
 /**
  * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources,
  * vendors, couriers, credit-note and recall reasons and extra charges are the Visa department's;
- * embassies and the follow-up and reason dropdowns are shared by every department (changed by any HOD).
+ * embassies, the follow-up and reason dropdowns and the field staff's time slots are shared by every department
+ * (changed by any HOD).
  */
 export function MasterListsPage() {
   const { data: me } = useMe()
@@ -127,6 +131,7 @@ export function MasterListsPage() {
       {tab === 'credit-note-reasons' && <CreditNoteReasonsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'recall-reasons' && <RecallReasonsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'extra-charges' && <ExtraChargesTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'field-slots' && <FieldSlotsTable canEdit={canEdit} showInactive={showInactive} />}
     </>
   )
 }

@@ -30,6 +30,7 @@ import type {
   FollowUpScope,
   IntakeCountry,
   LogFollowUpBody,
+  FieldStaff,
   ReceivedAs,
   StickerCheck,
   VisaCase,
@@ -398,6 +399,37 @@ export function useReceivePassports(caseNo: string) {
     stickers: { travellerId: string; check: StickerCheck }[]
     updatedAt: string
   }>(caseNo, (base, body) => api(`${base}/passports-received`, { method: 'POST', body }))
+}
+
+/** Who can be sent (0015): the active field staff. */
+export function useFieldStaff() {
+  return useQuery({
+    queryKey: ['field-staff'],
+    queryFn: async () => (await api<{ staff: FieldStaff[] }>('/visa/field-staff')).staff,
+    staleTime: 60_000,
+  })
+}
+
+/** A field job's who, when and where (0015 Decisions 2 and 3). */
+type FieldJobBody = { assigneeId: string; day: string; slotId: number; address: string; mapLink: string | null; updatedAt: string }
+
+/** "Book the collection boy" (0015 phase 1). 409 when the client has no email (CLIENT_EMAIL_MISSING) or one is booked. */
+export function useBookFieldJob(caseNo: string) {
+  return useCaseAction<FieldJobBody & { kind: 'PICKUP' }>(caseNo, (base, body) => api(`${base}/field-jobs`, { method: 'POST', body }))
+}
+
+/** "Change" a booked job (0015). */
+export function useChangeFieldJob(caseNo: string) {
+  return useCaseAction<FieldJobBody & { jobId: string }>(caseNo, (base, { jobId, ...body }) =>
+    api(`${base}/field-jobs/${encodeURIComponent(jobId)}`, { method: 'PUT', body }),
+  )
+}
+
+/** "Cancel" a booked job (0015). */
+export function useCancelFieldJob(caseNo: string) {
+  return useCaseAction<{ jobId: string; updatedAt: string }>(caseNo, (base, { jobId, ...body }) =>
+    api(`${base}/field-jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body }),
+  )
 }
 
 /**

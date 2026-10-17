@@ -8,6 +8,7 @@ import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
 import { getVisaSettings } from "../visa/visa.settings";
+import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { assertNotInOpenDocket } from "../visa/visaDocket.service";
 import type { CancelInput, LogFollowUpInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "./visibility";
@@ -133,10 +134,15 @@ export async function logFollowUp(caseNo: string, input: LogFollowUpInput, actor
  * A visa case in an open docket must be taken out first (docs/decisions/0008-visa-docket-dispatch.md Decision 10).
  * Checked after save's update has locked the case's row, so an "Add to docket" can't slip in between.
  */
-function notInOpenDocket(enquiryId: string) {
+/**
+ * Before a case is postponed or cancelled: it can't be in an open docket, and its booked field jobs are called off, so
+ * the boy doesn't go (docs/decisions/0015-field-staff-app.md Defaults). What was called off goes into the audit.
+ */
+function onHold(enquiryId: string, actor: Actor, why: string) {
   return async (tx: Db) => {
     await assertNotInOpenDocket(tx, enquiryId);
-    return {};
+    const jobs = await cancelBookedFieldJobs(tx, enquiryId, actor, why);
+    return jobs.length > 0 ? { fieldJobsCancelled: jobs } : {};
   };
 }
 
@@ -158,7 +164,7 @@ export async function postpone(caseNo: string, input: PostponeInput, actor: Acto
     { status: "POSTPONED", reasonId: input.reasonId, resumeOn: toDbDate(input.resumeOn), dueAt },
     "enquiry.postpone",
     actor,
-    notInOpenDocket(enquiry.id),
+    onHold(enquiry.id, actor, "case postponed"),
   );
 }
 
@@ -174,7 +180,7 @@ export async function cancel(caseNo: string, input: CancelInput, actor: Actor) {
     { status: "CANCELLED", reasonId: input.reasonId, resumeOn: null, dueAt: null },
     "enquiry.cancel",
     actor,
-    notInOpenDocket(enquiry.id),
+    onHold(enquiry.id, actor, "case cancelled"),
   );
 }
 

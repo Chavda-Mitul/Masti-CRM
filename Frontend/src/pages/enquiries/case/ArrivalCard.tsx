@@ -6,12 +6,13 @@ import { useToast } from '../../../lib/toast'
 import { useUpdateVisaCase } from '../queries'
 import type { DocumentArrival, VisaCase } from '../types'
 import { bookletsText } from './labels'
+import { PickupJob } from './PickupJob'
 
 const ARRIVAL_LABEL: Record<DocumentArrival, string> = { CLIENT_BRINGS: 'Client brings them', COLLECTION_BOY: 'Send collection boy' }
 
 /**
  * "How the documents reach us" (demo screen 07, 0006 Decision 4). The case's owner, its HOD or the Head can change it
- * while documents are collected; the collection boy's job itself comes with the field app.
+ * while documents are collected, and book the collection boy for "Send collection boy" (0015 phase 1).
  */
 export function ArrivalCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -41,12 +42,7 @@ function ArrivalView({ visaCase: c }: { visaCase: VisaCase }) {
         <span>How</span>
         <strong>{c.arrival ? ARRIVAL_LABEL[c.arrival] : <span className="muted">Not set yet</span>}</strong>
       </div>
-      {c.arrival === 'COLLECTION_BOY' && (
-        <div className="kv">
-          <span>Collection boy</span>
-          <span className="muted">Comes with the field app</span>
-        </div>
-      )}
+      {(c.arrival === 'COLLECTION_BOY' || c.fieldJobs.some((j) => j.kind === 'PICKUP')) && <PickupJob visaCase={c} canBook={false} />}
       <div className="kv">
         <span>Booklets received</span>
         <strong>{bookletsText(c.booklets)}</strong>
@@ -90,12 +86,7 @@ function ArrivalForm({ visaCase: c }: { visaCase: VisaCase }) {
           </button>
         ))}
       </div>
-      {c.arrival === 'COLLECTION_BOY' && (
-        <div className="kv">
-          <span>Collection boy</span>
-          <span className="muted">Comes with the field app</span>
-        </div>
-      )}
+      {c.arrival === 'COLLECTION_BOY' && <PickupJob visaCase={c} canBook />}
 
       <div className="booklets-row">
         <span className="lbl">Booklets received</span>

@@ -497,6 +497,53 @@ export const handOverSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 export type HandOverInput = z.infer<typeof handOverSchema>;
+
+/** Where Google Maps lives: a share link (maps.app.goo.gl, goo.gl/maps) or a google.com / google.co.in maps address. */
+const GOOGLE_HOSTS = new Set(["www.google.com", "google.com", "maps.google.com", "www.google.co.in", "google.co.in"]);
+
+/** Is this a Google Maps link (docs/decisions/0015-field-staff-app.md Decision 3)? */
+export function isGoogleMapsLink(text: string) {
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:") return false;
+    if (url.hostname === "maps.app.goo.gl") return true;
+    if (url.hostname === "goo.gl") return url.pathname.startsWith("/maps");
+    return GOOGLE_HOSTS.has(url.hostname) && url.pathname.startsWith("/maps");
+  } catch {
+    return false;
+  }
+}
+
+/** The client's location in Google Maps, when they shared one: optional; blank means none. */
+const mapLink = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+  z
+    .string()
+    .trim()
+    .max(500, "That link is too long.")
+    .refine(isGoogleMapsLink, "Paste a Google Maps link, e.g. https://maps.app.goo.gl/…")
+    .nullish(),
+);
+
+/**
+ * The collection or delivery boy's job (docs/decisions/0015-field-staff-app.md Decisions 2 and 3): who goes, on which
+ * day and slot, and where (the address, and the client's Google Maps link if they shared one). The service checks
+ * the boy, the day and the slot.
+ */
+export const changeFieldJobSchema = z.object({
+  assigneeId: z.string("Pick who goes.").trim().min(1, "Pick who goes.").max(64),
+  day: z.iso.date("Pick the day."),
+  slotId: z.number("Pick the time slot.").int().positive("Pick the time slot."),
+  address: z.string("Enter the address.").trim().min(1, "Enter the address.").max(300, "300 characters at most."),
+  mapLink,
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+/** "Book the collection boy" (phase 1); deliveries come in phase 2. */
+export const bookFieldJobSchema = changeFieldJobSchema.extend({
+  kind: z.enum(["PICKUP"], "Only a pickup can be booked here."),
+});
+export type ChangeFieldJobInput = z.infer<typeof changeFieldJobSchema>;
+export type BookFieldJobInput = z.infer<typeof bookFieldJobSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

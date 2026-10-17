@@ -108,15 +108,5 @@ describe("database rules (below the API)", () => {
   });
 });
 
-describe("field jobs", () => {
-  it("can be assigned to any user and keep the department that raised them", async () => {
-    const ramesh = await createUser({ mobile: RAMESH_MOBILE, type: "FIELD" });
-    const job = await prisma.fieldJob.create({ data: { departmentId: await visaId(), assigneeId: ramesh.id } });
-    const mine = await prisma.fieldJob.findMany({ where: { assigneeId: ramesh.id }, include: { department: true } });
-    expect(mine).toHaveLength(1);
-    expect(mine[0]?.id).toBe(job.id);
-    expect(mine[0]?.department.code).toBe("VISA");
-    // Users are deactivated, never deleted, so jobs keep their assignee.
-    await expect(prisma.user.delete({ where: { id: ramesh.id } })).rejects.toThrow();
-  });
-});
+// Field jobs themselves (the department that raised them, an assignee who is never deleted) are tested with booking,
+// in visaFieldJobs.test.ts (docs/decisions/0015-field-staff-app.md).

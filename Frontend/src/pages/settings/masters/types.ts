@@ -316,6 +316,12 @@ export interface EnquiryReason extends FollowUpOption {
   kind: EnquiryReasonKind
 }
 
+/** A time slot for the collection and delivery boy (0015 Decision 2): "4–6 pm", 16:00–18:00 (IST). */
+export interface FieldSlot extends FollowUpOption {
+  startsAt: string
+  endsAt: string
+}
+
 /** The small lists, by their API path. */
 export type MasterResource =
   | 'countries'
@@ -333,3 +339,4 @@ export type MasterResource =
   | 'credit-note-reasons'
   | 'recall-reasons'
   | 'extra-charges'
+  | 'field-slots'

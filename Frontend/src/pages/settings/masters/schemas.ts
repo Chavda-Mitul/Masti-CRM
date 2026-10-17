@@ -227,6 +227,20 @@ export const enquiryReasonFormSchema = followUpOptionFormSchema.extend({
 })
 export type EnquiryReasonFormValues = z.infer<typeof enquiryReasonFormSchema>
 
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Pick a time.')
+
+/** A time slot for the collection and delivery boy (0015). Mirrors enquiryMasters.schemas.ts. */
+export const fieldSlotFormSchema = z
+  .object({
+    code: optionCode,
+    name: required(40, 'Enter the slot as staff will see it, e.g. 4–6 pm.'),
+    startsAt: hhmm,
+    endsAt: hhmm,
+    sortOrder,
+  })
+  .refine((v) => v.endsAt > v.startsAt, { path: ['endsAt'], message: 'The slot must end after it starts.' })
+export type FieldSlotFormValues = z.infer<typeof fieldSlotFormSchema>
+
 export const embassyFormSchema = z.object({
   code: z
     .string()

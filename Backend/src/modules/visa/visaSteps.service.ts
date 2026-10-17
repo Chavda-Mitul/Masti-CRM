@@ -103,6 +103,10 @@ export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, act
     const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
     const changes = onlyChanged(definedOnly(input), before);
+    // The collection boy is booked (0015): call him off first, so nobody goes for papers the client brings.
+    if (changes.arrival === "CLIENT_BRINGS" && (await tx.fieldJob.count({ where: { enquiryId: enquiry.id, kind: "PICKUP", status: "BOOKED" } })) > 0) {
+      throw conflict("Cancel the collection boy's pickup first.");
+    }
     const keys = Object.keys(changes);
     if (keys.length === 0) return;
     const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });

@@ -1676,6 +1676,7 @@ Masti CRM/
 - **Booking:** the boy (an active FIELD user), an open office day, a time slot from a list (11 am – 1 pm, 2–4 pm, 4–6 pm ⚠️); the address copied from the client (correctable) and an optional Google Maps link. One open job of each kind per case.
 - **Proof at both ends:** an OTP from the client (by email until SMS/WhatsApp, so the client's email is needed to book), booklets counted, his selfie with place (GPS) and time; at delivery also the receiver's photo, and the count must match our stock.
 - **A failed visit:** a reason from a list (Client not home, Wrong address, Client asked to come later, Not ready ⚠️); the case comes back to the office.
+- **Built so far:** phase 1, **book a pickup** (17 Oct 2026). A Time slots list in Settings → Lists; on Step 2's "Send collection boy", **Book the collection boy** (who goes, an open office day, a slot, the address filled in from the client, an optional Google Maps link; refused without the client's email), then "Collection boy · Ramesh · Mon 19 Oct, 4–6 pm" with Change and Cancel. Postponing or cancelling the case calls the boy off. Next: phase 2, book a delivery.
 
 **Decided 17 Oct 2026 (project lead), for Visa Step 8 (Delivered).** The design is `docs/decisions/0014-visa-delivered.md` (decided; being built).
 - **One component at a time:** the office handover → book a delivery (day, slot, delivery boy) → the delivery boy's phone screen → the doorstep handover (booklets, OTP, receiver photo, selfie with place and time).

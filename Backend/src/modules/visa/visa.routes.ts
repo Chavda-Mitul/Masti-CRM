@@ -13,6 +13,8 @@ import {
   sendPassportsBackSchema,
   receivePassportsSchema,
   handOverSchema,
+  bookFieldJobSchema,
+  changeFieldJobSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -46,6 +48,8 @@ import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
 import * as passportsBackService from "./visaPassportsBack.service";
 import * as handoverService from "./visaHandover.service";
+import * as fieldJobService from "./visaFieldJobs.service";
+import { listFieldStaff } from "../fieldJobs/fieldJobs.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -318,6 +322,34 @@ router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 router.post("/cases/:caseNo/passports-received", visaEdit, async (req, res) => {
   const body = receivePassportsSchema.parse(req.body);
   res.json({ case: await passportsBackService.receivePassports(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** Who can be sent: the active field staff (0015), for "Book the collection boy". */
+router.get("/field-staff", visaView, async (_req, res) => {
+  res.json({ staff: await listFieldStaff() });
+});
+
+/**
+ * "Book the collection boy" (0015 phase 1): the boy, the day, the slot and where. 409 when one is booked already or
+ * the client has no email (code CLIENT_EMAIL_MISSING); 400 under `assigneeId`, `day`, `slotId`, `address` or `mapLink`.
+ */
+router.post("/cases/:caseNo/field-jobs", visaEdit, async (req, res) => {
+  const body = bookFieldJobSchema.parse(req.body);
+  res.json({ case: await fieldJobService.bookFieldJob(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** "Change" a booked job (0015): checked as when booked; the case's due time follows the day and slot. */
+router.put("/cases/:caseNo/field-jobs/:jobId", visaEdit, async (req, res) => {
+  const body = changeFieldJobSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await fieldJobService.changeFieldJob(caseNo, idParam.parse(req.params.jobId), body, actorOf(req)) });
+});
+
+/** "Cancel" a booked job (0015): called off, by whom and when. */
+router.post("/cases/:caseNo/field-jobs/:jobId/cancel", visaEdit, async (req, res) => {
+  const body = matureCaseSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await fieldJobService.cancelFieldJob(caseNo, idParam.parse(req.params.jobId), body, actorOf(req)) });
 });
 
 /**

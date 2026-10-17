@@ -1,7 +1,7 @@
 # 0015 · The field staff app (collection and delivery boy)
 
-- **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). A "Built" note is
-  added under each part as its phase lands.
+- **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
+  pickup (17 Oct 2026, phase 1). A "Built" note is added under each part as its phase lands.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -76,6 +76,34 @@ At each stop the boy also records, before he can finish:
 **Decided 17 Oct 2026 (project lead):** the boy taps **Couldn't complete** and picks a reason from a list the Head or an
 HOD edits, seeded ⚠️ with Client not home, Wrong address, Client asked to come later, Not ready. The place and time are
 recorded, and the case comes back to the office, due now, to book again.
+
+**Built 17 Oct 2026** (phase 1, book a pickup):
+- **Data** (migration `20261017140000_field_pickup`): the list `FieldSlot` (code, name, from, to, order, on/off; CHECKs:
+  the code's format, a name, 24-hour times ending after they start); `FieldJob` filled out (`kind`, `status`,
+  `enquiryId`, `assigneeId` now required, `day`, `slotId`, `address`, `mapLink`, `mobile`, who booked it, who
+  cancelled it and when; CHECKs: address and mobile not blank, a map link is an https address, cancelled ↔ who and
+  when). One booked job of a kind per case is kept by the case lock, not an index (a partial index would show up in
+  every `prisma migrate diff`).
+- **The slots list:** `GET/POST/PATCH /api/masters/field-slots` (the Head or any HOD changes it; audited
+  `fieldSlot.create` / `fieldSlot.update`), seeded 11 am – 1 pm, 2–4 pm, 4–6 pm ⚠️; a **Time slots** tab in Settings →
+  Lists.
+- `GET /api/visa/field-staff`: the active field staff. `POST /api/visa/cases/:caseNo/field-jobs` with `{ kind:
+  "PICKUP", assigneeId, day, slotId, address, mapLink?, updatedAt }`, by whoever can act on the case at Steps 1–2.
+  Refused with: 409 when the client has no email (`CLIENT_EMAIL_MISSING`: "Add the client's email first: the one-time
+  code they give the boy goes there.") or a pickup is booked already; 400 under `assigneeId` (not active field staff),
+  `day` (past, more than a year ahead, an office closed day by name), `slotId` (switched off, or "4–6 pm is over for
+  today"), `address` or `mapLink` ("Paste a Google Maps link"). In one transaction under the case lock: the job (with
+  the client's mobile), "Send collection boy", the case due at the slot's end, audit `field.job.book`.
+- `PUT …/field-jobs/:jobId` (Change, audited `field.job.update` with the old and new; the due time follows the day and
+  slot; an unchanged save writes nothing) and `POST …/field-jobs/:jobId/cancel` (audited `field.job.cancel`).
+- **Postponing or cancelling the case calls the boy off** (each job audited, with why; the case's audit lists them);
+  "Client brings them" is refused while a pickup is booked ("Cancel the collection boy's pickup first.").
+- **The case** sends `fieldJobs` (newest first) and the client's `email` and `address` in one line.
+- **Screen:** on "How the documents reach us", for "Send collection boy": **Book the collection boy** opens the form
+  (who goes, the day on the office calendar, the slot, with today's past slots switched off, the address filled in, an
+  optional Google Maps link, the client's mobile he'll call; without the client's email it says so and won't book).
+  Once booked: "Collection boy · Ramesh · Mon 19 Oct, 4–6 pm", "Pick up from · … · Map", **Change** and **Cancel**
+  ("Call off Ramesh's pickup?", asked in the page).
 
 ### 6. Settings and lists (golden rule 1)
 
