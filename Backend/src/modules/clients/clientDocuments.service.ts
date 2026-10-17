@@ -15,10 +15,11 @@ import { SCAN_TYPES, type AddClientDocumentQuery, type ScanType } from "./client
 import { getClientSettings } from "./clients.settings";
 
 // The client document vault (docs/decisions/0016-client-documents.md): scans of a client's papers (passport, Aadhaar
-// card, PAN card…), per family member, kept in the private bucket for good (rule 4) and reused on later cases. This is
-// the client page's side: only the Head and the HOD of any department see a client's whole list, add scans and open
-// them (Decision 4). Every save and every opening is audited. Nothing is changed or deleted: a newer scan of a paper for
-// the same person becomes the current one, and the older ones stay.
+// card, PAN card…), per family member, kept in the private bucket for good (rule 4) and reused on later cases. On the
+// client page only the Head and the HOD of any department see a client's whole list, add scans and open them (Decision
+// 4). The core (saving a scan, opening one, the current scan of a paper) is shared with a visa case's checklist
+// (Decision 5, visaCaseScans.service.ts), whose own rules say who may. Every save and every opening is audited. Nothing
+// is changed or deleted: a newer scan of a paper for the same person becomes the current one, and the older ones stay.
 
 /** Only the Head and HODs (any department) see a client's documents (Decision 4). Field staff never reach here. */
 function assertCanSeeDocuments(user: UserWithDepartments) {
@@ -107,9 +108,9 @@ export async function listClientDocuments(clientId: string, user: UserWithDepart
 
 /**
  * Where a new scan goes: the client, the person (on its family list, not taken off it; none for the client's own
- * paper) and the paper (one the document master still offers).
+ * paper) and the paper (one the document master still offers). A visa case's "Save scan" checks the same.
  */
-async function scanTarget(db: Db, clientId: string, { documentId, memberId }: AddClientDocumentQuery) {
+export async function scanTarget(db: Db, clientId: string, { documentId, memberId }: AddClientDocumentQuery) {
   const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
   if (!client) throw notFound("Client not found.");
   let member: { id: string; name: string } | null = null;
@@ -125,15 +126,20 @@ async function scanTarget(db: Db, clientId: string, { documentId, memberId }: Ad
   return { client, member, paper: { id: paper.id, name: paper.name } };
 }
 
+/** The largest scan (the setting clients.documents.maxMb), and what a bigger upload is told. */
+export async function clientScanLimit() {
+  const { maxMb } = (await getClientSettings()).documents;
+  return { maxBytes: maxMb * MB, tooBig: `This file is over ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
+}
+
 /**
- * Before the upload is read: this user may add scans, and the client, person and paper are right. The setting gives the
- * size limit (clients.documents.maxMb). Refusing here means a wrong upload is never held in memory.
+ * Before the upload is read: this user may add scans, and the client, person and paper are right. Refusing here means a
+ * wrong upload is never held in memory.
  */
 export async function clientDocumentLimit(clientId: string, query: AddClientDocumentQuery, user: UserWithDepartments) {
   assertCanSeeDocuments(user);
   await scanTarget(prisma, clientId, query);
-  const { maxMb } = (await getClientSettings()).documents;
-  return { maxBytes: maxMb * MB, tooBig: `This file is over ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
+  return clientScanLimit();
 }
 
 /** The scan is what the upload says: a PDF that opens (its pages are returned), or a real PNG or JPEG photo. */
@@ -152,13 +158,25 @@ function scanFileName(owner: string, paper: string, contentType: ScanType) {
   return `${parts.join("_")}.${SCAN_TYPES[contentType]}`;
 }
 
+/** Where a scan was saved or opened from, for the audit: a visa case's checklist (Decision 5); none for the client page. */
+interface ScanSource {
+  caseNo: string;
+}
+
 /**
- * Saves a scan in the client's vault, under a bucket key no other upload shares. The bucket upload happens first, so a
+ * Saves a scan in the client's vault, under a bucket key no other upload shares. The caller checks who may first: the
+ * client page lets HODs and the Head, a visa case whoever can tick its papers. The bucket upload happens first, so a
  * slow upload holds no transaction. In the transaction the person and paper are checked again; if they fail now (taken
- * off the list, switched off), the row isn't saved and the object is removed again. Returns the whole vault.
+ * off the list, switched off), the row isn't saved and the object is removed again.
  */
-export async function addClientDocument(clientId: string, query: AddClientDocumentQuery, contentType: ScanType, bytes: Buffer, actor: Actor) {
-  assertCanSeeDocuments(actor.user);
+export async function saveClientScan(
+  clientId: string,
+  query: AddClientDocumentQuery,
+  contentType: ScanType,
+  bytes: Buffer,
+  actor: Actor,
+  from?: ScanSource,
+) {
   const pageCount = await checkScan(bytes, contentType);
   const { client, member, paper } = await scanTarget(prisma, clientId, query);
   const fileName = scanFileName(member?.name ?? client.name, paper.name, contentType);
@@ -203,6 +221,7 @@ export async function addClientDocument(clientId: string, query: AddClientDocume
             pageCount,
             storageKey,
             replaces: previous?.id ?? null,
+            ...(from && { case: from.caseNo }),
           },
           ip: actor.ip,
         },
@@ -214,18 +233,17 @@ export async function addClientDocument(clientId: string, query: AddClientDocume
     await deleteObject(storageKey).catch((cleanupErr: unknown) => logger.error({ err: cleanupErr, storageKey }, "Couldn't remove an unsaved upload."));
     throw err;
   }
-  return vaultOf(client.id);
 }
 
-/** A short-lived link to one scan (rule 4), made per click and never stored. Every opening is audited. */
-export async function openClientDocument(clientId: string, clientDocumentId: string, actor: Actor) {
+/** The client page's "Add a scan": HODs and the Head. Returns the whole vault. */
+export async function addClientDocument(clientId: string, query: AddClientDocumentQuery, contentType: ScanType, bytes: Buffer, actor: Actor) {
   assertCanSeeDocuments(actor.user);
-  const scan = await prisma.clientDocument.findFirst({
-    where: { id: clientDocumentId, clientId },
-    select: { id: true, clientId: true, storageKey: true, fileName: true },
-  });
-  if (!scan) throw notFound("Document not found on this client.");
+  await saveClientScan(clientId, query, contentType, bytes, actor);
+  return vaultOf(clientId);
+}
 
+/** A short-lived link to one scan (rule 4), made per click and never stored, with the audit of its opening. */
+export async function openClientScan(scan: { id: string; clientId: string; storageKey: string; fileName: string }, actor: Actor, from?: ScanSource) {
   const link = await presignGet(scan.storageKey, { fileName: scan.fileName });
   await audit({
     actorId: actor.user.id,
@@ -233,8 +251,52 @@ export async function openClientDocument(clientId: string, clientDocumentId: str
     entityType: "ClientDocument",
     entityId: scan.id,
     clientId: scan.clientId,
-    after: { fileName: scan.fileName, expiresAt: link.expiresAt },
+    after: { fileName: scan.fileName, expiresAt: link.expiresAt, ...(from && { case: from.caseNo }) },
     ip: actor.ip,
   });
   return link;
 }
+
+/** What opening a scan needs. */
+const openSelect = { id: true, clientId: true, storageKey: true, fileName: true } satisfies Prisma.ClientDocumentSelect;
+
+/** Opens one of the client's scans from the client page: HODs and the Head. */
+export async function openClientDocument(clientId: string, clientDocumentId: string, actor: Actor) {
+  assertCanSeeDocuments(actor.user);
+  const scan = await prisma.clientDocument.findFirst({ where: { id: clientDocumentId, clientId }, select: openSelect });
+  if (!scan) throw notFound("Document not found on this client.");
+  return openClientScan(scan, actor);
+}
+
+/** The current scan of a paper for a person (the newest, as the vault shows it), ready to open; null if none. */
+export function currentScan(db: Db, memberId: string, documentId: number) {
+  return db.clientDocument.findFirst({
+    where: { memberId, documentId },
+    orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+    select: { ...openSelect, uploadedAt: true },
+  });
+}
+
+/** How currentScansOf keys a person's paper. */
+export const scanKey = (memberId: string, documentId: number) => `${memberId}:${documentId}`;
+
+/**
+ * The current scan of every paper for these people, keyed by scanKey: what a visa case shows as "On file" (Decision
+ * 5). One query; the newest of each person's paper wins.
+ */
+export async function currentScansOf(memberIds: string[]) {
+  const current = new Map<string, { id: string; uploadedAt: Date; contentType: string; pageCount: number | null; sizeBytes: number }>();
+  if (memberIds.length === 0) return current;
+  const rows = await prisma.clientDocument.findMany({
+    where: { memberId: { in: memberIds } },
+    orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+    select: { id: true, memberId: true, documentId: true, uploadedAt: true, contentType: true, pageCount: true, sizeBytes: true },
+  });
+  for (const { memberId, documentId, ...scan } of rows) {
+    const key = scanKey(memberId!, documentId);
+    if (!current.has(key)) current.set(key, scan);
+  }
+  return current;
+}
+
+export type CurrentScans = Awaited<ReturnType<typeof currentScansOf>>;

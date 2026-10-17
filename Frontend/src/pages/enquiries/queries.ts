@@ -1,8 +1,9 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, uploadPdf } from '../../lib/api'
+import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
 import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
+import type { ScanType } from '../clients/scanFiles'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
@@ -240,6 +241,22 @@ export function useUploadRefusalLetter(caseNo: string) {
 export function useOpenCaseFile(caseNo: string) {
   const open = useOpenSignedLink()
   return (fileId: string) => open(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
+}
+
+/**
+ * "Save scan" (0016 Decision 5): keeps one of a traveller's papers in the client's document vault. It doesn't tick the
+ * paper. The case action refreshes the client's queries too, so the client's Documents card follows.
+ */
+export function useSaveCaseScan(caseNo: string) {
+  return useCaseAction<{ documentId: string; file: File; type: ScanType }>(caseNo, (base, { documentId, file, type }) =>
+    uploadFile(`${base}/documents/${documentId}/scan`, file, type),
+  )
+}
+
+/** Opens a paper's copy in the client's vault: the one an On file paper came from, or else the current one. */
+export function useOpenCaseScan(caseNo: string) {
+  const open = useOpenSignedLink()
+  return (documentId: string) => open(`/visa/cases/${encodeURIComponent(caseNo)}/documents/${documentId}/scan/link`)
 }
 
 /** Names a traveller: links the client's family member. */

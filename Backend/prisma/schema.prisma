@@ -349,28 +349,30 @@ model ClientNote {
 /// the private bucket (CLAUDE.md rule 4) and reused on later cases. Never changed or deleted (nothing is removed until
 /// M40 is answered): the newest scan of a paper for a person is the current one; older ones stay and still open.
 model ClientDocument {
-  id           String         @id @default(uuid())
-  clientId     String
+  id            String             @id @default(uuid())
+  clientId      String
   /// Whose paper it is (a passport, an Aadhaar card); null for the client's own (a company's PAN card). The service
   /// keeps it to a member of the same client.
-  memberId     String?
+  memberId      String?
   /// Which paper, from the document master.
-  documentId   Int
+  documentId    Int
   /// clients/<clientId>/<uuid>.pdf|jpg|png: no two uploads ever share a key.
-  storageKey   String         @unique
+  storageKey    String             @unique
   /// The name it opens and saves under: Aarav-Mehta_Passport_2026-10-17.pdf.
-  fileName     String
+  fileName      String
   /// application/pdf, image/jpeg or image/png (checked in the migration), as the file's first bytes show.
-  contentType  String
-  sizeBytes    Int
+  contentType   String
+  sizeBytes     Int
   /// A PDF's pages; null for a photo (checked in the migration).
-  pageCount    Int?
-  uploadedById String
-  uploadedAt   DateTime       @default(now()) @db.Timestamptz(3)
-  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  member       ClientMember?  @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  document     DocumentMaster @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  uploadedBy   User           @relation("ClientDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  pageCount     Int?
+  uploadedById  String
+  uploadedAt    DateTime           @default(now()) @db.Timestamptz(3)
+  client        Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  member        ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  document      DocumentMaster     @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  uploadedBy    User               @relation("ClientDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  /// Case papers ticked On file from this scan.
+  caseDocuments VisaCaseDocument[]
 
   @@index([clientId, uploadedAt])
   @@index([memberId, documentId, uploadedAt])
@@ -1067,6 +1069,9 @@ enum DocumentStatus {
 enum ReceivedAs {
   ORIGINAL
   XEROX
+  /// Printed from the copy in the client's document vault (docs/decisions/0016-client-documents.md Decision 5): only
+  /// for a paper that may be a xerox, and with the scan it came from (hand-written CHECKs).
+  ON_FILE
 }
 
 /// The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3).
@@ -1153,34 +1158,38 @@ model DocumentProblemReason {
 /// A traveller's copy of a checklist line. The name, detail, requirement, quantity and note are copied,
 /// so editing the master never changes an open case.
 model VisaCaseDocument {
-  id            String                 @id @default(uuid())
-  travellerId   String
+  id               String                 @id @default(uuid())
+  travellerId      String
   /// Kept for reports ("which document is pending most often").
-  documentId    Int
-  name          String
-  detail        String?
-  requirement   DocumentRequirement
-  quantity      Int                    @default(1) @db.SmallInt
-  note          String?
-  sortOrder     Int
-  status        DocumentStatus         @default(PENDING)
+  documentId       Int
+  name             String
+  detail           String?
+  requirement      DocumentRequirement
+  quantity         Int                    @default(1) @db.SmallInt
+  note             String?
+  sortOrder        Int
+  status           DocumentStatus         @default(PENDING)
   // Filled in Step 2, when the paper is scanned in the office:
-  receivedAs    ReceivedAs?
-  receivedAt    DateTime?              @db.Timestamptz(3)
-  receivedById  String?
+  receivedAs       ReceivedAs?
+  receivedAt       DateTime?              @db.Timestamptz(3)
+  receivedById     String?
+  /// The scan in the client's vault an ON_FILE paper came from (set exactly for ON_FILE: hand-written CHECK).
+  clientDocumentId String?
   // Filled in Step 3, when the processor checks the paper. A reason exactly when it needs replacing (hand-written CHECKs).
-  check         DocumentCheck?
-  checkReasonId Int?
-  checkedAt     DateTime?              @db.Timestamptz(3)
-  checkedById   String?
-  traveller     VisaCaseTraveller      @relation(fields: [travellerId], references: [id], onDelete: Restrict)
-  document      DocumentMaster         @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  receivedBy    User?                  @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
-  checkReason   DocumentProblemReason? @relation(fields: [checkReasonId], references: [id], onDelete: Restrict)
-  checkedBy     User?                  @relation("DocumentCheckedBy", fields: [checkedById], references: [id], onDelete: Restrict)
+  check            DocumentCheck?
+  checkReasonId    Int?
+  checkedAt        DateTime?              @db.Timestamptz(3)
+  checkedById      String?
+  traveller        VisaCaseTraveller      @relation(fields: [travellerId], references: [id], onDelete: Restrict)
+  document         DocumentMaster         @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  receivedBy       User?                  @relation("DocumentReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  checkReason      DocumentProblemReason? @relation(fields: [checkReasonId], references: [id], onDelete: Restrict)
+  checkedBy        User?                  @relation("DocumentCheckedBy", fields: [checkedById], references: [id], onDelete: Restrict)
+  clientDocument   ClientDocument?        @relation(fields: [clientDocumentId], references: [id], onDelete: Restrict)
 
   @@unique([travellerId, documentId])
   @@index([documentId, status])
+  @@index([clientDocumentId])
 }
 
 // ---------------------------------------------------------------------------

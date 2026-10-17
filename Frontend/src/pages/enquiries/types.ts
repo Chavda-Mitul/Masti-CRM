@@ -1,5 +1,7 @@
 // API shapes for the enquiry screens. Mirrors Backend/src/modules/enquiries and Backend/src/modules/visa.
 
+import type { ScanType } from '../clients/scanFiles'
+
 export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
 export type EnquiryOrigin = 'STAFF' | 'WHATSAPP_BOT' | 'WEBSITE_FORM' | 'CROSS_SELL' | 'IMPORT'
 
@@ -125,7 +127,8 @@ export interface CreateVisaCaseBody {
 
 export type DocumentRequirement = 'ORIGINAL' | 'XEROX_OK' | 'ARRANGED_BY_US'
 export type DocumentStatus = 'PENDING' | 'RECEIVED' | 'MADE' | 'NOT_NEEDED'
-export type ReceivedAs = 'ORIGINAL' | 'XEROX'
+/** ON_FILE: printed from the copy in the client's document vault (docs/decisions/0016-client-documents.md Decision 5). */
+export type ReceivedAs = 'ORIGINAL' | 'XEROX' | 'ON_FILE'
 /** The processor's own check of a paper in Step 3 (docs/decisions/0007-visa-file-prep.md Decision 3). */
 export type DocumentCheck = 'CHECKED' | 'NEEDS_REPLACING'
 export type DocumentArrival = 'CLIENT_BRINGS' | 'COLLECTION_BOY'
@@ -154,6 +157,10 @@ export interface CaseDocument {
   receivedAs: ReceivedAs | null
   receivedAt: string | null
   receivedBy: PersonRef | null
+  /** The current copy of this paper in the client's vault, for a named traveller (0016 Decision 5); null if none. */
+  onFile: { id: string; uploadedAt: string; contentType: ScanType; pageCount: number | null; sizeBytes: number } | null
+  /** The copy an On file paper was printed from; it may be older than onFile. */
+  fromScan: { id: string; uploadedAt: string } | null
   /** Step 3: null until the processor checks it. */
   check: DocumentCheck | null
   /** Why it needs replacing, from Settings → Masters → Document problems. */
@@ -523,6 +530,8 @@ export interface VisaCase {
   finalFileCopies: number
   /** The largest PDF the server accepts (setting visa.finalFile). */
   finalFileMaxMb: number
+  /** The largest scan "Save scan" takes (setting clients.documents). */
+  scanMaxMb: number
   /** The submission agent picked during File preparation (0007 Decision 7), or null. */
   vendor: CaseVendor | null
   /** "File ready — add to docket" (0007 Decision 9): Step 3 is done and read-only. */

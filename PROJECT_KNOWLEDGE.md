@@ -482,7 +482,7 @@ These are used by every module.
   - **Step 2:** a xerox-OK paper can be ticked **On file** from the current copy, never automatically; originals can't be.
   - **The client is told** by one WhatsApp message on their first scan (sent once the outbox exists). The consent form doesn't change.
   - **Open:** whether it's charged (S12), and the government answer on keeping scans and on Aadhaar (M40).
-  - **Built so far:** component 1, **the Documents card** on the client page (17 Oct 2026). Table `ClientDocument`. `GET/POST /api/clients/:id/documents` (the file is the body; PDF, JPEG or PNG up to `clients.documents.maxMb`, 20 MB ⚠️) and `…/documents/:clientDocumentId/link`, for HODs and the Head only, every save and opening audited. Next: the vault in Step 2 (component 2).
+  - **Built so far:** component 1, **the Documents card** on the client page (17 Oct 2026). Table `ClientDocument`. `GET/POST /api/clients/:id/documents` (the file is the body; PDF, JPEG or PNG up to `clients.documents.maxMb`, 20 MB ⚠️) and `…/documents/:clientDocumentId/link`, for HODs and the Head only, every save and opening audited. Component 2, **the vault in Step 2** (17 Oct 2026): `ReceivedAs.ON_FILE` with `VisaCaseDocument.clientDocumentId` (CHECKs: set together; xerox-OK papers only); "Save scan" and "Open" on each paper from the case (`/api/visa/cases/:caseNo/documents/:documentId/scan[/link]`), for whoever can tick and whoever can see the case; relinking a traveller resets their On file papers. Waiting: the WhatsApp message (outbox).
 
 ### 10.2 Enquiry: the unit of work across departments
 
@@ -1675,7 +1675,7 @@ Masti CRM/
 - **One WhatsApp message per client** on their first scan; no consent form change.
 - **One component at a time:** the Documents card on the client page → the vault in Step 2.
 - **Open:** free or paid (S12); Aadhaar full or masked, keeping forever, removal on request (M40).
-- **Built so far:** component 1, **the Documents card** (17 Oct 2026). Under Family & travellers, for HODs and the Head: each person's scans (the client's own papers first, anyone taken off the list last), each paper's current scan with "Older copies", **Open** in a new tab through a short-lived link, and **+ Add a scan** (whose, which paper, the file). Aadhaar card and PAN card joined the document master.
+- **Built so far:** component 1, **the Documents card** (17 Oct 2026). Under Family & travellers, for HODs and the Head: each person's scans (the client's own papers first, anyone taken off the list last), each paper's current scan with "Older copies", **Open** in a new tab through a short-lived link, and **+ Add a scan** (whose, which paper, the file). Aadhaar card and PAN card joined the document master. Component 2, **the vault in Step 2** (17 Oct 2026): each paper of a named traveller shows "On file · saved 12 Mar · Open" when the client's vault has a copy, and **Save scan** keeps it there (it doesn't tick the paper). A xerox-OK paper can be ticked **On file**, never automatically; it counts as received, the processor opens and prints it in Step 3, and relinking the traveller puts it back to Pending.
 
 **Decided 13 Oct 2026 (project lead), for the visa invoice.** The design is `docs/decisions/0009-visa-invoice.md` (decided; all four components built).
 - **The CRM makes visa invoices** from go-live; Masti's current software stops issuing them (an export can come later, Q26).

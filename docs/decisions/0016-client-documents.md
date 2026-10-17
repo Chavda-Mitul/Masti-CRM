@@ -1,8 +1,8 @@
 # 0016 · The client document vault
 
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
-  a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1). A "Built" note is added
-  under each part as its component lands.
+  a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
+  (17 Oct 2026, component 2). The WhatsApp message (Decision 6) waits for the WhatsApp outbox.
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -154,6 +154,52 @@ The WhatsApp message (Decision 6) is recorded now and sent once the WhatsApp out
   member, by whoever can tick that case's papers. It goes into the client's vault, so the next case finds it.
 - **The paper keeps which copy was used:** `ReceivedAs` gains `ON_FILE`, and the case's paper points at the scan, so
   the file always shows exactly which copy went in.
+
+**Defaults added when building (17 Oct 2026; say if any is wrong):**
+- **Save scan doesn't tick the paper:** staff tick what came in, as before.
+- **When:** Save scan and On file work while the papers are ticked (Steps 1–2, the case open), and never for things we
+  arrange. Save scan isn't offered for a paper marked Not needed.
+- **Who opens the copy:** anyone who can see the case, so the processor can print it in Step 3, just as they open the
+  saved file.
+- **Which copy opens:** the one an On file paper came from, even after a newer scan; otherwise the current one.
+- **Relinking a traveller** to another family member puts their On file papers back to Pending: those were the other
+  person's copies. Papers that came in stay ticked.
+- **A newer copy:** On file pressed again picks up a copy saved since the paper was ticked.
+
+**Built 17 Oct 2026** (component 2, the vault in Step 2):
+- **Data** (migration `20261017160000_case_scans`):
+  - `ReceivedAs` gains `ON_FILE`.
+  - `VisaCaseDocument.clientDocumentId` points at the scan the paper came from.
+  - CHECKs, comparing as text because a new enum value can't be used in the migration that adds it:
+    - `VisaCaseDocument_on_file`: ON_FILE exactly when the scan is set
+    - `VisaCaseDocument_on_file_xerox`: ON_FILE only on a `XEROX_OK` paper
+- **Ticking On file:** `PATCH /api/visa/cases/:caseNo/documents/:documentId` with
+  `{ status: "RECEIVED", receivedAs: "ON_FILE" }`. Under the case lock, the server picks the current copy for the
+  traveller's person and paper. It refuses with a 400:
+  - for a paper not `XEROX_OK` ("Only papers that may be a xerox can come from the copy on file.")
+  - for an unnamed traveller
+  - when there's no copy ("There's no copy of "…" on file for Rakesh Mehta.")
+
+  The `visa.document.update` audit carries `clientDocumentId`.
+- **Relinking:** `linkTraveller` resets the traveller's On file papers in the same transaction, each audited.
+- **`POST /api/visa/cases/:caseNo/documents/:documentId/scan`**, with the file as the body (PDF, JPEG or PNG), returns
+  `{ case }`. It's for whoever can tick, in Steps 1–2. It refuses:
+  - a thing we arrange, and an unnamed traveller (400)
+  - another file type (415)
+  - over `clients.documents.maxMb` (413)
+  - after Step 2 (409)
+
+  The scan goes in through the vault's own code (`saveClientScan`), audited `client.document.add` with `case`.
+- **`GET /api/visa/cases/:caseNo/documents/:documentId/scan/link`:** anyone who can see the case (`visaView`,
+  `findVisibleCase`); audited `client.document.open` with `case`. 404 when there's no copy.
+- **The case DTO:** each paper sends `onFile` (the current copy, from one query of the linked people's scans) and
+  `fromScan`; the case sends `scanMaxMb`.
+- **Screen:**
+  - "Came in as" offers **On file** beside Original and Xerox, only for a `XEROX_OK` paper with a copy.
+  - Under the paper's name: "On file · saved 12 Mar · Open", or "From the copy of 12 Mar · Open", and **Save scan**
+    (or "Save a newer scan").
+  - In Step 3, an On file paper reads "On file", with **Open** for the processor.
+  - Labels come from one map (`RECEIVED_AS_LABEL`), so no "came in as" value is missing a label.
 
 ### 6. Telling the client
 
