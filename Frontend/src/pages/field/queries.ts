@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, uploadFile } from '../../lib/api'
 import type { Place } from '../../lib/place'
 import type { FailReason, MyRun, MyStop } from './types'
 
@@ -44,17 +44,47 @@ export function useFailReasons(enabled: boolean) {
   })
 }
 
-/** "Couldn't complete": the reason and the place. The stop comes back; every run refetches. */
-export function useMarkFailed(jobId: string) {
+/** A save on a stop: it comes back, every run refetches; refused, the stop is read again (moved or called off meanwhile). */
+function useStopSave<V>(jobId: string, save: (vars: V) => Promise<MyStop>) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { reasonId: number; place: Place }) =>
-      api<MyStop>(`/field/jobs/${encodeURIComponent(jobId)}/failed`, { method: 'POST', body }),
+    mutationFn: save,
     onSuccess: (data) => {
       queryClient.setQueryData(fieldKeys.stop(jobId), data)
       void queryClient.invalidateQueries({ queryKey: fieldKeys.runs })
     },
-    // Called off or moved meanwhile: show the stop as it is now.
     onError: () => void queryClient.invalidateQueries({ queryKey: fieldKeys.stop(jobId) }),
   })
+}
+
+const stopPath = (jobId: string, rest = '') => `/field/jobs/${encodeURIComponent(jobId)}${rest}`
+
+/** "Couldn't complete": the reason and the place. */
+export function useMarkFailed(jobId: string) {
+  return useStopSave(jobId, (body: { reasonId: number; place: Place }) => api<MyStop>(stopPath(jobId, '/failed'), { method: 'POST', body }))
+}
+
+/** "Send the code" (0015 Decision 4): a new one-time code to the client's email. */
+export function useSendOtp(jobId: string) {
+  return useStopSave<void>(jobId, () => api<MyStop>(stopPath(jobId, '/otp'), { method: 'POST' }))
+}
+
+/** "Check" the code the client reads out. */
+export function useCheckOtp(jobId: string) {
+  return useStopSave(jobId, (code: string) => api<MyStop>(stopPath(jobId, '/otp/check'), { method: 'POST', body: { code } }))
+}
+
+/** His selfie at the door, saved as soon as he takes it: its case file. */
+export function useUploadSelfie(jobId: string) {
+  return useMutation({
+    mutationFn: async (photo: Blob) =>
+      (await uploadFile<{ selfie: { id: string; fileName: string } }>(stopPath(jobId, '/selfie'), photo, photo.type || 'image/jpeg')).selfie,
+  })
+}
+
+/** "Picked up": the booklets he counted, his selfie and the place, once the client confirmed the code. */
+export function useMarkDone(jobId: string) {
+  return useStopSave(jobId, (body: { booklets: { current: number; old: number }; selfieId: string; place: Place }) =>
+    api<MyStop>(stopPath(jobId, '/done'), { method: 'POST', body }),
+  )
 }

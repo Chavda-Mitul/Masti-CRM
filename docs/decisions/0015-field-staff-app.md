@@ -2,7 +2,8 @@
 
 - **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
   pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2); his run on his phone (17 Oct 2026,
-  phase 3); couldn't complete (17 Oct 2026, phase 4a). A "Built" note is added under each part as its phase lands.
+  phase 3); couldn't complete (17 Oct 2026, phase 4a); the pickup at the door (17 Oct 2026, phase 4b). A "Built" note
+  is added under each part as its phase lands.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -186,6 +187,57 @@ back to the office, due now, to book again.
     office will book it again."). Another day's stop is read-only, with one line saying why.
   - **The case page:** "Last visit · Ramesh couldn't complete · Client not home" and "When · Sat 17 Oct, 15:24 ·
     Place" (Google Maps), above "Book the collection boy" (or the booked one).
+
+**Built 17 Oct 2026** (phase 4b, the pickup at the door):
+- **Data** (migration `20261017180000_field_pickup_done`):
+  - `CaseFileKind` gains `FIELD_SELFIE`; the `CaseFile_size_and_pages` CHECK now leaves both photo kinds without a
+    page count.
+  - on `FieldJob`: the booklets he counted (`bookletsCurrent`, `bookletsOld`), his `selfieId` (unique, a case file),
+    and the client's code: `otpHash` (sha256 of the job and the code, never the code), `otpSentAt`, `otpSentTo`,
+    `otpExpiresAt`, `otpTries`, `otpConfirmedAt`. CHECKs: DONE ↔ the booklets and the selfie, and DONE → the code
+    confirmed; booklets 0–50; the code's columns together, confirmed only once sent.
+- **The setting `field`** ⚠️ (`fieldJobs/fieldJobs.settings.ts`): `{ otpMinutes: 10, otpTries: 5, otpResendSeconds:
+  60, selfieMaxMb: 5 }`; `GET/PUT /api/masters/field-settings` (the Head or any HOD changes it; audited
+  `setting.update`). API only, like the visa settings.
+- **His side** (field staff only; his booked pickup on today's run; a delivery gets 409 until phase 5):
+  - `POST /api/field/jobs/:jobId/otp`: a new 6-digit code to the client's email as it is then, stored as a hash
+    before the email goes (outside any transaction).
+    - **Refused:** 409 within the wait ("Wait 40 seconds, then send a new code."), once confirmed, or with no email
+      (`CLIENT_EMAIL_MISSING`).
+    - **If the email fails,** the code is cleared again and he's told why (502 "Couldn't send the code: …").
+      Audited `field.otp.send` either way.
+    - **The email** (fixed wording): "Your code for MASTI TOUR AND TRAVEL: 740972 … Ramesh from MASTI TOUR AND TRAVEL
+      is at your door to collect the documents for VISA-2026-0001. Give him this code to confirm: 740972 … It works
+      for 10 minutes. If you didn't expect this, don't share it, and call us on +91-93777-57580." Masti's name and
+      phone come from Company details as written there.
+  - `POST …/otp/check` `{ code }`: six digits (a typo isn't a try). A wrong one counts ("That's not the code. 4 tries
+    left.", audited `field.otp.wrong`, committed before the refusal); after the last try, or once expired, a new code
+    is needed; the right one confirms (`field.otp.confirm`).
+  - `POST …/selfie` (the JPEG or PNG as the body; 415, 400 when the bytes aren't what's stated, 413 over the limit):
+    a FIELD_SELFIE case file (`{caseNo}_selfie.jpg`), saved as he takes it, audited `visa.file.upload`.
+  - `POST …/done` `{ booklets, selfieId, place }`: once the code is confirmed ("The client hasn't confirmed with the
+    code yet."), with his own unused selfie of this case ("Take your selfie at the door."), on an open case at Steps
+    1–2. In one transaction under the case's lock: DONE with when, where, the booklets and the selfie; his count
+    becomes the case's intake count (audited `visa.case.update`); a case still at Step 1 moves to Documents
+    (`enquiry.stage`); the case's updatedAt moves; audited `field.job.done`, with the place.
+  - `GET /api/field/jobs/:jobId` adds where the code stands: `otp: { sentTo: "h•••@example.com", sentAt, expiresAt,
+    resendAt, confirmedAt }`.
+- **Screens:**
+  - **A booked pickup's screen** shows the demo's numbered steps, each a green tick once done:
+    1. **Booklets counted:** current and old.
+    2. **Code from the client:** Send the code, then "Sent to h•••@example.com at 3:55 pm", the 6 digits and Check,
+       and Send a new code; then "Confirmed by the client at 3:55 pm".
+    3. **Your selfie at the door:** the front camera in the page (Capture waits for the camera's first frames), with
+       the phone's place and time added; Retake.
+
+    **Finish pickup · N steps left** waits for all three, then "Pickup recorded." and back to the run. Couldn't
+    complete stays below.
+  - **The case page:** "Last visit · Ramesh picked up", "When · … · Place", "Booklets · 2 current + 1 old", "Proof ·
+    Code confirmed · Selfie" (it opens through a short-lived link, audited). The arrival card's booklet boxes show his
+    count.
+  - **The camera in the page** now asks the browser to play the stream, and Capture waits for its first frames:
+    before them, a picture came out black (seen in headless Chrome; iOS Safari needs the same). The office's receiver
+    photo (0014) gets the same fix.
 
 ### 6. Settings and lists (golden rule 1)
 

@@ -33,5 +33,39 @@ export const markFailedSchema = z.object({
   place: placeSchema,
 });
 
+/**
+ * The field staff app's ⚠️ values (docs/decisions/0015-field-staff-app.md Decision 8), one setting the Head or any HOD
+ * changes: how long the client's code works, the wrong tries it takes, the wait before another can be sent, and the
+ * largest selfie.
+ */
+export const fieldSettingsSchema = z.object({
+  otpMinutes: z.number().int().min(1).max(60),
+  otpTries: z.number().int().min(1).max(10),
+  otpResendSeconds: z.number().int().min(10).max(600),
+  selfieMaxMb: z.number().int().min(1).max(20),
+});
+export const updateFieldSettingsSchema = fieldSettingsSchema.partial();
+
+const SIX_DIGITS = "Type the 6 digits the client reads out.";
+
+/** The code the client reads out (Decision 4): six digits. A typo in the form isn't counted as a wrong try. */
+export const checkOtpSchema = z.object({
+  code: z.string(SIX_DIGITS).trim().regex(/^\d{6}$/, SIX_DIGITS),
+});
+
+const COUNT = "Count the booklets: current and old (0 if none).";
+const booklets = z.number(COUNT).int(COUNT).min(0, COUNT).max(50, "At most 50 booklets.");
+
+/** "Picked up" (Decision 4): the booklets he counted, his selfie (uploaded as he took it) and the place. */
+export const markDoneSchema = z.object({
+  booklets: z.object({ current: booklets, old: booklets }, COUNT),
+  selfieId: z.string("Take your selfie at the door.").min(1, "Take your selfie at the door."),
+  place: placeSchema,
+});
+
 export type Place = z.infer<typeof placeSchema>;
 export type MarkFailedInput = z.infer<typeof markFailedSchema>;
+export type FieldSettings = z.infer<typeof fieldSettingsSchema>;
+export type UpdateFieldSettingsInput = z.infer<typeof updateFieldSettingsSchema>;
+export type CheckOtpInput = z.infer<typeof checkOtpSchema>;
+export type MarkDoneInput = z.infer<typeof markDoneSchema>;

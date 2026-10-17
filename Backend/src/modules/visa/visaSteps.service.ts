@@ -17,7 +17,11 @@ import { countTravellers, travellerLabel } from "./visaCase";
  * Enquiry → Documents, once: the first name or tick does it, as does "Start collecting documents". The stage is matched
  * in the update, so two changes at the same moment move it only once. Returns whether it moved.
  */
-async function advanceToDocuments(tx: Db, enquiry: LockedCase, actor: Actor): Promise<boolean> {
+export async function advanceToDocuments(
+  tx: Db,
+  enquiry: Pick<LockedCase, "id" | "stageId" | "departmentId" | "clientId"> & { stage: { code: string } },
+  actor: Actor,
+): Promise<boolean> {
   if (enquiry.stage.code !== "ENQUIRY") return false;
   const documents = await visaStage(tx, enquiry.departmentId, "DOCUMENTS");
   const moved = await tx.enquiry.updateMany({ where: { id: enquiry.id, stageId: enquiry.stageId }, data: { stageId: documents.id } });

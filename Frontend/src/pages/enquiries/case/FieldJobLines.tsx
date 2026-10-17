@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { errorText } from '../../../lib/apiErrors'
 import { placeLink } from '../../../lib/place'
 import { useToast } from '../../../lib/toast'
-import { useCancelFieldJob } from '../queries'
+import { useCancelFieldJob, useOpenCaseFile } from '../queries'
 import type { FieldJob, VisaCase } from '../types'
 import { FieldJobDialog } from './FieldJobDialog'
-import { dayTime, firstName, weekdayDay } from './labels'
+import { bookletsText, dayTime, firstName, weekdayDay } from './labels'
 
 /** How the case talks about each kind of job (0015) ⚠️. */
 const WORDING: Record<FieldJob['kind'], { who: string; where: string; book: string; what: string; cancelled: string; done: string }> = {
@@ -29,7 +29,7 @@ export function FieldJobLines({ visaCase: c, kind, canBook }: { visaCase: VisaCa
   // Newest first: the booked one, if any, and the last he finished.
   const job = c.fieldJobs.find((j) => j.kind === kind && j.status === 'BOOKED')
   const finished = c.fieldJobs.find((j) => j.kind === kind && (j.status === 'DONE' || j.status === 'FAILED'))
-  const last = finished && <FinishedLines job={finished} />
+  const last = finished && <FinishedLines job={finished} caseNo={c.caseNo} />
 
   if (!job) {
     return (
@@ -122,11 +122,13 @@ export function FieldJobLines({ visaCase: c, kind, canBook }: { visaCase: VisaCa
 
 /**
  * The last visit the boy finished (0015 phase 4): "Ramesh couldn't complete · Client not home" (or "Ramesh picked up"),
- * then when, and the place his phone gave, in Google Maps.
+ * then when, and the place his phone gave, in Google Maps; once done, the booklets he counted, and the proof: the
+ * client's code and his selfie, which opens through a short-lived link.
  */
-function FinishedLines({ job }: { job: FieldJob }) {
+function FinishedLines({ job, caseNo }: { job: FieldJob; caseNo: string }) {
   const words = WORDING[job.kind]
   const who = firstName(job.assignee.name)
+  const openFile = useOpenCaseFile(caseNo)
   return (
     <>
       <div className="kv">
@@ -147,6 +149,28 @@ function FinishedLines({ job }: { job: FieldJob }) {
           )}
         </span>
       </div>
+      {job.status === 'DONE' && job.counted && (
+        <div className="kv">
+          <span>Booklets</span>
+          <span>{bookletsText(job.counted)}</span>
+        </div>
+      )}
+      {job.status === 'DONE' && (
+        <div className="kv">
+          <span>Proof</span>
+          <span>
+            {job.otpConfirmedAt ? 'Code confirmed' : 'No code'}
+            {job.selfie && (
+              <>
+                {' · '}
+                <button type="button" className="btn-link" onClick={() => openFile(job.selfie!.id)}>
+                  Selfie
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+      )}
     </>
   )
 }

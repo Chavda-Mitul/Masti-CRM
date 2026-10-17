@@ -10,6 +10,8 @@ import {
   updateReasonSchema,
   updateSlotSchema,
 } from "./enquiryMasters.schemas";
+import { updateFieldSettingsSchema } from "../fieldJobs/field.schemas";
+import { getFieldSettings } from "../fieldJobs/fieldJobs.settings";
 import * as service from "./enquiryMasters.service";
 
 /**
@@ -91,6 +93,16 @@ router.post("/field-fail-reasons", async (req, res) => {
 router.patch("/field-fail-reasons/:id", async (req, res) => {
   const body = updateOptionSchema.parse(req.body);
   res.json({ reason: await service.updateFailReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// The field staff app's settings (0015 Decision 8): how long the client's code works, its tries and resend wait, and
+// the largest selfie
+router.get("/field-settings", async (_req, res) => {
+  res.json({ settings: await getFieldSettings() });
+});
+router.put("/field-settings", async (req, res) => {
+  const body = updateFieldSettingsSchema.parse(req.body);
+  res.json({ settings: await service.updateFieldSettings(body, actorOf(req)) });
 });
 
 export default router;

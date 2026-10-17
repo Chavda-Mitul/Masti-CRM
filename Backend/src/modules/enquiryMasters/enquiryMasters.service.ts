@@ -2,7 +2,10 @@ import { prisma } from "../../config/prisma";
 import { definedOnly, onlyChanged } from "../../lib/changes";
 import { fieldError, forbidden, notFound } from "../../lib/httpError";
 import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
+import { saveSetting } from "../../lib/settings";
 import { isHodOfAny } from "../auth/permissions";
+import type { UpdateFieldSettingsInput } from "../fieldJobs/field.schemas";
+import { FIELD_SETTINGS_KEY, getFieldSettings } from "../fieldJobs/fieldJobs.settings";
 import type { Actor, UserWithDepartments } from "../users/user";
 import type {
   CreateOptionInput,
@@ -170,4 +173,17 @@ export async function updateFailReason(id: number, input: UpdateOptionInput, act
     entityId: id,
     write: (tx) => tx.fieldFailReason.update({ where: { id }, data: changes }),
   });
+}
+
+/**
+ * The field staff app's settings (0015 Decision 8), changed by the Head or any HOD like the field lists: only what was
+ * sent changes; an unchanged save writes nothing. Audited (setting.update).
+ */
+export async function updateFieldSettings(input: UpdateFieldSettingsInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  const before = await getFieldSettings();
+  const after = { ...before, ...definedOnly(input) };
+  if (JSON.stringify(after) === JSON.stringify(before)) return before;
+  await prisma.$transaction((tx) => saveSetting(tx, { key: FIELD_SETTINGS_KEY, before, after, actorId: actor.user.id, ip: actor.ip }));
+  return getFieldSettings();
 }

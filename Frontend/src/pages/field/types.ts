@@ -38,9 +38,21 @@ export interface MyRun {
   total: number
 }
 
-/** One of his stops, with today by the server's clock: he records a stop only on its day. */
+/** Where the client's one-time code stands (0015 Decision 4); none until one is sent. */
+export interface OtpState {
+  /** Where it went, masked: "h•••@example.com". */
+  sentTo: string
+  sentAt: string
+  expiresAt: string
+  /** When he may send another. */
+  resendAt: string
+  confirmedAt: string | null
+}
+
+/** One of his stops, where its code stands, and today by the server's clock: he records a stop only on its day. */
 export interface MyStop {
   stop: RunStop
+  otp: OtpState | null
   today: string
 }
 

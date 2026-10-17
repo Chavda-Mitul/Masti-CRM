@@ -82,6 +82,7 @@ export const visaCaseInclude = {
       createdBy: personSelect,
       cancelledBy: personSelect,
       failReason: { select: { id: true, name: true } },
+      selfie: { select: { id: true, fileName: true } },
     },
   },
   stage: true,
@@ -423,6 +424,10 @@ export function toVisaCaseDto(
       finishedAt: j.finishedAt,
       place: j.latitude !== null && j.longitude !== null && j.accuracyM !== null ? { lat: j.latitude, lng: j.longitude, accuracy: j.accuracyM } : null,
       failReason: j.failReason,
+      /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+      counted: j.bookletsCurrent !== null && j.bookletsOld !== null ? { current: j.bookletsCurrent, old: j.bookletsOld } : null,
+      selfie: j.selfie,
+      otpConfirmedAt: j.otpConfirmedAt,
     })),
     source: row.source,
     origin: row.origin,

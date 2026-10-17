@@ -1,7 +1,9 @@
 import { Router } from "express";
+import { HttpError } from "../../lib/httpError";
+import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { markFailedSchema, myRunQuerySchema } from "./field.schemas";
-import { getMyStop, listFailReasons, listMyJobs, markFailed } from "./fieldStops.service";
+import { checkOtpSchema, markDoneSchema, markFailedSchema, myRunQuerySchema } from "./field.schemas";
+import { checkOtp, getMyStop, listFailReasons, listMyJobs, markDone, markFailed, selfieLimit, sendOtp, uploadSelfie } from "./fieldStops.service";
 
 /**
  * The collection and delivery boy's own screen (docs/decisions/0015-field-staff-app.md; docs/decisions/0002-user-types.md:
@@ -30,6 +32,36 @@ router.get("/fail-reasons", async (_req, res) => {
 router.post("/jobs/:jobId/failed", async (req, res) => {
   const body = markFailedSchema.parse(req.body);
   res.json(await markFailed(req.params.jobId, body, actorOf(req)));
+});
+
+/** "Send the code" (Decision 4): a new one-time code to the client's email. */
+router.post("/jobs/:jobId/otp", async (req, res) => {
+  res.json(await sendOtp(req.params.jobId, actorOf(req)));
+});
+
+/** "Check" the code the client reads out. */
+router.post("/jobs/:jobId/otp/check", async (req, res) => {
+  const { code } = checkOtpSchema.parse(req.body);
+  res.json(await checkOtp(req.params.jobId, code, actorOf(req)));
+});
+
+/**
+ * His selfie at the door (Decision 4): the JPEG or PNG itself is the body, saved as soon as he takes it; "Picked up"
+ * links it. The stop and the size limit are checked before the body is read.
+ */
+router.post("/jobs/:jobId/selfie", async (req, res) => {
+  const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (type !== "image/jpeg" && type !== "image/png") throw new HttpError(415, "Send the selfie as a JPEG or PNG photo.");
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await selfieLimit(req.params.jobId, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ selfie: await uploadSelfie(req.params.jobId, bytes, type, actor) });
+});
+
+/** "Picked up" (Decision 4): the booklets he counted, his selfie and the place, once the client confirmed the code. */
+router.post("/jobs/:jobId/done", async (req, res) => {
+  const body = markDoneSchema.parse(req.body);
+  res.json(await markDone(req.params.jobId, body, actorOf(req)));
 });
 
 export default router;

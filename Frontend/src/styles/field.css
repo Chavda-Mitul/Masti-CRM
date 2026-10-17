@@ -309,3 +309,119 @@ a.btn.field-record {
 .field-fail-actions .btn {
   height: 46px;
 }
+
+/* At a pickup (phase 4b): the demo's numbered steps, then Finish. */
+.field-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.field-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-input);
+}
+.field-step.is-done {
+  background: var(--ok-bg);
+  border-color: #cfe9da;
+}
+.field-step-mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--fill-tile);
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 800;
+}
+.field-step.is-done .field-step-mark {
+  background: var(--ok);
+  color: var(--on-fill);
+}
+.field-step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-step-title {
+  font-weight: 800;
+}
+.field-step-hint {
+  margin-top: -4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.field-step-action {
+  align-self: flex-start;
+  height: 42px;
+}
+.field-step-error {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bad);
+}
+.field-count-row {
+  display: flex;
+  gap: 14px;
+}
+.field-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+/* 16px and up, so a phone doesn't zoom in on the box. */
+.field-count .input {
+  width: 64px;
+  height: 42px;
+  text-align: center;
+  font-size: 16px;
+}
+.field-code-row {
+  display: flex;
+  gap: 8px;
+}
+.field-code {
+  width: 100%;
+  max-width: 170px;
+  height: 44px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+.field-resend {
+  align-self: flex-start;
+}
+.field-selfie {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.field-selfie-img {
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  background: var(--ink);
+}
+.field-selfie-actions {
+  display: flex;
+  gap: 8px;
+}
+.field-finish {
+  width: 100%;
+  height: 50px;
+  font-size: 15px;
+}

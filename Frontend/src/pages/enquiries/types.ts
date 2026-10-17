@@ -206,6 +206,10 @@ export interface FieldJob {
   finishedAt: string | null
   place: { lat: number; lng: number; accuracy: number } | null
   failReason: { id: number; name: string } | null
+  /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+  counted: { current: number; old: number } | null
+  selfie: { id: string; fileName: string } | null
+  otpConfirmedAt: string | null
 }
 
 /** Who can be sent: the active field staff (GET /api/visa/field-staff). */

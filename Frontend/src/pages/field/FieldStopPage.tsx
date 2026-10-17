@@ -4,6 +4,7 @@ import { errorText } from '../../lib/apiErrors'
 import { currentPlace, type Place } from '../../lib/place'
 import { useToast } from '../../lib/toast'
 import { dayName, KIND_LABEL, shortDay } from './labels'
+import { PickupSteps } from './PickupSteps'
 import { useFailReasons, useMarkFailed, useStop } from './queries'
 import { StopCard } from './StopCard'
 import type { RunStop } from './types'
@@ -19,7 +20,8 @@ function notToday(stop: RunStop, today: string): string | null {
 
 /**
  * One stop on the boy's phone (demo screen 14; docs/decisions/0015-field-staff-app.md, phase 4): the stop as on his run,
- * and what he records at the door, on the day: "Couldn't complete" (Decision 5). Another day's stop is read-only.
+ * and what he records at the door, on the day: at a pickup, the booklets, the client's code and his selfie, then
+ * "Finish pickup" (Decision 4); or "Couldn't complete" (Decision 5). Another day's stop is read-only.
  */
 export function FieldStopPage() {
   const { jobId = '' } = useParams()
@@ -60,6 +62,7 @@ export function FieldStopPage() {
               {query.isError && <div className="alert alert-warn">Can&apos;t reach the office right now. This is the stop as it last loaded.</div>}
               <StopCard stop={data.stop} number={null} />
               {why && <p className="field-note muted">{why}</p>}
+              {canRecord && data.stop.kind === 'PICKUP' && <PickupSteps jobId={data.stop.id} otp={data.otp} />}
               {canRecord && <CouldntComplete jobId={data.stop.id} />}
             </>
           )}
