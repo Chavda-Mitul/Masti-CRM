@@ -23,7 +23,7 @@ import {
   type UpdateClientInput,
   type UpdateClientSettingsInput,
 } from "./clients.schemas";
-import { EXPIRY_WARNINGS_KEY, getClientSettings, INVOICE_READINESS_KEY } from "./clients.settings";
+import { CLIENT_DOCUMENTS_KEY, EXPIRY_WARNINGS_KEY, getClientSettings, INVOICE_READINESS_KEY } from "./clients.settings";
 import {
   checkDuplicates,
   confirmedDuplicatesNote,
@@ -557,6 +557,7 @@ export async function updateSettings(input: UpdateClientSettingsInput, actor: Ac
   const updates = [
     { key: INVOICE_READINESS_KEY, value: input.invoiceReadiness, previous: before.invoiceReadiness },
     { key: EXPIRY_WARNINGS_KEY, value: input.expiryWarnings, previous: before.expiryWarnings },
+    { key: CLIENT_DOCUMENTS_KEY, value: input.documents, previous: before.documents },
   ];
 
   await prisma.$transaction(async (tx) => {

@@ -1,7 +1,9 @@
 import { prisma, type Db } from "../../config/prisma";
 import {
+  clientDocumentsSettingSchema,
   expiryWarningsSchema,
   invoiceReadinessSchema,
+  type ClientDocumentsSetting,
   type ExpiryWarnings,
   type InvoiceReadiness,
 } from "./clients.schemas";
@@ -10,6 +12,7 @@ import {
 
 export const INVOICE_READINESS_KEY = "clients.invoiceReadiness";
 export const EXPIRY_WARNINGS_KEY = "clients.expiryWarnings";
+export const CLIENT_DOCUMENTS_KEY = "clients.documents";
 
 /** ⚠️ Our proposal, not Masti's. Confirm what must be on file before an invoice (docs/decisions/0004-client-master.md). */
 export const DEFAULT_INVOICE_READINESS: InvoiceReadiness = {
@@ -20,19 +23,25 @@ export const DEFAULT_INVOICE_READINESS: InvoiceReadiness = {
 /** ⚠️ 12 months matches the demo: on 5 Oct 2026, Jun 2027 shows "renew soon" and Aug 2029 doesn't. */
 export const DEFAULT_EXPIRY_WARNINGS: ExpiryWarnings = { passportRenewSoonMonths: 12 };
 
+/** ⚠️ Ours: one paper's scan, up to a few pages (docs/decisions/0016-client-documents.md Decision 2). */
+export const DEFAULT_CLIENT_DOCUMENTS: ClientDocumentsSetting = { maxMb: 20 };
+
 export interface ClientSettings {
   invoiceReadiness: InvoiceReadiness;
   expiryWarnings: ExpiryWarnings;
+  documents: ClientDocumentsSetting;
 }
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getClientSettings(db: Db = prisma): Promise<ClientSettings> {
-  const rows = await db.setting.findMany({ where: { key: { in: [INVOICE_READINESS_KEY, EXPIRY_WARNINGS_KEY] } } });
+  const rows = await db.setting.findMany({ where: { key: { in: [INVOICE_READINESS_KEY, EXPIRY_WARNINGS_KEY, CLIENT_DOCUMENTS_KEY] } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const readiness = invoiceReadinessSchema.safeParse(value(INVOICE_READINESS_KEY));
   const expiry = expiryWarningsSchema.safeParse(value(EXPIRY_WARNINGS_KEY));
+  const documents = clientDocumentsSettingSchema.safeParse(value(CLIENT_DOCUMENTS_KEY));
   return {
     invoiceReadiness: readiness.success ? readiness.data : DEFAULT_INVOICE_READINESS,
     expiryWarnings: expiry.success ? expiry.data : DEFAULT_EXPIRY_WARNINGS,
+    documents: documents.success ? documents.data : DEFAULT_CLIENT_DOCUMENTS,
   };
 }

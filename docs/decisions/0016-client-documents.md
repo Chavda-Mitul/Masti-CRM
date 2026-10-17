@@ -1,7 +1,8 @@
 # 0016 · The client document vault
 
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
-  a time (Decision 1). A "Built" note is added under each part as its component lands.
+  a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1). A "Built" note is added
+  under each part as its component lands.
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -94,6 +95,47 @@ The WhatsApp message (Decision 6) is recorded now and sent once the WhatsApp out
 - **Every save and every opening is audited:** who, when, the IP, and the client, so the client's history shows them.
 - **Departments:** Tickets, Holidays and Insurance HODs see the list too, since their work needs passport copies.
   Their staff get the "On file" view when their case screens are built (Stage 2).
+
+**Built 17 Oct 2026** (component 1, the Documents card, Decisions 2–4):
+- **Data** (migration `20261017120000_client_documents`):
+  - `ClientDocument`: the client, the member (or none), the paper, the bucket key, file name, type, size, a PDF's
+    pages, who and when. Never updated or deleted.
+  - CHECKs: one of the three types; a size above 0; pages set exactly for a PDF.
+  - The setting `clients.documents` `{ maxMb: 20 }` ⚠️, which the Head can change through `PUT /api/clients/settings`
+    (no screen yet).
+  - The document master gains Aadhaar card and PAN card.
+- **`GET /api/clients/:id/documents`** returns `{ groups, papers, maxMb }`:
+  - groups: the client's own papers first, then members in family order, anyone taken off the list last
+  - each paper's current scan and the older ones, newest first
+  - the active papers for the Add form (the masters API needs Visa access)
+- **`POST /api/clients/:id/documents?documentId=&memberId=`**, with the file as the body (PDF, JPEG or PNG), returns
+  201 with the list. Before the body is read, it refuses:
+  - 415 for another type
+  - 403 for anyone but an HOD or the Head ("Only an HOD or the Head can see a client's documents.")
+  - 404 for an unknown client, a person not on this client, or an unknown paper
+  - 400 for a person taken off the list, or a paper switched off
+  - 413 over the size limit
+- **The bytes are checked:** a PDF that opens (pages counted), or a real PNG or JPEG; otherwise 400. The bucket upload
+  comes before the transaction, which checks the person and paper again; a failure removes the object. Audit
+  `client.document.add`, with `replaces` (the previous current scan).
+- **`GET /api/clients/:id/documents/:clientDocumentId/link`:** a short-lived link (`S3_PRESIGN_SECONDS`), audited
+  `client.document.open`.
+- **Shared code:**
+  - `src/lib/pdf.ts`, moved from the visa module
+  - `src/lib/images.ts`, as on the Step 8 branch
+  - `src/lib/fileNames.ts`, which the refusal letter uses too
+  - on the frontend, `useOpenSignedLink`, which case files use too
+- **Screen:** the Documents card under Family & travellers, for HODs and the Head only:
+  - one block per person: "Not one person's: the client's own papers" first; a "Taken off the list" chip for anyone
+    taken off the list
+  - each paper's current scan (type, pages, size, saved when and by whom, **Open**), and "Older copies (n)"
+  - **+ Add a scan:** whose paper (the active family members, or the client's own), the paper and the file, checked
+    before upload. The toast reads "Saved Aarav Mehta's Passport."
+- **Checked in the browser:**
+  - a Holidays HOD adds and opens a PDF, a PNG and the client's own paper; a second passport moves the first to the
+    older copies
+  - taking a person off the list moves their scans last
+  - Visa staff see no card, and the API refuses them
 
 ### 5. The vault in Step 2
 

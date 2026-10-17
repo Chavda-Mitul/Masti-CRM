@@ -48,6 +48,8 @@ import {
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
 import {
+  CLIENT_DOCUMENTS_KEY,
+  DEFAULT_CLIENT_DOCUMENTS,
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
   EXPIRY_WARNINGS_KEY,
@@ -77,11 +79,13 @@ async function main() {
     create: { key: OFFICE_NETWORK_KEY, value: DEFAULT_OFFICE_NETWORK },
   });
 
-  // Client master: lookup tables and the ⚠️ settings (docs/decisions/0004-client-master.md). Existing rows are kept.
+  // Client master: lookup tables and the ⚠️ settings (docs/decisions/0004-client-master.md), with the document vault's
+  // largest scan (docs/decisions/0016-client-documents.md). Existing rows are kept.
   await seedClientLookups(prisma);
   for (const [key, value] of [
     [INVOICE_READINESS_KEY, DEFAULT_INVOICE_READINESS],
     [EXPIRY_WARNINGS_KEY, DEFAULT_EXPIRY_WARNINGS],
+    [CLIENT_DOCUMENTS_KEY, DEFAULT_CLIENT_DOCUMENTS],
   ] as const) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }

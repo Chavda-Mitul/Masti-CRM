@@ -87,6 +87,7 @@ model User {
   visaCasesDecided   VisaCase[]         @relation("VisaCaseDecidedBy")
   visaCasesInTransit VisaCase[]         @relation("VisaCasePassportsInTransitBy")
   caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
+  clientDocsUploaded ClientDocument[]   @relation("ClientDocumentUploadedBy")
   docketsCreated     Docket[]           @relation("DocketCreatedBy")
   docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
   quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
@@ -160,7 +161,7 @@ model AuditLog {
   action     String
   entityType String
   entityId   String?
-  /// The client the change belongs to (the client, its numbers, members, notes, later its files), so a client's
+  /// The client the change belongs to (the client, its numbers, members, notes, documents), so a client's
   /// history is one indexed query. No foreign key: audit rows must never block or follow changes to other tables.
   clientId   String?
   before     Json?
@@ -227,10 +228,10 @@ enum ClientKind {
 /// Completed before invoicing; which fields are required is the clients.invoiceReadiness setting.
 /// Never deleted: enquiries and invoices will point here.
 model Client {
-  id             String         @id @default(uuid())
-  kind           ClientKind     @default(INDIVIDUAL)
+  id             String           @id @default(uuid())
+  kind           ClientKind       @default(INDIVIDUAL)
   /// +91XXXXXXXXXX. The lookup key, the WhatsApp number, and the match key for the Excel import.
-  mobile         String         @unique
+  mobile         String           @unique
   /// The person's name, or the company's. Required (0004 Amendment); a database check also refuses a blank one.
   /// Integrations and the Excel import must supply one too (e.g. the WhatsApp profile name).
   name           String
@@ -243,29 +244,30 @@ model Client {
   area           String?
   city           String?
   /// GST state code ("24" = Gujarat). Decides the place of supply on invoices.
-  stateCode      String?        @db.Char(2)
-  pincode        String?        @db.Char(6)
+  stateCode      String?          @db.Char(2)
+  pincode        String?          @db.Char(6)
   /// Uppercase AAAAA9999A. Typed in by staff; not verified (PAN verification is Q23, out of scope).
   pan            String?
   /// Uppercase, 15 characters. Characters 3–12 equal pan when both are set (database check).
   gstin          String?
   /// The client's code in Masti's accounting software ✅.
-  accountingCode String?        @unique
+  accountingCode String?          @unique
   billingCycleId Int
   paymentHabitId Int?
   /// The service sets the IST date; the Excel import may set an earlier one. The default is today in India too.
-  clientSince    DateTime       @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
-  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  clientSince    DateTime         @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token: PATCH sends back the updatedAt it read.
-  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
   /// Null when created by the WhatsApp bot, a website form or the import.
   createdById    String?
-  billingCycle   BillingCycle   @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
-  paymentHabit   PaymentHabit?  @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
-  createdBy      User?          @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  billingCycle   BillingCycle     @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
+  paymentHabit   PaymentHabit?    @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
+  createdBy      User?            @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   phones         ClientPhone[]
   members        ClientMember[]
   notes          ClientNote[]
+  documents      ClientDocument[]
   enquiries      Enquiry[]
 
   @@index([name])
@@ -323,6 +325,7 @@ model ClientMember {
   createdBy      User                @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   travellers     VisaCaseTraveller[]
   consent        Consent?
+  documents      ClientDocument[]
 
   @@index([clientId])
   @@index([passportNumber])
@@ -340,6 +343,39 @@ model ClientNote {
   author    User     @relation("ClientNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
 
   @@index([clientId, createdAt])
+}
+
+/// The client document vault (docs/decisions/0016-client-documents.md): a scan of one of the client's papers, kept in
+/// the private bucket (CLAUDE.md rule 4) and reused on later cases. Never changed or deleted (nothing is removed until
+/// M40 is answered): the newest scan of a paper for a person is the current one; older ones stay and still open.
+model ClientDocument {
+  id           String         @id @default(uuid())
+  clientId     String
+  /// Whose paper it is (a passport, an Aadhaar card); null for the client's own (a company's PAN card). The service
+  /// keeps it to a member of the same client.
+  memberId     String?
+  /// Which paper, from the document master.
+  documentId   Int
+  /// clients/<clientId>/<uuid>.pdf|jpg|png: no two uploads ever share a key.
+  storageKey   String         @unique
+  /// The name it opens and saves under: Aarav-Mehta_Passport_2026-10-17.pdf.
+  fileName     String
+  /// application/pdf, image/jpeg or image/png (checked in the migration), as the file's first bytes show.
+  contentType  String
+  sizeBytes    Int
+  /// A PDF's pages; null for a photo (checked in the migration).
+  pageCount    Int?
+  uploadedById String
+  uploadedAt   DateTime       @default(now()) @db.Timestamptz(3)
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  member       ClientMember?  @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  document     DocumentMaster @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  uploadedBy   User           @relation("ClientDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([clientId, uploadedAt])
+  @@index([memberId, documentId, uploadedAt])
+  @@index([documentId])
+  @@index([uploadedById])
 }
 
 // ---------------------------------------------------------------------------
@@ -591,21 +627,23 @@ model VisaOffering {
   @@unique([countryId, visaTypeId])
 }
 
-/// Every document a checklist can ask for. No department: insurance claim checklists reuse it later.
+/// Every document a checklist can ask for. No department: insurance claim checklists reuse it later, and the client
+/// document vault (0016) files its scans under it.
 model DocumentMaster {
-  id             Int                 @id @default(autoincrement())
+  id              Int                 @id @default(autoincrement())
   /// PASSPORT, OLD_PASSPORTS, BANK_STATEMENT_6M… Never changes.
-  code           String              @unique
+  code            String              @unique
   /// "Bank statement, last 6 months"
-  name           String
+  name            String
   /// Shown to the client with the name, e.g. "35×45 mm, white background".
-  detail         String?
-  sortOrder      Int                 @default(0)
-  isActive       Boolean             @default(true)
-  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
-  checklistItems VisaChecklistItem[]
-  caseDocuments  VisaCaseDocument[]
+  detail          String?
+  sortOrder       Int                 @default(0)
+  isActive        Boolean             @default(true)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  checklistItems  VisaChecklistItem[]
+  caseDocuments   VisaCaseDocument[]
+  clientDocuments ClientDocument[]
 }
 
 /// What we need. Code branches on it (Original/Xerox toggle, "Made" for things we arrange), so an enum.

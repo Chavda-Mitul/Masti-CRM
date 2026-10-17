@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
+import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type {
   ClientLookup,
@@ -235,25 +236,10 @@ export function useUploadRefusalLetter(caseNo: string) {
   )
 }
 
-/**
- * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
- * click itself, so popup blockers allow it, and pointed at the file once the link arrives.
- */
+/** Opens one of the case's files in a new tab, through a link that works for a few minutes. */
 export function useOpenCaseFile(caseNo: string) {
-  const toast = useToast()
-  return (fileId: string) => {
-    const tab = window.open('', '_blank')
-    if (tab) tab.opener = null
-    api<{ url: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
-      .then(({ url }) => {
-        if (tab) tab.location.href = url
-        else window.location.href = url
-      })
-      .catch((err: unknown) => {
-        tab?.close()
-        toast({ tone: 'bad', message: err instanceof Error ? err.message : 'Couldn’t open the file. Please try again.' })
-      })
-  }
+  const open = useOpenSignedLink()
+  return (fileId: string) => open(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
 }
 
 /** Names a traveller: links the client's family member. */
