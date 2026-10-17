@@ -193,6 +193,22 @@ an e-visa.
     names & dates", "Doesn't match: …" in red, "No stickers (taken back)" or "(all refused)") and who received them; an
     open case is due to "Arrange the handover"; the header's "Hand over to the client →" stays "Soon" until Step 8.
 
+**Amended 17 Oct 2026 (project lead), after the 17 Oct browser review** (3 of 4 passports came back, and the case
+closed as Delivered with nobody asked to chase the fourth):
+- **A short return holds the handover.** "Missing" is fewer current or old booklets back than went out (intake, as
+  above). The receipt is still saved as counted, but the case shows what's missing, its task reads "Find the missing
+  passport", and the handover (its photo too) and booking a delivery are refused until the shortfall is settled:
+  - **"Received the rest":** the late booklets come in and are added to our stock count, up to what's missing
+    (audited). The receipt itself stays as it was; this adds to it.
+  - **"Clear the shortfall":** accept they won't come back, with a reason from an admin-editable **"Missing passport
+    reasons"** list ⚠️ (seeded: Embassy kept it, Vendor still has it, Counted wrong at intake, Lost, reported to the
+    vendor; no free text). Who: whoever can act on the case (the processor, the Visa HOD or the Head); desk staff who
+    see the case through the in-stock rule can't.
+  - Then the handover goes ahead with what's in our stock (0014 Decision 4).
+- **More back than went out** stays as before: shown, not held. A sticker that doesn't match is a separate question.
+- *Supersedes "a count that doesn't match is allowed" above for a shortfall: it's still recorded, but now held.* The
+  field app's doorstep handover (0015 phase 5) respects the same hold. To confirm with Vimal: M42.
+
 ### 6. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
