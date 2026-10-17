@@ -37,6 +37,13 @@ Decided with the go for part 7 (10 Oct 2026, project lead):
 11. **"Mark documents complete" asks first.** The dialog lists what is missing (unnamed travellers, pending papers by traveller) and stays disabled until nothing is. Staff are taken back to their list afterwards, as the case is no longer theirs; the HOD or Head stays on it to assign a processor.
 12. **Step 2 changes and maturity take turns** (review of PR #6, 12 Oct 2026). Each one locks the case's row first in its transaction (`SELECT … FOR UPDATE`), then reads the case again and repeats its checks. Maturity checks the checklist under that lock, in the same transaction as the move to File preparation. A paper un-ticked at the same moment either lands first and stops maturity, or waits and is then refused because the case has moved on. Ticks still don't change the case's `updatedAt`, so they never make an open "Mark documents complete" stale. *Refines Decision 2: there is still no lock per document, but there is one per case.*
 
+Amended 17 Oct 2026 (project lead), with Step 8 ([0014](0014-visa-delivered.md) Decision 5):
+
+13. **Visa staff with EDIT also see a case whose passports are in our stock** (received at Step 7, not yet handed
+    over), in their list and on its page, so whoever is at the desk can hand them over. Only the handover is theirs;
+    everything else stays with the case's owner, the HOD or the Head. Once delivered, the case is back to the rule
+    above.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):

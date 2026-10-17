@@ -881,6 +881,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - **Proof:** OTP from the client (Verified), photo of the receiver, delivery-boy selfie, place and time ("Vesu · 12:10 pm"). The "as designed earlier" steps still need confirming (Q12).
 - The file closes. Accounts follows up anything outstanding separately.
 - The step lists the cross-sell leads created at invoicing, with their answers ("Insurance · Travel insurance for 4 · Answered · working on it", "Tickets · Mumbai–Paris flights · Answer required").
+- **Decided 17 Oct 2026 (project lead), `docs/decisions/0014-visa-delivered.md`:** the office handover first (the client collects: booklets counted, which must match our stock, who collected them, a photo taken at the desk; the case is Delivered and closes), then booking a delivery, the delivery boy's phone screen, and the doorstep handover. Any Visa staff with EDIT can hand over at the desk and can open a case while its passports are in our stock. The OTP goes by email until SMS/WhatsApp is connected. A postponed case closes on handover; a cancelled one stays cancelled. Cross-sell leads and WhatsApp come later.
 
 ### 12.5 Field staff app (collection/delivery boy)
 
@@ -1668,6 +1669,14 @@ Masti CRM/
 - **Not in 0009:** payments and the balance, WhatsApp sending, cross-sell leads, the accounting export, other departments' invoices.
 - **Build order:** the quote card → invoice settings → raising the invoice (+ PDF) → the Docket card's Invoice column → then the Dispatch card (0008).
 - **Built so far:** component 1, **the quote** (13 Oct 2026). "Money on this case" in the case's right rail. Per traveller a lump sum or itemised, plus the service charge and the processing speed (a master list: Normal / Express / Super priority ⚠️). GST is previewed on the service charge. It's editable from Step 1 until the file goes to the vendor, by the case owner, the Visa HOD or the Head, and audited. The `visa.invoice` setting (MVI series, 18% GST) came with it. Component 2, **the invoice settings** (13 Oct 2026): in Settings → **Company & invoice** (its own tab), the Head enters Masti's PAN, GSTIN, state, bank details, the invoice terms, and uploads the logo and signature (stored privately). A note lists what the first invoice still needs. The Visa HOD or Head sets the invoice series' **starting number** and the GST rate there. Component 3, **raising the invoice** (13 Oct 2026): "Raise invoice" in Money on this case checks first what blocks it (quote, unnamed travellers, client details, Masti's details, names not in English letters), then makes the locked tax invoice: the next `MVI` number, GST (CGST + SGST for Gujarat clients, IGST otherwise) and a stored PDF in Masti's layout (Noto Sans font). The database refuses any edit or delete; the quote freezes. Component 4, **the Docket card's Invoice column** (13 Oct 2026): each file in the docket shows "MVI… · locked" or "Raise invoice first" (on the case's own row, a link to Money on this case). Next: the Dispatch card (0008).
+
+**Decided 17 Oct 2026 (project lead), for Visa Step 8 (Delivered).** The design is `docs/decisions/0014-visa-delivered.md` (decided; being built).
+- **One component at a time:** the office handover → book a delivery (day, slot, delivery boy) → the delivery boy's phone screen → the doorstep handover (booklets, OTP, receiver photo, selfie with place and time).
+- **At the office:** booklets counted (must match our stock, else blocked), who collected them (a traveller, or someone else by name), and a photo taken at the desk (webcam in the page, or an uploaded file). The staff member and time are recorded.
+- **Who:** any Visa staff with EDIT; while the passports are in our stock, they can open the case (amends 0006 Decision 1).
+- **Any status:** an open or postponed case becomes Delivered and closed; a cancelled one stays cancelled but records the handover.
+- **The OTP** goes by email until SMS/WhatsApp is connected (M2); needed at the doorstep only.
+- **Not here:** cross-sell leads, WhatsApp, payment at delivery, the Step 2 pickup job.
 
 **Decided 16 Oct 2026 (project lead), for Visa Step 7 (Passport back).** The design is `docs/decisions/0013-visa-passport-back.md` (decided; being built).
 - **One component at a time:** passports on the way back → change the dates (both days, no reason asked) → mark received.
