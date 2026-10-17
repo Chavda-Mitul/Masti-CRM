@@ -51,48 +51,49 @@ enum Access {
 }
 
 model User {
-  id                 String             @id @default(uuid())
-  name               String
+  id                    String             @id @default(uuid())
+  name                  String
   /// Stored normalised as +91XXXXXXXXXX. A user needs a mobile, an email, or both. FIELD users need a mobile.
-  mobile             String?            @unique
+  mobile                String?            @unique
   /// Stored lowercased.
-  email              String?            @unique
-  passwordHash       String
-  type               UserType           @default(OFFICE)
-  isActive           Boolean            @default(true)
-  mustChangePassword Boolean            @default(true)
-  lastLoginAt        DateTime?          @db.Timestamptz(3)
-  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
-  departments        UserDepartment[]
-  sessions           Session[]
-  auditEntries       AuditLog[]
-  assignedFieldJobs  FieldJob[]         @relation("FieldJobAssignee")
-  clientsCreated     Client[]           @relation("ClientCreatedBy")
-  clientPhonesAdded  ClientPhone[]      @relation("ClientPhoneCreatedBy")
-  clientMembersAdded ClientMember[]     @relation("ClientMemberCreatedBy")
-  clientNotes        ClientNote[]       @relation("ClientNoteAuthor")
-  holidaysAdded      Holiday[]          @relation("HolidayAddedBy")
-  enquiriesOwned     Enquiry[]          @relation("EnquiryOwner")
-  enquiriesCreated   Enquiry[]          @relation("EnquiryCreatedBy")
-  documentsReceived  VisaCaseDocument[] @relation("DocumentReceivedBy")
-  documentsChecked   VisaCaseDocument[] @relation("DocumentCheckedBy")
-  followUpsLogged    FollowUp[]         @relation("FollowUpBy")
-  visaCasesMatured   VisaCase[]         @relation("VisaCaseMaturedBy")
-  visaCasesFileReady VisaCase[]         @relation("VisaCaseFileReadyBy")
-  visaCasesOnline    VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
-  visaCasesReceived  VisaCase[]         @relation("VisaCaseVendorReceivedBy")
-  visaCasesSubmitted VisaCase[]         @relation("VisaCaseSubmittedBy")
-  visaCasesRecalled  VisaCase[]         @relation("VisaCaseRecalledBy")
-  visaCasesDecided   VisaCase[]         @relation("VisaCaseDecidedBy")
-  visaCasesInTransit VisaCase[]         @relation("VisaCasePassportsInTransitBy")
-  caseFilesUploaded  CaseFile[]         @relation("CaseFileUploadedBy")
-  docketsCreated     Docket[]           @relation("DocketCreatedBy")
-  docketsDispatched  Docket[]           @relation("DocketDispatchedBy")
-  quotesUpdated      VisaQuote[]        @relation("VisaQuoteUpdatedBy")
-  companyImagesAdded CompanyImage[]     @relation("CompanyImageUploadedBy")
-  invoicesIssued     Invoice[]          @relation("InvoiceIssuedBy")
-  creditNotesIssued  CreditNote[]       @relation("CreditNoteIssuedBy")
+  email                 String?            @unique
+  passwordHash          String
+  type                  UserType           @default(OFFICE)
+  isActive              Boolean            @default(true)
+  mustChangePassword    Boolean            @default(true)
+  lastLoginAt           DateTime?          @db.Timestamptz(3)
+  createdAt             DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime           @updatedAt @db.Timestamptz(3)
+  departments           UserDepartment[]
+  sessions              Session[]
+  auditEntries          AuditLog[]
+  assignedFieldJobs     FieldJob[]         @relation("FieldJobAssignee")
+  clientsCreated        Client[]           @relation("ClientCreatedBy")
+  clientPhonesAdded     ClientPhone[]      @relation("ClientPhoneCreatedBy")
+  clientMembersAdded    ClientMember[]     @relation("ClientMemberCreatedBy")
+  clientNotes           ClientNote[]       @relation("ClientNoteAuthor")
+  holidaysAdded         Holiday[]          @relation("HolidayAddedBy")
+  enquiriesOwned        Enquiry[]          @relation("EnquiryOwner")
+  enquiriesCreated      Enquiry[]          @relation("EnquiryCreatedBy")
+  documentsReceived     VisaCaseDocument[] @relation("DocumentReceivedBy")
+  documentsChecked      VisaCaseDocument[] @relation("DocumentCheckedBy")
+  followUpsLogged       FollowUp[]         @relation("FollowUpBy")
+  visaCasesMatured      VisaCase[]         @relation("VisaCaseMaturedBy")
+  visaCasesFileReady    VisaCase[]         @relation("VisaCaseFileReadyBy")
+  visaCasesOnline       VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
+  visaCasesReceived     VisaCase[]         @relation("VisaCaseVendorReceivedBy")
+  visaCasesSubmitted    VisaCase[]         @relation("VisaCaseSubmittedBy")
+  visaCasesRecalled     VisaCase[]         @relation("VisaCaseRecalledBy")
+  visaCasesDecided      VisaCase[]         @relation("VisaCaseDecidedBy")
+  visaCasesInTransit    VisaCase[]         @relation("VisaCasePassportsInTransitBy")
+  visaCasesReceivedBack VisaCase[]         @relation("VisaCasePassportsReceivedBy")
+  caseFilesUploaded     CaseFile[]         @relation("CaseFileUploadedBy")
+  docketsCreated        Docket[]           @relation("DocketCreatedBy")
+  docketsDispatched     Docket[]           @relation("DocketDispatchedBy")
+  quotesUpdated         VisaQuote[]        @relation("VisaQuoteUpdatedBy")
+  companyImagesAdded    CompanyImage[]     @relation("CompanyImageUploadedBy")
+  invoicesIssued        Invoice[]          @relation("InvoiceIssuedBy")
+  creditNotesIssued     CreditNote[]       @relation("CreditNoteIssuedBy")
 
   @@index([type, isActive])
 }
@@ -942,6 +943,14 @@ model VisaCase {
   passportsExpectedOn    DateTime?           @db.Date
   passportsInTransitAt   DateTime?           @db.Timestamptz(3)
   passportsInTransitById String?
+  /// "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet was opened at our office and
+  /// the passports are in our stock, by whom and when, with the booklets counted (current and old). All four set
+  /// together, only after they were on their way back, each count 0–50 and at least one booklet (checked in the
+  /// migration). Never changed once saved (decided 17 Oct 2026).
+  passportsReceivedAt    DateTime?           @db.Timestamptz(3)
+  passportsReceivedById  String?
+  bookletsBackCurrent    Int?                @db.SmallInt
+  bookletsBackOld        Int?                @db.SmallInt
   enquiry                Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering               VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy              User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
@@ -952,6 +961,7 @@ model VisaCase {
   recalledBy             User?               @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
   decidedBy              User?               @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
   passportsInTransitBy   User?               @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
+  passportsReceivedBy    User?               @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
   recallReason           RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
   embassy                Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor                 Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
@@ -970,6 +980,13 @@ model VisaCase {
 enum VisaOutcome {
   APPROVED
   REFUSED
+}
+
+/// An approved traveller's visa sticker, checked against the passport's name and the dates recorded at Step 6 when the
+/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5).
+enum StickerCheck {
+  MATCHES
+  MISMATCH
 }
 
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
@@ -995,6 +1012,9 @@ model VisaCaseTraveller {
   visaNo         String?
   validFrom      DateTime?          @db.Date
   validTo        DateTime?          @db.Date
+  /// Checked when the passports are received (0013 Decision 5): only an approved traveller has a sticker (checked in the
+  /// migration); null until then.
+  stickerCheck   StickerCheck?
   visaCase       VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member         ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents      VisaCaseDocument[]

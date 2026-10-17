@@ -50,6 +50,16 @@ export const IN_TRANSIT: StepRule = {
   wrongStage: "The dates can only be changed while the passports are on their way back.",
 };
 
+/**
+ * Step 7 (0013 Decision 5): "Mark received" at Passport back, whatever the case's status: the packet is here, so it's
+ * counted in (chain of custody, decided 17 Oct 2026).
+ */
+export const RECEIVING: StepRule = {
+  stages: ["PASSPORT_BACK"],
+  anyStatus: true,
+  wrongStage: "Passports are received at Passport back.",
+};
+
 /** The refusal letter (0012 Decision 4): once the decision is recorded, at any later step, whatever the case's status. */
 export const LETTERS: StepRule = {
   stages: ["DECISION", "PASSPORT_BACK", "DELIVERED"],
