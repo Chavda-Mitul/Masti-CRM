@@ -46,9 +46,9 @@ Nobody has designed how a delivery is booked, or how the boy is assigned: the de
 Each component is planned in plan mode, built, tested, checked in the browser and committed before the next starts:
 
 1. **The office handover** (Decisions 2–6): the client collects; the case is Delivered and closes
-2. **Book a delivery:** the day, the slot and the delivery boy (a field job)
-3. **The delivery boy's phone screen:** his run for the day
-4. **The doorstep handover:** booklets, OTP, photo of the receiver, selfie with place and time
+2. ~~Book a delivery~~, 3. ~~the delivery boy's phone screen~~, 4. ~~the doorstep handover~~: **replaced 17 Oct 2026
+   by [0015](0015-field-staff-app.md)**, one field staff app for both the Step 2 pickup and the Step 8 delivery,
+   with an OTP at both ends.
 
 ### 2. The OTP goes by email for now
 

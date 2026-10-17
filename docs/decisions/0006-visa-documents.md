@@ -43,6 +43,9 @@ Amended 17 Oct 2026 (project lead), with Step 8 ([0014](0014-visa-delivered.md) 
     over), in their list and on its page, so whoever is at the desk can hand them over. Only the handover is theirs;
     everything else stays with the case's owner, the HOD or the Head. Once delivered, the case is back to the rule
     above.
+14. **The collection boy's pickup job** (Decision 4's "comes with the field app") is designed in
+    [0015](0015-field-staff-app.md): booked from Step 2 with the boy, a day and a time slot; at the door he counts the
+    booklets, takes the client's OTP and his selfie with place and time, and his count becomes the intake count.
 
 ## Context
 
