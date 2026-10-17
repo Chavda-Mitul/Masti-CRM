@@ -5,11 +5,9 @@ import { errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useUpdateVisaCase } from '../queries'
 import type { DocumentArrival, VisaCase } from '../types'
+import { bookletsText } from './labels'
 
 const ARRIVAL_LABEL: Record<DocumentArrival, string> = { CLIENT_BRINGS: 'Client brings them', COLLECTION_BOY: 'Send collection boy' }
-
-/** "4 current + 3 old". Booklets are optional (e-visas hand over none), so a blank count shows as 0. */
-const bookletsText = (b: VisaCase['booklets']) => `${b.current ?? 0} current + ${b.old ?? 0} old`
 
 /**
  * "How the documents reach us" (demo screen 07, 0006 Decision 4). The case's owner, its HOD or the Head can change it

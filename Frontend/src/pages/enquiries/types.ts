@@ -194,6 +194,9 @@ export interface TravellerDecision {
   validTo: string | null
 }
 
+/** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */
+export type StickerCheck = 'MATCHES' | 'MISMATCH'
+
 export interface CaseTraveller {
   id: string
   position: number
@@ -217,6 +220,8 @@ export interface CaseTraveller {
   appointmentAt: string | null
   /** Step 6 (0012): null until the decision is recorded */
   decision: TravellerDecision | null
+  /** An approved traveller's sticker, checked when the passports were received (0013 Decision 5); null until then */
+  stickerCheck: StickerCheck | null
   /** The current refusal letter (0012 Decision 4), and how many were uploaded; only while the traveller is refused. */
   refusalLetter: (CaseFile & { copies: number }) | null
   documents: CaseDocument[]
@@ -577,6 +582,8 @@ export interface VisaCase {
   decision: { at: string; by: PersonRef | null } | null
   /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when */
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
+  /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted */
+  passportsReceived: { at: string; by: PersonRef | null; booklets: { current: number; old: number } } | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]

@@ -1,8 +1,8 @@
 # 0013 · Visa Step 7: passport back
 
 - **Status:** decided (16 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: passports
-  on the way back (16 Oct 2026, component 1); changing the dates (16 Oct 2026, component 2). A "Built" note is added
-  under each part as its component lands.
+  on the way back (16 Oct 2026, component 1); changing the dates (16 Oct 2026, component 2); mark received (17 Oct
+  2026, component 3). Step 7 is complete. A "Built" note is added under each part as its component lands.
 - **Date:** 16 Oct 2026
 - **Scope:** the passports' way back from the vendor to our office, until they're in our passport stock and ready to
   hand over (Step 8):
@@ -149,11 +149,56 @@ an e-visa.
   for someone else.
 - The case then shows "Passports in our stock", next step "Hand over to the client" (Step 8).
 
+**Decided 17 Oct 2026 (project lead):**
+- **Whatever the case's status:** the passports can be marked received on a postponed or cancelled case too (chain of
+  custody: the packet is here). The case keeps its status; only an open case gets a new due time.
+- **No correction for now:** a saved receipt is fixed, and audited. If Masti asks for corrections, it's its own
+  component.
+- **Counting:** the booklet boxes start blank, with intake's count beside them; a difference turns red as staff type.
+
+**Defaults (not asked; say if any is wrong):**
+- **Intake** is what went to the vendor, as the docket counted it: the current booklets counted at Step 2 (else one per
+  traveller) and the old ones (else none).
+- **At least one booklet** is counted; each count is 0–50, as at intake.
+- **After receipt**, an open case is due the next open office day at 11:00 ⚠️ (`visa.handoverCheck`) to arrange the
+  handover. It stays at Step 7; Step 8 is its own record.
+- **The dates can't change** once received; a refusal letter can still be uploaded.
+
+**Built 17 Oct 2026** (component 3, mark received):
+- **Data** (migration `20261017100000_passports_received`): `VisaCase.passportsReceivedAt`, `passportsReceivedById`,
+  `bookletsBackCurrent`, `bookletsBackOld`; `VisaCaseTraveller.stickerCheck` (`StickerCheck`: MATCHES / MISMATCH).
+  CHECKs: all four together; received only after (and not before) "on the way back"; each count 0–50, at least one
+  booklet; a sticker check only for an approved traveller.
+- `POST /api/visa/cases/:caseNo/passports-received` with `{ booklets: { current, old }, stickers: [{ travellerId,
+  check }], updatedAt }`, for whoever can act on the case, at Passport back, **whatever its status** (step rule
+  `RECEIVING`). Refused with:
+  - 409 before they're on the way back ("Mark the passports on the way back first."), once received ("The passports
+    are already in our stock."), at another step ("Passports are received at Passport back."), STALE
+  - 400 under `booklets` ("Count at least one booklet.", "50 at most.") or `stickers`, naming the traveller: "Check
+    Rakesh Mehta's sticker.", "Aarav Mehta was refused: there's no sticker to check.", someone listed twice or not on
+    the case; a recalled file lists none
+- **In one transaction under the case lock:** who received them and when, the counts, each approved traveller's sticker
+  check, the due time (an open case only), and the audit `visa.passports.received` (the counts, intake, whether they
+  match, each sticker check by name). "Change" on the dates is refused from then on.
+- **The case** sends `passportsReceived { at, by, booklets }` and each traveller's `stickerCheck`.
+- **Screen:**
+  - **"Mark received →"** in the header of an open case in transit, and **Mark received** on the Passports coming back
+    card for any status (beside Change, which is for open cases only).
+  - **The form:** blank Current and Old boxes with "Intake: 2 current + 1 old" beside them and a live "— 1 old short of
+    intake" in red (or "matches intake" in green); Matches / Doesn't match for each approved traveller's sticker (with
+    its number and dates), "Refused · no sticker" for the others, or "Taken back unsubmitted · no stickers to check";
+    "Received by Neha Joshi, now"; the demo's footer.
+  - **Once received:** the chip reads "Passports in our stock" (green); the third tile is current ("Now · Sat 17 Oct,
+    11:09"); the demo's three boxes show the booklets (red when they don't match intake), the stickers ("All match
+    names & dates", "Doesn't match: …" in red, "No stickers (taken back)" or "(all refused)") and who received them; an
+    open case is due to "Arrange the handover"; the header's "Hand over to the client →" stays "Soon" until Step 8.
+
 ### 6. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | `visa.arrivalCheck` (in transit: when the case comes back due, counted from the expected day) | `{ afterDays: 0, at: "11:00" }` ⚠️ |
+| `visa.handoverCheck` (received: when an open case comes back due to arrange the handover) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | The chip and card wording ("In transit · expected Thu 29 Oct", the tiles, the footer) | the demo's, or ours ⚠️ |
 
 **Defaults (not asked; say if any is wrong):**

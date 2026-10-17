@@ -1098,6 +1098,46 @@ button.tick:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Received (0013 Decision 5): the demo's three boxes under the tiles, red where they don't match. */
+.return-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.return-field {
+  margin-top: 6px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-input);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.return-field.is-bad {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+@media (max-width: 640px) {
+  .return-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Mark received: the two counts beside intake, and how they compare. */
+.receive-booklets {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.receive-booklets .input {
+  width: 90px;
+}
+.booklets-vs {
+  font-size: 13px;
+  color: var(--ok);
+}
+.booklets-vs.is-bad {
+  color: var(--bad);
+}
 /* A refused traveller's refusal letter (0012 Decision 4): the chip, its pages, Open and Upload / Replace. */
 .refusal-letter {
   display: flex;

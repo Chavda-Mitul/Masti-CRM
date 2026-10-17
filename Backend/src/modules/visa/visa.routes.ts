@@ -12,6 +12,7 @@ import {
   recordDecisionSchema,
   changeDecisionSchema,
   sendPassportsBackSchema,
+  receivePassportsSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -308,6 +309,15 @@ router.post("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
   const body = sendPassportsBackSchema.parse(req.body);
   res.json({ case: await passportsBackService.changePassportsBack(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Mark received" (0013 Decision 5): the passports are in our stock, with the booklets counted and each approved
+ * traveller's sticker checked; whatever the case's status. 400 under `booklets` or `stickers`, naming the traveller.
+ */
+router.post("/cases/:caseNo/passports-received", visaEdit, async (req, res) => {
+  const body = receivePassportsSchema.parse(req.body);
+  res.json({ case: await passportsBackService.receivePassports(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**
