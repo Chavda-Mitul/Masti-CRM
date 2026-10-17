@@ -10,7 +10,7 @@ import type { FollowUpOption } from '../types'
 import { ListCard } from './ListCard'
 import { MasterDrawer, ToggleActiveButton } from './MasterDrawer'
 
-type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps' | 'processing-speeds'
+type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps' | 'processing-speeds' | 'field-fail-reasons'
 
 const COPY: Record<OptionResource, { title: string; column: string; one: string; intro: string; placeholder: string; codeHint: string }> = {
   'follow-up-outcomes': {
@@ -37,11 +37,19 @@ const COPY: Record<OptionResource, { title: string; column: string; one: string;
     placeholder: 'Express',
     codeHint: 'e.g. EXPRESS.',
   },
+  'field-fail-reasons': {
+    title: 'Visit fail reasons',
+    column: 'Reason',
+    one: 'a reason',
+    intro: 'What the collection and delivery boy picks when he couldn’t complete a stop. The case comes back to the office, due now.',
+    placeholder: 'Client not home',
+    codeHint: 'e.g. CLIENT_NOT_HOME.',
+  },
 }
 
 /**
- * Simple dropdown lists of a code and a name: the two follow-up dropdowns (0006 Decision 7) and the processing speeds
- * on a visa quote (0009). No free text: reports count these.
+ * Simple dropdown lists of a code and a name: the two follow-up dropdowns (0006 Decision 7), the processing speeds
+ * on a visa quote (0009) and why a field visit fails (0015 Decision 5). No free text: reports count these.
  */
 export function FollowUpOptionsTable({ resource, canEdit, showInactive }: { resource: OptionResource; canEdit: boolean; showInactive: boolean }) {
   const copy = COPY[resource]

@@ -6,6 +6,7 @@ import { ClientDetailPage } from './pages/clients/ClientDetailPage'
 import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
 import { EnquiriesPage } from './pages/enquiries/EnquiriesPage'
 import { FieldRunPage } from './pages/field/FieldRunPage'
+import { FieldStopPage } from './pages/field/FieldStopPage'
 import { FollowUpsPage } from './pages/followUps/FollowUpsPage'
 import { VisaCasePage } from './pages/enquiries/case/VisaCasePage'
 import { NewEnquiryPage } from './pages/enquiries/NewEnquiryPage'
@@ -49,6 +50,16 @@ export default function App() {
           <RequireAuth>
             <RequireField>
               <FieldRunPage />
+            </RequireField>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/tasks/:jobId"
+        element={
+          <RequireAuth>
+            <RequireField>
+              <FieldStopPage />
             </RequireField>
           </RequireAuth>
         }

@@ -263,6 +263,9 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
       ];
       throw new HttpError(409, `Not everything is in yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
     }
+    // The boy mustn't go for papers that are all in (0015): the office calls him off first, as for "Client brings them".
+    const pickup = await tx.fieldJob.findFirst({ where: { enquiryId: enquiry.id, kind: "PICKUP", status: "BOOKED" }, select: { id: true } });
+    if (pickup) throw conflict("The collection boy is still booked for this case. Cancel his pickup first.");
 
     const filePrep = await visaStage(tx, enquiry.departmentId, "FILE_PREPARATION");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: filePrep.id, ownerId: null, dueAt: now } });

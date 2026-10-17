@@ -142,3 +142,32 @@ export async function updateSlot(id: number, input: UpdateSlotInput, actor: Acto
     write: (tx) => tx.fieldSlot.update({ where: { id }, data: changes }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Why a visit fails, for the boy's "Couldn't complete" (docs/decisions/0015-field-staff-app.md Decision 5)
+// ---------------------------------------------------------------------------
+
+export async function listFailReasons(active?: boolean) {
+  return prisma.fieldFailReason.findMany({ where: activeFilter(active), orderBy: order });
+}
+
+export async function createFailReason(input: CreateOptionInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  return createAudited(actor, "fieldFailReason.create", "FieldFailReason", (tx) => tx.fieldFailReason.create({ data: input }));
+}
+
+export async function updateFailReason(id: number, input: UpdateOptionInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  const before = await prisma.fieldFailReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "fieldFailReason.update",
+    entityType: "FieldFailReason",
+    entityId: id,
+    write: (tx) => tx.fieldFailReason.update({ where: { id }, data: changes }),
+  });
+}

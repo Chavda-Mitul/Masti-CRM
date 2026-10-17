@@ -68,6 +68,18 @@ export const FIELD_SLOTS = [
   { code: "EVENING", name: "4–6 pm", startsAt: "16:00", endsAt: "18:00", sortOrder: 3 },
 ] as const;
 
+/**
+ * ⚠️ 0015 Decision 5: why a visit fails, for the boy's "Couldn't complete". "Client couldn't get the code": no code, no
+ * pickup (decided 17 Oct 2026).
+ */
+export const FIELD_FAIL_REASONS = [
+  { code: "CLIENT_NOT_HOME", name: "Client not home", sortOrder: 1 },
+  { code: "WRONG_ADDRESS", name: "Wrong address", sortOrder: 2 },
+  { code: "COME_LATER", name: "Client asked to come later", sortOrder: 3 },
+  { code: "NOT_READY", name: "Not ready", sortOrder: 4 },
+  { code: "NO_CODE", name: "Client couldn't get the code", sortOrder: 5 },
+] as const;
+
 export async function seedEnquiryMasters(db: Db) {
   for (const source of ENQUIRY_SOURCES) {
     await db.enquirySource.upsert({ where: { code: source.code }, update: {}, create: source });
@@ -83,6 +95,9 @@ export async function seedEnquiryMasters(db: Db) {
   }
   for (const slot of FIELD_SLOTS) {
     await db.fieldSlot.upsert({ where: { code: slot.code }, update: {}, create: slot });
+  }
+  for (const reason of FIELD_FAIL_REASONS) {
+    await db.fieldFailReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
   }
 
   const visa = await db.department.findUniqueOrThrow({ where: { code: "VISA" } });

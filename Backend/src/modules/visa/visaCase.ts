@@ -81,6 +81,7 @@ export const visaCaseInclude = {
       slot: { select: { id: true, name: true, startsAt: true, endsAt: true } },
       createdBy: personSelect,
       cancelledBy: personSelect,
+      failReason: { select: { id: true, name: true } },
     },
   },
   stage: true,
@@ -418,6 +419,10 @@ export function toVisaCaseDto(
       bookedBy: j.createdBy,
       cancelledAt: j.cancelledAt,
       cancelledBy: j.cancelledBy,
+      /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it failed. */
+      finishedAt: j.finishedAt,
+      place: j.latitude !== null && j.longitude !== null && j.accuracyM !== null ? { lat: j.latitude, lng: j.longitude, accuracy: j.accuracyM } : null,
+      failReason: j.failReason,
     })),
     source: row.source,
     origin: row.origin,

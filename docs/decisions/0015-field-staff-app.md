@@ -2,7 +2,7 @@
 
 - **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
   pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2); his run on his phone (17 Oct 2026,
-  phase 3). A "Built" note is added under each part as its phase lands.
+  phase 3); couldn't complete (17 Oct 2026, phase 4a). A "Built" note is added under each part as its phase lands.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -72,11 +72,22 @@ At each stop the boy also records, before he can finish:
 - **delivery:** the booklets counted (they must match our stock, as at the office), the OTP, a photo of the person
   receiving, and his selfie with the place and time.
 
+**Decided 17 Oct 2026 (project lead), for the pickup (phase 4):**
+- **No code, no pickup.** If the client can't get the code at the door (the email doesn't arrive, or they can't open
+  it), he records **Couldn't complete** with the reason "Client couldn't get the code". The office sorts it out: the
+  client brings the papers, or the boy is booked again. This answers 0014 Decision 2's open question for the pickup;
+  phase 5 settles the delivery.
+- **The code's email has fixed wording**, with Masti's name and phone from Company details: "Your code for Masti Tours
+  & Travels: 482913 … Ramesh from Masti Tours & Travels is at your door to collect the documents for VISA-2026-0003.
+  Give him this code to confirm … It works for 10 minutes. If you didn't expect this, don't share it, and call us on
+  …". It moves to an approved SMS or WhatsApp template once one is connected (M2).
+
 ### 5. A visit that fails
 
 **Decided 17 Oct 2026 (project lead):** the boy taps **Couldn't complete** and picks a reason from a list the Head or an
-HOD edits, seeded ⚠️ with Client not home, Wrong address, Client asked to come later, Not ready. The place and time are
-recorded, and the case comes back to the office, due now, to book again.
+HOD edits, seeded ⚠️ with Client not home, Wrong address, Client asked to come later, Not ready, and Client couldn't
+get the code (added the same day: no code, no pickup, Decision 4). The place and time are recorded, and the case comes
+back to the office, due now, to book again.
 
 **Built 17 Oct 2026** (phase 1, book a pickup):
 - **Data** (migration `20261017140000_field_pickup`): the list `FieldSlot` (code, name, from, to, order, on/off; CHECKs:
@@ -145,12 +156,44 @@ recorded, and the case comes back to the office, due now, to book again.
     keeps the last loaded run, with a note.
   - A phone-first column, 480 px wide and centred on a desktop.
 
+**Built 17 Oct 2026** (phase 4a, couldn't complete):
+- **Data** (migration `20261017160000_field_visit_failed`):
+  - the list `FieldFailReason` (code, name, order, on/off). CHECKs: the code's format, a name.
+  - on `FieldJob`: when it finished and the place his phone gave (`finishedAt`, `latitude`, `longitude`, `accuracyM`
+    in whole metres), and a failed visit's `failReasonId`. CHECKs: a finished job (done or couldn't complete) ↔ its
+    time and place, and only then; the place in range; FAILED ↔ a reason.
+- **The list:** `GET/POST/PATCH /api/masters/field-fail-reasons` (the Head or any HOD changes it; audited
+  `fieldFailReason.create` / `.update`), seeded ⚠️ Client not home, Wrong address, Client asked to come later, Not
+  ready, Client couldn't get the code; a **Visit fail reasons** tab in Settings → Lists.
+- **His side** (`fieldJobs/fieldStops.service.ts`, field staff only):
+  - `GET /api/field/jobs/:jobId`: one of his stops, with today. Anyone else's is not found.
+  - `GET /api/field/fail-reasons`: the ones switched on.
+  - `POST /api/field/jobs/:jobId/failed` `{ reasonId, place: { lat, lng, accuracy } }`, for either kind of stop.
+    - **Refused:** 404 for another boy's stop; 409 for one called off ("The office called this stop off."), already
+      recorded, or on another day ("This stop is on Mon 19 Oct. Record it on the day." / "This stop was on … Ask the
+      office to book it again."); 400 for a reason switched off, or no place ("Your phone's location is needed. Allow
+      it, then try again.").
+    - **One transaction,** under the case's lock, then the job's: FAILED with when, where and why; an open case due
+      now (a postponed or cancelled one keeps its own); the case's updatedAt moves; audit `field.job.fail`, with the
+      place.
+- **Maturity waits for a booked pickup:** "The collection boy is still booked for this case. Cancel his pickup first."
+- **Screens:**
+  - **His run:** today's booked stops get **Record this stop ›**. A finished stop shows "Couldn't complete · Client not
+    home · 3:24 pm" (or "Done · …") instead of what it needs.
+  - **The stop's screen** (`/tasks/:jobId`): the stop as on his run. **Couldn't complete** lists the reasons as big
+    rows; **Record** reads the phone's location first (blocked: "Location is blocked for the CRM. In Chrome, tap the
+    icon left of the address, allow Location, then try again."), saves, and goes back to the run ("Recorded. The
+    office will book it again."). Another day's stop is read-only, with one line saying why.
+  - **The case page:** "Last visit · Ramesh couldn't complete · Client not home" and "When · Sat 17 Oct, 15:24 ·
+    Place" (Google Maps), above "Book the collection boy" (or the booked one).
+
 ### 6. Settings and lists (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | Time slots (a list: name, from, to) | 11 am – 1 pm, 2–4 pm, 4–6 pm ⚠️ |
-| Reasons a visit fails (a list, phase 4) | Client not home, Wrong address, Client asked to come later, Not ready ⚠️ |
+| Reasons a visit fails (a list, phase 4) | Client not home, Wrong address, Client asked to come later, Not ready, Client couldn't get the code ⚠️ |
+| The code and the selfie (setting `field`, phase 4) | the code works 10 minutes, 5 wrong tries, a new one after 60 seconds; a selfie at most 5 MB ⚠️ |
 
 **Defaults (not asked; say if any is wrong):**
 - **Kinds and statuses are fixed in code** (kind PICKUP / DELIVERY; status BOOKED / DONE / FAILED / CANCELLED), like an
@@ -181,6 +224,32 @@ recorded, and the case comes back to the office, due now, to book again.
 - **"3 of 5 done"** counts finished stops (done or couldn't complete) among the day's jobs that weren't called off.
 - **Called-off stops** stay at the bottom, greyed, as "Called off by the office", so he knows not to go.
 - **Call** is a `tel:` link to the job's mobile; **Directions** as in Decision 3.
+
+### 8. Recording a stop (phase 4)
+
+**Defaults (not asked; say if any is wrong):**
+- **What he can record:** only his own stops, booked, on today's run, at any time that day. Past days stay read-only;
+  nothing is undone from the phone (the office books again).
+- **The place is required** for Done and Couldn't complete alike (golden rule 5). With location blocked or off, his
+  phone says how to allow it, and nothing is saved until it works.
+- **Couldn't complete** works for both kinds (same list, same rule). The case's due time moves to now only while it's
+  open; a postponed or cancelled case keeps its own.
+- **After a failed visit,** the arrival stays "Send collection boy": the office books again, or switches to "Client
+  brings them".
+- **The case's updatedAt moves** when he finishes or fails a stop, so an office page left open over it is refused
+  (STALE) rather than writing over it.
+- **Maturity waits for a booked pickup:** "The collection boy is still booked for this case. Cancel his pickup
+  first.", as "Client brings them" does.
+- **The code:** 6 digits, works 10 minutes ⚠️, 5 wrong tries ⚠️, a new one after 60 seconds ⚠️. It's kept only as a
+  hash, and sent when he taps Send the code, to the client's email as it is then; his phone shows where it went,
+  masked.
+- **The selfie** is taken in the page with the front camera (live, not picked from the gallery), shrunk to 1600 px,
+  at most 5 MB ⚠️; the place is read at the same moment.
+- **After a pickup is done,** the case keeps its due time (the slot's end) and "Send collection boy"; the papers are
+  still ticked and scanned at the office.
+- **Who sees the proof:** anyone who can open the case sees the selfie (a short-lived link, audited) and the place (a
+  Google Maps link). How long they're kept is still S11.
+- **The ⚠️ values** are one setting, `field`, which the Head or any HOD changes (API only, like the visa settings).
 
 ## Not in this record
 

@@ -93,7 +93,12 @@ describe("his run (phase 3)", () => {
 
   it("counts finished stops; another day shows that day's; another boy sees only his", async () => {
     const { today } = await setup();
-    await prisma.fieldJob.updateMany({ where: { kind: "PICKUP", day: toDbDate(today), assignee: { mobile: "+919825000001" } }, data: { status: "DONE" } });
+    // A finished stop: here one he couldn't complete (Client not home), with when and where.
+    const notHome = await prisma.fieldFailReason.findUniqueOrThrow({ where: { code: "CLIENT_NOT_HOME" } });
+    await prisma.fieldJob.updateMany({
+      where: { kind: "PICKUP", day: toDbDate(today), assignee: { mobile: "+919825000001" } },
+      data: { status: "FAILED", finishedAt: new Date(), failReasonId: notHome.id, latitude: 21.1959, longitude: 72.7933, accuracyM: 19 },
+    });
     const ramesh = await loginAs("98250 00001");
     expect((await ramesh.get("/api/field/jobs")).body).toMatchObject({ done: 1, total: 2 });
     const tomorrow = (await ramesh.get(`/api/field/jobs?day=${addDays(today, 1)}`)).body as RunDto;

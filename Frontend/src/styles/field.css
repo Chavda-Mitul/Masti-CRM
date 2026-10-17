@@ -230,3 +230,82 @@
     padding-right: 0;
   }
 }
+
+/* The stop's own screen (phase 4): back to the run, in the band. */
+.field-back {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--on-fill);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+.field-back:hover {
+  color: var(--on-fill);
+  background: rgba(255, 255, 255, 0.24);
+}
+a.btn.field-record {
+  height: 46px;
+}
+
+/* "Couldn't complete": the reasons as big rows, then Record. */
+.field-fail-open {
+  width: 100%;
+  height: 46px;
+  color: var(--bad);
+}
+.field-fail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.field-fail-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+}
+.field-fail-hint {
+  margin: -6px 0 0;
+  font-size: 13.5px;
+}
+.field-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-input);
+  font-weight: 700;
+  cursor: pointer;
+}
+.field-reason input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+.field-reason.is-picked {
+  border-color: var(--ink);
+  background: var(--fill-tile);
+}
+.field-fail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-fail-actions .btn {
+  height: 46px;
+}

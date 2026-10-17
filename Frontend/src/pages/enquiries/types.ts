@@ -202,6 +202,10 @@ export interface FieldJob {
   bookedBy: PersonRef | null
   cancelledAt: string | null
   cancelledBy: PersonRef | null
+  /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it couldn't be. */
+  finishedAt: string | null
+  place: { lat: number; lng: number; accuracy: number } | null
+  failReason: { id: number; name: string } | null
 }
 
 /** Who can be sent: the active field staff (GET /api/visa/field-staff). */
