@@ -474,7 +474,7 @@ These are used by every module.
   - **Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings** (409, then save again with `confirmDuplicates: true`; audited). A second client with the same **main** number is refused.
   - **Accounting code, billing cycle and payment habit:** only Accounts (or the Head) can set them (Q34).
   - **Saves use optimistic locking** on `updatedAt`.
-- **Document vault: being built** (decided 17 Oct 2026, project lead; Vimal wants the scans kept permanently). The design is `docs/decisions/0015-client-documents.md`. It replaces the 8 Oct "not built" and the 12 Oct "passport photo page only".
+- **Document vault: being built** (decided 17 Oct 2026, project lead; Vimal wants the scans kept permanently). The design is `docs/decisions/0016-client-documents.md`. It replaces the 8 Oct "not built" and the 12 Oct "passport photo page only".
   - **What:** a scan of any paper in the document master (Aadhaar card and PAN card are added to it), as one PDF, JPEG or PNG, kept on the client and naming the family member it's for. In the private bucket (rule 4).
   - **Kept forever:** every version stays, the newest is current, and nothing is deleted until Vimal's check with the government (M40).
   - **Aadhaar:** the card's scan is kept; a typed Aadhaar number is still never stored.
@@ -1186,7 +1186,7 @@ This is the biggest technical unknown (§16.2).
 **Other automated messages the requirements imply** ✅:
 - the refusal ("sorry") message
 - the consent link
-- "We keep a copy of your documents": once per client, on their first saved scan (0015 Decision 6, wording ⚠️)
+- "We keep a copy of your documents": once per client, on their first saved scan (0016 Decision 6, wording ⚠️)
 - OTPs (passport handover; hotel and ticket terms)
 - collection-boy jobs (address, number, amount)
 - invoices
@@ -1219,7 +1219,7 @@ This is the biggest technical unknown (§16.2).
 | ClientPhone ✅ built | client, extra mobile, label. Matched by lookup; not unique across clients. |
 | ClientMember ✅ built (the "Traveller") | client, passport name, relation (master), DOB (age/child worked out), own mobile, current passport no., passport expiry, archived at. Case travellers (`VisaCaseTraveller`) link here in Visa Step 2. |
 | ClientNote ✅ built | client, body, author, at. Append-only, never reported on. |
-| ClientDocument (0015, being built) | client, family member (optional), paper (document master), bucket key, file name, type, size, who and when. Never deleted; the newest per person and paper is current. |
+| ClientDocument (0016, being built) | client, family member (optional), paper (document master), bucket key, file name, type, size, who and when. Never deleted; the newest per person and paper is current. |
 | BillingCycle / PaymentHabit / Relation ✅ built | Seeded lookup tables (masters); admin screens come with System Masters |
 | Consent | person (one per lifetime; keyed to `ClientMember`), staff-filled details, wording version, link token, accepted at, channel, stored link |
 | Enquiry | case no., client, department, source, services, summary, stage, next step, due at, owner, desk, status (open / postponed / cancelled / lost / closed) + reason, origin (direct or cross-sell lead) |
@@ -1665,7 +1665,7 @@ Masti CRM/
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
-**Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0015-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
+**Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
 - **Build it now:** Vimal wants clients' scans kept **permanently**, and will check that with the government himself (M40).
 - **All papers for now:** anything in the document master, plus Aadhaar card and PAN card. Aadhaar is kept as a scan; a typed number is still never stored.
 - **On the client, per family member.** Every version kept, newest current, no delete until M40 is answered.
@@ -1822,7 +1822,7 @@ Masti CRM/
 | 34 | **New:** Only Accounts (and the Head) may set the accounting code, billing cycle and payment habit. Is that right, or may each department set them when it creates a client? Built Accounts-only. | Y→C | 1 |
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
-| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007). **17 Oct 2026, answered (project lead; Vimal wants it): build it,** all papers, Aadhaar too, kept permanently, HODs see the list, one WhatsApp notice (0015). Still open: free or paid (S12), and the government answer (M40) | S | 2 |
+| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007). **17 Oct 2026, answered (project lead; Vimal wants it): build it,** all papers, Aadhaar too, kept permanently, HODs see the list, one WhatsApp notice (0016). Still open: free or paid (S12), and the government answer (M40) | S | 2 |
 | 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits. | C | 1 |
 
 Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.

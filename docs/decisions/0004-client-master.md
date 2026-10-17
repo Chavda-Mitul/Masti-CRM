@@ -46,7 +46,7 @@ The schema is in `Backend/prisma/schema.prisma` (section "Client master"); the m
 
 **The document vault is excluded** (reusable passport/PAN scans per client). It isn't in the demo, so it may be a change request (§7 rule 16), and Q37 asks Shivanshu. If it is built later, it stores **Drive/OneDrive links**, not S3 uploads: uploads go against what Vimal said three times and against rule 4.
 
-**Replaced 17 Oct 2026** by [0015](0015-client-documents.md): the vault is being built, in the private bucket (rule 4
+**Replaced 17 Oct 2026** by [0016](0016-client-documents.md): the vault is being built, in the private bucket (rule 4
 changed to S3-compatible storage on 10 Oct 2026). Aadhaar cards are kept as scans; a typed Aadhaar number is still
 not stored.
 

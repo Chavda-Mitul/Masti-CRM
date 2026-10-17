@@ -537,7 +537,7 @@ per checklist line, with the server merging them into one PDF for the vendor, in
    (point 4), costs more per call, and is less reliable on scanner-quality pages.
 
 **17 Oct 2026:** the vault is confirmed and goes further than below: every paper, not just the passport's photo page,
-kept on the client per family member. See [0015](0015-client-documents.md). The saved file is unchanged.
+kept on the client per family member. See [0016](0016-client-documents.md). The saved file is unchanged.
 
 **If passport reading (Q13) or the document vault (Q37) is confirmed:**
 

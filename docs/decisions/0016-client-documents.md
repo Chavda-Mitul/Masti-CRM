@@ -1,4 +1,4 @@
-# 0015 · The client document vault
+# 0016 · The client document vault
 
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). A "Built" note is added under each part as its component lands.
