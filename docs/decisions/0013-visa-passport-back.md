@@ -104,6 +104,15 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
   - **The Passports coming back card**, above the Decision card: the demo's three tiles, when it's due back ("Check the
     passports have arrived") and the demo's footer.
 
+**Fixed 17 Oct 2026** (found in the visa review): the enquiries list showed the step's own next step, "Hand over to
+the client", while the passports were still in transit.
+- **The cause:** each list row only carried the step's fixed label.
+- **The fix:** each row now sends its own `nextStep` (`visaNextStep`), as the header button does. It reads:
+  - "Passports on the way back" for a recalled file not yet sent back
+  - "Mark received" in transit
+  - the step's own label once the passports are received
+  - "No passports to bring back (e-visa)" ⚠️ for an e-visa at Decision (Decision 4)
+
 **Changing the dates.** **Decided 16 Oct 2026 (project lead):** vendors aren't systematic, so the expected day moves,
 and a collected day can be mistyped.
 - **"Change" edits both days** in the same form, filled in, with the same checks.
