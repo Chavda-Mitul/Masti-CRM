@@ -12,7 +12,8 @@ import { dayTime, firstName } from './labels'
  * recall-reasons list, and what goes back per traveller. By default each traveller's embassy fee (nothing on a lump
  * sum); VFS, Masti's service charge and the courier are kept. The Visa HOD or the Head can give back more ("Change
  * refund (HOD)"), each traveller up to what they were charged, never the service charge. The case then goes to Passport
- * back.
+ * back. A cancelled case is taken back too, the reason starting on "Client cancelled the trip"; with its invoice already
+ * cancelled whole, nothing goes back (docs/decisions/0006-visa-documents.md amendment 15).
  */
 export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
@@ -20,11 +21,16 @@ export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
   const recall = useRecallFile(c.caseNo)
   const reasons = useMasterList('recall-reasons')
   const options = (reasons.data ?? []).filter((r) => r.isActive)
-  const [reasonId, setReasonId] = useState('')
+  const [picked, setReasonId] = useState('')
+  // Until something is picked, a cancelled case's reason is "Client cancelled the trip" (when it's on the list).
+  const preset = c.status === 'CANCELLED' ? options.find((r) => r.code === 'CLIENT_CANCELLED_TRIP') : undefined
+  const reasonId = picked || (preset ? String(preset.id) : '')
   const [changing, setChanging] = useState(false)
   const [typed, setTyped] = useState<Record<number, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const lines = check.data?.lines ?? []
+  /** No invoice left to give back from: a cancelled case whose invoice was already cancelled whole. */
+  const nothingBack = check.data?.invoiceNo === null
 
   /** The refund a traveller gets: what the HOD typed while changing, else the default. undefined when it can't be read. */
   const refundOf = (l: RecallCheck['lines'][number]) => (changing && typed[l.position] !== undefined ? parseRupees(typed[l.position]!) : l.defaultRefundPaise)
@@ -71,8 +77,10 @@ export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
           Take the file back
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
-          The papers come back from {c.vendor?.name ?? 'the vendor'}. The embassy fee goes back; VFS, the service charge and the
-          courier both ways are kept.
+          The papers come back from {c.vendor?.name ?? 'the vendor'}.{' '}
+          {nothingBack
+            ? 'Nothing goes back: this file’s invoice was already cancelled with a credit note.'
+            : 'The embassy fee goes back; VFS, the service charge and the courier both ways are kept.'}
         </p>
 
         {check.isPending ? (
@@ -111,7 +119,7 @@ export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
               </div>
             </div>
             {errors.refunds && <span className="field-error">{errors.refunds}</span>}
-            {check.data.canChangeRefund ? (
+            {nothingBack ? null : check.data.canChangeRefund ? (
               !changing && (
                 <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setChanging(true)}>
                   Change refund (HOD)

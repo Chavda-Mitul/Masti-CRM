@@ -86,6 +86,18 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
 /** The passports are in our stock: received at Step 7, not yet handed over (0014 Decision 5). */
 export const passportsInStock = (c: VisaCase) => c.stage.code === 'PASSPORT_BACK' && !!c.passportsReceived && !c.handover
 
+/**
+ * The passports are still to hand back to the client: the file went to the vendor in a dispatched docket and nothing is
+ * handed over yet (with the vendor, on the way back or in our stock). As the server's TO_HAND_BACK says.
+ */
+export const toHandBack = (c: VisaCase) => c.docket?.status === 'DISPATCHED' && !c.handover
+
+/**
+ * A cancelled case whose passports are still to hand back: only their way back still works on it, and it stays on its
+ * owner's list until the handover (docs/decisions/0006-visa-documents.md amendment 15).
+ */
+export const windingDown = (c: VisaCase) => c.status === 'CANCELLED' && toHandBack(c)
+
 /** The steps the follow-up person owns; processing owns the rest (§12.4). */
 export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
 

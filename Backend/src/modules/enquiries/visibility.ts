@@ -30,6 +30,20 @@ export function passportsInStock(e: { stage: { code: string }; visa: { passports
 }
 
 /**
+ * A visa case whose passports are still to hand back to the client: its file went to the vendor in a dispatched docket
+ * and nothing is handed over yet (with the vendor, on the way back or in our stock). A cancelled one stays on its
+ * owner's Open list until then (docs/decisions/0006-visa-documents.md amendment 15). An e-visa never is.
+ */
+export const TO_HAND_BACK: Prisma.EnquiryWhereInput = {
+  visa: { docket: { is: { dispatchedAt: { not: null } } }, handover: { is: null } },
+};
+
+/** Whether a loaded visa case's passports are still to hand back, as TO_HAND_BACK says. */
+export function toHandBack(visa: { docket: { dispatchedAt: Date | null } | null; handover: unknown } | null) {
+  return !!visa?.docket?.dispatchedAt && !visa.handover;
+}
+
+/**
  * The enquiries this user may see, among `departments` (the ones they can VIEW). An unowned enquiry (e.g. matured,
  * waiting for a processor) is seen by the HOD, the Head and view-only users, not by other staff.
  */

@@ -32,6 +32,8 @@ export interface EnquiryRow {
   reason: { name: string } | null
   /** When a postponed case comes back, YYYY-MM-DD. */
   resumeOn: string | null
+  /** A visa case whose passports are still to hand back: a cancelled one stays on the Open tab until then (0006 amendment 15). */
+  toHandBack?: boolean
   stage: StageRef
   source: { code: string; name: string }
   origin: EnquiryOrigin
@@ -449,9 +451,13 @@ export interface AdditionalInvoiceCheck {
 /** The file's one additional invoice (0011 Decision 7): an invoice of extra charges, with no GST. */
 export type CaseAdditionalInvoice = CaseInvoice & { charges: { name: string; amountPaise: number }[] }
 
-/** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
+/**
+ * GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller.
+ * `invoiceNo` (and `creditNoteNo`) are null when nothing can go back: a cancelled case whose invoice was already
+ * cancelled whole (docs/decisions/0006-visa-documents.md amendment 15).
+ */
 export interface RecallCheck {
-  invoiceNo: string
+  invoiceNo: string | null
   lines: {
     /** The invoice's line, 1, 2, 3… */
     position: number
@@ -466,7 +472,7 @@ export interface RecallCheck {
   defaultTotalPaise: number
   /** The Visa HOD or the Head: "Change refund (HOD)" */
   canChangeRefund: boolean
-  creditNoteNo: string
+  creditNoteNo: string | null
   dueAt: string
   blockers: { kind: string; label: string; items: string[] }[]
 }

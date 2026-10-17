@@ -50,7 +50,10 @@ export function RecallCard({ visaCase: c }: { visaCase: VisaCase }) {
 
   if (c.stage.code !== 'AT_VENDOR' || c.docket?.status !== 'DISPATCHED') return null
   const invoice = liveInvoice(c)
-  const canAct = !!me && c.status === 'OPEN' && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  // A cancelled case is taken back too, so its passports come back (0006 amendment 15); with its invoice already
+  // cancelled whole, nothing goes back, but the file still comes back.
+  const cancelled = c.status === 'CANCELLED'
+  const canAct = !!me && (c.status === 'OPEN' || cancelled) && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // The standing invoice was raised from this quote, which is frozen since: its embassy fees are what goes back.
   const embassyFees = (c.quote?.lines ?? []).reduce((n, l) => n + (l.form === 'ITEMISED' ? (l.embassyFeePaise ?? 0) : 0), 0)
   return (
@@ -73,7 +76,7 @@ export function RecallCard({ visaCase: c }: { visaCase: VisaCase }) {
         <span className="small" style={{ flexGrow: 1 }}>
           Only an <strong>HOD</strong> can return more, case by case.
         </span>
-        {canAct && invoice && (
+        {canAct && (invoice || cancelled) && (
           <button type="button" className="btn btn-sm" onClick={() => setRecalling(true)}>
             Take the file back
           </button>

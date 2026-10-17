@@ -75,7 +75,8 @@ async function checkDates(db: Db, input: SendPassportsBackInput, g: Gathered) {
 }
 
 /**
- * "Passports on the way back" (Decision 3), by whoever can act on the case, while it's open. In one transaction under
+ * "Passports on the way back" (Decision 3), by whoever can act on the case, while it's open or cancelled (0006 amendment
+ * 15: a cancelled case's passports still come back). In one transaction under
  * the case lock: the two days, who recorded them and when, the move to Passport back with its due time, and the audit
  * (visa.passports.inTransit).
  */
@@ -221,8 +222,9 @@ function checkStickers(r: Receipt, stickers: ReceivePassportsInput["stickers"]) 
  * "Mark received" (Decision 5), by whoever can act on the case, whatever its status: the packet is here, so it's
  * counted in (decided 17 Oct 2026). A count that doesn't match what went to the vendor, or a sticker that doesn't
  * match, is recorded and shown, not refused. In one transaction under the case lock: who received them and when, the
- * booklets, each approved traveller's sticker check, the due time to arrange the handover (an open case only:
- * visa.handoverCheck ⚠️), and the audit (visa.passports.received). The case stays at Passport back.
+ * booklets, each approved traveller's sticker check, the due time to arrange the handover (an open or cancelled case:
+ * visa.handoverCheck ⚠️; a cancelled one stays on its owner's list until handed back, 0006 amendment 15), and the audit
+ * (visa.passports.received). The case stays at Passport back.
  */
 export async function receivePassports(caseNo: string, input: ReceivePassportsInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, RECEIVING);
@@ -239,8 +241,9 @@ export async function receivePassports(caseNo: string, input: ReceivePassportsIn
     assertCanReceive(r);
     const who = checkStickers(r, input.stickers);
 
-    // A postponed or cancelled case keeps its due time; the update still marks the case changed for open pages.
-    const dueAt = locked.status === "OPEN" ? await dueOnOfficeDay((await getVisaSettings(tx)).handoverCheck, tx) : locked.dueAt;
+    // A postponed case keeps its due time (its resume day); the update still marks the case changed for open pages.
+    const handoverDue = locked.status === "OPEN" || locked.status === "CANCELLED";
+    const dueAt = handoverDue ? await dueOnOfficeDay((await getVisaSettings(tx)).handoverCheck, tx) : locked.dueAt;
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
     await tx.visaCase.update({
       where: { enquiryId: enquiry.id },
