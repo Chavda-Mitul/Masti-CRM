@@ -227,6 +227,8 @@ export interface Handover {
   booklets: { current: number; old: number }
   receiver: { name: string; travellerId: string | null }
   photo: { id: string; fileName: string } | null
+  /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) is on the case's field jobs. */
+  fieldJobId: string | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */

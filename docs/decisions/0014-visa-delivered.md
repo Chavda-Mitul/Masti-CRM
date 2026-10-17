@@ -55,7 +55,7 @@ Each component is planned in plan mode, built, tested, checked in the browser an
 **Decided 17 Oct 2026 (project lead):** there's no SMS or WhatsApp sending yet (M2), so the handover OTP goes to the
 client by email until one is connected. It's needed only at the doorstep (component 4). What happens for a client with
 no email is decided when component 4 is planned. *(The doorstep moved to 0015. For the pickup, 0015 Decision 4, 17 Oct
-2026: no code, no pickup. 0015 phase 5 settles the delivery.)*
+2026: no code, no pickup. For the delivery, 0015 Decision 4, the same day: no code, no handover.)*
 
 ### 3. At the office: what's recorded
 

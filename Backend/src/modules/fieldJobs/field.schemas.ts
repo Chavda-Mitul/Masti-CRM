@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { handOverBookletsSchema, receiverSchema } from "../visa/visa.schemas";
 
-// The field staff app's own requests (docs/decisions/0015-field-staff-app.md). Only zod is imported here, so these
-// schemas can later be shared with the frontend.
+// The field staff app's own requests (docs/decisions/0015-field-staff-app.md). Only zod and other *.schemas.ts files
+// are imported here, so these schemas can later be shared with the frontend.
 
 /** His run for a day (phase 3): YYYY-MM-DD in India; today when left out. */
 export const myRunQuerySchema = z.object({
@@ -63,9 +64,23 @@ export const markDoneSchema = z.object({
   place: placeSchema,
 });
 
+/**
+ * The handover at the door (Decision 4, phase 5): the booklets he counted (they must match our stock), who receives
+ * them (a traveller on the case, or someone else by name), their photo and his selfie (each uploaded as he took it),
+ * and the place, once the client confirmed the code.
+ */
+export const handOverAtDoorSchema = z.object({
+  booklets: handOverBookletsSchema,
+  receiver: receiverSchema,
+  photoId: z.string("Take a photo of the person receiving.").min(1, "Take a photo of the person receiving."),
+  selfieId: z.string("Take your selfie at the door.").min(1, "Take your selfie at the door."),
+  place: placeSchema,
+});
+
 export type Place = z.infer<typeof placeSchema>;
 export type MarkFailedInput = z.infer<typeof markFailedSchema>;
 export type FieldSettings = z.infer<typeof fieldSettingsSchema>;
 export type UpdateFieldSettingsInput = z.infer<typeof updateFieldSettingsSchema>;
 export type CheckOtpInput = z.infer<typeof checkOtpSchema>;
 export type MarkDoneInput = z.infer<typeof markDoneSchema>;
+export type HandOverAtDoorInput = z.infer<typeof handOverAtDoorSchema>;

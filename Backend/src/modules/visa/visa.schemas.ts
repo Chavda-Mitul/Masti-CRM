@@ -482,17 +482,24 @@ const receiverName = z
   .max(100, "100 characters at most.")
   .regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE);
 
+/** The booklets handed over (0014 Decision 4): counted, and checked against our stock by the service. */
+export const handOverBookletsSchema = z.object({ current: bookletsBack("current"), old: bookletsBack("old") });
+
+/** Who collected the passports (0014 Decision 3): a traveller on the case, or someone else by name; exactly one. */
+export const receiverSchema = z
+  .object({ travellerId: z.string().trim().min(1).max(64).nullish(), name: receiverName.nullish() })
+  .refine((r) => !!r.travellerId !== !!r.name, "Pick who collected the passports.");
+
 /**
  * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 3 and 4): the booklets
  * counted (the service checks them against our stock), who collected them (a traveller on the case, or someone else by
- * name: exactly one) and the photo uploaded for it. The delivery boy's handover comes with component 4.
+ * name: exactly one) and the photo uploaded for it. The delivery boy hands over at the door from his phone (0015
+ * phase 5, fieldJobs/field.schemas.ts).
  */
 export const handOverSchema = z.object({
-  mode: z.enum(["OFFICE"], "The delivery boy's handover comes with his phone screen."),
-  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
-  receiver: z
-    .object({ travellerId: z.string().trim().min(1).max(64).nullish(), name: receiverName.nullish() })
-    .refine((r) => !!r.travellerId !== !!r.name, "Pick who collected the passports."),
+  mode: z.enum(["OFFICE"], "The delivery boy hands over from his phone."),
+  booklets: handOverBookletsSchema,
+  receiver: receiverSchema,
   photoId: z.string("Take a photo of the person collecting.").trim().min(1, "Take a photo of the person collecting.").max(64),
   updatedAt: z.iso.datetime("Reload and try again."),
 });

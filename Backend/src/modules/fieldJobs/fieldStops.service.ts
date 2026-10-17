@@ -13,15 +13,17 @@ import type { Actor } from "../users/user";
 import { MB } from "../visa/casePdf";
 import { countTravellers, travellerLabel } from "../visa/visaCase";
 import { advanceToDocuments } from "../visa/visaSteps.service";
-import type { FieldSettings, MarkDoneInput, MarkFailedInput } from "./field.schemas";
+import { assertInStock, checkHandover, deliverCase, gather as gatherHandover } from "../visa/visaHandover.service";
+import type { FieldSettings, HandOverAtDoorInput, MarkDoneInput, MarkFailedInput } from "./field.schemas";
 import { getFieldSettings } from "./fieldJobs.settings";
 import { otpEmail } from "./otpEmail";
 
 // The field staff app, the boy's own side (docs/decisions/0015-field-staff-app.md): his run for a day (phase 3), one of
 // his stops, and what he records there (phase 4): "Couldn't complete", with a reason from the list and the place his
-// phone gave (Decision 5); or, at a pickup, "Picked up": the booklets he counted, the client's one-time code by email,
-// and his selfie with the place (Decision 4). Only his own stops; he records only booked ones on today's run (past days
-// are read-only, decided 17 Oct 2026). The office's side is in visa/visaFieldJobs.service.ts.
+// phone gave (Decision 5); or, at the door (Decision 4), the client's one-time code by email, the booklets he counted
+// and his selfie with the place: "Picked up" at a pickup (phase 4), the handover at a delivery, with a photo of the
+// person receiving (phase 5). Only his own stops; he records only booked ones on today's run (past days are read-only,
+// decided 17 Oct 2026). The office's side is in visa/visaFieldJobs.service.ts.
 
 /** What his phone shows of a stop: just what it needs, never the case page, money or documents (0015 phase 3). */
 const stopSelect = {
@@ -47,6 +49,7 @@ const stopSelect = {
           travellers: {
             orderBy: { position: "asc" },
             select: {
+              id: true,
               position: true,
               isChild: true,
               name: true,
@@ -68,8 +71,9 @@ type StopRow = Prisma.FieldJobGetPayload<{ select: typeof stopSelect }>;
 /**
  * One stop as his phone shows it: the desk that raised it, the day and slot, the client's name, the case number, where
  * to go (the address, the Google Maps link), whom to call; for a delivery, the booklets in our stock he hands over; for
- * a pickup, the papers still pending on the case's checklist (by traveller, leaving out what we arrange ourselves); and
- * once it's finished, when, and why it couldn't be completed.
+ * a pickup, the papers still pending on the case's checklist (by traveller, leaving out what we arrange ourselves); for
+ * a delivery, the travellers, to pick who receives (names only); and once it's finished, when, and why it couldn't be
+ * completed.
  */
 function toStop(j: StopRow) {
   const visa = j.enquiry.visa;
@@ -94,6 +98,7 @@ function toStop(j: StopRow) {
       j.kind === "PICKUP" && visa
         ? visa.travellers.flatMap((t) => t.documents.map((d) => ({ document: d.name, traveller: t.name ?? travellerLabel(t, adults) })))
         : [],
+    travellers: j.kind === "DELIVERY" && visa ? visa.travellers.map((t) => ({ id: t.id, name: t.name ?? travellerLabel(t, adults) })) : [],
     finishedAt: j.finishedAt,
     failReason: j.failReason?.name ?? null,
   };
@@ -177,9 +182,14 @@ function assertCanRecord(job: { status: string; day: Date }) {
   if (day > today) throw conflict(`This stop is on ${dayLabel(day)}. Record it on the day.`);
 }
 
-/** The code, the selfie and "Picked up" are the pickup's (phase 4b); the delivery's doorstep handover is phase 5. */
+/** "Picked up" is a pickup's (phase 4b). */
 function assertPickup(job: { kind: string }) {
   if (job.kind !== "PICKUP") throw conflict("Only a pickup is recorded this way.");
+}
+
+/** The handover at the door, and the photo of the person receiving, are a delivery's (phase 5). */
+function assertDelivery(job: { kind: string }) {
+  if (job.kind !== "DELIVERY") throw conflict("Only a delivery is handed over this way.");
 }
 
 /**
@@ -275,7 +285,6 @@ export async function sendOtp(jobId: string, actor: Actor) {
   const expiresAt = new Date(now.getTime() + settings.otpMinutes * 60_000);
   const job = await prisma.$transaction(async (tx) => {
     const locked = await lockMyJob(tx, jobId, actor);
-    assertPickup(locked);
     if (locked.otpConfirmedAt) throw conflict("The client has already confirmed with the code.");
     const readyAt = locked.otpSentAt ? locked.otpSentAt.getTime() + settings.otpResendSeconds * 1000 : 0;
     if (readyAt > now.getTime()) throw conflict(`Wait ${Math.ceil((readyAt - now.getTime()) / 1000)} seconds, then send a new code.`);
@@ -300,6 +309,7 @@ export async function sendOtp(jobId: string, actor: Actor) {
         boy: firstWord(actor.user.name),
         company: { name: company.name, phone: company.phone || null, email: company.email },
         caseNo: job.enquiry.caseNo,
+        kind: job.kind,
         code,
         minutes: settings.otpMinutes,
       }),
@@ -330,7 +340,6 @@ export async function checkOtp(jobId: string, code: string, actor: Actor) {
   const now = new Date();
   const refusal = await prisma.$transaction(async (tx) => {
     const job = await lockMyJob(tx, jobId, actor);
-    assertPickup(job);
     if (job.otpConfirmedAt) return null;
     if (!job.otpHash || !job.otpExpiresAt) throw conflict("Send the code first.");
     if (job.otpExpiresAt <= now) return "This code has expired. Send a new one.";
@@ -352,29 +361,37 @@ export async function checkOtp(jobId: string, code: string, actor: Actor) {
 }
 
 // ---------------------------------------------------------------------------
-// His selfie at the door, and "Picked up" (Decision 4)
+// The photos at the door, "Picked up", and the handover (Decision 4)
 // ---------------------------------------------------------------------------
 
+type DoorPhotoKind = "FIELD_SELFIE" | "RECEIVER_PHOTO";
+
+/** His selfie, at either kind of stop; the photo of the person receiving, at a delivery only. */
+function assertPhotoFits(job: { kind: string }, kind: DoorPhotoKind) {
+  if (kind === "RECEIVER_PHOTO") assertDelivery(job);
+}
+
 /**
- * Before the selfie is read: it must be for a pickup of his he can record now, and the setting gives the size limit
- * (field.selfieMaxMb ⚠️). Refusing here means a wrong upload is never held in memory.
+ * Before a photo is read: it must be for a stop of his he can record now, and the setting gives the size limit
+ * (field.selfieMaxMb ⚠️, for both photos). Refusing here means a wrong upload is never held in memory.
  */
-export async function selfieLimit(jobId: string, actor: Actor) {
+export async function photoLimit(jobId: string, kind: DoorPhotoKind, actor: Actor) {
   const job = await prisma.fieldJob.findFirst({ where: { id: jobId, assigneeId: actor.user.id }, select: { kind: true, status: true, day: true } });
   if (!job) throw notFound("Stop not found.");
   assertCanRecord(job);
-  assertPickup(job);
+  assertPhotoFits(job, kind);
   const { selfieMaxMb } = await getFieldSettings();
   return { maxBytes: selfieMaxMb * MB, tooBig: `This photo is over ${selfieMaxMb} MB. Take it again.` };
 }
 
 /**
- * Saves his selfie at the door (Decision 4) as soon as he takes it: really the JPEG or PNG it says it is, in the private
- * bucket under a key no other upload shares, as a case file of its own (FIELD_SELFIE). The bucket upload happens before
- * the lock; under it the checks are repeated, and if they fail now the object is removed again. "Picked up" links it.
+ * Saves a photo taken at the door as soon as he takes it (Decision 4): his selfie (FIELD_SELFIE), or at a delivery the
+ * person receiving (RECEIVER_PHOTO); really the JPEG or PNG it says it is, in the private bucket under a key no other
+ * upload shares, as a case file of its own. The bucket upload happens before the lock; under it the checks are
+ * repeated, and if they fail now the object is removed again. "Picked up" or the handover links it.
  */
-export async function uploadSelfie(jobId: string, bytes: Buffer, contentType: ImageType, actor: Actor) {
-  if (bytes.length === 0) throw badRequest("Take your selfie first.");
+export async function uploadDoorPhoto(jobId: string, kind: DoorPhotoKind, bytes: Buffer, contentType: ImageType, actor: Actor) {
+  if (bytes.length === 0) throw badRequest("Take the photo first.");
   if (imageType(bytes) !== contentType) throw badRequest(`This isn't a ${contentType === "image/png" ? "PNG" : "JPEG"} photo. Take it again.`);
   const job = await prisma.fieldJob.findFirst({
     where: { id: jobId, assigneeId: actor.user.id },
@@ -382,18 +399,18 @@ export async function uploadSelfie(jobId: string, bytes: Buffer, contentType: Im
   });
   if (!job) throw notFound("Stop not found.");
   assertCanRecord(job);
-  assertPickup(job);
+  assertPhotoFits(job, kind);
   const extension = contentType === "image/png" ? "png" : "jpg";
-  const fileName = `${job.enquiry.caseNo}_selfie.${extension}`;
+  const fileName = `${job.enquiry.caseNo}_${kind === "FIELD_SELFIE" ? "selfie" : "receiver"}.${extension}`;
   const storageKey = `cases/${job.enquiryId}/field/${randomUUID()}.${extension}`;
   await putObject(storageKey, bytes, contentType);
 
   try {
     return await prisma.$transaction(async (tx) => {
       const locked = await lockMyJob(tx, jobId, actor);
-      assertPickup(locked);
+      assertPhotoFits(locked, kind);
       const file = await tx.caseFile.create({
-        data: { enquiryId: locked.enquiryId, kind: "FIELD_SELFIE", storageKey, fileName, sizeBytes: bytes.length, uploadedById: actor.user.id },
+        data: { enquiryId: locked.enquiryId, kind, storageKey, fileName, sizeBytes: bytes.length, uploadedById: actor.user.id },
         select: { id: true, fileName: true, uploadedAt: true },
       });
       await audit(
@@ -403,7 +420,7 @@ export async function uploadSelfie(jobId: string, bytes: Buffer, contentType: Im
           entityType: "CaseFile",
           entityId: file.id,
           clientId: locked.enquiry.clientId,
-          after: { kind: "FIELD_SELFIE", jobId, fileName, sizeBytes: bytes.length, storageKey },
+          after: { kind, jobId, fileName, sizeBytes: bytes.length, storageKey },
           ip: actor.ip,
         },
         tx,
@@ -414,6 +431,17 @@ export async function uploadSelfie(jobId: string, bytes: Buffer, contentType: Im
     // Nothing points at the object: remove it so the bucket holds only files the CRM knows. Best effort.
     await deleteObject(storageKey).catch((cleanupErr: unknown) => logger.error({ err: cleanupErr, storageKey }, "Couldn't remove an unsaved upload."));
     throw err;
+  }
+}
+
+/** A photo he took at this stop's door, of the kind asked for, for this case, and not proving anything yet. */
+async function checkDoorPhoto(db: Db, enquiryId: string, fileId: string, kind: DoorPhotoKind, actor: Actor, field: string, message: string) {
+  const file = await db.caseFile.findUnique({
+    where: { id: fileId },
+    select: { enquiryId: true, kind: true, uploadedById: true, fieldJob: { select: { id: true } }, handover: { select: { enquiryId: true } } },
+  });
+  if (!file || file.enquiryId !== enquiryId || file.kind !== kind || file.uploadedById !== actor.user.id || file.fieldJob || file.handover) {
+    throw fieldError(field, message);
   }
 }
 
@@ -435,13 +463,7 @@ export async function markDone(jobId: string, input: MarkDoneInput, actor: Actor
       throw conflict("This case has moved on from collecting documents. Call the office.");
     }
     if (!job.otpConfirmedAt) throw conflict("The client hasn't confirmed with the code yet.");
-    const selfie = await tx.caseFile.findUnique({
-      where: { id: input.selfieId },
-      select: { enquiryId: true, kind: true, uploadedById: true, fieldJob: { select: { id: true } } },
-    });
-    if (!selfie || selfie.enquiryId !== enquiry.id || selfie.kind !== "FIELD_SELFIE" || selfie.uploadedById !== actor.user.id || selfie.fieldJob) {
-      throw fieldError("selfieId", "Take your selfie at the door.");
-    }
+    await checkDoorPhoto(tx, enquiry.id, input.selfieId, "FIELD_SELFIE", actor, "selfieId", "Take your selfie at the door.");
 
     const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { bookletsCurrent: true, bookletsOld: true } });
     const { current, old } = input.booklets;
@@ -496,6 +518,107 @@ export async function markDone(jobId: string, input: MarkDoneInput, actor: Actor
       tx,
     );
     await advanceToDocuments(tx, enquiry, actor);
+  });
+  return getMyStop(actor.user.id, jobId);
+}
+
+/**
+ * The handover at the client's door (Decision 4, phase 5), once the client confirmed with the code: the booklets he
+ * counted must match our stock, as at the office (otherwise he brings them back and uses Couldn't complete, decided 17
+ * Oct 2026); who receives them, a traveller on the case or someone else by name, and the photo he took of them; his
+ * selfie; and the place. In one transaction under the case's lock: the stop is done, with when, where and the proof;
+ * the handover (mode DELIVERY) points at it; the case moves to Delivered and closes (a cancelled one stays cancelled),
+ * as at the office. Audited: visa.handover (with the job and the place) and field.job.done.
+ */
+export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, actor: Actor) {
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const job = await lockMyJob(tx, jobId, actor);
+    assertDelivery(job);
+    const { enquiry } = job;
+    if (!job.otpConfirmedAt) throw conflict("The client hasn't confirmed with the code yet.");
+    const g = await gatherHandover(tx, enquiry.id);
+    assertInStock(g);
+    const receiver = checkHandover(g, input);
+    await checkDoorPhoto(tx, enquiry.id, input.photoId, "RECEIVER_PHOTO", actor, "photoId", "Take a photo of the person receiving.");
+    await checkDoorPhoto(tx, enquiry.id, input.selfieId, "FIELD_SELFIE", actor, "selfieId", "Take your selfie at the door.");
+
+    const { current, old } = input.booklets;
+    await tx.fieldJob.update({
+      where: { id: jobId },
+      data: {
+        status: "DONE",
+        finishedAt: now,
+        bookletsCurrent: current,
+        bookletsOld: old,
+        selfieId: input.selfieId,
+        latitude: input.place.lat,
+        longitude: input.place.lng,
+        accuracyM: input.place.accuracy,
+      },
+    });
+    // After the job is done, so only other booked jobs are called off.
+    const { closes, fieldJobsCancelled } = await deliverCase(tx, enquiry, actor, "handed over at the door");
+    await tx.visaHandover.create({
+      data: {
+        enquiryId: enquiry.id,
+        mode: "DELIVERY",
+        at: now,
+        byId: actor.user.id,
+        bookletsCurrent: current,
+        bookletsOld: old,
+        receiverTravellerId: input.receiver.travellerId ?? null,
+        receiverName: input.receiver.name ?? null,
+        receiverPhotoId: input.photoId,
+        fieldJobId: jobId,
+      },
+    });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.handover",
+        entityType: "Enquiry",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { stage: "PASSPORT_BACK", status: enquiry.status, dueAt: enquiry.dueAt },
+        after: {
+          stage: "DELIVERED",
+          status: closes ? "CLOSED" : enquiry.status,
+          mode: "DELIVERY",
+          booklets: input.booklets,
+          receiver,
+          receiverIsTraveller: !!input.receiver.travellerId,
+          photoId: input.photoId,
+          fieldJobId: jobId,
+          place: input.place,
+          ...(fieldJobsCancelled.length > 0 ? { fieldJobsCancelled } : {}),
+        },
+        ip: actor.ip,
+      },
+      tx,
+    );
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "field.job.done",
+        entityType: "FieldJob",
+        entityId: jobId,
+        clientId: enquiry.clientId,
+        before: { status: "BOOKED" },
+        after: {
+          status: "DONE",
+          kind: job.kind,
+          caseNo: enquiry.caseNo,
+          booklets: input.booklets,
+          selfieId: input.selfieId,
+          otpConfirmedAt: job.otpConfirmedAt,
+          place: input.place,
+          finishedAt: now,
+        },
+        ip: actor.ip,
+      },
+      tx,
+    );
   });
   return getMyStop(actor.user.id, jobId);
 }

@@ -10,6 +10,7 @@ import type { Actor } from "../users/user";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import { MB } from "./casePdf";
+import type { EnquiryStatus } from "../../../generated/prisma/enums";
 import type { HandOverInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -21,8 +22,8 @@ import { countTravellers, travellerLabel } from "./visaCase";
 // their photo (Decisions 3 and 6), whatever the case's status (Decision 7). The case moves to Delivered and closes; a
 // cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it.
 
-/** What a handover checks, read again under the lock. */
-async function gather(db: Db, enquiryId: string) {
+/** What a handover checks, read again under the lock (also the delivery boy's at the door, 0015 phase 5). */
+export async function gather(db: Db, enquiryId: string) {
   return db.visaCase.findUniqueOrThrow({
     where: { enquiryId },
     select: {
@@ -38,7 +39,7 @@ async function gather(db: Db, enquiryId: string) {
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /** In our stock: received at Step 7, and not handed over yet. */
-function assertInStock(g: Gathered) {
+export function assertInStock(g: Gathered) {
   if (!g.passportsReceivedAt) throw conflict("Mark the passports received first.");
   if (g.handover) throw conflict("The passports are already handed over.");
 }
@@ -103,7 +104,7 @@ export async function uploadHandoverPhoto(caseNo: string, bytes: Buffer, content
  * The booklets match our stock (Decision 4: a missing one is found first), and who collected them: a traveller on the
  * case, or someone else by name. Returns the name the handover shows.
  */
-function checkHandover(g: Gathered, input: HandOverInput) {
+export function checkHandover(g: Gathered, input: Pick<HandOverInput, "booklets" | "receiver">) {
   const stock = { current: g.bookletsBackCurrent!, old: g.bookletsBackOld! };
   if (input.booklets.current !== stock.current || input.booklets.old !== stock.old) {
     throw fieldError("booklets", `Count again: our stock has ${stock.current} current + ${stock.old} old. Find what's missing before handing over.`);
@@ -118,6 +119,23 @@ function checkHandover(g: Gathered, input: HandOverInput) {
 async function checkPhoto(db: Db, enquiryId: string, photoId: string) {
   const photo = await db.caseFile.findUnique({ where: { id: photoId }, select: { enquiryId: true, kind: true } });
   if (!photo || photo.enquiryId !== enquiryId || photo.kind !== "RECEIVER_PHOTO") throw fieldError("photoId", "Take a photo of the person collecting.");
+}
+
+/**
+ * The passports are back with the client (Decision 7), in the caller's transaction: the case moves to Delivered with no
+ * due time; an open or postponed case closes (its reason and resume date cleared), a cancelled one stays cancelled; and
+ * any job still booked for the field boy is called off, with why. Returns whether it closed and what was called off,
+ * for the caller's audit. The office handover and the delivery boy's at the door (0015 phase 5) both end here.
+ */
+export async function deliverCase(tx: Db, locked: { id: string; departmentId: number; status: EnquiryStatus }, actor: Actor, why: string) {
+  const delivered = await visaStage(tx, locked.departmentId, "DELIVERED");
+  const closes = locked.status === "OPEN" || locked.status === "POSTPONED";
+  await tx.enquiry.update({
+    where: { id: locked.id },
+    data: { stageId: delivered.id, dueAt: null, ...(closes ? { status: "CLOSED", reasonId: null, resumeOn: null } : {}) },
+  });
+  const fieldJobsCancelled = await cancelBookedFieldJobs(tx, locked.id, actor, why);
+  return { closes, fieldJobsCancelled };
 }
 
 /**
@@ -143,14 +161,8 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     const receiver = checkHandover(g, input);
     await checkPhoto(tx, enquiry.id, input.photoId);
 
-    const delivered = await visaStage(tx, locked.departmentId, "DELIVERED");
-    const closes = locked.status === "OPEN" || locked.status === "POSTPONED";
-    await tx.enquiry.update({
-      where: { id: enquiry.id },
-      data: { stageId: delivered.id, dueAt: null, ...(closes ? { status: "CLOSED", reasonId: null, resumeOn: null } : {}) },
-    });
     // Handed over here: a delivery booked for the boy is called off (0015).
-    const fieldJobsCancelled = await cancelBookedFieldJobs(tx, enquiry.id, actor, "handed over at the office");
+    const { closes, fieldJobsCancelled } = await deliverCase(tx, locked, actor, "handed over at the office");
     await tx.visaHandover.create({
       data: {
         enquiryId: enquiry.id,

@@ -65,12 +65,13 @@ describe("the reasons a visit fails", () => {
       "Client asked to come later",
       "Not ready",
       "Client couldn't get the code",
+      "Passports don't match our count",
     ]);
     expect((await staff.post("/api/masters/field-fail-reasons").send({ code: "RAIN", name: "Heavy rain" })).status).toBe(403);
 
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     const hod = await loginAs("riya@masti.test");
-    const added = await hod.post("/api/masters/field-fail-reasons").send({ code: "rain", name: "Heavy rain", sortOrder: 6 });
+    const added = await hod.post("/api/masters/field-fail-reasons").send({ code: "rain", name: "Heavy rain", sortOrder: 7 });
     expect(added.status).toBe(201);
     expect(added.body.reason).toMatchObject({ code: "RAIN", name: "Heavy rain", isActive: true });
     await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
@@ -88,6 +89,7 @@ describe("the reasons a visit fails", () => {
       "Wrong address",
       "Client asked to come later",
       "Client couldn't get the code",
+      "Passports don't match our count",
       "Heavy rain",
     ]);
     expect((await boy.get("/api/masters/field-fail-reasons")).status).toBe(403);

@@ -425,3 +425,8 @@ a.btn.field-record {
   height: 50px;
   font-size: 15px;
 }
+/* At a delivery: who receives (the travellers as big rows, or someone else by name). */
+.field-other-name {
+  height: 44px;
+  font-size: 16px;
+}
