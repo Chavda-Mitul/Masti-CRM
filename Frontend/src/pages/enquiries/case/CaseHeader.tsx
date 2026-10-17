@@ -10,11 +10,13 @@ import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { HandoverDialog } from './HandoverDialog'
-import { dayMonth, passportsInStock, weekdayDay } from './labels'
+import { dayMonth, heldAtOffice, heldShort, missingCount, passportsInStock, weekdayDay, windingDown } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
+import { RecallDialog } from './RecallDialog'
+import { ShortfallDialog } from './ShortfallDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
 import { VendorReceivedDialog } from './VendorReceivedDialog'
@@ -75,7 +77,9 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
  * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3), then "Mark received" (0013 Decision 5), then "Hand over to the client" (0014).
- * The later steps show as "Soon" until they are built.
+ * A short return shows "Missing passport" instead, until it's settled (0013 Decision 5, amended 17 Oct 2026).
+ * The later steps show as "Soon" until they are built. A cancelled case whose passports are still out gets only their
+ * way back: "Take the file back" at the vendor, then the same steps (0006 amendment 15).
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -91,7 +95,24 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [sending, setSending] = useState(false)
   const [receiving, setReceiving] = useState(false)
   const [handing, setHanding] = useState(false)
+  const [takingBack, setTakingBack] = useState(false)
+  const [settling, setSettling] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
+  // Cancelled with its passports still out: only their way back works (0006 amendment 15).
+  const winding = windingDown(c)
+
+  // Cancelled before dispatch, its passports held at our office: hand them back, by whoever is at the desk (component 3).
+  if (winding && heldAtOffice(c)) {
+    if (!me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
+          Hand back to the client →
+        </button>
+        {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
+      </>
+    )
+  }
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
     return (
@@ -169,6 +190,17 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
+  // Cancelled while the file is with the vendor: take it back, so the passports come back (0011 Decision 6).
+  if (c.stage.code === 'AT_VENDOR' && winding && canAct) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setTakingBack(true)}>
+          Take the file back →
+        </button>
+        {takingBack && <RecallDialog visaCase={c} onClose={() => setTakingBack(false)} />}
+      </>
+    )
+  }
   if (c.stage.code === 'AT_VENDOR' && c.status === 'OPEN' && canAct && d?.status === 'DISPATCHED' && !c.vendorReceived) {
     return (
       <>
@@ -205,7 +237,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   // 3). An e-visa's passports never left the office, so it waits at Decision with no button (Decision 4, M39).
   if (c.stage.code === 'DECISION' && c.submittedOnline) return null
   const returning = c.stage.code === 'DECISION' || (c.stage.code === 'PASSPORT_BACK' && !!c.recall)
-  if (returning && !c.passportsBack && c.status === 'OPEN' && canAct) {
+  if (returning && !c.passportsBack && (c.status === 'OPEN' || winding) && canAct) {
     return (
       <>
         <button type="button" className="btn btn-primary" onClick={() => setSending(true)}>
@@ -215,8 +247,21 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
+  // A short return holds the handover (0013 Decision 5, amended 17 Oct 2026): whoever can act on the case settles it
+  // first. The desk sees the hold on the Passports coming back card, and no button here.
+  if ((c.status === 'OPEN' || winding) && heldShort(c)) {
+    if (!canAct) return null
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setSettling(true)}>
+          {missingCount(c) === 1 ? 'Missing passport' : 'Missing passports'} →
+        </button>
+        {settling && <ShortfallDialog visaCase={c} onClose={() => setSettling(false)} />}
+      </>
+    )
+  }
   // In our stock: "Hand over to the client" (0014), for whoever is at the desk, not only the case's processor.
-  if (me && c.status === 'OPEN' && canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) {
+  if (me && (c.status === 'OPEN' || winding) && canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) {
     return (
       <>
         <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
@@ -227,7 +272,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
     )
   }
   // In transit: "Mark received" (0013 Decision 5). The Passports coming back card has it too, for a case on hold.
-  if (c.stage.code === 'PASSPORT_BACK' && c.passportsBack && !c.passportsReceived && c.status === 'OPEN' && canAct) {
+  if (c.stage.code === 'PASSPORT_BACK' && c.passportsBack && !c.passportsReceived && (c.status === 'OPEN' || winding) && canAct) {
     return (
       <>
         <button type="button" className="btn btn-primary" onClick={() => setReceiving(true)}>
@@ -237,6 +282,8 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
+  // Nothing else is done on a cancelled case.
+  if (winding) return null
   const label = c.stage.nextStepLabel
   return (
     <button type="button" className="btn btn-primary" disabled title={canAct ? 'Comes with a later step' : 'Only the case’s owner, its HOD and the Head can do this'}>
@@ -313,7 +360,7 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
         <div className="case-head-actions">
           <StatusChip visaCase={c} />
           <HoldButton visaCase={c} />
-          {c.status === 'OPEN' && c.owner && <NextStepButton visaCase={c} />}
+          {((c.status === 'OPEN' && c.owner) || windingDown(c)) && <NextStepButton visaCase={c} />}
         </div>
       </div>
 

@@ -9,7 +9,7 @@ import { countTravellers, travellersLabel } from "../visa/visaCase";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
-import { visibleEnquiryWhere } from "./visibility";
+import { TO_HAND_BACK, toHandBack, visibleEnquiryWhere } from "./visibility";
 
 // The All enquiries list (§12.2): every department in one list, late first, then by time due (§9).
 // Each department adds its own part (VisaCase now; holidays, hotels… in Stage 2) and its own one-line summary.
@@ -21,7 +21,15 @@ export const rowInclude = {
   stage: true,
   owner: { select: { id: true, name: true } },
   reason: { select: { name: true } },
-  visa: { include: { offering: { include: offeringInclude }, travellers: { select: { isChild: true } } } },
+  visa: {
+    include: {
+      offering: { include: offeringInclude },
+      travellers: { select: { isChild: true } },
+      // Whether its passports are still to hand back (TO_HAND_BACK).
+      docket: { select: { dispatchedAt: true } },
+      handover: { select: { enquiryId: true } },
+    },
+  },
 } satisfies Prisma.EnquiryInclude;
 
 type EnquiryRow = Prisma.EnquiryGetPayload<{ include: typeof rowInclude }>;
@@ -104,11 +112,15 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     }
   }
 
+  // The Open tab also lists a cancelled visa case whose passports are still to hand back: it stays on its owner's (and the
+  // HOD's) list until the handover (docs/decisions/0006-visa-documents.md amendment 15). "To assign" stays open cases only.
+  const statusWhere: Prisma.EnquiryWhereInput =
+    query.status === "OPEN" && !query.unassigned ? { OR: [{ status: "OPEN" }, { status: "CANCELLED", ...TO_HAND_BACK }] } : { status: query.status };
   // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
   // HODs their department's, the Head everything (visibility.ts).
   const base: Prisma.EnquiryWhereInput[] = [
     visibleEnquiryWhere(user, departments),
-    { status: query.status },
+    statusWhere,
     ...(query.mine ? [{ ownerId: user.id }] : []),
     ...(query.unassigned ? [{ ownerId: null }] : []),
     ...(query.q ? [searchWhere(query.q)] : []),
@@ -153,6 +165,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       /** Why it was postponed or cancelled, and when a postponed one comes back (the Postponed / Cancelled filters). */
       reason: row.reason,
       resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
+      /** A visa case whose passports are still to hand back (a cancelled one stays on the Open tab until then). */
+      toHandBack: toHandBack(row),
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       source: row.source,
       origin: row.origin,

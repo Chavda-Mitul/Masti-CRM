@@ -387,9 +387,11 @@ export const cancelInvoiceSchema = z.object({
 /**
  * "Take the file back" (Decision 6): why, from the recall-reasons list, and the invoice and case as the dialog showed
  * them. `refunds` is only for the HOD's "Change refund": per traveller (the invoice's line position), what goes back.
+ * `invoiceNo` is null when nothing can go back: a cancelled case whose invoice was already cancelled whole
+ * (docs/decisions/0006-visa-documents.md amendment 15).
  */
 export const recallSchema = z.object({
-  invoiceNo: z.string().trim().toUpperCase().min(1).max(40),
+  invoiceNo: z.string().trim().toUpperCase().min(1).max(40).nullable(),
   reasonId: z.number("Pick why it's taken back.").int().positive("Pick why it's taken back."),
   refunds: z
     .array(z.object({ position: z.number().int().min(1), refundPaise: z.number().int().min(0).max(100_000_000) }))
@@ -471,8 +473,25 @@ export const receivePassportsSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/**
+ * "Received the rest" of a short return (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026):
+ * the late booklets, current and old, added to our stock. The service checks each against what's still missing.
+ */
+export const receiveRestSchema = z.object({
+  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Clear the shortfall" (same amendment): why the missing passports won't come back, picked from the list. */
+export const clearShortfallSchema = z.object({
+  reasonId: z.number("Pick why it won't come back.").int().positive("Pick why it won't come back."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
 export type ReceivePassportsInput = z.infer<typeof receivePassportsSchema>;
+export type ReceiveRestInput = z.infer<typeof receiveRestSchema>;
+export type ClearShortfallInput = z.infer<typeof clearShortfallSchema>;
 
 /** Who collected the passports, by name, when it isn't a traveller on the case (0014 Decision 3). */
 const receiverName = z

@@ -5,6 +5,7 @@ import { toMemberDto } from "../clients/client";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
+import { missingBooklets } from "./shortfall";
 
 // The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006), without the message log and
 // reminders, which come with the WhatsApp work.
@@ -144,6 +145,8 @@ export const visaCaseInclude = {
       decidedBy: personSelect,
       passportsInTransitBy: personSelect,
       passportsReceivedBy: personSelect,
+      shortfallClearedBy: personSelect,
+      shortfallReason: { select: { name: true } },
       handover: { include: { by: personSelect, receiverPhoto: { select: { id: true, fileName: true } } } },
       vendor: {
         select: {
@@ -522,11 +525,21 @@ export function toVisaCaseDto(
       at: visa.passportsInTransitAt,
       by: visa.passportsInTransitBy,
     },
-    /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted. */
+    /**
+     * "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted (plus any
+     * received later). `missing`: per kind, what went out and isn't back; while any is and the shortfall isn't cleared,
+     * the handover waits (amended 17 Oct 2026). `shortfallCleared`: when, by whom and why it won't come back.
+     */
     passportsReceived: visa.passportsReceivedAt && {
       at: visa.passportsReceivedAt,
       by: visa.passportsReceivedBy,
       booklets: { current: visa.bookletsBackCurrent!, old: visa.bookletsBackOld! },
+      missing: missingBooklets({ ...visa, travellerCount: visa.travellers.length }),
+      shortfallCleared: visa.shortfallClearedAt && {
+        at: visa.shortfallClearedAt,
+        by: visa.shortfallClearedBy,
+        reason: visa.shortfallReason!.name,
+      },
     },
     /** Handed back to the client (0014): how, when and by whom, the booklets, who collected them and their photo. */
     handover: visa.handover && {

@@ -12,7 +12,8 @@ import { bookletsSent, bookletsText, bookletsVsIntake } from './labels'
  * passports go into our stock. Staff count the booklets into blank boxes, with what went to the vendor beside them (a
  * difference turns red but is allowed), and check each approved traveller's sticker against the passport's name and the
  * dates recorded at Step 6: Matches or Doesn't match. Whoever saves it received them, now. It works whatever the case's
- * status, and a saved receipt isn't changed (decided 17 Oct 2026).
+ * status, and a saved receipt isn't changed (decided 17 Oct 2026). A short count holds the handover until the rest come
+ * or the shortfall is cleared (Decision 5, amended 17 Oct 2026); the dialog says so.
  */
 export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const { data: me } = useMe()
@@ -26,6 +27,7 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
   const [errors, setErrors] = useState<Record<string, string>>({})
   const counted = current !== '' && old !== '' ? { current: Number(current), old: Number(old) } : null
   const vs = counted && bookletsVsIntake(counted, sent)
+  const short = !!counted && (counted.current < sent.current || counted.old < sent.old)
 
   const press = () => {
     const missing: Record<string, string> = {}
@@ -88,6 +90,7 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
               {bookletsText(counted)} — {vs.text}
             </span>
           )}
+          {short && <span className="hint">The handover will wait until the rest arrive or the shortfall is cleared.</span>}
           {errors.booklets && <span className="field-error">{errors.booklets}</span>}
         </div>
 

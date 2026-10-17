@@ -32,6 +32,8 @@ export interface EnquiryRow {
   reason: { name: string } | null
   /** When a postponed case comes back, YYYY-MM-DD. */
   resumeOn: string | null
+  /** A visa case whose passports are still to hand back: a cancelled one stays on the Open tab until then (0006 amendment 15). */
+  toHandBack?: boolean
   stage: StageRef
   source: { code: string; name: string }
   origin: EnquiryOrigin
@@ -459,9 +461,13 @@ export interface AdditionalInvoiceCheck {
 /** The file's one additional invoice (0011 Decision 7): an invoice of extra charges, with no GST. */
 export type CaseAdditionalInvoice = CaseInvoice & { charges: { name: string; amountPaise: number }[] }
 
-/** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
+/**
+ * GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller.
+ * `invoiceNo` (and `creditNoteNo`) are null when nothing can go back: a cancelled case whose invoice was already
+ * cancelled whole (docs/decisions/0006-visa-documents.md amendment 15).
+ */
 export interface RecallCheck {
-  invoiceNo: string
+  invoiceNo: string | null
   lines: {
     /** The invoice's line, 1, 2, 3… */
     position: number
@@ -476,7 +482,7 @@ export interface RecallCheck {
   defaultTotalPaise: number
   /** The Visa HOD or the Head: "Change refund (HOD)" */
   canChangeRefund: boolean
-  creditNoteNo: string
+  creditNoteNo: string | null
   dueAt: string
   blockers: { kind: string; label: string; items: string[] }[]
 }
@@ -485,6 +491,8 @@ export interface RecallCheck {
 export interface CancelInvoiceCheck {
   invoiceNo: string
   alreadyCancelled: string | null
+  /** The case is cancelled: no corrected invoice follows, so only the Visa HOD or the Head may (0006 amendment 15). */
+  hodOnly: boolean
   blockers: { kind: string; label: string; items: string[] }[]
   preview: {
     creditNoteNo: string
@@ -620,8 +628,18 @@ export interface VisaCase {
   decision: { at: string; by: PersonRef | null } | null
   /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when */
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
-  /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted */
-  passportsReceived: { at: string; by: PersonRef | null; booklets: { current: number; old: number } } | null
+  /**
+   * "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted (plus any
+   * received later). `missing`: per kind, what went out and isn't back; while any is and the shortfall isn't cleared, the
+   * handover waits (amended 17 Oct 2026). `shortfallCleared`: when, by whom and why it won't come back.
+   */
+  passportsReceived: {
+    at: string
+    by: PersonRef | null
+    booklets: { current: number; old: number }
+    missing: { current: number; old: number }
+    shortfallCleared: { at: string; by: PersonRef | null; reason: string } | null
+  } | null
   /** Handed back to the client (0014): null until then */
   handover: Handover | null
   travellers: CaseTraveller[]

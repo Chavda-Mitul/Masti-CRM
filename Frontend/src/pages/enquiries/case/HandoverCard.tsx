@@ -27,7 +27,10 @@ export function HandoverCard({ visaCase: c }: { visaCase: VisaCase }) {
     <section className="card pad handover-card">
       <div className="handover-card-head">
         <h2 className="h2">Handed back to the client</h2>
-        <span className="chip chip-ok">Delivered · {dayTime(h.at)}</span>
+        {/* Handed back before dispatch, the case stays at its step (0006 amendment 15): "Handed back", not "Delivered". */}
+        <span className="chip chip-ok">
+          {c.stage.code === 'DELIVERED' ? 'Delivered' : 'Handed back'} · {dayTime(h.at)}
+        </span>
       </div>
       <span className="seg-btn" aria-label="How the passports went back">
         <button type="button" className={h.mode === 'OFFICE' ? 'on' : ''} disabled>

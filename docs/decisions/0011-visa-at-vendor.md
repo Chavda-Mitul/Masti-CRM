@@ -165,6 +165,8 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
+- **On a cancelled case too** (amended 17 Oct 2026, [0006](0006-visa-documents.md) amendment 15): no replacement follows
+  there, so it's a refund, and only the Visa HOD or the Head may issue it (step rule `CREDITING`).
 - **Masti's answer (15 Oct 2026, through the project lead):** a wrong invoice is never changed; it's corrected with a
   credit note. Masti has **no system today:** the CRM is their first. So there's no credit-note format to match and no
   series to continue.
@@ -270,6 +272,11 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 - **"Change refund (HOD)":** per traveller, up to what that traveller was charged (embassy, VFS, other). **Never
   Masti's service charge**, so the part credit note carries no GST, and M38(b) doesn't arise.
 - **After the recall:** due the next office day at 11:00 ⚠️ (`visa.recallReturn`), to chase the vendor for the papers.
+
+**Amended 17 Oct 2026 (project lead), [0006](0006-visa-documents.md) amendment 15:** a **cancelled** case is recalled
+too (step rule `RECALLING`: At vendor, open or cancelled; a postponed case is still resumed first), so its passports
+come back. The reason starts on "Client cancelled the trip". If its invoice was already cancelled whole with no
+replacement, the recall gives nothing back and issues no credit note.
 
 **Built 15 Oct 2026** (component 4, in two steps):
 

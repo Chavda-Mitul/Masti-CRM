@@ -69,7 +69,9 @@ no email is decided when component 4 is planned. *(The doorstep moved to 0015. F
 
 **Decided 17 Oct 2026 (project lead):** what's handed over must match the count when the passports came in (Step 7).
 If it doesn't, the handover is refused: something is missing in our office, so find it first. (Unlike Step 7, where a
-short packet is still received and shown red.)
+short packet is still received and shown red.) **Amended 17 Oct 2026:** a short packet now also holds the handover
+until the rest come in or the shortfall is cleared with a reason ([0013](0013-visa-passport-back.md) Decision 5,
+amended).
 
 ### 5. Who: any Visa staff at the desk
 
@@ -88,7 +90,10 @@ file (e.g. taken on a phone). On a phone or tablet the page opens the camera. Ca
 
 **Decided 17 Oct 2026 (project lead):** the passports are handed over whatever the case's status (chain of custody). An
 open or postponed case becomes **Delivered** and **closed**; a cancelled case stays cancelled, with its reason, but
-records the handover and moves to Delivered.
+records the handover and moves to Delivered. How a case cancelled after dispatch gets here (recall, on the way back,
+received) and stays on its owner's list until then: [0006](0006-visa-documents.md) amendment 15 (17 Oct 2026). A case
+cancelled before dispatch hands back the passports held at our office with this same dialog and proof, against the
+intake count, and stays at its step (amendment 15, component 3).
 
 **Built 17 Oct 2026** (component 1, the office handover, Decisions 3–7):
 - **Data** (migration `20261017120000_office_handover`): `VisaHandover` (one per case: `mode` OFFICE / DELIVERY, `at`,

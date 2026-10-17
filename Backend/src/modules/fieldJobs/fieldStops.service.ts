@@ -538,8 +538,7 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
     const { enquiry } = job;
     if (!job.otpConfirmedAt) throw conflict("The client hasn't confirmed with the code yet.");
     const g = await gatherHandover(tx, enquiry.id);
-    assertInStock(g);
-    const receiver = checkHandover(g, input);
+    const receiver = checkHandover(g, assertInStock(g, enquiry), input);
     await checkDoorPhoto(tx, enquiry.id, input.photoId, "RECEIVER_PHOTO", actor, "photoId", "Take a photo of the person receiving.");
     await checkDoorPhoto(tx, enquiry.id, input.selfieId, "FIELD_SELFIE", actor, "selfieId", "Take your selfie at the door.");
 

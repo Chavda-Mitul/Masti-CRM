@@ -6,6 +6,7 @@ import { useMe } from '../../../../auth/useAuth'
 import { CountriesTable } from './CountriesTable'
 import { CouriersTable } from './CouriersTable'
 import { CreditNoteReasonsTable } from './CreditNoteReasonsTable'
+import { MissingPassportReasonsTable } from './MissingPassportReasonsTable'
 import { RecallReasonsTable } from './RecallReasonsTable'
 import { ExtraChargesTable } from './ExtraChargesTable'
 import { DocumentProblemsTable } from './DocumentProblemsTable'
@@ -33,6 +34,7 @@ type ListTab =
   | 'couriers'
   | 'credit-note-reasons'
   | 'recall-reasons'
+  | 'missing-passport-reasons'
   | 'extra-charges'
   | 'field-slots'
   | 'field-fail-reasons'
@@ -56,6 +58,7 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'couriers', label: 'Couriers', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'credit-note-reasons', label: 'Credit-note reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'recall-reasons', label: 'Recall reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
+  { value: 'missing-passport-reasons', label: 'Missing passport reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'extra-charges', label: 'Extra charges', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
@@ -132,6 +135,7 @@ export function MasterListsPage() {
       {tab === 'couriers' && <CouriersTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'credit-note-reasons' && <CreditNoteReasonsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'recall-reasons' && <RecallReasonsTable canEdit={canEdit} showInactive={showInactive} />}
+      {tab === 'missing-passport-reasons' && <MissingPassportReasonsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'extra-charges' && <ExtraChargesTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'field-slots' && <FieldSlotsTable canEdit={canEdit} showInactive={showInactive} />}
     </>

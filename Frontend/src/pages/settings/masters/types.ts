@@ -292,6 +292,9 @@ export type CreditNoteReason = FollowUpOption
 /** Why a file is taken back from the vendor: "Embassy taking too long"… (0011 Decision 6). Picked at the recall. */
 export type RecallReason = FollowUpOption
 
+/** Why a missing passport won't come back: "Embassy kept it"… (0013 Decision 5, amended). Picked when a shortfall is cleared. */
+export type MissingPassportReason = FollowUpOption
+
 /** What an additional invoice charges for: "Urgent submission", "Photos"… (0011 Decision 7). No GST. */
 export type ExtraCharge = FollowUpOption
 
@@ -338,6 +341,7 @@ export type MasterResource =
   | 'couriers'
   | 'credit-note-reasons'
   | 'recall-reasons'
+  | 'missing-passport-reasons'
   | 'extra-charges'
   | 'field-slots'
   | 'field-fail-reasons'

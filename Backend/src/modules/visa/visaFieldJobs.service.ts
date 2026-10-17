@@ -7,6 +7,7 @@ import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
 import type { Actor } from "../users/user";
 import { COLLECTING, HANDING_OVER, loadCase, lockCase, type StepRule } from "./caseLock";
+import { assertNotHeldShort } from "./shortfall";
 import { MAX_COLLECTION_DAYS_AHEAD, type BookFieldJobInput, type ChangeFieldJobInput, type MatureCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 
@@ -34,7 +35,18 @@ async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
     select: {
       client: { select: { email: true, mobile: true } },
       fieldJobs: { where: { kind, status: "BOOKED" }, select: { id: true } },
-      visa: { select: { passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
+      visa: {
+        select: {
+          passportsReceivedAt: true,
+          bookletsCurrent: true,
+          bookletsOld: true,
+          bookletsBackCurrent: true,
+          bookletsBackOld: true,
+          shortfallClearedAt: true,
+          handover: { select: { enquiryId: true } },
+          _count: { select: { travellers: true } },
+        },
+      },
     },
   });
 }
@@ -42,12 +54,13 @@ async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
- * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock; and the client's email
- * for their one-time code (Decision 4).
+ * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock, and not while a short
+ * return holds them (0013 Decision 5, amended 17 Oct 2026); and the client's email for their one-time code (Decision 4).
  */
 function assertCanBook(g: Gathered, kind: FieldJobKind) {
   if (kind === "DELIVERY" && !g.visa?.passportsReceivedAt) throw conflict("Mark the passports received first.");
   if (kind === "DELIVERY" && g.visa?.handover) throw conflict("The passports are already handed over.");
+  if (kind === "DELIVERY" && g.visa) assertNotHeldShort({ ...g.visa, travellerCount: g.visa._count.travellers });
   if (g.fieldJobs.length > 0) throw conflict(kind === "PICKUP" ? "The collection boy is already booked for this case." : "The delivery boy is already booked for this case.");
   if (!g.client.email) {
     throw new HttpError(409, "Add the client's email first: the one-time code they give the boy goes there.", { code: "CLIENT_EMAIL_MISSING" });

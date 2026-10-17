@@ -3,14 +3,15 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
-import { conflict, fieldError, HttpError } from "../../lib/httpError";
+import { conflict, fieldError, forbidden, HttpError } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { GST_STATES } from "../../lib/shared.schemas";
 import { deleteObject, getObject, putObject } from "../../lib/storage";
 import { currentCompanyImages } from "../company/company.service";
 import { getCompanyDetails, invoiceMissing } from "../company/company.settings";
+import { isHodOf } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { findVisibleCase, INVOICED, loadCase, lockCase } from "./caseLock";
+import { CREDITING, findVisibleCase, loadCase, lockCase } from "./caseLock";
 import { renderInvoicePdf, type InvoiceImages, type InvoiceParty, type InvoiceView } from "./invoicePdf";
 import type { CancelInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
@@ -295,17 +296,32 @@ export async function withCreditNoteNumber(attempt: (upload: Upload) => Promise<
 }
 
 /**
+ * On a cancelled case no corrected invoice follows, so a credit note gives the client's money back: only the Visa HOD
+ * or the Head may issue it, as only they can give back more on a recall (0006 amendment 15, decided 17 Oct 2026).
+ */
+function assertMayCredit(status: string, actor: Actor) {
+  if (status === "CANCELLED" && !isHodOf(actor.user, "VISA")) {
+    throw forbidden("On a cancelled case only the Visa HOD or the Head can cancel its invoice: it gives the client's money back.");
+  }
+}
+
+/**
  * For the Cancel dialog: the invoice, everything its credit note will give back (GST included), the number it will get,
- * and what blocks it. Anyone who can open the case may look.
+ * what blocks it, and whether only the Visa HOD or the Head may issue it (a cancelled case). Anyone who can open the case
+ * may look.
  */
 export async function cancelInvoiceCheck(caseNo: string, user: UserWithDepartments, invoiceNo?: string) {
   const { id } = await findVisibleCase(caseNo, user);
-  const g = await gatherForCredit(id, prisma, invoiceNo);
+  const [g, { status }] = await Promise.all([
+    gatherForCredit(id, prisma, invoiceNo),
+    prisma.enquiry.findUniqueOrThrow({ where: { id }, select: { status: true } }),
+  ]);
   const inv = g.invoice;
   if (!inv) throw conflict("This case has no invoice yet.");
   return {
     invoiceNo: inv.invoiceNo,
     alreadyCancelled: cancellationOf(inv)?.creditNoteNo ?? null,
+    hodOnly: status === "CANCELLED",
     blockers: creditBlockers(g, user.name),
     preview: {
       creditNoteNo: await nextCreditNoteNo(g, prisma),
@@ -324,10 +340,12 @@ export async function cancelInvoiceCheck(caseNo: string, user: UserWithDepartmen
  * "Cancel with a credit note" (Decision 5). Refused if the invoice or its total isn't the one the dialog showed, if
  * it's already cancelled or partly given back (a recall), or while Masti's details can't be printed. In one transaction
  * under the case lock: the WHOLE credit note issued (PDF, number, file, rows, audit). The invoice itself is untouched;
- * from now on it counts as cancelled.
+ * from now on it counts as cancelled. On an open case or a cancelled one (CREDITING); on a cancelled one, by the Visa
+ * HOD or the Head only, as no corrected invoice follows (0006 amendment 15).
  */
 export async function cancelInvoice(caseNo: string, input: CancelInvoiceInput, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, INVOICED);
+  const enquiry = await loadCase(caseNo, actor, CREDITING);
+  assertMayCredit(enquiry.status, actor);
   const check = async (g: CreditGathered, db: Db) => {
     const inv = g.invoice;
     if (!inv || inv.invoiceNo !== input.invoiceNo || inv.totalPaise !== input.totalPaise) {
@@ -350,7 +368,8 @@ export async function cancelInvoice(caseNo: string, input: CancelInvoiceInput, a
   await withCreditNoteNumber((upload) =>
     prisma.$transaction(
       async (tx) => {
-        await lockCase(tx, enquiry.id, actor, INVOICED);
+        const locked = await lockCase(tx, enquiry.id, actor, CREDITING);
+        assertMayCredit(locked.status, actor);
         const g = await gatherForCredit(enquiry.id, tx, input.invoiceNo);
         const { inv, reason } = await check(g, tx);
         await issueCreditNote(tx, { enquiryId: enquiry.id, g, inv, draft: wholeDraft(inv, reason), images, actor, upload });

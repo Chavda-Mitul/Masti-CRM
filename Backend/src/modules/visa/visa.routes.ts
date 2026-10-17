@@ -12,6 +12,8 @@ import {
   changeDecisionSchema,
   sendPassportsBackSchema,
   receivePassportsSchema,
+  receiveRestSchema,
+  clearShortfallSchema,
   handOverSchema,
   bookFieldJobSchema,
   changeFieldJobSchema,
@@ -322,6 +324,24 @@ router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 router.post("/cases/:caseNo/passports-received", visaEdit, async (req, res) => {
   const body = receivePassportsSchema.parse(req.body);
   res.json({ case: await passportsBackService.receivePassports(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Received the rest" of a short return (0013 Decision 5, amended 17 Oct 2026): the late booklets added to our stock,
+ * each kind up to what's missing; whatever the case's status. 400 under `booklets`; 409 when nothing is missing.
+ */
+router.post("/cases/:caseNo/passports-received/rest", visaEdit, async (req, res) => {
+  const body = receiveRestSchema.parse(req.body);
+  res.json({ case: await passportsBackService.receiveRest(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Clear the shortfall" (same amendment): the missing passports won't come back, with a reason from the list, so the
+ * handover can go ahead. 400 under `reasonId`; 409 when nothing is missing or it's cleared already.
+ */
+router.post("/cases/:caseNo/passports-received/clear", visaEdit, async (req, res) => {
+  const body = clearShortfallSchema.parse(req.body);
+  res.json({ case: await passportsBackService.clearShortfall(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** Who can be sent: the active field staff (0015), for "Book the collection boy". */
