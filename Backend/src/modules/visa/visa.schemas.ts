@@ -471,8 +471,25 @@ export const receivePassportsSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/**
+ * "Received the rest" of a short return (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026):
+ * the late booklets, current and old, added to our stock. The service checks each against what's still missing.
+ */
+export const receiveRestSchema = z.object({
+  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Clear the shortfall" (same amendment): why the missing passports won't come back, picked from the list. */
+export const clearShortfallSchema = z.object({
+  reasonId: z.number("Pick why it won't come back.").int().positive("Pick why it won't come back."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
 export type ReceivePassportsInput = z.infer<typeof receivePassportsSchema>;
+export type ReceiveRestInput = z.infer<typeof receiveRestSchema>;
+export type ClearShortfallInput = z.infer<typeof clearShortfallSchema>;
 
 /** Who collected the passports, by name, when it isn't a traveller on the case (0014 Decision 3). */
 const receiverName = z

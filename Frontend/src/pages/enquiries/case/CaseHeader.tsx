@@ -10,11 +10,12 @@ import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { HandoverDialog } from './HandoverDialog'
-import { dayMonth, passportsInStock, weekdayDay } from './labels'
+import { dayMonth, heldShort, missingCount, passportsInStock, weekdayDay } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
+import { ShortfallDialog } from './ShortfallDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
 import { VendorReceivedDialog } from './VendorReceivedDialog'
@@ -75,6 +76,7 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
  * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3), then "Mark received" (0013 Decision 5), then "Hand over to the client" (0014).
+ * A short return shows "Missing passport" instead, until it's settled (0013 Decision 5, amended 17 Oct 2026).
  * The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
@@ -91,6 +93,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [sending, setSending] = useState(false)
   const [receiving, setReceiving] = useState(false)
   const [handing, setHanding] = useState(false)
+  const [settling, setSettling] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -212,6 +215,19 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.code === 'DECISION' ? c.stage.nextStepLabel : 'Passports on the way back'} →
         </button>
         {sending && <PassportsBackDialog visaCase={c} onClose={() => setSending(false)} />}
+      </>
+    )
+  }
+  // A short return holds the handover (0013 Decision 5, amended 17 Oct 2026): whoever can act on the case settles it
+  // first. The desk sees the hold on the Passports coming back card, and no button here.
+  if (c.status === 'OPEN' && heldShort(c)) {
+    if (!canAct) return null
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setSettling(true)}>
+          {missingCount(c) === 1 ? 'Missing passport' : 'Missing passports'} →
+        </button>
+        {settling && <ShortfallDialog visaCase={c} onClose={() => setSettling(false)} />}
       </>
     )
   }

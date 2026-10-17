@@ -86,6 +86,23 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
 /** The passports are in our stock: received at Step 7, not yet handed over (0014 Decision 5). */
 export const passportsInStock = (c: VisaCase) => c.stage.code === 'PASSPORT_BACK' && !!c.passportsReceived && !c.handover
 
+/** "1 old passport", "2 current passports", "2 passports (1 current, 1 old)": what a short return is missing ⚠️. */
+export function passportsMissing(m: { current: number; old: number }): string {
+  const total = m.current + m.old
+  const noun = total === 1 ? 'passport' : 'passports'
+  if (m.current > 0 && m.old > 0) return `${total} ${noun} (${m.current} current, ${m.old} old)`
+  return `${total} ${m.current > 0 ? 'current' : 'old'} ${noun}`
+}
+
+/** How many booklets that went out aren't back (0013 Decision 5, amended 17 Oct 2026); 0 until received. */
+export const missingCount = (c: VisaCase) => (c.passportsReceived ? c.passportsReceived.missing.current + c.passportsReceived.missing.old : 0)
+
+/**
+ * A short return holds the case (0013 Decision 5, amended 17 Oct 2026): in our stock, something that went out isn't
+ * back, and the shortfall isn't cleared. The handover and the delivery boy wait until it's settled.
+ */
+export const heldShort = (c: VisaCase) => passportsInStock(c) && missingCount(c) > 0 && !c.passportsReceived?.shortfallCleared
+
 /** The steps the follow-up person owns; processing owns the rest (§12.4). */
 export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
 

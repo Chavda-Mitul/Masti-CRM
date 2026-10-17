@@ -10,6 +10,7 @@ import type { Actor } from "../users/user";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import { MB } from "./casePdf";
+import { assertNotHeldShort } from "./shortfall";
 import type { HandOverInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -19,7 +20,8 @@ import { countTravellers, travellerLabel } from "./visaCase";
 // any Visa staff with EDIT, who can open a case while its passports are in our stock (Decision 5), counts the booklets
 // (they must match our stock, Decision 4), records who collected them (a traveller, or someone else by name) and takes
 // their photo (Decisions 3 and 6), whatever the case's status (Decision 7). The case moves to Delivered and closes; a
-// cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it.
+// cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it. A short return is
+// settled first (0013 Decision 5, amended 17 Oct 2026).
 
 /** What a handover checks, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
@@ -27,8 +29,11 @@ async function gather(db: Db, enquiryId: string) {
     where: { enquiryId },
     select: {
       passportsReceivedAt: true,
+      bookletsCurrent: true,
+      bookletsOld: true,
       bookletsBackCurrent: true,
       bookletsBackOld: true,
+      shortfallClearedAt: true,
       handover: { select: { enquiryId: true } },
       travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true } },
     },
@@ -37,10 +42,14 @@ async function gather(db: Db, enquiryId: string) {
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
-/** In our stock: received at Step 7, and not handed over yet. */
+/**
+ * In our stock: received at Step 7, and not handed over yet. Not while a short return holds the case (0013 Decision 5,
+ * amended 17 Oct 2026): the rest come in, or the shortfall is cleared, first.
+ */
 function assertInStock(g: Gathered) {
   if (!g.passportsReceivedAt) throw conflict("Mark the passports received first.");
   if (g.handover) throw conflict("The passports are already handed over.");
+  assertNotHeldShort({ ...g, travellerCount: g.travellers.length });
 }
 
 /**
