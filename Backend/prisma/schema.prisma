@@ -218,6 +218,8 @@ model FieldJob {
   cancelledBy     User?            @relation("FieldJobCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
   failReason      FieldFailReason? @relation(fields: [failReasonId], references: [id], onDelete: Restrict)
   selfie          CaseFile?        @relation("FieldJobSelfie", fields: [selfieId], references: [id], onDelete: Restrict)
+  /// The handover a delivery done at the door made (phase 5).
+  handover        VisaHandover?
 
   @@index([assigneeId, day])
   @@index([enquiryId])
@@ -1154,8 +1156,9 @@ enum HandoverMode {
 
 /// The passports handed back to the client (docs/decisions/0014-visa-delivered.md), once per case, never changed: how,
 /// when and by whom; the booklets counted (the service keeps them equal to the stock count, Decision 4); who collected
-/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person, which an office
-/// handover must have (checked in the migration).
+/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person. At the client's
+/// door (mode DELIVERY, 0015 phase 5) it points at the boy's field job, which holds the client's code, his selfie and
+/// the place (checked in the migration).
 model VisaHandover {
   enquiryId           String             @id
   mode                HandoverMode
@@ -1165,11 +1168,14 @@ model VisaHandover {
   bookletsOld         Int                @db.SmallInt
   receiverTravellerId String?
   receiverName        String?
-  receiverPhotoId     String?            @unique
+  receiverPhotoId     String             @unique
+  /// The delivery boy's job, at the door (mode DELIVERY), and only then.
+  fieldJobId          String?            @unique
   visaCase            VisaCase           @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
   by                  User               @relation("VisaHandoverBy", fields: [byId], references: [id], onDelete: Restrict)
   receiverTraveller   VisaCaseTraveller? @relation(fields: [receiverTravellerId], references: [id], onDelete: Restrict)
-  receiverPhoto       CaseFile?          @relation(fields: [receiverPhotoId], references: [id], onDelete: Restrict)
+  receiverPhoto       CaseFile           @relation(fields: [receiverPhotoId], references: [id], onDelete: Restrict)
+  fieldJob            FieldJob?          @relation(fields: [fieldJobId], references: [id], onDelete: Restrict)
 
   @@index([byId])
   @@index([receiverTravellerId])

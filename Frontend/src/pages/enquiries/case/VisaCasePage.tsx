@@ -25,6 +25,7 @@ import { SavedFileCard } from './SavedFileCard'
 import { StickerCard } from './StickerCard'
 import { SubmitOnlineCard } from './SubmitOnlineCard'
 import { TripCard } from './TripCard'
+import { WindingDownBanner } from './WindingDownBanner'
 import { WithVendorCard } from './WithVendorCard'
 
 /**
@@ -66,6 +67,7 @@ export function VisaCasePage() {
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">
+          <WindingDownBanner visaCase={c} />
           <HandoverCard visaCase={c} />
           <PassportsBackCard visaCase={c} />
           <DecisionCard visaCase={c} />

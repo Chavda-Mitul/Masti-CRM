@@ -23,6 +23,8 @@ export interface RunStop {
   booklets: { current: number; old: number } | null
   /** A pickup: the papers still pending on the case's checklist, traveller by traveller. */
   pending: { document: string; traveller: string }[]
+  /** A delivery: the travellers, to pick who receives (names only). */
+  travellers: { id: string; name: string }[]
   /** When he recorded it done or couldn't complete (phase 4), and why it couldn't be. */
   finishedAt: string | null
   failReason: string | null

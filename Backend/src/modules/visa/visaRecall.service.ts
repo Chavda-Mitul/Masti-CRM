@@ -4,7 +4,7 @@ import { assertFresh } from "../../lib/changes";
 import { conflict, fieldError, forbidden, HttpError } from "../../lib/httpError";
 import { isHodOf } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { findVisibleCase, loadCase, lockCase, visaStage, WITH_VENDOR } from "./caseLock";
+import { findVisibleCase, loadCase, lockCase, RECALLING, visaStage } from "./caseLock";
 import type { InvoiceImages } from "./invoicePdf";
 import type { RecallInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
@@ -27,18 +27,20 @@ import {
 // fee (nothing on a lump sum); VFS, Masti's service charge and the courier are kept. Only the Visa HOD or the Head can
 // give back more ("Change refund (HOD)"), per traveller up to what they were charged, never the service charge, so the
 // note carries no GST. The case goes to Passport back, marked Recalled, due the next office day ⚠️ (visa.recallReturn)
-// to chase the vendor for the papers.
+// to chase the vendor for the papers. A cancelled case is recalled too, so its passports still come back
+// (docs/decisions/0006-visa-documents.md amendment 15).
 
 const VISA = "VISA";
 
-/** The case's standing invoice and what a credit note against it prints, its file and the recall's timing. */
+/** The case's standing invoice and what a credit note against it prints, its file, its status and the recall's timing. */
 async function gather(enquiryId: string, db: Db) {
-  const [credit, visa, settings] = await Promise.all([
+  const [credit, visa, enquiry, settings] = await Promise.all([
     gatherForCredit(enquiryId, db),
     db.visaCase.findUniqueOrThrow({ where: { enquiryId }, select: { docketId: true } }),
+    db.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, select: { status: true } }),
     getVisaSettings(db),
   ]);
-  return { ...credit, visa, recallReturn: settings.recallReturn };
+  return { ...credit, visa, status: enquiry.status, recallReturn: settings.recallReturn };
 }
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
@@ -60,28 +62,36 @@ function assertRecallable(g: Gathered) {
   if (!g.visa.docketId) throw conflict("This file went in online: there's nothing to take back from a vendor.");
 }
 
-/** The invoice a recall gives back from: the case's standing one. */
-function standingInvoice(g: Gathered) {
+/**
+ * The invoice a recall gives back from: the case's standing one. A cancelled case whose invoice was already cancelled
+ * whole (no replacement) has none, and its recall gives nothing back (0006 amendment 15); an open case raises the
+ * corrected one first.
+ */
+function recallInvoice(g: Gathered) {
   const inv = g.invoice;
-  if (!inv || cancellationOf(inv)) throw conflict("This file has no standing invoice: raise the corrected one first.");
-  return inv;
+  if (inv && !cancellationOf(inv)) return inv;
+  if (g.status === "CANCELLED") return null;
+  throw conflict("This file has no standing invoice: raise the corrected one first.");
 }
 
-/** For the recall dialog: each traveller's default refund, the total, the number its credit note would get, and when it's due back. */
+/**
+ * For the recall dialog: each traveller's default refund, the total, the number its credit note would get, and when it's
+ * due back. With no invoice to give back from (a cancelled case, above), `invoiceNo` is null and nothing goes back.
+ */
 export async function recallCheck(caseNo: string, user: UserWithDepartments) {
   const { id } = await findVisibleCase(caseNo, user);
   const g = await gather(id, prisma);
   assertRecallable(g);
-  const inv = standingInvoice(g);
-  const lines = refundLines(inv);
+  const inv = recallInvoice(g);
+  const lines = inv ? refundLines(inv) : [];
   return {
-    invoiceNo: inv.invoiceNo,
+    invoiceNo: inv?.invoiceNo ?? null,
     lines,
     defaultTotalPaise: lines.reduce((n, l) => n + l.defaultRefundPaise, 0),
-    canChangeRefund: isHodOf(user, VISA),
-    creditNoteNo: await nextCreditNoteNo(g, prisma),
+    canChangeRefund: !!inv && isHodOf(user, VISA),
+    creditNoteNo: inv ? await nextCreditNoteNo(g, prisma) : null,
     dueAt: await dueOnOfficeDay(g.recallReturn),
-    blockers: creditBlockers(g, user.name),
+    blockers: inv ? creditBlockers(g, user.name) : [],
   };
 }
 
@@ -138,20 +148,22 @@ function partDraft(inv: CreditInvoice, refunds: ReturnType<typeof refundsOf>["re
 /**
  * "Take the file back" (Decision 6). In one transaction under the case lock: the case moves to Passport back, due the
  * next office day; the recall is stamped with who, when and why; when anything goes back, a PART credit note is issued
- * (PDF, number, file, rows, audit); and the recall is audited with the refunds and whether the HOD changed them.
+ * (PDF, number, file, rows, audit); and the recall is audited with the refunds and whether the HOD changed them. On an
+ * open or a cancelled case (RECALLING); a cancelled one with no invoice left to give back from gives nothing back.
  */
 export async function recallFile(caseNo: string, input: RecallInput, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, WITH_VENDOR);
+  const enquiry = await loadCase(caseNo, actor, RECALLING);
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
   const check = async (g: Gathered, db: Db) => {
     assertRecallable(g);
-    const inv = standingInvoice(g);
-    if (inv.invoiceNo !== input.invoiceNo) {
+    const inv = recallInvoice(g);
+    if ((inv?.invoiceNo ?? null) !== input.invoiceNo) {
       throw new HttpError(409, "This file's invoice changed after this opened. Look at it again.", { code: "RECALL_CHANGED" });
     }
     const reason = await db.recallReason.findUnique({ where: { id: input.reasonId } });
     if (!reason?.isActive) throw fieldError("reasonId", "Pick an active reason.");
-    const refund = refundsOf(inv, input, actor);
+    if (!inv && (input.refunds ?? []).length > 0) throw fieldError("refunds", "Nothing goes back: this file's invoice was already cancelled.");
+    const refund = inv ? refundsOf(inv, input, actor) : { refunds: [] as ReturnType<typeof refundsOf>["refunds"], changed: false, totalPaise: 0 };
     if (refund.totalPaise > 0) {
       const blockers = creditBlockers(g, actor.user.name);
       if (blockers.length) throw new HttpError(409, "The credit note can't be issued yet.", { code: "RECALL_BLOCKED", blockers });
@@ -168,7 +180,7 @@ export async function recallFile(caseNo: string, input: RecallInput, actor: Acto
   await withCreditNoteNumber((upload) =>
     prisma.$transaction(
       async (tx) => {
-        const locked = await lockCase(tx, enquiry.id, actor, WITH_VENDOR);
+        const locked = await lockCase(tx, enquiry.id, actor, RECALLING);
         assertFresh(locked.updatedAt, input.updatedAt, "case");
         const g = await gather(enquiry.id, tx);
         const { inv, reason, refunds, changed, totalPaise } = await check(g, tx);
@@ -181,7 +193,7 @@ export async function recallFile(caseNo: string, input: RecallInput, actor: Acto
           data: { recalledAt: new Date(), recalledById: actor.user.id, recallReasonId: reason.id },
         });
         const note =
-          totalPaise > 0
+          inv && totalPaise > 0
             ? await issueCreditNote(tx, { enquiryId: enquiry.id, g, inv, draft: partDraft(inv, refunds, reason.name, creditReason), images, actor, upload })
             : null;
         await audit(

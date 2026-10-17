@@ -1,3 +1,4 @@
+import type { FieldJobKind } from "../../../generated/prisma/enums";
 import type { Email } from "../../lib/email";
 
 // The email that carries the client's one-time code (docs/decisions/0015-field-staff-app.md Decision 4). Fixed wording
@@ -14,6 +15,8 @@ export interface OtpEmailInput {
   boy: string;
   company: { name: string; phone: string | null; email: string | null };
   caseNo: string;
+  /** A pickup collects the documents; a delivery hands the passports over. */
+  kind: FieldJobKind;
   code: string;
   /** How long the code works. */
   minutes: number;
@@ -21,7 +24,8 @@ export interface OtpEmailInput {
 
 export function otpEmail(d: OtpEmailInput): Email {
   const greeting = `Hello ${d.client},`;
-  const visit = `${d.boy} from ${d.company.name} is at your door to collect the documents for ${d.caseNo}. Give him this code to confirm:`;
+  const why = d.kind === "PICKUP" ? `to collect the documents for ${d.caseNo}` : `to hand over the passports for ${d.caseNo}`;
+  const visit = `${d.boy} from ${d.company.name} is at your door ${why}. Give him this code to confirm:`;
   const closing = `It works for ${d.minutes} minutes. If you didn't expect this, don't share it${d.company.phone ? `, and call us on ${d.company.phone}` : ""}.`;
   return {
     to: d.to,

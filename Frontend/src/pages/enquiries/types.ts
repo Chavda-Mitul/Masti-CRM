@@ -32,6 +32,8 @@ export interface EnquiryRow {
   reason: { name: string } | null
   /** When a postponed case comes back, YYYY-MM-DD. */
   resumeOn: string | null
+  /** A visa case whose passports are still to hand back: a cancelled one stays on the Open tab until then (0006 amendment 15). */
+  toHandBack?: boolean
   stage: StageRef
   source: { code: string; name: string }
   origin: EnquiryOrigin
@@ -227,6 +229,8 @@ export interface Handover {
   booklets: { current: number; old: number }
   receiver: { name: string; travellerId: string | null }
   photo: { id: string; fileName: string } | null
+  /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) is on the case's field jobs. */
+  fieldJobId: string | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */
@@ -457,9 +461,13 @@ export interface AdditionalInvoiceCheck {
 /** The file's one additional invoice (0011 Decision 7): an invoice of extra charges, with no GST. */
 export type CaseAdditionalInvoice = CaseInvoice & { charges: { name: string; amountPaise: number }[] }
 
-/** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
+/**
+ * GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller.
+ * `invoiceNo` (and `creditNoteNo`) are null when nothing can go back: a cancelled case whose invoice was already
+ * cancelled whole (docs/decisions/0006-visa-documents.md amendment 15).
+ */
 export interface RecallCheck {
-  invoiceNo: string
+  invoiceNo: string | null
   lines: {
     /** The invoice's line, 1, 2, 3… */
     position: number
@@ -474,7 +482,7 @@ export interface RecallCheck {
   defaultTotalPaise: number
   /** The Visa HOD or the Head: "Change refund (HOD)" */
   canChangeRefund: boolean
-  creditNoteNo: string
+  creditNoteNo: string | null
   dueAt: string
   blockers: { kind: string; label: string; items: string[] }[]
 }
@@ -483,6 +491,8 @@ export interface RecallCheck {
 export interface CancelInvoiceCheck {
   invoiceNo: string
   alreadyCancelled: string | null
+  /** The case is cancelled: no corrected invoice follows, so only the Visa HOD or the Head may (0006 amendment 15). */
+  hodOnly: boolean
   blockers: { kind: string; label: string; items: string[] }[]
   preview: {
     creditNoteNo: string

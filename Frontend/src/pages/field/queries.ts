@@ -74,17 +74,45 @@ export function useCheckOtp(jobId: string) {
   return useStopSave(jobId, (code: string) => api<MyStop>(stopPath(jobId, '/otp/check'), { method: 'POST', body: { code } }))
 }
 
-/** His selfie at the door, saved as soon as he takes it: its case file. */
-export function useUploadSelfie(jobId: string) {
+/** The photos taken at the door: his selfie, or (at a delivery) the person receiving. */
+export type DoorPhoto = 'selfie' | 'receiver'
+
+/** A photo at the door, saved as soon as he takes it: its case file. */
+export function useUploadDoorPhoto(jobId: string, kind: DoorPhoto) {
   return useMutation({
-    mutationFn: async (photo: Blob) =>
-      (await uploadFile<{ selfie: { id: string; fileName: string } }>(stopPath(jobId, '/selfie'), photo, photo.type || 'image/jpeg')).selfie,
+    mutationFn: async (photo: Blob) => {
+      const answer = await uploadFile<{ selfie?: SavedPhoto; photo?: SavedPhoto }>(
+        stopPath(jobId, kind === 'selfie' ? '/selfie' : '/receiver-photo'),
+        photo,
+        photo.type || 'image/jpeg',
+      )
+      return (kind === 'selfie' ? answer.selfie : answer.photo)!
+    },
   })
+}
+
+interface SavedPhoto {
+  id: string
+  fileName: string
 }
 
 /** "Picked up": the booklets he counted, his selfie and the place, once the client confirmed the code. */
 export function useMarkDone(jobId: string) {
   return useStopSave(jobId, (body: { booklets: { current: number; old: number }; selfieId: string; place: Place }) =>
     api<MyStop>(stopPath(jobId, '/done'), { method: 'POST', body }),
+  )
+}
+
+/** The handover at the door (phase 5): the booklets, who receives them, their photo, his selfie and the place. */
+export function useHandOverAtDoor(jobId: string) {
+  return useStopSave(
+    jobId,
+    (body: {
+      booklets: { current: number; old: number }
+      receiver: { travellerId: string } | { name: string }
+      photoId: string
+      selfieId: string
+      place: Place
+    }) => api<MyStop>(stopPath(jobId, '/handover'), { method: 'POST', body }),
   )
 }

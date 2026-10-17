@@ -524,9 +524,9 @@ export function useRecallCheck(caseNo: string) {
   })
 }
 
-/** "Take the file back" (0011 Decision 6): `refunds` only for the HOD's "Change refund". */
+/** "Take the file back" (0011 Decision 6): `refunds` only for the HOD's "Change refund"; `invoiceNo` null when nothing goes back. */
 export function useRecallFile(caseNo: string) {
-  return useCaseAction<{ invoiceNo: string; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
+  return useCaseAction<{ invoiceNo: string | null; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
     caseNo,
     (base, body) => api(`${base}/recall`, { method: 'POST', body }),
   )

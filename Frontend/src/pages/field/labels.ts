@@ -62,3 +62,20 @@ export function byTraveller(pending: RunStop['pending']) {
 /** The office's Google Maps link, else directions to the address (a plain Google Maps link: no key, no cost). */
 export const directionsTo = (stop: RunStop) =>
   stop.mapLink ?? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`
+
+/** Digits only, at most `max` of them. */
+export const digits = (typed: string, max: number) => typed.replace(/\D/g, '').slice(0, max)
+
+/** The booklets as typed, current and old. */
+export interface TypedBooklets {
+  current: string
+  old: string
+}
+
+/** The count typed: whole numbers up to 50 each, else null. */
+export function countOf({ current, old }: TypedBooklets): { current: number; old: number } | null {
+  const one = (typed: string) => (/^\d{1,2}$/.test(typed) && Number(typed) <= 50 ? Number(typed) : null)
+  const c = one(current)
+  const o = one(old)
+  return c === null || o === null ? null : { current: c, old: o }
+}

@@ -70,7 +70,7 @@ export const FIELD_SLOTS = [
 
 /**
  * ⚠️ 0015 Decision 5: why a visit fails, for the boy's "Couldn't complete". "Client couldn't get the code": no code, no
- * pickup (decided 17 Oct 2026).
+ * pickup or handover; "Passports don't match our count": no handover at the door (both decided 17 Oct 2026).
  */
 export const FIELD_FAIL_REASONS = [
   { code: "CLIENT_NOT_HOME", name: "Client not home", sortOrder: 1 },
@@ -78,6 +78,7 @@ export const FIELD_FAIL_REASONS = [
   { code: "COME_LATER", name: "Client asked to come later", sortOrder: 3 },
   { code: "NOT_READY", name: "Not ready", sortOrder: 4 },
   { code: "NO_CODE", name: "Client couldn't get the code", sortOrder: 5 },
+  { code: "COUNT_MISMATCH", name: "Passports don't match our count", sortOrder: 6 },
 ] as const;
 
 export async function seedEnquiryMasters(db: Db) {

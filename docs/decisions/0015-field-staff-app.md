@@ -1,9 +1,8 @@
 # 0015 · The field staff app (collection and delivery boy)
 
-- **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
-  pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2); his run on his phone (17 Oct 2026,
-  phase 3); couldn't complete (17 Oct 2026, phase 4a); the pickup at the door (17 Oct 2026, phase 4b). A "Built" note
-  is added under each part as its phase lands.
+- **Status:** decided and built (17 Oct 2026, project lead), one phase at a time (Decision 1): booking a pickup
+  (phase 1); booking a delivery (phase 2); his run on his phone (phase 3); couldn't complete (phase 4a); the pickup at
+  the door (phase 4b); the doorstep handover (phase 5). Each part has its "Built" note.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -88,12 +87,21 @@ At each stop the boy also records, before he can finish:
   Give him this code to confirm … It works for 10 minutes. If you didn't expect this, don't share it, and call us on
   …". It moves to an approved SMS or WhatsApp template once one is connected (M2).
 
+**Decided 17 Oct 2026 (project lead), for the delivery (phase 5):**
+- **No code, no handover.** If the client can't get the code, he brings the passports back and taps Couldn't complete
+  ("Client couldn't get the code"), as at a pickup. This settles 0014 Decision 2's open question for the delivery.
+- **A count that doesn't match our stock blocks the handover,** as at the office: he brings everything back and taps
+  Couldn't complete with "Passports don't match our count" ⚠️ (seeded).
+- **The receiver is as at the office:** a traveller on the case, or someone else by name. He photographs that person
+  (the phone's back camera); the client confirms with the code.
+
 ### 5. A visit that fails
 
 **Decided 17 Oct 2026 (project lead):** the boy taps **Couldn't complete** and picks a reason from a list the Head or an
-HOD edits, seeded ⚠️ with Client not home, Wrong address, Client asked to come later, Not ready, and Client couldn't
-get the code (added the same day: no code, no pickup, Decision 4). The place and time are recorded, and the case comes
-back to the office, due now, to book again.
+HOD edits, seeded ⚠️ with Client not home, Wrong address, Client asked to come later, Not ready, Client couldn't get the
+code, and Passports don't match our count (the last two added the same day: no code, no pickup or handover; a count
+that doesn't match, no handover; Decision 4). The place and time are recorded, and the case comes back to the office,
+due now, to book again.
 
 **Built 17 Oct 2026** (phase 1, book a pickup):
 - **Data** (migration `20261017140000_field_pickup`): the list `FieldSlot` (code, name, from, to, order, on/off; CHECKs:
@@ -244,12 +252,55 @@ back to the office, due now, to book again.
     before them, a picture came out black (seen in headless Chrome; iOS Safari needs the same). The office's receiver
     photo (0014) gets the same fix.
 
+**Built 17 Oct 2026** (phase 5, the doorstep handover):
+- **Data** (migration `20261017200000_field_doorstep_handover`):
+  - `VisaHandover.fieldJobId` (unique, the delivery boy's job). CHECK: a handover at the door (mode DELIVERY) ↔ its
+    job.
+  - `receiverPhotoId` becomes `NOT NULL`: both kinds of handover photograph the person receiving. The office's own
+    CHECK goes.
+  - The reasons list gains "Passports don't match our count" ⚠️ (`COUNT_MISMATCH`).
+- **Shared with the office** (`visa/visaHandover.service.ts`): `gather`, `assertInStock`, `checkHandover` (the booklets
+  equal our stock; the receiver is a traveller or a name) and a new `deliverCase` (Delivered, closing, booked jobs
+  called off), which the office's handover now calls too. The validators `handOverBookletsSchema` and `receiverSchema`
+  are shared from `visa.schemas.ts`.
+- **His side** (field staff only; his booked delivery on today's run):
+  - The code and his selfie now work at a delivery too. The code's email reads "…is at your door to hand over the
+    passports for VISA-2026-0001. Give him this code to confirm: …".
+  - `POST /api/field/jobs/:jobId/receiver-photo` (a delivery only): the person receiving, a RECEIVER_PHOTO case file
+    (`{caseNo}_receiver.jpg`), saved as he takes it.
+  - `POST /api/field/jobs/:jobId/handover` `{ booklets, receiver: { travellerId | name }, photoId, selfieId, place }`:
+    - **Refused:** without the code ("The client hasn't confirmed with the code yet."); a count that doesn't match
+      ("Count again: our stock has 2 current + 0 old. Find what's missing before handing over."); no receiver, or
+      both; a photo or selfie that isn't his, of the right kind, unused; a pickup (409); another boy's stop (404).
+    - **One transaction under the case's lock:**
+      - the job DONE, with the booklets, his selfie and the place
+      - `deliverCase` ("handed over at the door")
+      - the `VisaHandover` (mode DELIVERY, by him, the receiver and their photo, the job)
+      - audits `visa.handover` (with the job and the place) and `field.job.done`
+    - The office's handover first calls a booked delivery off, and his is then refused ("The office called this stop
+      off."). After either, a second is refused.
+  - A delivery's stop lists its travellers (`travellers: [{ id, name }]`, names only), to pick who receives.
+- **Screens:**
+  - **A booked delivery's screen** shows the demo's four steps:
+    1. **Booklets counted:** "Our stock: 2 passports + 1 old". A different count says "Count again… If one is
+       missing, don't hand over: use Couldn't complete."
+    2. **Code from the client.**
+    3. **Photo of the person receiving:** the travellers as big rows, or Someone else with a name; then the back
+       camera.
+    4. **Your selfie at the door.**
+
+    **Finish handover · N steps left**, then "Passports handed over." and back to the run.
+  - **The steps are shared** with the pickup (`DoorSteps.tsx`: `Step`, `BookletsStep`, `CodeStep`; `PhotoStep.tsx`
+    for both photos).
+  - **The case page's "Handed back to the client"** shows "Our delivery boy", "Received by", and a second row: Code
+    from the client · Confirmed, His selfie · Open, Place · Map, At the door · Sat 17 Oct, 16:46.
+
 ### 6. Settings and lists (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | Time slots (a list: name, from, to) | 11 am – 1 pm, 2–4 pm, 4–6 pm ⚠️ |
-| Reasons a visit fails (a list, phase 4) | Client not home, Wrong address, Client asked to come later, Not ready, Client couldn't get the code ⚠️ |
+| Reasons a visit fails (a list, phase 4) | Client not home, Wrong address, Client asked to come later, Not ready, Client couldn't get the code, Passports don't match our count ⚠️ |
 | The code and the selfie (setting `field`, phase 4) | the code works 10 minutes, 5 wrong tries, a new one after 60 seconds; a selfie at most 5 MB ⚠️ |
 
 **Defaults (not asked; say if any is wrong):**

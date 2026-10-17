@@ -41,9 +41,13 @@ interface Mail {
   Subject: string;
   To: { Address: string }[];
 }
-/** Every email Mailpit caught (newest first), with the newest one's text. */
+/**
+ * The emails Mailpit caught for this file's client (newest first), with the newest one's text. Only theirs: an email
+ * another test file sent just before can still be arriving.
+ */
 async function inbox() {
-  const { messages } = (await (await fetch(`${mailpit}/api/v1/messages`)).json()) as { messages: Mail[] };
+  const all = ((await (await fetch(`${mailpit}/api/v1/messages`)).json()) as { messages: Mail[] }).messages;
+  const messages = all.filter((m) => m.To.some((t) => t.Address === "hiren@example.com"));
   const first = messages[0] && ((await (await fetch(`${mailpit}/api/v1/message/${messages[0].ID}`)).json()) as { Text: string });
   return { messages, text: first?.Text ?? "" };
 }
@@ -200,7 +204,7 @@ describe("the client's code", () => {
 
 describe("his selfie", () => {
   it("is a JPEG or PNG, really, within the limit, for his own pickup on today's run", async () => {
-    const { pickup, boy, ramesh, c, job } = await setup();
+    const { pickup, boy, ramesh, c } = await setup();
     const res = await selfie(boy, pickup.id, PNG, "image/png");
     expect(res.status).toBe(200);
     expect(res.body.selfie).toMatchObject({ fileName: `${c.caseNo}_selfie.png` });
@@ -218,8 +222,10 @@ describe("his selfie", () => {
 
     await createUser({ name: "Suresh", mobile: "+919825000002", type: "FIELD" });
     expect((await selfie(await loginAs("98250 00002"), pickup.id)).status).toBe(404);
-    const delivery = await job({ kind: "DELIVERY" });
-    expect((await selfie(boy, delivery.id)).body.message).toBe("Only a pickup is recorded this way.");
+    // The photo of the person receiving is a delivery's (phase 5).
+    const receiver = await boy.post(`/api/field/jobs/${pickup.id}/receiver-photo`).set("Content-Type", "image/jpeg").send(JPEG);
+    expect(receiver.status).toBe(409);
+    expect(receiver.body.message).toBe("Only a delivery is handed over this way.");
   });
 });
 
@@ -290,8 +296,8 @@ describe("Picked up (phase 4b)", () => {
     expect(reused.status).toBe(400);
     expect(reused.body.issues.selfieId).toEqual(["Take your selfie at the door."]);
 
+    // "Picked up" is a pickup's; a delivery is handed over (phase 5).
     const delivery = await job({ kind: "DELIVERY" });
-    expect((await send(boy, delivery.id)).body.message).toBe("Only a pickup is recorded this way.");
     expect((await done(boy, delivery.id, { booklets: { current: 1, old: 0 }, selfieId: taken.id, place: PLACE })).body.message).toBe(
       "Only a pickup is recorded this way.",
     );
@@ -319,5 +325,31 @@ describe("the field settings", () => {
     const { otp } = (await send(boy, pickup.id)).body;
     expect(Date.parse(otp.expiresAt) - Date.parse(otp.sentAt)).toBe(15 * 60_000);
     expect((await inbox()).text).toContain("It works for 15 minutes.");
+  });
+});
+
+describe("the database", () => {
+  it("keeps a finished job's time and place, a failed one's reason, a done one's proof, and the code's columns together", async () => {
+    const { pickup, ramesh, c } = await setup();
+    const set = (data: Record<string, unknown>) => prisma.fieldJob.update({ where: { id: pickup.id }, data: data as never });
+    const finished = { finishedAt: new Date(), latitude: 21.1959, longitude: 72.7933, accuracyM: 12 };
+    const notHome = (await prisma.fieldFailReason.findUniqueOrThrow({ where: { code: "CLIENT_NOT_HOME" } })).id;
+    const selfie = await prisma.caseFile.create({
+      data: { enquiryId: c.id, kind: "FIELD_SELFIE", storageKey: "t/selfie", fileName: "s.jpg", sizeBytes: 1, uploadedById: ramesh.id },
+    });
+    const now = new Date();
+    const code = { otpHash: "h", otpSentAt: now, otpSentTo: "hiren@example.com", otpExpiresAt: now };
+
+    await expect(set({ finishedAt: new Date() })).rejects.toThrow(/FieldJob_finished/);
+    await expect(set({ status: "FAILED", failReasonId: notHome, ...finished, latitude: 95 })).rejects.toThrow(/FieldJob_place/);
+    await expect(set({ status: "FAILED", ...finished })).rejects.toThrow(/FieldJob_failed/);
+    await expect(set({ status: "DONE", ...finished, ...code, otpConfirmedAt: now, bookletsCurrent: 1, bookletsOld: 0 })).rejects.toThrow(/FieldJob_done/);
+    await expect(set({ status: "DONE", ...finished, ...code, bookletsCurrent: 1, bookletsOld: 0, selfieId: selfie.id })).rejects.toThrow(/FieldJob_done/);
+    await expect(set({ status: "DONE", ...finished, ...code, otpConfirmedAt: now, bookletsCurrent: 51, bookletsOld: 0, selfieId: selfie.id })).rejects.toThrow(
+      /FieldJob_booklets_range/,
+    );
+    await expect(set({ otpHash: "h" })).rejects.toThrow(/FieldJob_otp/);
+    await expect(set({ otpConfirmedAt: now })).rejects.toThrow(/FieldJob_otp/);
+    await set({ status: "DONE", ...finished, ...code, otpConfirmedAt: now, bookletsCurrent: 1, bookletsOld: 0, selfieId: selfie.id });
   });
 });

@@ -4,7 +4,19 @@ import { useMe } from '../../../auth/useAuth'
 import type { VisaCase } from '../types'
 import { FieldJobLines } from './FieldJobLines'
 import { HandoverDialog } from './HandoverDialog'
-import { bookletsSent, bookletsText, bookletsVsIntake, dayTime, firstName, heldShort, missingCount, passportsInStock, passportsMissing, weekdayDay } from './labels'
+import {
+  bookletsSent,
+  bookletsText,
+  bookletsVsIntake,
+  dayTime,
+  firstName,
+  heldShort,
+  missingCount,
+  passportsInStock,
+  passportsMissing,
+  weekdayDay,
+  windingDown,
+} from './labels'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { ShortfallDialog } from './ShortfallDialog'
@@ -21,10 +33,11 @@ function stickersSummary(c: VisaCase): { text: string; bad: boolean } {
 /**
  * "Passports coming back" (demo screen 12 ⚠️, docs/decisions/0013-visa-passport-back.md Decisions 2 and 5), once they're
  * on their way: the demo's three tiles, Vendor collected → In transit to us → In our passport stock, and when the case is
- * due back. While they're in transit, whoever can act on the case corrects either day (Change, open cases only) or marks
- * them received (any status: the packet is here). Once received: the booklets counted against intake, the stickers
- * checked and who received them, red where they don't match. A short return holds the handover and the delivery boy
- * until whoever can act on the case settles it (0013 Decision 5, amended 17 Oct 2026): it came, or it won't come back.
+ * due back. While they're in transit, whoever can act on the case corrects either day (Change, open or cancelled cases:
+ * 0006 amendment 15) or marks them received (any status: the packet is here). Once received: the booklets counted
+ * against intake, the stickers checked and who received them, red where they don't match. A short return holds the
+ * handover and the delivery boy until whoever can act on the case settles it (0013 Decision 5, amended 17 Oct 2026): it
+ * came, or it won't come back.
  */
 export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -44,6 +57,8 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
   const cleared = r?.shortfallCleared
   const booklets = r && bookletsVsIntake(r.booklets, bookletsSent(c))
   const stickers = r && stickersSummary(c)
+  // A cancelled case's passports still come back, and it stays due until handed back (0006 amendment 15).
+  const live = c.status === 'OPEN' || windingDown(c)
 
   return (
     <section className="card pad passports-back-card">
@@ -51,7 +66,7 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
         <h2 className="h2">Passports coming back</h2>
         {inTransit && canAct && (
           <span style={{ display: 'flex', gap: 8 }}>
-            {c.status === 'OPEN' && (
+            {live && (
               <button type="button" className="btn btn-sm" onClick={() => setChanging(true)}>
                 Change
               </button>
@@ -122,7 +137,7 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
       )}
       {/* In our stock: the delivery boy, booked by whoever can hand over (0015 phase 2). */}
       {r && c.stage.code === 'PASSPORT_BACK' && !c.handover && <FieldJobLines visaCase={c} kind="DELIVERY" canBook={canHand} />}
-      {c.stage.code === 'PASSPORT_BACK' && c.status === 'OPEN' && c.dueAt && (
+      {c.stage.code === 'PASSPORT_BACK' && live && c.dueAt && (
         <div className="kv">
           <span>
             {dayTime(c.dueAt)}

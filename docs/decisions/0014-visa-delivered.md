@@ -55,7 +55,7 @@ Each component is planned in plan mode, built, tested, checked in the browser an
 **Decided 17 Oct 2026 (project lead):** there's no SMS or WhatsApp sending yet (M2), so the handover OTP goes to the
 client by email until one is connected. It's needed only at the doorstep (component 4). What happens for a client with
 no email is decided when component 4 is planned. *(The doorstep moved to 0015. For the pickup, 0015 Decision 4, 17 Oct
-2026: no code, no pickup. 0015 phase 5 settles the delivery.)*
+2026: no code, no pickup. For the delivery, 0015 Decision 4, the same day: no code, no handover.)*
 
 ### 3. At the office: what's recorded
 
@@ -90,7 +90,10 @@ file (e.g. taken on a phone). On a phone or tablet the page opens the camera. Ca
 
 **Decided 17 Oct 2026 (project lead):** the passports are handed over whatever the case's status (chain of custody). An
 open or postponed case becomes **Delivered** and **closed**; a cancelled case stays cancelled, with its reason, but
-records the handover and moves to Delivered.
+records the handover and moves to Delivered. How a case cancelled after dispatch gets here (recall, on the way back,
+received) and stays on its owner's list until then: [0006](0006-visa-documents.md) amendment 15 (17 Oct 2026). A case
+cancelled before dispatch hands back the passports held at our office with this same dialog and proof, against the
+intake count, and stays at its step (amendment 15, component 3).
 
 **Built 17 Oct 2026** (component 1, the office handover, Decisions 3–7):
 - **Data** (migration `20261017120000_office_handover`): `VisaHandover` (one per case: `mode` OFFICE / DELIVERY, `at`,

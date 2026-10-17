@@ -549,6 +549,8 @@ export function toVisaCaseDto(
       booklets: { current: visa.handover.bookletsCurrent, old: visa.handover.bookletsOld },
       receiver: { name: receiverName(visa.handover, visa.travellers, adults), travellerId: visa.handover.receiverTravellerId },
       photo: visa.handover.receiverPhoto,
+      /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) the case sends. */
+      fieldJobId: visa.handover.fieldJobId,
     },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,
