@@ -76,8 +76,15 @@ stranded the client's passports (nothing could move again):
       button and is told to ask them. Nothing is raised on a cancelled case (no invoice, replacement, additional
       invoice or quote change): a cancellation charge Masti keeps is billed before cancelling. The cancel dialog
       warns about each invoice that still stands (at the vendor: its refund is set when the file is taken back).
-    - **Following as its own component:** a "Hand back to the client", with the office handover's proof, for
-      passports counted in before dispatch (not a demo screen).
+    - **Hand back before dispatch** (component 3; not a demo screen, change request #7): a case cancelled at Steps
+      1–4 while its passports are at our office (counted in at intake, more than zero) gets "Hand back to the
+      client", with the office handover's proof: the count against the intake count, who collected, a desk photo.
+      Decided 17 Oct 2026: **any Visa staff with EDIT** may do it (whoever is at the desk, as 0014 Decision 5), so
+      such a case counts as in our stock and they can open it until then; it is due the next office day at 11:00
+      (`visa.handoverCheck` ⚠️) and on its owner's Open list; afterwards it **stays at the step where it stopped**
+      (no jump to Delivered) and stays Cancelled. At the office only: the delivery boy takes received passports
+      (0015). With no intake count there's no custody record and so no hand-back; e-visas after the online submission
+      wait on M39.
     - **For the field app ([0015](0015-field-staff-app.md)):** a delivery booked to hand the passports back should
       stay booked when the case is cancelled, and booking one should give a cancelled case its due time, as on an
       open one. Until that's changed there, cancelling still calls off a booked job.
@@ -107,6 +114,17 @@ stranded the client's passports (nothing could move again):
     - **The cancel dialog:** a note per standing invoice.
     - **Tests:** 3 new (`visaCreditNote`, `visaAdditionalInvoice`). Browser-checked: a case cancelled before dispatch,
       its invoice cancelled by the HOD. All 42 test files pass (513).
+
+    **Built 17 Oct 2026, component 3** (`f37e07d`, branch `fix/visa-cancel-custody`):
+    - **Definitions:** `PRE_DISPATCH` and `heldAtOffice` (`visibility.ts`, mirrored in `labels.ts`). `TO_HAND_BACK` /
+      `toHandBack` and `IN_STOCK` / `passportsInStock` include a cancelled case held at the office.
+    - **Cancel:** the case is due at the handover check.
+    - **The handover:** `HANDING_OVER` covers Steps 1–4. `assertInStock` requires a cancelled case with an intake
+      count, and the count must match the intake. The case keeps its step and its due time is cleared (audit
+      `beforeDispatch: true`).
+    - **The case page:** "Hand back to the client →", the banner, the dialog with no delivery option, the card's
+      "Handed back".
+    - **Tests:** 3 new (`visaCancelCustody`). All 42 test files pass (516). Browser-checked.
 
 ## Context
 
