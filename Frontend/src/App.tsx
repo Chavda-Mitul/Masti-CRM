@@ -5,6 +5,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ClientDetailPage } from './pages/clients/ClientDetailPage'
 import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
 import { EnquiriesPage } from './pages/enquiries/EnquiriesPage'
+import { FieldRunPage } from './pages/field/FieldRunPage'
 import { FollowUpsPage } from './pages/followUps/FollowUpsPage'
 import { VisaCasePage } from './pages/enquiries/case/VisaCasePage'
 import { NewEnquiryPage } from './pages/enquiries/NewEnquiryPage'
@@ -16,7 +17,6 @@ import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
-import { TasksPage } from './pages/TasksPage'
 import { TodayPage } from './pages/TodayPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -48,7 +48,7 @@ export default function App() {
         element={
           <RequireAuth>
             <RequireField>
-              <TasksPage />
+              <FieldRunPage />
             </RequireField>
           </RequireAuth>
         }

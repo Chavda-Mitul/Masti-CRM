@@ -1,7 +1,8 @@
 # 0015 · The field staff app (collection and delivery boy)
 
 - **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
-  pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2). A "Built" note is added under each part as its phase lands.
+  pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2); his run on his phone (17 Oct 2026,
+  phase 3). A "Built" note is added under each part as its phase lands.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -118,6 +119,32 @@ recorded, and the case comes back to the office, due now, to book again.
   Oct, 11 am – 1 pm", "Deliver to · …", Change and Cancel, or **Book the delivery boy**. The pickup and delivery lines
   share `FieldJobLines`; the dialog takes the kind.
 
+**Built 17 Oct 2026** (phase 3, his run on his phone):
+- `GET /api/field/jobs?day=YYYY-MM-DD`, for field staff only (office staff and the Head get 403): his own jobs that
+  day, today in India when no day is asked for. They come in slot order, then by when they were booked, with the
+  called-off ones last. Each stop carries:
+  - the desk that raised it (for the chip's colour), the slot, the case number and the client's name
+  - the address, the map link and the mobile to call
+  - what it needs: for a delivery, the booklets in our stock; for a pickup, the papers still pending on the case's
+    checklist, by traveller, leaving out what we arrange ourselves
+
+  With them come `done` (done or couldn't complete) of `total` (not called off), and `today` by the server's clock.
+- **Screen** (`/tasks`, demo screen 14; it replaces the placeholder):
+  - **The dark band:** "Ramesh's run · Sat 17 Oct", "Collection & delivery", "1 of 3 done" and a bar with one piece per
+    stop (done green, the one he's on orange).
+  - **‹ Yesterday · Today · Tomorrow ›** step through the days (`?day=`). Today drops it, so a phone left open reopens
+    on the new day.
+  - **Each stop:** "Stop 2 · 2–4 pm · Now", the kind (Pick up documents / Deliver passports, in the desk's colour),
+    client · case and the address. While it's booked: **Call Hiren** (`tel:`) and **Directions** (the pasted Google
+    Maps link, else Google Maps directions to the address: no key, no cost). Then "Hand over · 2 passports + 1 old",
+    or "Still to collect" traveller by traveller (the names split by " · ", since checklist names hold commas;
+    "Nothing pending on the checklist" when empty).
+  - **A done or couldn't-complete stop** shows a chip. **A called-off one** is greyed: "Called off by the office.
+    Don't go."
+  - The run refreshes every minute while open and whenever he comes back to it. When the server can't be reached, it
+    keeps the last loaded run, with a note.
+  - A phone-first column, 480 px wide and centred on a desktop.
+
 ### 6. Settings and lists (golden rule 1)
 
 | What | Seeded with |
@@ -136,6 +163,25 @@ recorded, and the case comes back to the office, due now, to book again.
 - **While a job is booked**, an open case is due at the slot's end that day, to check it happened.
 - **The office handover cancels an open delivery job** of the case, in the same save (phase 2).
 
+### 7. His run on his phone (phase 3)
+
+**Decided 17 Oct 2026 (project lead):**
+- **Days:** his phone opens on **today**. ‹ › step to other days: tomorrow to plan ahead, past days to look back
+  (read-only).
+- **A pickup stop lists the papers still pending** on the case's checklist ("Still to collect"), traveller by
+  traveller. Names only; nothing scanned is shown.
+- **His sign-in** works as office staff's for now: 12 h idle, 7 days at most. Revisit once Masti answers Q3 (the
+  device).
+
+**Defaults (not asked; say if any is wrong):**
+- **He sees only his own jobs**, and only what each stop needs: the client's name, the case number, the address, the
+  map link, the mobile to call, and the booklets to hand over or the papers to collect. Never the case page, money or
+  documents.
+- **Order:** by slot start, then by when the job was booked.
+- **"3 of 5 done"** counts finished stops (done or couldn't complete) among the day's jobs that weren't called off.
+- **Called-off stops** stay at the bottom, greyed, as "Called off by the office", so he knows not to go.
+- **Call** is a `tel:` link to the job's mobile; **Directions** as in Decision 3.
+
 ## Not in this record
 
 - **Collect-payment stops** (the demo's "Collect payment · ₹[amount] · cheque"): Accounts.
@@ -145,7 +191,8 @@ recorded, and the case comes back to the office, due now, to book again.
 
 ## Still needed from Masti
 
-- **Q3 / R2:** the boy's device (we build a phone website; the camera and GPS need HTTPS in production).
+- **Q3 / R2:** the boy's device (we build a phone website; the camera and GPS need HTTPS in production). Until
+  then his sign-in works as office staff's (Decision 7).
 - **M14 / Q12:** confirm the handover steps.
 - **M2:** the SMS / WhatsApp accounts.
 - **M15 / Q38:** whether Sundays and office holidays block collections and deliveries (seeded: yes).

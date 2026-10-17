@@ -102,7 +102,7 @@ Every question we still need answered before or during the build, in one place. 
 | # | Decision | What to do | Ref |
 |---|---|---|---|
 | R1 | Docket grouping: one docket per file, or one per vendor per day (today's practice)? One vendor email per docket, or one per day? | Recommend, then confirm with Vimal. He left it to us. | Q1 |
-| R2 | Collection boy's device: phone or tablet; mobile web app or WhatsApp-only jobs? | Recommend, then confirm. Vimal asked for our recommendation. | Q3 | 17 Oct, project lead: we build a phone website (`/tasks`), with Call, Google Maps directions, the client's OTP, the camera and GPS (0015). Camera and GPS need HTTPS in production. |
+| R2 | Collection boy's device: phone or tablet; mobile web app or WhatsApp-only jobs? | Recommend, then confirm. Vimal asked for our recommendation. | Q3 | 17 Oct, project lead: we build a phone website (`/tasks`), with Call, Google Maps directions, the client's OTP, the camera and GPS (0015). Camera and GPS need HTTPS in production. His sign-in works as office staff's (12 h idle, 7 days at most) until the device is confirmed (0015 Decision 7). |
 | R3 | Click-to-login: how it works and which portals it can support | Spike one visa portal and one airline portal. Tell Shivanshu what can't be done before the client assumes it can. | Q4 |
 | R4 | Ticket quote input: manual fare entry vs reading screenshots | Test both once M24 and M25 are answered, then recommend. | Q20 |
 
