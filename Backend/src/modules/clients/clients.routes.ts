@@ -1,11 +1,16 @@
 import { Router } from "express";
+import { HttpError } from "../../lib/httpError";
+import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
+import * as documentsService from "./clientDocuments.service";
 import {
+  addClientDocumentQuerySchema,
   addNoteSchema,
   addPhoneSchema,
   changeMobileSchema,
   createClientSchema,
   createMemberSchema,
+  isScanType,
   listClientsQuerySchema,
   lookupQuerySchema,
   updateClientSchema,
@@ -103,6 +108,30 @@ router.get("/:id/notes", async (req, res) => {
 router.post("/:id/notes", async (req, res) => {
   const body = addNoteSchema.parse(req.body);
   res.status(201).json({ note: await clientsService.addNote(req.params.id, body, actorOf(req)) });
+});
+
+// The document vault (docs/decisions/0016-client-documents.md): the Head and HODs only; the service checks.
+
+router.get("/:id/documents", async (req, res) => {
+  res.json(await documentsService.listClientDocuments(req.params.id, currentUser(req)));
+});
+
+/**
+ * Adds a scan: the file itself is the body (a PDF, JPEG or PNG), not a form; which paper and whose come in the query.
+ * Access, the person, the paper and the size limit are checked before the body is read.
+ */
+router.post("/:id/documents", async (req, res) => {
+  const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!isScanType(contentType)) throw new HttpError(415, "Upload a PDF, JPEG or PNG.");
+  const query = addClientDocumentQuerySchema.parse(req.query);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await documentsService.clientDocumentLimit(req.params.id, query, actor.user);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.status(201).json(await documentsService.addClientDocument(req.params.id, query, contentType, bytes, actor));
+});
+
+router.get("/:id/documents/:clientDocumentId/link", async (req, res) => {
+  res.json(await documentsService.openClientDocument(req.params.id, req.params.clientDocumentId, actorOf(req)));
 });
 
 export default router;

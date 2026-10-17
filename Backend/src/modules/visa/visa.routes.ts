@@ -3,6 +3,7 @@ import { z } from "zod";
 import { HttpError } from "../../lib/httpError";
 import { readBody } from "../../lib/readBody";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
+import { isScanType } from "../clients/clients.schemas";
 import {
   addToDocketSchema,
   cancelInvoiceSchema,
@@ -39,6 +40,7 @@ import {
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
+import * as caseScansService from "./visaCaseScans.service";
 import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
@@ -427,6 +429,27 @@ router.post("/cases/:caseNo/travellers/:travellerId/refusal-letter", visaEdit, a
   const { maxBytes, tooBig } = await refusalLetterService.refusalLetterLimit(caseNo, travellerId, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await refusalLetterService.uploadRefusalLetter(caseNo, travellerId, bytes, actor) });
+});
+
+/**
+ * "Save scan" (0016 Decision 5): keeps one of a traveller's papers in the client's document vault. The file itself is
+ * the body (a PDF, JPEG or PNG). The case, the paper and the size limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/documents/:documentId/scan", visaEdit, async (req, res) => {
+  const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!isScanType(contentType)) throw new HttpError(415, "Upload a PDF, JPEG or PNG.");
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const documentId = idParam.parse(req.params.documentId);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await caseScansService.caseScanLimit(caseNo, documentId, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await caseScansService.saveCaseScan(caseNo, documentId, contentType, bytes, actor) });
+});
+
+/** A short-lived link to a paper's copy in the client's vault (0016 Decision 5). Opening is audited. */
+router.get("/cases/:caseNo/documents/:documentId/scan/link", visaView, async (req, res) => {
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json(await caseScansService.openCaseScan(caseNo, idParam.parse(req.params.documentId), actorOf(req)));
 });
 
 /** A short-lived link that opens one of the case's files ({ url, expiresAt }). Opening is audited. */

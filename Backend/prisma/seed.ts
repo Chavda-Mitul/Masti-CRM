@@ -43,6 +43,8 @@ import {
   RECALL_RETURN_KEY,
   PASSPORTS_BACK_CHECK_KEY,
   ARRIVAL_CHECK_KEY,
+  ASSIGN_CHECK_KEY,
+  DEFAULT_ASSIGN_CHECK,
   HANDOVER_CHECK_KEY,
   HANDOVER_PHOTO_KEY,
   COLLECTION_CHECK_KEY,
@@ -50,6 +52,8 @@ import {
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
 import {
+  CLIENT_DOCUMENTS_KEY,
+  DEFAULT_CLIENT_DOCUMENTS,
   DEFAULT_EXPIRY_WARNINGS,
   DEFAULT_INVOICE_READINESS,
   EXPIRY_WARNINGS_KEY,
@@ -79,11 +83,13 @@ async function main() {
     create: { key: OFFICE_NETWORK_KEY, value: DEFAULT_OFFICE_NETWORK },
   });
 
-  // Client master: lookup tables and the ⚠️ settings (docs/decisions/0004-client-master.md). Existing rows are kept.
+  // Client master: lookup tables and the ⚠️ settings (docs/decisions/0004-client-master.md), with the document vault's
+  // largest scan (docs/decisions/0016-client-documents.md). Existing rows are kept.
   await seedClientLookups(prisma);
   for (const [key, value] of [
     [INVOICE_READINESS_KEY, DEFAULT_INVOICE_READINESS],
     [EXPIRY_WARNINGS_KEY, DEFAULT_EXPIRY_WARNINGS],
+    [CLIENT_DOCUMENTS_KEY, DEFAULT_CLIENT_DOCUMENTS],
   ] as const) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
@@ -107,7 +113,9 @@ async function main() {
   // (0008 Decision 8) ⚠️, the file-number check (0011 Decision 2) ⚠️, the collection reminder (0011
   // Decision 4) ⚠️, the credit-note series (0011 Decision 5) ⚠️, the recall's
   // follow-up (0011 Decision 6) ⚠️, the check after the decision (0012 Decision 7) ⚠️, the check on the day passports are expected back (0013
-  // Decision 3) ⚠️, the handover check once they're received (0013 Decision 5) ⚠️, the receiver photo's size limit (0014 Decision 6) ⚠️, and Masti's own details.
+  // Decision 3) ⚠️, when a matured case is due to be assigned (0006, amended 16 Oct 2026) ⚠️, the handover check once
+  // the passports are received (0013 Decision 5) ⚠️, the receiver photo's size limit (0014 Decision 6) ⚠️, and Masti's
+  // own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -119,6 +127,7 @@ async function main() {
     [RECALL_RETURN_KEY, DEFAULT_RECALL_RETURN],
     [PASSPORTS_BACK_CHECK_KEY, DEFAULT_PASSPORTS_BACK_CHECK],
     [ARRIVAL_CHECK_KEY, DEFAULT_ARRIVAL_CHECK],
+    [ASSIGN_CHECK_KEY, DEFAULT_ASSIGN_CHECK],
     [HANDOVER_CHECK_KEY, DEFAULT_HANDOVER_CHECK],
     [HANDOVER_PHOTO_KEY, DEFAULT_HANDOVER_PHOTO],
     [COLLECTION_CHECK_KEY, DEFAULT_COLLECTION_CHECK],

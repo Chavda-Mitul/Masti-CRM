@@ -206,6 +206,17 @@ export async function makeInvoiceable(
   return { travellers };
 }
 
+/**
+ * Moves every traveller's embassy appointment to yesterday, 10:30 in India: the appointments have been, as when the
+ * vendor submits the file (it can't be marked submitted before the earliest one, 0011 Decision 3, 16 Oct 2026).
+ */
+export async function appointmentsHeld(caseId: string) {
+  await prisma.visaCaseTraveller.updateMany({
+    where: { caseId, appointmentAt: { not: null } },
+    data: { appointmentAt: istDateTimeToUtc(addDays(istToday(), -1), "10:30") },
+  });
+}
+
 // Steps 6 and 7 (docs/decisions/0012-visa-decision.md, 0013-visa-passport-back.md): a decided file, and a recalled one.
 
 /** A Wednesday at least 10 days out: an open day for the French embassy in Mumbai. */
@@ -239,6 +250,7 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: "12345678", caseNos: [c.caseNo] })).status).toBe(200);
   const received = await updatedAtOf(processor, c.caseNo);
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt: received })).status).toBe(200);
+  await appointmentsHeld(c.id);
   const embassy = await prisma.embassy.findUniqueOrThrow({ where: { code: "FR-MUM" } });
   const now = await updatedAtOf(processor, c.caseNo);
   const sub = await processor

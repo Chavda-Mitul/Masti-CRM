@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, makeInvoiceable, mastiReady, type Agent } from "./visaHelpers";
+import { appointmentsHeld, dispatchCase, makeInvoiceable, mastiReady, type Agent } from "./visaHelpers";
 
 // Visa Step 6, the decision (docs/decisions/0012-visa-decision.md): once the file was submitted (at the embassy, or
 // online for an e-visa), every traveller's outcome is recorded at once, an approved one with the sticker (or e-visa)
@@ -74,6 +74,7 @@ async function atVendor({ submitted = true, extra, vendorId, clientName = "Rakes
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: "12345678", caseNos: [c.caseNo] })).status).toBe(200);
   const received = (await load(processor, c.caseNo)).updatedAt;
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt: received })).status).toBe(200);
+  await appointmentsHeld(c.id);
   if (submitted) {
     const embassy = await prisma.embassy.findUniqueOrThrow({ where: { code: "FR-MUM" } });
     const now = (await load(processor, c.caseNo)).updatedAt;

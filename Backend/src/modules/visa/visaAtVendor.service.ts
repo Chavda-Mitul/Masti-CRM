@@ -4,6 +4,7 @@ import { assertFresh } from "../../lib/changes";
 import { addDays, fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
+import { longDay } from "../holidays/holiday";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, WITH_VENDOR } from "./caseLock";
 import { MAX_COLLECTION_DAYS_AHEAD, type SaveSubmissionInput, type VendorReceivedInput } from "./visa.schemas";
@@ -18,7 +19,8 @@ import { dueBeforeOfficeDay, dueOnOfficeDay, getVisaSettings } from "./visa.sett
 // Then "Submitted at the embassy" (Decisions 3 and 4): the vendor's file number, the embassy and the expected collection
 // date, saved together and changeable while the file is at Step 5. The date can't be one the embassy is closed (its
 // holidays and the weekly Sunday, from the holiday calendar). The file comes back due the office day before it ⚠️
-// (visa.collectionCheck).
+// (visa.collectionCheck). With appointments booked (Step 3), the file is marked submitted only from the earliest
+// appointment day, and the collection date is after the latest one (decided 16 Oct 2026).
 
 /** What "Vendor got it" and "Submitted" check, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
@@ -50,6 +52,15 @@ async function dueAfterReceipt(db: Db, g: Gathered) {
     return { dueAt: new Date(Math.min(...appointments.map((at) => at.getTime()))), dueReason: "APPOINTMENT" as const };
   }
   return { dueAt: await dueOnOfficeDay((await getVisaSettings(db)).submissionCheck, db), dueReason: "NEXT_DAY" as const };
+}
+
+/**
+ * The travellers' embassy appointments as days in India: the earliest (the vendor can't submit before it) and the latest
+ * (nothing is collected before everyone has been in). Null when none is booked: an e-visa, or a visa without appointments.
+ */
+function appointmentDays(g: Gathered) {
+  const days = g.travellers.flatMap((t) => (t.appointmentAt ? [istToday(t.appointmentAt)] : [])).sort();
+  return days.length ? { earliest: days[0]!, latest: days.at(-1)! } : null;
 }
 
 function assertCanConfirm(g: Gathered) {
@@ -99,10 +110,17 @@ export async function markVendorReceived(caseNo: string, input: VendorReceivedIn
   return getVisaCaseById(enquiry.id);
 }
 
-/** Whether this file can be marked submitted: it went by docket, and the vendor got it. */
+/**
+ * Whether this file can be marked submitted: it went by docket, and the vendor got it. The first save waits for the
+ * earliest appointment day; a change later doesn't.
+ */
 function assertCanSubmit(g: Gathered) {
   if (!g.docket) throw conflict("This file went in online: there's no vendor file number.");
   if (!g.vendorReceivedAt) throw conflict("Confirm the vendor got it first.");
+  const appointments = appointmentDays(g);
+  if (!g.submittedAt && appointments && istToday() < appointments.earliest) {
+    throw conflict(`The embassy appointment is ${longDay(appointments.earliest)}. Mark it submitted on that day or after.`);
+  }
 }
 
 /**
@@ -116,10 +134,17 @@ async function checkEmbassy(db: Db, embassyId: number, g: Gathered) {
   return embassy;
 }
 
-/** After today, within a year, and not a day the embassy is closed (its holidays and the weekly Sunday). */
-async function checkCollectionOn(db: Db, date: string, embassy: { id: number; name: string }) {
+/**
+ * After today and after the latest appointment, within a year, and not a day the embassy is closed (its holidays and
+ * the weekly Sunday).
+ */
+async function checkCollectionOn(db: Db, date: string, embassy: { id: number; name: string }, g: Gathered) {
   const today = istToday();
   if (date <= today) throw fieldError("collectionOn", "Pick a day after today.");
+  const appointments = appointmentDays(g);
+  if (appointments && date <= appointments.latest) {
+    throw fieldError("collectionOn", `Pick a day after the appointment (${longDay(appointments.latest)}).`);
+  }
   if (date > addDays(today, MAX_COLLECTION_DAYS_AHEAD)) throw fieldError("collectionOn", "Pick a day within the next year.");
   const [closed] = await blockedDays(date, date, { embassyId: embassy.id }, db);
   if (closed) {
@@ -139,7 +164,7 @@ export async function saveSubmission(caseNo: string, input: SaveSubmissionInput,
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
   const pre = await gather(prisma, enquiry.id);
   assertCanSubmit(pre);
-  await checkCollectionOn(prisma, input.collectionOn, await checkEmbassy(prisma, input.embassyId, pre));
+  await checkCollectionOn(prisma, input.collectionOn, await checkEmbassy(prisma, input.embassyId, pre), pre);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, WITH_VENDOR);
@@ -147,7 +172,7 @@ export async function saveSubmission(caseNo: string, input: SaveSubmissionInput,
     const g = await gather(tx, enquiry.id);
     assertCanSubmit(g);
     const embassy = await checkEmbassy(tx, input.embassyId, g);
-    await checkCollectionOn(tx, input.collectionOn, embassy);
+    await checkCollectionOn(tx, input.collectionOn, embassy, g);
 
     const was = g.submittedAt && { vendorFileNo: g.vendorFileNo, embassyId: g.embassyId, collectionOn: fromDbDate(g.collectionOn!) };
     const now = { vendorFileNo: input.vendorFileNo, embassyId: embassy.id, collectionOn: input.collectionOn };

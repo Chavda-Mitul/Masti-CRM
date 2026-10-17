@@ -536,6 +536,9 @@ per checklist line, with the server merging them into one PDF for the vendor, in
 5. **Not "AI finds the passport inside the PDF".** Searching a 30–50-page scan for the passport pages works too late
    (point 4), costs more per call, and is less reliable on scanner-quality pages.
 
+**17 Oct 2026:** the vault is confirmed and goes further than below: every paper, not just the passport's photo page,
+kept on the client per family member. See [0016](0016-client-documents.md). The saved file is unchanged.
+
 **If passport reading (Q13) or the document vault (Q37) is confirmed:**
 
 - **One extra scan per traveller:** the passport's photo page, captured when the passport arrives in Step 2. That is one

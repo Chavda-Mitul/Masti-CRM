@@ -1,8 +1,11 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, uploadFile } from '../../lib/api'
+import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import { isStale } from './apiErrors'
+import type { ScanType } from './scanFiles'
 import type {
+  ClientDocuments,
   ClientListFilters,
   ClientListPage,
   ClientMember,
@@ -28,6 +31,7 @@ export const clientKeys = {
   list: (filters: ClientListFilters) => ['clients', 'list', filters] as const,
   detail: (id: string) => ['clients', 'detail', id] as const,
   notes: (id: string) => ['clients', 'notes', id] as const,
+  documents: (id: string) => ['clients', 'documents', id] as const,
   options: ['clients', 'options'] as const,
 }
 
@@ -148,6 +152,8 @@ function useInvalidateClient(id: string) {
   return () => {
     void queryClient.invalidateQueries({ queryKey: clientKeys.detail(id) })
     void queryClient.invalidateQueries({ queryKey: clientKeys.lists() })
+    // The vault shows each person's name and whether they were taken off the list.
+    void queryClient.invalidateQueries({ queryKey: clientKeys.documents(id) })
   }
 }
 
@@ -211,4 +217,36 @@ export function useAddNote(clientId: string) {
       queryClient.setQueryData<ClientNote[]>(clientKeys.notes(clientId), (notes) => (notes ? [note, ...notes] : notes))
     },
   })
+}
+
+// ---------------------------------------------------------------------------
+// The document vault (docs/decisions/0016-client-documents.md): HODs and the Head only
+// ---------------------------------------------------------------------------
+
+/** The client's scans, grouped by person. Loaded only when `enabled` (the server refuses anyone else). */
+export function useClientDocuments(clientId: string, enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: clientKeys.documents(clientId),
+    queryFn: () => api<ClientDocuments>(`/clients/${clientId}/documents`),
+  })
+}
+
+/** Saves a scan: the file is the body; which paper and whose go in the query (no member: the client's own paper). */
+export function useAddClientDocument(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ documentId, memberId, file, type }: { documentId: number; memberId: string | null; file: File; type: ScanType }) => {
+      const params = new URLSearchParams({ documentId: String(documentId) })
+      if (memberId) params.set('memberId', memberId)
+      return uploadFile<ClientDocuments>(`/clients/${clientId}/documents?${params.toString()}`, file, type)
+    },
+    onSuccess: (documents) => queryClient.setQueryData(clientKeys.documents(clientId), documents),
+  })
+}
+
+/** Opens one scan in a new tab, through a link that works for a few minutes. Every opening is recorded. */
+export function useOpenClientDocument(clientId: string) {
+  const open = useOpenSignedLink()
+  return (scanId: string) => open(`/clients/${clientId}/documents/${scanId}/link`)
 }

@@ -1,4 +1,4 @@
-import type { CaseTraveller, DocumentRequirement, VisaCase } from '../types'
+import type { CaseTraveller, DocumentRequirement, ReceivedAs, VisaCase } from '../types'
 
 // Wording shared by the case page's cards (demo screen 07 ⚠️).
 
@@ -6,6 +6,13 @@ export const REQUIREMENT_LABEL: Record<DocumentRequirement, string> = {
   ORIGINAL: 'Original',
   XEROX_OK: 'Xerox is fine',
   ARRANGED_BY_US: 'Arranged by us',
+}
+
+/** How a paper came in. On file: printed from the client's document vault (0016 Decision 5). */
+export const RECEIVED_AS_LABEL: Record<ReceivedAs, string> = {
+  ORIGINAL: 'Original',
+  XEROX: 'Xerox',
+  ON_FILE: 'On file',
 }
 
 const DAY_MONTH = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })

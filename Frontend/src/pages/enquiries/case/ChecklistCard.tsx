@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
@@ -6,9 +6,10 @@ import { formatDateTime, formatMonthYear } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { MemberFormDrawer } from '../../clients/MemberFormDrawer'
 import { useClient, useClientOptions } from '../../clients/queries'
-import { useCheckCaseDocument, useLinkTraveller, useUpdateCaseDocument } from '../queries'
+import { SCAN_ACCEPT, scanProblem, scanType } from '../../clients/scanFiles'
+import { useCheckCaseDocument, useLinkTraveller, useOpenCaseScan, useSaveCaseScan, useUpdateCaseDocument } from '../queries'
 import type { CaseDocument, CaseTraveller, ReceivedAs, VisaCase } from '../types'
-import { REQUIREMENT_LABEL, travellerTab } from './labels'
+import { dayMonth, RECEIVED_AS_LABEL, REQUIREMENT_LABEL, travellerTab } from './labels'
 import { NeedsReplacingDialog } from './NeedsReplacingDialog'
 
 /** The steps where the checklist can still change; after maturity it is the processor's (0006 Decision 8). */
@@ -76,7 +77,7 @@ export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
           <h2 className="h2">Document checklist</h2>
           <p className="muted small" style={{ margin: '2px 0 0' }}>
             {!showChecks
-              ? 'Tick each paper as it is scanned at the office — original or xerox.'
+              ? 'Tick each paper as it is scanned at the office — original or xerox, or On file when the client’s copy is already kept.'
               : canCheck
                 ? 'Check each paper again before the file is made. Flag a bad one with what’s wrong.'
                 : 'The processor checks each paper again before the file is made.'}
@@ -146,14 +147,22 @@ export function ChecklistCard({ visaCase: c }: { visaCase: VisaCase }) {
           showChecks ? (
             <CheckRow key={d.id} caseNo={c.caseNo} doc={d} canCheck={canCheck} travellerName={who} />
           ) : (
-            <DocumentRow key={d.id} caseNo={c.caseNo} doc={d} editable={editable} />
+            <DocumentRow
+              key={d.id}
+              caseNo={c.caseNo}
+              doc={d}
+              editable={editable}
+              named={!!traveller.member}
+              travellerName={who}
+              scanMaxMb={c.scanMaxMb}
+            />
           ),
         )}
       </div>
 
       <p className="checklist-foot">
-        Clients don’t upload anything — papers are scanned here by the follow-up desk. The checklist comes from Masters →{' '}
-        {c.country.label} · {c.visaType.name}.
+        Clients don’t upload anything — papers are scanned here by the follow-up desk. “Save scan” keeps a paper in the
+        client’s documents for the next trip. The checklist comes from Masters → {c.country.label} · {c.visaType.name}.
       </p>
     </section>
   )
@@ -276,14 +285,108 @@ function TravellerPicker({
   )
 }
 
-/** "Came in as" for a paper: the default follows what we need. */
+/** "Came in as" for a paper: the default follows what we need. On file is never the default (0016 Decision 5). */
 const defaultReceivedAs = (doc: CaseDocument): ReceivedAs => (doc.requirement === 'ORIGINAL' ? 'ORIGINAL' : 'XEROX')
 
-function DocumentRow({ caseNo, doc: d, editable }: { caseNo: string; doc: CaseDocument; editable: boolean }) {
+/** The "Came in as" choices: On file too for a paper that may be a xerox and has a copy in the client's vault. */
+const receivedAsChoices = (doc: CaseDocument): ReceivedAs[] =>
+  doc.requirement === 'XEROX_OK' && (doc.onFile || doc.receivedAs === 'ON_FILE') ? ['ORIGINAL', 'XEROX', 'ON_FILE'] : ['ORIGINAL', 'XEROX']
+
+/**
+ * The paper's copy in the client's document vault (0016 Decision 5): "On file · saved 12 Mar · Open", or for a paper
+ * ticked On file the copy it came from. "Save scan" keeps this paper there for the next trip (named travellers only).
+ */
+function VaultLine({
+  caseNo,
+  doc: d,
+  canSave,
+  travellerName,
+  maxMb,
+}: {
+  caseNo: string
+  doc: CaseDocument
+  canSave: boolean
+  travellerName: string
+  maxMb: number
+}) {
+  const toast = useToast()
+  const open = useOpenCaseScan(caseNo)
+  const save = useSaveCaseScan(caseNo)
+  const picker = useRef<HTMLInputElement>(null)
+  const from = d.receivedAs === 'ON_FILE' ? d.fromScan : null
+  const copy = from ?? d.onFile
+  if (!copy && !canSave) return null
+
+  const send = (picked: File | undefined) => {
+    if (picker.current) picker.current.value = ''
+    if (!picked) return
+    const type = scanType(picked)
+    const problem = scanProblem(picked, maxMb)
+    if (problem || !type) {
+      toast({ tone: 'bad', message: problem ?? 'Pick a PDF, JPEG or PNG.' })
+      return
+    }
+    save.mutate(
+      { documentId: d.id, file: picked, type },
+      {
+        onSuccess: () => toast({ tone: 'ok', message: `${d.name} saved to ${travellerName}’s documents.` }),
+        onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t save the scan. Please try again.' }),
+      },
+    )
+  }
+
+  return (
+    <div className="doc-note doc-vault">
+      {copy && (
+        <>
+          {from ? `From the copy of ${dayMonth(from.uploadedAt)}` : `On file · saved ${dayMonth(copy.uploadedAt)}`} ·{' '}
+          <button type="button" className="btn-link" onClick={() => open(d.id)}>
+            Open
+          </button>
+        </>
+      )}
+      {canSave && (
+        <>
+          {copy && ' · '}
+          <button type="button" className="btn-link" disabled={save.isPending} onClick={() => picker.current?.click()}>
+            {save.isPending ? 'Saving…' : copy ? 'Save a newer scan' : 'Save scan'}
+          </button>
+          <input
+            ref={picker}
+            type="file"
+            hidden
+            accept={SCAN_ACCEPT}
+            aria-label={`Scan of ${d.name}`}
+            onChange={(e) => send(e.target.files?.[0])}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+function DocumentRow({
+  caseNo,
+  doc: d,
+  editable,
+  named,
+  travellerName,
+  scanMaxMb,
+}: {
+  caseNo: string
+  doc: CaseDocument
+  editable: boolean
+  /** The traveller is linked to a family member: copies on file are kept per person. */
+  named: boolean
+  travellerName: string
+  scanMaxMb: number
+}) {
   const toast = useToast()
   const update = useUpdateCaseDocument(caseNo)
   const arranged = d.requirement === 'ARRANGED_BY_US'
   const done = d.status === 'RECEIVED' || d.status === 'MADE'
+  const choices = receivedAsChoices(d)
+  const canSave = editable && named && !arranged && d.status !== 'NOT_NEEDED'
 
   const set = (status: CaseDocument['status'], receivedAs: ReceivedAs | null = null) =>
     update.mutate(
@@ -325,6 +428,7 @@ function DocumentRow({ caseNo, doc: d, editable }: { caseNo: string; doc: CaseDo
           {d.quantity > 1 && ` (${d.quantity})`}
         </span>
         {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+        <VaultLine caseNo={caseNo} doc={d} canSave={canSave} travellerName={travellerName} maxMb={scanMaxMb} />
       </span>
       <span role="cell" className="small">
         {REQUIREMENT_LABEL[d.requirement]}
@@ -333,8 +437,8 @@ function DocumentRow({ caseNo, doc: d, editable }: { caseNo: string; doc: CaseDo
         {arranged ? (
           <span className="muted">{d.status === 'MADE' ? 'Made by us' : '—'}</span>
         ) : editable && d.status !== 'NOT_NEEDED' ? (
-          <span className="seg-btn" role="radiogroup" aria-label={`${d.name} came in as`}>
-            {(['ORIGINAL', 'XEROX'] as const).map((as) => (
+          <span className={`seg-btn${choices.length > 2 ? ' seg-three' : ''}`} role="radiogroup" aria-label={`${d.name} came in as`}>
+            {choices.map((as) => (
               <button
                 key={as}
                 type="button"
@@ -342,16 +446,15 @@ function DocumentRow({ caseNo, doc: d, editable }: { caseNo: string; doc: CaseDo
                 aria-checked={d.receivedAs === as}
                 className={d.receivedAs === as ? 'on' : ''}
                 disabled={busy}
-                onClick={() => d.receivedAs !== as && set('RECEIVED', as)}
+                // On file again picks up a newer copy saved since the paper was ticked.
+                onClick={() => (d.receivedAs !== as || (as === 'ON_FILE' && d.fromScan?.id !== d.onFile?.id)) && set('RECEIVED', as)}
               >
-                {as === 'ORIGINAL' ? 'Original' : 'Xerox'}
+                {RECEIVED_AS_LABEL[as]}
               </button>
             ))}
           </span>
-        ) : d.receivedAs === 'ORIGINAL' ? (
-          'Original'
-        ) : d.receivedAs === 'XEROX' ? (
-          'Xerox'
+        ) : d.receivedAs ? (
+          RECEIVED_AS_LABEL[d.receivedAs]
         ) : (
           '—'
         )}
@@ -420,6 +523,8 @@ function CheckRow({
             {d.quantity > 1 && ` (${d.quantity})`}
           </span>
           {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+          {/* The processor prints an On file paper from its copy (0016 Decision 5). */}
+          {d.receivedAs === 'ON_FILE' && <VaultLine caseNo={caseNo} doc={d} canSave={false} travellerName={travellerName} maxMb={0} />}
         </span>
         <span role="cell" className="small">
           {REQUIREMENT_LABEL[d.requirement]}
@@ -427,10 +532,8 @@ function CheckRow({
         <span role="cell" className="small" title={receiptTitle(d)}>
           {arranged ? (
             <span className="muted">{d.status === 'MADE' ? 'Made by us' : '—'}</span>
-          ) : d.receivedAs === 'ORIGINAL' ? (
-            'Original'
-          ) : d.receivedAs === 'XEROX' ? (
-            'Xerox'
+          ) : d.receivedAs ? (
+            RECEIVED_AS_LABEL[d.receivedAs]
           ) : (
             <span className="muted">Not needed</span>
           )}

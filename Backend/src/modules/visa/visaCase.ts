@@ -2,6 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { fromDbDate } from "../../lib/dates";
 import { lineTotalPaise, quoteTotals } from "../../lib/money";
 import { toMemberDto } from "../clients/client";
+import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
@@ -174,7 +175,12 @@ export const visaCaseInclude = {
           member: { include: { relation: true, consent: true } },
           documents: {
             orderBy: { sortOrder: "asc" },
-            include: { receivedBy: personSelect, checkedBy: personSelect, checkReason: { select: { id: true, name: true } } },
+            include: {
+              receivedBy: personSelect,
+              checkedBy: personSelect,
+              checkReason: { select: { id: true, name: true } },
+              clientDocument: { select: { id: true, uploadedAt: true } },
+            },
           },
           /** The current refusal letter (0012 Decision 4): the newest upload. Older ones are counted, not loaded. */
           refusalLetters: { orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
@@ -379,6 +385,7 @@ function consentOf(t: TravellerRow) {
  * @param today IST date, for the travellers' age and passport status
  * @param finalFileMaxMb the setting visa.finalFile.maxMb
  * @param gstRatePercent the setting visa.invoice.gstRatePercent, for the quote's GST
+ * @param scans the current scan of each linked traveller's papers in the client's vault (currentScansOf)
  */
 export function toVisaCaseDto(
   row: VisaCaseRow,
@@ -387,6 +394,7 @@ export function toVisaCaseDto(
   clientSettings: ClientSettings,
   finalFileMaxMb: number,
   gstRatePercent: number,
+  scans: CurrentScans,
 ) {
   const finalFile = row.files[0];
   const visa = row.visa;
@@ -470,6 +478,8 @@ export function toVisaCaseDto(
       : null,
     finalFileCopies: row._count.files,
     finalFileMaxMb,
+    /** The largest scan "Save scan" takes (clients.documents.maxMb, 0016 Decision 5): the page checks it first. */
+    scanMaxMb: clientSettings.documents.maxMb,
     /**
      * The submission agent (Decision 7). isActive false, or coversCountry false (the case's country was taken off the
      * vendor since it was picked): "File ready" will ask for another.
@@ -600,6 +610,10 @@ export function toVisaCaseDto(
           receivedAs: d.receivedAs,
           receivedAt: d.receivedAt,
           receivedBy: d.receivedBy,
+          /** The current copy of this paper in the client's vault (0016 Decision 5), for a traveller linked to a person. */
+          onFile: (t.memberId && scans.get(scanKey(t.memberId, d.documentId))) || null,
+          /** The copy an On file paper was printed from; it may be older than the current one. */
+          fromScan: d.clientDocument,
           /** The processor's check in Step 3 (0007 Decision 3): null until checked. */
           check: d.check,
           checkReason: d.checkReason,

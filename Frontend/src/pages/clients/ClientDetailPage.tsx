@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { can, canEditClients } from '../../auth/permissions'
+import { can, canEditClients, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
 import { departmentStyle } from '../../lib/departments'
@@ -9,6 +9,7 @@ import '../../styles/clients.css'
 import { errorText } from './apiErrors'
 import { ReadinessBadge } from './ClientBadges'
 import { ClientFormDrawer } from './ClientFormDrawer'
+import { DocumentsCard } from './DocumentsCard'
 import { MembersCard } from './MembersCard'
 import { NotesCard } from './NotesCard'
 import { PhonesCard } from './PhonesCard'
@@ -25,6 +26,8 @@ export function ClientDetailPage() {
   const canEdit = me ? canEditClients(me) : false
   // Only Visa intake is built so far; other departments' intakes come in Stage 2.
   const canAddEnquiry = me ? can(me, 'VISA', 'EDIT') : false
+  // The document vault is for HODs and the Head only (docs/decisions/0016-client-documents.md Decision 4).
+  const canSeeDocuments = me ? isHodOfAny(me) : false
 
   if (client.isPending) return <div className="muted">Loading…</div>
   if (client.isError) {
@@ -94,6 +97,7 @@ export function ClientDetailPage() {
       <div className="client-grid">
         <div className="client-col">
           <MembersCard client={c} options={options.data} canEdit={canEdit} />
+          {canSeeDocuments && <DocumentsCard client={c} />}
           <DetailsCard client={c} options={options.data} canEdit={canEdit} onEdit={() => setEditing(true)} />
           <CasesCard client={c} />
         </div>

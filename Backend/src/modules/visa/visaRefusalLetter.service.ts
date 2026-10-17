@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { fileNamePart } from "../../lib/fileNames";
 import { conflict, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
+import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
 import { deleteObject, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { LETTERS, loadCase, lockCase } from "./caseLock";
-import { MB, pdfPageCount, tooBigMessage } from "./casePdf";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
@@ -44,10 +45,7 @@ export async function refusalLetterLimit(caseNo: string, travellerId: string, ac
 
 /** "VISA-2026-0001_Aarav-Mehta_refusal.pdf" ⚠️: the case number and the traveller's name, letters and digits only. */
 function letterFileName(caseNo: string, name: string) {
-  const safe = name
-    .normalize("NFKD")
-    .replace(/[^A-Za-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  const safe = fileNamePart(name);
   return safe ? `${caseNo}_${safe}_refusal.pdf` : `${caseNo}_refusal.pdf`;
 }
 

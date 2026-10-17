@@ -30,8 +30,9 @@ function shiftMonth(ym: string, by: number) {
  * screen 10 ⚠️, docs/decisions/0011-visa-at-vendor.md Decision 4) and the day passports are expected back
  * (docs/decisions/0013-visa-passport-back.md Decision 3). The days it's closed are struck through with the holiday's
  * name (its holidays and the weekly Sunday, from the holiday calendar), and so are the days before the first one allowed
- * (tomorrow, or today with `allowToday`): none of them can be picked. The server checks the same days again when the
- * date is saved.
+ * (tomorrow, or today with `allowToday`) and the days up to `after` (for the collection date, the latest embassy
+ * appointment, decided 16 Oct 2026): none of them can be picked. The server checks the same days again when the date
+ * is saved.
  */
 export function OpenDayCalendar({
   target,
@@ -39,6 +40,7 @@ export function OpenDayCalendar({
   value,
   onChange,
   allowToday = false,
+  after = null,
   disabled = false,
 }: {
   /** Whose closed days to strike out; nothing can be picked until it's known */
@@ -48,10 +50,13 @@ export function OpenDayCalendar({
   value: string | null
   onChange: (day: string) => void
   allowToday?: boolean
+  /** Only days after this one can be picked, when it's later than the first day allowed. */
+  after?: string | null
   disabled?: boolean
 }) {
   const today = istToday()
-  const first = allowToday ? today : addDays(today, 1)
+  const soonest = allowToday ? today : addDays(today, 1)
+  const first = after && after >= soonest ? addDays(after, 1) : soonest
   const latest = addDays(today, MAX_DAYS_AHEAD)
   const [month, setMonth] = useState((value ?? first).slice(0, 7))
   const m = monthOf(month)

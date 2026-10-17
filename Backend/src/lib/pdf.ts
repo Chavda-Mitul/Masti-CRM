@@ -1,8 +1,9 @@
 import { PDFDocument } from "pdf-lib";
-import { badRequest } from "../../lib/httpError";
+import { badRequest } from "./httpError";
 
-// Scanned PDFs kept with a case (docs/decisions/0007-visa-file-prep.md Decision 8): the final file, and a refused
-// traveller's refusal letter (docs/decisions/0012-visa-decision.md Decision 4).
+// Scanned PDFs: a visa case's final file (docs/decisions/0007-visa-file-prep.md Decision 8) and a refused traveller's
+// refusal letter (docs/decisions/0012-visa-decision.md Decision 4), and scans in the client document vault
+// (docs/decisions/0016-client-documents.md).
 
 export const MB = 1024 * 1024;
 const PDF_MAGIC = Buffer.from("%PDF-");

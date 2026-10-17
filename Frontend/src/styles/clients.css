@@ -226,3 +226,35 @@
 .case-list-main a {
   font-weight: 700;
 }
+
+/* The document vault (docs/decisions/0016-client-documents.md): one block of rows per person */
+.doc-actions {
+  align-items: center;
+  gap: 10px;
+}
+.doc-table .doc-person th {
+  background: var(--fill-tile);
+  color: var(--ink);
+  font-size: 13px;
+  border-bottom: 1px solid var(--divider);
+}
+.doc-table .doc-person .chip {
+  margin-left: 8px;
+}
+.doc-paper {
+  font-weight: 700;
+}
+.doc-table .doc-older td {
+  background: var(--fill-table-head);
+}
+.doc-table .doc-open {
+  text-align: right;
+  white-space: nowrap;
+}
+.doc-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-weight: 400;
+}
