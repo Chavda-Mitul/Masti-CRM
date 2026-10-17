@@ -1,0 +1,432 @@
+/* The collection and delivery boy's phone screen (demo screen 14; docs/decisions/0015-field-staff-app.md): a phone-first
+   column, centred about 480px wide on a desktop, with the demo's dark header band. */
+.field-page {
+  min-height: 100%;
+  background: var(--bg-page);
+}
+.field-column {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* The header band: his run, the day, how many stops are done, and a bar with one piece per stop. */
+.field-head {
+  --seg-todo: rgba(255, 255, 255, 0.18);
+  --seg-done: #4cc38a;
+  --seg-failed: #e5484d;
+  --seg-now: #f2994a;
+  padding: 16px 16px 14px;
+  background: var(--ink);
+  color: var(--on-fill);
+}
+.field-head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.field-mark {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+}
+.field-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.field-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.field-sub {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.field-count {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.field-progress {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+.field-progress span {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--seg-todo);
+}
+.field-progress .is-done {
+  background: var(--seg-done);
+}
+.field-progress .is-failed {
+  background: var(--seg-failed);
+}
+.field-progress .is-now {
+  background: var(--seg-now);
+}
+
+/* ‹ Yesterday · Today · Tomorrow › */
+.field-days {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+.field-days .btn {
+  justify-self: start;
+  padding: 0 12px;
+}
+.field-days .btn:last-child {
+  justify-self: end;
+}
+.field-day {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* The stops: big tap targets, one card each. */
+.field-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.field-stops[aria-busy='true'] {
+  opacity: 0.6;
+}
+.field-note {
+  margin: 0;
+  padding: 28px 0;
+  text-align: center;
+}
+.field-error {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.field-error-actions {
+  display: flex;
+  gap: 8px;
+}
+.field-stop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.field-stop.is-now {
+  border-color: #f4c7a1;
+}
+.field-stop.is-cancelled {
+  opacity: 0.6;
+  box-shadow: none;
+}
+.field-stop-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.field-client {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.field-address {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+.field-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-actions .btn {
+  height: 46px;
+}
+.field-finished {
+  align-self: flex-start;
+}
+.field-called-off {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+/* What the stop needs: the booklets to hand over, or the papers still to collect. */
+.field-need {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-input);
+  background: var(--fill-tile);
+  font-size: 14px;
+  color: var(--text-2);
+}
+.field-need strong {
+  font-weight: 800;
+  color: var(--ink);
+}
+.field-collect {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.field-collect ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink);
+}
+.field-collect li strong {
+  font-weight: 700;
+}
+
+.field-foot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px 16px 28px;
+}
+
+/* A desktop: the column floats on the cream page, the band rounded like a card. */
+@media (min-width: 520px) {
+  .field-column {
+    padding-top: 24px;
+  }
+  .field-head {
+    border-radius: var(--radius-card);
+  }
+  .field-days,
+  .field-stops,
+  .field-foot {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* The stop's own screen (phase 4): back to the run, in the band. */
+.field-back {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--on-fill);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+.field-back:hover {
+  color: var(--on-fill);
+  background: rgba(255, 255, 255, 0.24);
+}
+a.btn.field-record {
+  height: 46px;
+}
+
+/* "Couldn't complete": the reasons as big rows, then Record. */
+.field-fail-open {
+  width: 100%;
+  height: 46px;
+  color: var(--bad);
+}
+.field-fail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.field-fail-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+}
+.field-fail-hint {
+  margin: -6px 0 0;
+  font-size: 13.5px;
+}
+.field-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-input);
+  font-weight: 700;
+  cursor: pointer;
+}
+.field-reason input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+.field-reason.is-picked {
+  border-color: var(--ink);
+  background: var(--fill-tile);
+}
+.field-fail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-fail-actions .btn {
+  height: 46px;
+}
+
+/* At a pickup (phase 4b): the demo's numbered steps, then Finish. */
+.field-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.field-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-input);
+}
+.field-step.is-done {
+  background: var(--ok-bg);
+  border-color: #cfe9da;
+}
+.field-step-mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--fill-tile);
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 800;
+}
+.field-step.is-done .field-step-mark {
+  background: var(--ok);
+  color: var(--on-fill);
+}
+.field-step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-step-title {
+  font-weight: 800;
+}
+.field-step-hint {
+  margin-top: -4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.field-step-action {
+  align-self: flex-start;
+  height: 42px;
+}
+.field-step-error {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bad);
+}
+.field-count-row {
+  display: flex;
+  gap: 14px;
+}
+.field-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+/* 16px and up, so a phone doesn't zoom in on the box. */
+.field-count .input {
+  width: 64px;
+  height: 42px;
+  text-align: center;
+  font-size: 16px;
+}
+.field-code-row {
+  display: flex;
+  gap: 8px;
+}
+.field-code {
+  width: 100%;
+  max-width: 170px;
+  height: 44px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+.field-resend {
+  align-self: flex-start;
+}
+.field-selfie {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.field-selfie-img {
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  background: var(--ink);
+}
+.field-selfie-actions {
+  display: flex;
+  gap: 8px;
+}
+.field-finish {
+  width: 100%;
+  height: 50px;
+  font-size: 15px;
+}
+/* At a delivery: who receives (the travellers as big rows, or someone else by name). */
+.field-other-name {
+  height: 44px;
+  font-size: 16px;
+}

@@ -139,6 +139,10 @@ export const updateCreditNoteReasonSchema = z.object({
 export const createRecallReasonSchema = createCreditNoteReasonSchema;
 export const updateRecallReasonSchema = updateCreditNoteReasonSchema;
 
+/** Why a missing passport won't come back (docs/decisions/0013-visa-passport-back.md Decision 5, amended): picked. */
+export const createMissingPassportReasonSchema = createCreditNoteReasonSchema;
+export const updateMissingPassportReasonSchema = updateCreditNoteReasonSchema;
+
 /** What an additional invoice charges for (docs/decisions/0011-visa-at-vendor.md Decision 7): picked, never typed. */
 export const createExtraChargeSchema = createCreditNoteReasonSchema;
 export const updateExtraChargeSchema = updateCreditNoteReasonSchema;
@@ -210,6 +214,8 @@ export type CreateCreditNoteReasonInput = z.infer<typeof createCreditNoteReasonS
 export type UpdateCreditNoteReasonInput = z.infer<typeof updateCreditNoteReasonSchema>;
 export type CreateRecallReasonInput = z.infer<typeof createRecallReasonSchema>;
 export type UpdateRecallReasonInput = z.infer<typeof updateRecallReasonSchema>;
+export type CreateMissingPassportReasonInput = z.infer<typeof createMissingPassportReasonSchema>;
+export type UpdateMissingPassportReasonInput = z.infer<typeof updateMissingPassportReasonSchema>;
 export type CreateExtraChargeInput = z.infer<typeof createExtraChargeSchema>;
 export type UpdateExtraChargeInput = z.infer<typeof updateExtraChargeSchema>;
 export type CreateEnquirySourceInput = z.infer<typeof createEnquirySourceSchema>;

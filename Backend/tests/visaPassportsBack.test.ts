@@ -438,7 +438,7 @@ describe("Mark received (component 3)", () => {
     expect((res.body.case as CaseDto).passportsReceived).toMatchObject({ booklets: { current: 2, old: 0 } });
   });
 
-  it("a postponed or cancelled case is received too, keeping its status and its due time", async () => {
+  it("a postponed or cancelled case is received too, keeping its status; a cancelled one is due for the handover", async () => {
     const { c, processor } = await decidedCase();
     expect((await send(processor, c.caseNo)).status).toBe(200);
     await prisma.enquiry.update({
@@ -455,7 +455,9 @@ describe("Mark received (component 3)", () => {
     await prisma.enquiry.update({ where: { id: other.c.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED"), resumeOn: null, dueAt: null } });
     const cancelled = await receive(processor, other.c.caseNo);
     expect(cancelled.status).toBe(200);
-    expect(cancelled.body.case as CaseDto).toMatchObject({ status: "CANCELLED", dueAt: null });
+    // It stays on its owner's list until the handover (0006 amendment 15): due like an open case (visa.handoverCheck).
+    const handoverDue = istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 1), { office: true }), "11:00").toISOString();
+    expect(cancelled.body.case as CaseDto).toMatchObject({ status: "CANCELLED", dueAt: handoverDue });
   });
 
   it("before they're on the way back, at another step, the wrong stickers or booklets, a stale page, and twice", async () => {

@@ -68,6 +68,8 @@ model User {
   sessions              Session[]
   auditEntries          AuditLog[]
   assignedFieldJobs     FieldJob[]         @relation("FieldJobAssignee")
+  fieldJobsBooked       FieldJob[]         @relation("FieldJobBookedBy")
+  fieldJobsCancelled    FieldJob[]         @relation("FieldJobCancelledBy")
   clientsCreated        Client[]           @relation("ClientCreatedBy")
   clientPhonesAdded     ClientPhone[]      @relation("ClientPhoneCreatedBy")
   clientMembersAdded    ClientMember[]     @relation("ClientMemberCreatedBy")
@@ -87,6 +89,7 @@ model User {
   visaCasesDecided      VisaCase[]         @relation("VisaCaseDecidedBy")
   visaCasesInTransit    VisaCase[]         @relation("VisaCasePassportsInTransitBy")
   visaCasesReceivedBack VisaCase[]         @relation("VisaCasePassportsReceivedBy")
+  visaShortfallsCleared VisaCase[]         @relation("VisaCaseShortfallClearedBy")
   visaHandovers         VisaHandover[]     @relation("VisaHandoverBy")
   caseFilesUploaded     CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated        Docket[]           @relation("DocketCreatedBy")
@@ -117,19 +120,109 @@ model UserDepartment {
 // ---------------------------------------------------------------------------
 
 /// A field worker sees the jobs assigned to them, whatever department raised them.
-/// Skeleton only: job type and status (master tables), slot, address, amount and handover proof
-/// (OTP, photo/selfie links, lat/long, time) are added when the field module is built.
-model FieldJob {
-  id           String     @id @default(uuid())
-  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
-  departmentId Int
-  assigneeId   String?
-  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  assignee     User?      @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+/// What a field job is (docs/decisions/0015-field-staff-app.md): picking a case's documents up from the client, or
+/// delivering its passports. Fixed in code: the screens and the rules branch on it. (Collecting money comes with
+/// Accounts.)
+enum FieldJobKind {
+  PICKUP
+  DELIVERY
+}
 
-  @@index([assigneeId])
+/// Where a field job stands (0015): booked; done at the door; failed (a reason from a list, phase 4); or called off by
+/// the office.
+enum FieldJobStatus {
+  BOOKED
+  DONE
+  FAILED
+  CANCELLED
+}
+
+/// A time slot the boy is booked for (0015 Decision 2): a list the Head or an HOD edits, seeded with the demo's ⚠️.
+/// Times are IST, "HH:mm", ending after they start (checked in the migration). Switched off, never deleted.
+model FieldSlot {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  /// "4–6 pm"
+  name      String
+  startsAt  String
+  endsAt    String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  jobs      FieldJob[]
+}
+
+/// Why a visit failed (0015 Decision 5): a list the Head or an HOD edits, seeded with the demo's ⚠️ and "Client
+/// couldn't get the code" (no code, no pickup: decided 17 Oct 2026). Switched off, never deleted, so a failed job keeps
+/// its reason.
+model FieldFailReason {
+  id        Int        @id @default(autoincrement())
+  /// CLIENT_NOT_HOME… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  jobs      FieldJob[]
+}
+
+/// One stop on the boy's run (0002, 0015): which desk raised it, for which case, who goes, on which day and slot, where
+/// to (the client's address, copied at booking and correctable, with an optional Google Maps link) and the client's
+/// mobile for his Call button. One booked job of each kind per case, kept by the case lock. Cancelled: who and when,
+/// together. Finished (done, or couldn't complete with a reason, phase 4): when, and the place his phone gave. All
+/// checked in the migration.
+model FieldJob {
+  id              String           @id @default(uuid())
+  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
+  departmentId    Int
+  kind            FieldJobKind
+  status          FieldJobStatus   @default(BOOKED)
+  enquiryId       String
+  /// An active FIELD user when booked (the service checks).
+  assigneeId      String
+  day             DateTime         @db.Date
+  slotId          Int
+  address         String
+  /// The client's location in Google Maps, when they shared one (0015 Decision 3).
+  mapLink         String?
+  mobile          String
+  createdById     String
+  cancelledAt     DateTime?        @db.Timestamptz(3)
+  cancelledById   String?
+  /// When he recorded it done or couldn't complete (0015 phase 4), with the place his phone gave (golden rule 5):
+  /// degrees, and the accuracy in whole metres. All four together, on a finished job only.
+  finishedAt      DateTime?        @db.Timestamptz(3)
+  latitude        Float?
+  longitude       Float?
+  accuracyM       Int?
+  /// Why he couldn't complete it (0015 Decision 5): set exactly when FAILED.
+  failReasonId    Int?
+  /// What he recorded at the door when it's DONE (Decision 4), and only then: the booklets he counted (at a pickup they
+  /// become the case's intake count) and his selfie, a case file of its own.
+  bookletsCurrent Int?             @db.SmallInt
+  bookletsOld     Int?             @db.SmallInt
+  selfieId        String?          @unique
+  /// The client's one-time code (Decision 4): only its hash (sha256 of the job and the code), when and where it went,
+  /// until when it works, the wrong tries, and when the client confirmed it. Cleared again if the email didn't go.
+  otpHash         String?
+  otpSentAt       DateTime?        @db.Timestamptz(3)
+  otpSentTo       String?
+  otpExpiresAt    DateTime?        @db.Timestamptz(3)
+  otpTries        Int              @default(0) @db.SmallInt
+  otpConfirmedAt  DateTime?        @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  enquiry         Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  assignee        User             @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  slot            FieldSlot        @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  createdBy       User             @relation("FieldJobBookedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy     User?            @relation("FieldJobCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  failReason      FieldFailReason? @relation(fields: [failReasonId], references: [id], onDelete: Restrict)
+  selfie          CaseFile?        @relation("FieldJobSelfie", fields: [selfieId], references: [id], onDelete: Restrict)
+  /// The handover a delivery done at the door made (phase 5).
+  handover        VisaHandover?
+
+  @@index([assigneeId, day])
+  @@index([enquiryId])
   @@index([departmentId])
 }
 
@@ -793,6 +886,8 @@ model Enquiry {
   followUps      FollowUp[]
   files          CaseFile[]
   invoices       Invoice[]
+  /// The collection and delivery boy's jobs for it (0015).
+  fieldJobs      FieldJob[]
   creditNotes    CreditNote[]
 
   @@index([status, dueAt])
@@ -813,6 +908,9 @@ enum CaseFileKind {
   /// A photo of the person the passports were handed to (docs/decisions/0014-visa-delivered.md Decision 3): a JPEG or
   /// PNG, so it has no page count.
   RECEIVER_PHOTO
+  /// The field boy's selfie at the client's door (docs/decisions/0015-field-staff-app.md Decision 4): a photo, no page
+  /// count. Linked to the job once he finishes it.
+  FIELD_SELFIE
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -840,6 +938,8 @@ model CaseFile {
   creditNote   CreditNote?
   /// The handover this photo proves (0014): set once "Hand over" links it.
   handover     VisaHandover?
+  /// The field job this selfie proves (0015): set once he finishes it.
+  fieldJob     FieldJob?          @relation("FieldJobSelfie")
 
   @@index([enquiryId, kind, uploadedAt])
   @@index([travellerId, uploadedAt])
@@ -953,11 +1053,17 @@ model VisaCase {
   /// "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet was opened at our office and
   /// the passports are in our stock, by whom and when, with the booklets counted (current and old). All four set
   /// together, only after they were on their way back, each count 0–50 and at least one booklet (checked in the
-  /// migration). Never changed once saved (decided 17 Oct 2026).
+  /// migration). Never changed once saved (decided 17 Oct 2026), except that "Received the rest" adds the late booklets
+  /// of a short return, up to what went out (0013 Decision 5, amended 17 Oct 2026).
   passportsReceivedAt    DateTime?           @db.Timestamptz(3)
   passportsReceivedById  String?
   bookletsBackCurrent    Int?                @db.SmallInt
   bookletsBackOld        Int?                @db.SmallInt
+  /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
+  /// missing-passport-reasons list. All three set together, only once received (checked in the migration).
+  shortfallClearedAt     DateTime?           @db.Timestamptz(3)
+  shortfallClearedById   String?
+  shortfallReasonId      Int?
   enquiry                Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering               VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy              User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
@@ -970,6 +1076,8 @@ model VisaCase {
   passportsInTransitBy   User?               @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
   passportsReceivedBy    User?               @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
   recallReason           RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
+  shortfallClearedBy     User?               @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
+  shortfallReason        MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)
   embassy                Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor                 Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket                 Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
@@ -1048,8 +1156,9 @@ enum HandoverMode {
 
 /// The passports handed back to the client (docs/decisions/0014-visa-delivered.md), once per case, never changed: how,
 /// when and by whom; the booklets counted (the service keeps them equal to the stock count, Decision 4); who collected
-/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person, which an office
-/// handover must have (checked in the migration).
+/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person. At the client's
+/// door (mode DELIVERY, 0015 phase 5) it points at the boy's field job, which holds the client's code, his selfie and
+/// the place (checked in the migration).
 model VisaHandover {
   enquiryId           String             @id
   mode                HandoverMode
@@ -1059,11 +1168,14 @@ model VisaHandover {
   bookletsOld         Int                @db.SmallInt
   receiverTravellerId String?
   receiverName        String?
-  receiverPhotoId     String?            @unique
+  receiverPhotoId     String             @unique
+  /// The delivery boy's job, at the door (mode DELIVERY), and only then.
+  fieldJobId          String?            @unique
   visaCase            VisaCase           @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
   by                  User               @relation("VisaHandoverBy", fields: [byId], references: [id], onDelete: Restrict)
   receiverTraveller   VisaCaseTraveller? @relation(fields: [receiverTravellerId], references: [id], onDelete: Restrict)
-  receiverPhoto       CaseFile?          @relation(fields: [receiverPhotoId], references: [id], onDelete: Restrict)
+  receiverPhoto       CaseFile           @relation(fields: [receiverPhotoId], references: [id], onDelete: Restrict)
+  fieldJob            FieldJob?          @relation(fields: [fieldJobId], references: [id], onDelete: Restrict)
 
   @@index([byId])
   @@index([receiverTravellerId])
@@ -1142,6 +1254,19 @@ model CreditNoteReason {
 model RecallReason {
   id        Int        @id @default(autoincrement())
   /// EMBASSY_DELAY… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  visaCases VisaCase[]
+}
+
+/// Why fewer passports came back than went out, when the shortfall is cleared rather than found: "Embassy kept it",
+/// "Counted wrong at intake"… (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026). Never free
+/// text. Edited by the Visa HOD or the Head; switched off, never deleted.
+model MissingPassportReason {
+  id        Int     @id @default(autoincrement())
+  /// EMBASSY_KEPT… Never changes.
   code      String     @unique
   name      String
   sortOrder Int        @default(0)

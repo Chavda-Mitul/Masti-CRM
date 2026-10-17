@@ -449,6 +449,36 @@ describe("recall reasons (0011 Decision 6)", () => {
   });
 });
 
+describe("missing passport reasons (0013 Decision 5, amended 17 Oct 2026)", () => {
+  it("is seeded, read by Visa staff and written only by the Visa HOD or the Head; codes never change; switched off", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/missing-passport-reasons");
+    expect(list.status).toBe(200);
+    expect(list.body.missingPassportReasons.map((r: { name: string }) => r.name)).toEqual([
+      "Embassy kept it",
+      "Vendor still has it",
+      "Counted wrong at intake",
+      "Lost, reported to the vendor",
+    ]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    expect((await (await loginAs("neha@masti.test")).post("/api/masters/missing-passport-reasons").send({ code: "CLIENT_HAS_IT", name: "Client has it" })).status).toBe(403);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/missing-passport-reasons").send({ code: " client_has_it ", name: "Client has it" });
+    expect(created.status).toBe(201);
+    expect(created.body.missingPassportReason).toMatchObject({ code: "CLIENT_HAS_IT", isActive: true });
+    expect((await hod.post("/api/masters/missing-passport-reasons").send({ code: "EMBASSY_KEPT", name: "Again" })).status).toBe(409);
+
+    const kept = await prisma.missingPassportReason.findUniqueOrThrow({ where: { code: "EMBASSY_KEPT" } });
+    const patched = await hod.patch(`/api/masters/missing-passport-reasons/${kept.id}`).send({ code: "OLD", name: "Kept by the embassy" });
+    expect(patched.body.missingPassportReason).toMatchObject({ code: "EMBASSY_KEPT", name: "Kept by the embassy" });
+    await hod.patch(`/api/masters/missing-passport-reasons/${kept.id}`).send({ isActive: false });
+    expect((await hod.get("/api/masters/missing-passport-reasons?active=true")).body.missingPassportReasons.map((r: { code: string }) => r.code)).not.toContain("EMBASSY_KEPT");
+    expect(await prisma.auditLog.count({ where: { action: { in: ["missingPassportReason.create", "missingPassportReason.update"] } } })).toBe(3);
+  });
+});
+
 describe("extra charges (0011 Decision 7)", () => {
   it("is seeded, read by Visa staff and written only by the Visa HOD or the Head; codes never change; switched off", async () => {
     const staff = await visaStaff("VIEW");

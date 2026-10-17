@@ -32,6 +32,8 @@ export interface EnquiryRow {
   reason: { name: string } | null
   /** When a postponed case comes back, YYYY-MM-DD. */
   resumeOn: string | null
+  /** A visa case whose passports are still to hand back: a cancelled one stays on the Open tab until then (0006 amendment 15). */
+  toHandBack?: boolean
   stage: StageRef
   source: { code: string; name: string }
   origin: EnquiryOrigin
@@ -187,6 +189,38 @@ export interface TravellerDecision {
   validTo: string | null
 }
 
+/** One stop on the collection or delivery boy's run (docs/decisions/0015-field-staff-app.md). */
+export interface FieldJob {
+  id: string
+  kind: 'PICKUP' | 'DELIVERY'
+  status: 'BOOKED' | 'DONE' | 'FAILED' | 'CANCELLED'
+  assignee: { id: string; name: string; mobile: string }
+  day: string
+  slot: { id: number; name: string; startsAt: string; endsAt: string }
+  address: string
+  mapLink: string | null
+  mobile: string
+  bookedAt: string
+  bookedBy: PersonRef | null
+  cancelledAt: string | null
+  cancelledBy: PersonRef | null
+  /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it couldn't be. */
+  finishedAt: string | null
+  place: { lat: number; lng: number; accuracy: number } | null
+  failReason: { id: number; name: string } | null
+  /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+  counted: { current: number; old: number } | null
+  selfie: { id: string; fileName: string } | null
+  otpConfirmedAt: string | null
+}
+
+/** Who can be sent: the active field staff (GET /api/visa/field-staff). */
+export interface FieldStaff {
+  id: string
+  name: string
+  mobile: string
+}
+
 /** The passports handed back to the client (docs/decisions/0014-visa-delivered.md): how, when and by whom, the booklets, who collected them, their photo. */
 export interface Handover {
   mode: 'OFFICE' | 'DELIVERY'
@@ -195,6 +229,8 @@ export interface Handover {
   booklets: { current: number; old: number }
   receiver: { name: string; travellerId: string | null }
   photo: { id: string; fileName: string } | null
+  /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) is on the case's field jobs. */
+  fieldJobId: string | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */
@@ -425,9 +461,13 @@ export interface AdditionalInvoiceCheck {
 /** The file's one additional invoice (0011 Decision 7): an invoice of extra charges, with no GST. */
 export type CaseAdditionalInvoice = CaseInvoice & { charges: { name: string; amountPaise: number }[] }
 
-/** GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller. */
+/**
+ * GET /api/visa/cases/:caseNo/recall/check (0011 Decision 6): what taking the file back gives back, per traveller.
+ * `invoiceNo` (and `creditNoteNo`) are null when nothing can go back: a cancelled case whose invoice was already
+ * cancelled whole (docs/decisions/0006-visa-documents.md amendment 15).
+ */
 export interface RecallCheck {
-  invoiceNo: string
+  invoiceNo: string | null
   lines: {
     /** The invoice's line, 1, 2, 3… */
     position: number
@@ -442,7 +482,7 @@ export interface RecallCheck {
   defaultTotalPaise: number
   /** The Visa HOD or the Head: "Change refund (HOD)" */
   canChangeRefund: boolean
-  creditNoteNo: string
+  creditNoteNo: string | null
   dueAt: string
   blockers: { kind: string; label: string; items: string[] }[]
 }
@@ -451,6 +491,8 @@ export interface RecallCheck {
 export interface CancelInvoiceCheck {
   invoiceNo: string
   alreadyCancelled: string | null
+  /** The case is cancelled: no corrected invoice follows, so only the Visa HOD or the Head may (0006 amendment 15). */
+  hodOnly: boolean
   blockers: { kind: string; label: string; items: string[] }[]
   preview: {
     creditNoteNo: string
@@ -513,7 +555,10 @@ export interface VisaCase {
   reason: { id: number; code: string; name: string; kind: 'POSTPONE' | 'CANCEL' } | null
   /** YYYY-MM-DD, while postponed */
   resumeOn: string | null
-  client: { id: string; name: string; mobile: string }
+  /** With their email (the field boy's one-time code goes there, 0015) and address in one line */
+  client: { id: string; name: string; mobile: string; email: string | null; address: string }
+  /** The collection and delivery boy's jobs (0015), newest first */
+  fieldJobs: FieldJob[]
   source: { code: string; name: string }
   origin: EnquiryOrigin
   country: { id: number; name: string; zone: string | null; label: string }
@@ -583,8 +628,18 @@ export interface VisaCase {
   decision: { at: string; by: PersonRef | null } | null
   /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when */
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
-  /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted */
-  passportsReceived: { at: string; by: PersonRef | null; booklets: { current: number; old: number } } | null
+  /**
+   * "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted (plus any
+   * received later). `missing`: per kind, what went out and isn't back; while any is and the shortfall isn't cleared, the
+   * handover waits (amended 17 Oct 2026). `shortfallCleared`: when, by whom and why it won't come back.
+   */
+  passportsReceived: {
+    at: string
+    by: PersonRef | null
+    booklets: { current: number; old: number }
+    missing: { current: number; old: number }
+    shortfallCleared: { at: string; by: PersonRef | null; reason: string } | null
+  } | null
   /** Handed back to the client (0014): null until then */
   handover: Handover | null
   travellers: CaseTraveller[]

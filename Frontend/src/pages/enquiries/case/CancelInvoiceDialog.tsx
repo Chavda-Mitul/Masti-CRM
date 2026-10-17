@@ -1,5 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { isHodOf } from '../../../auth/permissions'
+import { useMe } from '../../../auth/useAuth'
 import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { formatRupees } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
@@ -12,24 +14,32 @@ import type { CancelInvoiceCheck, VisaCase } from '../types'
  * WHOLE credit note cancels it, giving back everything it charged, its GST included, so the tax reports net to zero. The
  * reason is picked from the credit-note reasons list. The invoice and total shown are sent back, so a change meanwhile
  * is refused rather than cancelling something nobody saw. `invoiceNo` picks the additional invoice (Decision 7), which
- * has no GST; without it, the main invoice.
+ * has no GST; without it, the main invoice. On a cancelled case no corrected invoice follows, so it gives the client's
+ * money back: only the Visa HOD or the Head may, and the reason starts on "Client cancelled" (0006 amendment 15).
  */
 export function CancelInvoiceDialog({ visaCase: c, invoiceNo, onClose }: { visaCase: VisaCase; invoiceNo?: string; onClose: () => void }) {
   const toast = useToast()
   const queryClient = useQueryClient()
+  const { data: me } = useMe()
   const check = useCancelInvoiceCheck(c.caseNo, invoiceNo)
   const cancel = useCancelInvoice(c.caseNo)
   const reasons = useMasterList('credit-note-reasons')
-  const [reasonId, setReasonId] = useState('')
+  const [picked, setReasonId] = useState('')
   const [reasonError, setReasonError] = useState<string | null>(null)
   const options = (reasons.data ?? []).filter((r) => r.isActive)
+  const caseCancelled = c.status === 'CANCELLED'
+  // Until something is picked, a cancelled case's reason is "Client cancelled" (when it's on the list).
+  const preset = caseCancelled ? options.find((r) => r.code === 'CLIENT_CANCELLED') : undefined
+  const reasonId = picked || (preset ? String(preset.id) : '')
+  // A cancelled case's invoice is a refund: only the Visa HOD or the Head may cancel it.
+  const notTheirs = !!check.data?.hodOnly && !(me && isHodOf(me, 'VISA'))
 
   const serverBlockers =
     errorCode(cancel.error) === 'CREDIT_NOTE_BLOCKED' ? (errorBody(cancel.error)?.details?.blockers as CancelInvoiceCheck['blockers'] | undefined) : undefined
   const blockers = serverBlockers ?? check.data?.blockers ?? []
   const message = serverBlockers || errorBody(cancel.error)?.issues ? null : errorText(cancel.error)
   const p = check.data?.preview
-  const ready = !!check.data && !check.data.alreadyCancelled && blockers.length === 0
+  const ready = !!check.data && !check.data.alreadyCancelled && blockers.length === 0 && !notTheirs
 
   const press = () => {
     if (!check.data || !p) return
@@ -70,10 +80,13 @@ export function CancelInvoiceDialog({ visaCase: c, invoiceNo, onClose }: { visaC
           Cancel invoice {check.data?.invoiceNo ?? invoiceNo ?? c.invoice?.invoiceNo}
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
-          {invoiceNo
-            ? 'An invoice is never changed. A credit note cancels it, giving back every extra charge. A corrected additional invoice can then be raised; it still counts as the file’s one.'
-            : 'An invoice is never changed. A credit note cancels it, giving back everything it charged, GST included. A corrected invoice can then be raised.'}
+          {caseCancelled
+            ? 'The case is cancelled, so no corrected invoice follows: this gives the client back everything this invoice charged.'
+            : invoiceNo
+              ? 'An invoice is never changed. A credit note cancels it, giving back every extra charge. A corrected additional invoice can then be raised; it still counts as the file’s one.'
+              : 'An invoice is never changed. A credit note cancels it, giving back everything it charged, GST included. A corrected invoice can then be raised.'}
         </p>
+        {notTheirs && <div className="alert alert-warn">Only the Visa HOD or the Head can cancel the invoice of a cancelled case: ask them.</div>}
 
         {check.isPending ? (
           <p className="muted">Checking…</p>

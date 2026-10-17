@@ -35,7 +35,7 @@ enum UserType { HEAD  OFFICE  FIELD }   // User.type, default OFFICE
 
 **Why an enum and not a master table** (golden rule 1 wants masters as tables): each value is wired to code (which app, which guards). A new type needs a deploy anyway, so it isn't admin-editable data. This is the same reasoning as `DepartmentRole` and `Access`.
 
-**Field jobs carry their own scope.** `FieldJob` has a `departmentId`, the desk that raised it, for that desk's lists and reports, plus an `assigneeId` (any user). A field worker's access comes from assignment, not from a department. Only the skeleton exists so far. Job type, status (both master tables), slot, address, amount and handover proof come with the field module.
+**Field jobs carry their own scope.** `FieldJob` has a `departmentId`, the desk that raised it, for that desk's lists and reports, plus an `assigneeId` (any user). A field worker's access comes from assignment, not from a department. Only the skeleton exists so far. Job type, status (both master tables), slot, address, amount and handover proof come with the field module. *Designed in [0015](0015-field-staff-app.md) (17 Oct 2026): kind and status are fixed in code, slots and fail reasons are lists.*
 
 **Enforced in three layers:**
 

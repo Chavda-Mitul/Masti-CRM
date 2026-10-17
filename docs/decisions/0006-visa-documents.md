@@ -43,6 +43,88 @@ Amended 17 Oct 2026 (project lead), with Step 8 ([0014](0014-visa-delivered.md) 
     over), in their list and on its page, so whoever is at the desk can hand them over. Only the handover is theirs;
     everything else stays with the case's owner, the HOD or the Head. Once delivered, the case is back to the rule
     above.
+14. **The collection boy's pickup job** (Decision 4's "comes with the field app") is designed in
+    [0015](0015-field-staff-app.md): booked from Step 2 with the boy, a day and a time slot; at the door he counts the
+    booklets, takes the client's OTP and his selfie with place and time, and his count becomes the intake count.
+
+Amended 17 Oct 2026 (project lead), after the 17 Oct browser review found that a case cancelled at the vendor
+stranded the client's passports (nothing could move again):
+
+15. **Cancelling doesn't end the passports' way back.** Cancel stays possible at every step (Decision 6), but a paper
+    file that went to the vendor still comes back to the client, with the usual proof:
+    - **"To hand back":** a case whose file was dispatched in a docket and whose passports aren't handed over yet.
+      An e-visa never is.
+    - **What still works on such a cancelled case:** "Take the file back" ([0011](0011-visa-at-vendor.md) Decision 6),
+      "Passports on the way back" and its "Change" ([0013](0013-visa-passport-back.md) Decision 3, component 2), as
+      on an open case. Mark received and the handover already worked whatever the status (0013 Decision 5,
+      [0014](0014-visa-delivered.md) Decision 7). The case stays Cancelled, with its reason, and moves to Delivered
+      at the handover. Vendor got it, the submission, the decision and its correction, Log call and reassigning stay
+      refused.
+    - **It stays on its owner's list until the handover** (and on the HOD's): the enquiries list's Open tab shows it
+      too, as "Cancelled · reason · passports still to hand back", and it counts toward running late. Cancelling gives
+      it a due time instead of none: **now** at At vendor (take the file back) or when it was postponed (its due time
+      was the resume day); otherwise it **keeps the due time it had** (the check after the decision, the arrival day,
+      the handover check). Each later step sets its own, as on an open case: a cancelled case now also gets the
+      handover check when its passports are received. The handover clears it.
+    - **Money:** a recall issues its own part credit note (each traveller's embassy fee; the Visa HOD can give back
+      more), and a whole credit note is refused after a part one, so a case cancelled at the vendor settles its refund
+      in the recall dialog. If the invoice was already cancelled whole (no replacement), a cancelled case's recall
+      gives nothing back and issues no credit note; an open case still raises a replacement first.
+    - **"Cancel with a credit note" on a cancelled case** (component 2): the main invoice or the additional one, at
+      any step. No corrected invoice follows, so it gives the client's money back, and **only the Visa HOD or the
+      Head** may issue it (decided 17 Oct 2026, as only an HOD gives back more on a recall); the processor sees the
+      button and is told to ask them. Nothing is raised on a cancelled case (no invoice, replacement, additional
+      invoice or quote change): a cancellation charge Masti keeps is billed before cancelling. The cancel dialog
+      warns about each invoice that still stands (at the vendor: its refund is set when the file is taken back).
+    - **Hand back before dispatch** (component 3; not a demo screen, change request #7): a case cancelled at Steps
+      1–4 while its passports are at our office (counted in at intake, more than zero) gets "Hand back to the
+      client", with the office handover's proof: the count against the intake count, who collected, a desk photo.
+      Decided 17 Oct 2026: **any Visa staff with EDIT** may do it (whoever is at the desk, as 0014 Decision 5), so
+      such a case counts as in our stock and they can open it until then; it is due the next office day at 11:00
+      (`visa.handoverCheck` ⚠️) and on its owner's Open list; afterwards it **stays at the step where it stopped**
+      (no jump to Delivered) and stays Cancelled. At the office only: the delivery boy takes received passports
+      (0015). With no intake count there's no custody record and so no hand-back; e-visas after the online submission
+      wait on M39.
+    - **For the field app ([0015](0015-field-staff-app.md)):** a delivery booked to hand the passports back should
+      stay booked when the case is cancelled, and booking one should give a cancelled case its due time, as on an
+      open one. Until that's changed there, cancelling still calls off a booked job.
+
+    *Supersedes Decision 6's "with no due time" for these cases.* To confirm with Vimal: M41.
+
+    **Built 17 Oct 2026, component 1** (`4f9d2ca`, branch `fix/visa-cancel-custody`):
+    - **Step rules:** `cancelledToo` on `StepRule` (`caseLock.ts`), a new `RECALLING` (At vendor, WITH_VENDOR's
+      wording), and `RETURNING` and `IN_TRANSIT` allow a cancelled case.
+    - **"To hand back":** `TO_HAND_BACK` / `toHandBack` in `visibility.ts`.
+    - **Due times:** `cancel()` keeps a due time for such a case (audit `toHandBack: true`); Mark received gives a
+      cancelled case the handover check.
+    - **The Open list:** it also lists them, and its rows carry `toHandBack`.
+    - **Recall with nothing back:** for a cancelled case with no standing invoice, `invoiceNo: null`.
+    - **The case page:** a banner of what's left; the header's custody step ("Take the file back →" and the steps
+      after it); the recall reason preset; Change and the due lines on a cancelled case; a note in the cancel dialog.
+    - **Tests:** 5 new (`tests/visaCancelCustody.test.ts`). All 42 test files pass (510). Browser-checked on an isolated
+      copy.
+
+    **Built 17 Oct 2026, component 2** (`5adc882`, branch `fix/visa-cancel-custody`):
+    - **Step rule:** `CREDITING` (`caseLock.ts`): INVOICED's steps, on a cancelled case too, for `cancelInvoice` only.
+      On a cancelled case only the Visa HOD or the Head (403 otherwise), checked again under the case lock.
+    - **The check:** `GET …/invoice/cancel/check` says `hodOnly` (the case is cancelled).
+    - **The Money section:** "Cancel with a credit note" shows on a cancelled case for the main and the additional
+      invoice. The dialog says no corrected invoice follows, starts on "Client cancelled", and for anyone but the HOD
+      or the Head explains and keeps Confirm off.
+    - **The cancel dialog:** a note per standing invoice.
+    - **Tests:** 3 new (`visaCreditNote`, `visaAdditionalInvoice`). Browser-checked: a case cancelled before dispatch,
+      its invoice cancelled by the HOD. All 42 test files pass (513).
+
+    **Built 17 Oct 2026, component 3** (`f37e07d`, branch `fix/visa-cancel-custody`):
+    - **Definitions:** `PRE_DISPATCH` and `heldAtOffice` (`visibility.ts`, mirrored in `labels.ts`). `TO_HAND_BACK` /
+      `toHandBack` and `IN_STOCK` / `passportsInStock` include a cancelled case held at the office.
+    - **Cancel:** the case is due at the handover check.
+    - **The handover:** `HANDING_OVER` covers Steps 1–4. `assertInStock` requires a cancelled case with an intake
+      count, and the count must match the intake. The case keeps its step and its due time is cleared (audit
+      `beforeDispatch: true`).
+    - **The case page:** "Hand back to the client →", the banner, the dialog with no delivery option, the card's
+      "Handed back".
+    - **Tests:** 3 new (`visaCancelCustody`). All 42 test files pass (516). Browser-checked.
 
 ## Context
 
@@ -140,7 +222,8 @@ These live on the shared `Enquiry`, so Holidays, Hotels and the others reuse the
 
 **Cancel:**
 
-- Needs a CANCEL reason. Status becomes `CANCELLED`, with no due time.
+- Needs a CANCEL reason. Status becomes `CANCELLED`, with no due time (unless its passports are still to hand back:
+  amendment 15).
 - Not reopened in this build. If needed, it's a later HOD action.
 
 **Reassign:**

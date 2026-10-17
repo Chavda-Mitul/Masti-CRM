@@ -12,6 +12,7 @@ import {
   createCourierSchema,
   createCreditNoteReasonSchema,
   createRecallReasonSchema,
+  createMissingPassportReasonSchema,
   createExtraChargeSchema,
   createProcessingSpeedSchema,
   createVisaTypeSchema,
@@ -27,6 +28,7 @@ import {
   updateCourierSchema,
   updateCreditNoteReasonSchema,
   updateRecallReasonSchema,
+  updateMissingPassportReasonSchema,
   updateExtraChargeSchema,
   updateProcessingSpeedSchema,
   updateVisaTypeSchema,
@@ -168,6 +170,20 @@ router.post("/recall-reasons", visaEdit, async (req, res) => {
 router.patch("/recall-reasons/:id", visaEdit, async (req, res) => {
   const body = updateRecallReasonSchema.parse(req.body);
   res.json({ recallReason: await mastersService.updateRecallReason(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Missing passport reasons (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026)
+router.get("/missing-passport-reasons", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ missingPassportReasons: await mastersService.listMissingPassportReasons(active) });
+});
+router.post("/missing-passport-reasons", visaEdit, async (req, res) => {
+  const body = createMissingPassportReasonSchema.parse(req.body);
+  res.status(201).json({ missingPassportReason: await mastersService.createMissingPassportReason(body, actorOf(req)) });
+});
+router.patch("/missing-passport-reasons/:id", visaEdit, async (req, res) => {
+  const body = updateMissingPassportReasonSchema.parse(req.body);
+  res.json({ missingPassportReason: await mastersService.updateMissingPassportReason(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Extra charges, for the additional invoice (docs/decisions/0011-visa-at-vendor.md Decision 7)

@@ -2,7 +2,8 @@
 
 - **Status:** decided (16 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: passports
   on the way back (16 Oct 2026, component 1); changing the dates (16 Oct 2026, component 2); mark received (17 Oct
-  2026, component 3). Step 7 is complete. A "Built" note is added under each part as its component lands.
+  2026, component 3). Step 7 is complete. A "Built" note is added under each part as its component lands. Amended 17
+  Oct 2026 (Decision 5): a short return holds the handover; built the same day.
 - **Date:** 16 Oct 2026
 - **Scope:** the passports' way back from the vendor to our office, until they're in our passport stock and ready to
   hand over (Step 8):
@@ -74,7 +75,8 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
   our office is open: Sundays and office holidays are struck through on the calendar and refused by the server).
 - **The case moves to Step 7 · Passport back, In transit,** due on the expected day at 11:00 ⚠️
   (`visa.arrivalCheck`), on the processor's desk, to check the passports have arrived.
-- **Who:** the case's processor, the Visa HOD or the Head, while the case is open.
+- **Who:** the case's processor, the Visa HOD or the Head, while the case is open (or cancelled: amended 17 Oct 2026,
+  [0006](0006-visa-documents.md) amendment 15, so a cancelled case's passports still come back).
 - **From Step 6:** "Passports on the way back →" in the header.
 - **A recalled file** is already at Step 7, so the same button shows there until it's in transit. Everything else is
   the same, with no stickers to check later.
@@ -111,8 +113,8 @@ and a collected day can be mistyped.
   change request.
 
 **Defaults (not asked; say if any is wrong):**
-- **Who and when:** the processor, the Visa HOD or the Head, while the case is open at Passport back and the passports
-  are in transit (component 3 adds "not yet received").
+- **Who and when:** the processor, the Visa HOD or the Head, while the case is open (or cancelled: 0006 amendment 15)
+  at Passport back and the passports are in transit (component 3 adds "not yet received").
 - **What stays:** who recorded them on the way back, and when. The due time moves with the expected day.
 - **Collected day:** no later than the day they were recorded on the way back.
 - **Saving:** a save that changes nothing writes nothing, and a stale page is refused.
@@ -151,7 +153,9 @@ an e-visa.
 
 **Decided 17 Oct 2026 (project lead):**
 - **Whatever the case's status:** the passports can be marked received on a postponed or cancelled case too (chain of
-  custody: the packet is here). The case keeps its status; only an open case gets a new due time.
+  custody: the packet is here). The case keeps its status; an open or cancelled case gets the handover check as its
+  due time (a cancelled one since 0006 amendment 15, so it stays on the list until handed back); a postponed one keeps
+  its resume day.
 - **No correction for now:** a saved receipt is fixed, and audited. If Masti asks for corrections, it's its own
   component.
 - **Counting:** the booklet boxes start blank, with intake's count beside them; a difference turns red as staff type.
@@ -192,6 +196,71 @@ an e-visa.
     11:09"); the demo's three boxes show the booklets (red when they don't match intake), the stickers ("All match
     names & dates", "Doesn't match: …" in red, "No stickers (taken back)" or "(all refused)") and who received them; an
     open case is due to "Arrange the handover"; the header's "Hand over to the client →" stays "Soon" until Step 8.
+
+**Amended 17 Oct 2026 (project lead), after the 17 Oct browser review** (3 of 4 passports came back, and the case
+closed as Delivered with nobody asked to chase the fourth):
+- **A short return holds the handover.** "Missing" is fewer current or old booklets back than went out (intake, as
+  above). The receipt is still saved as counted, but the case shows what's missing, its task reads "Find the missing
+  passport", and the handover (its photo too) and booking a delivery are refused until the shortfall is settled:
+  - **"Received the rest":** the late booklets come in and are added to our stock count, up to what's missing
+    (audited). The receipt (who and when) stays as it was; this adds to its counts.
+  - **"Clear the shortfall":** accept they won't come back, with a reason from an admin-editable **"Missing passport
+    reasons"** list ⚠️ (seeded: Embassy kept it, Vendor still has it, Counted wrong at intake, Lost, reported to the
+    vendor; no free text). Who: whoever can act on the case (the processor, the Visa HOD or the Head); desk staff who
+    see the case through the in-stock rule can't.
+  - Then the handover goes ahead with what's in our stock (0014 Decision 4).
+- **More back than went out** stays as before: shown, not held. A sticker that doesn't match is a separate question.
+- *Supersedes "a count that doesn't match is allowed" above for a shortfall: it's still recorded, but now held.* The
+  field app's doorstep handover (0015 phase 5) respects the same hold. To confirm with Vimal: M42.
+
+**Built 17 Oct 2026** (the amendment):
+- **Data:**
+  - `MissingPassportReason` (`code` unique, letters, digits and underscores; `name`, `sortOrder`, `isActive`), seeded
+    with the four reasons above ⚠️ (migration `20261017203000_missing_passport_reasons`).
+  - `VisaCase.shortfallClearedAt`, `shortfallClearedById`, `shortfallReasonId` (migration
+    `20261017204000_shortfall_cleared`). CHECKs: all three together, and only once received.
+  - "Received the rest" raises `bookletsBackCurrent` / `bookletsBackOld`. The first count stays in the
+    `visa.passports.received` audit.
+- **The rule** (`Backend/src/modules/visa/shortfall.ts`): missing is, per kind, what went out (intake, else one current
+  per traveller) less what's in our stock, never below 0. A case is held while it's received, something is missing, the
+  shortfall isn't cleared and it isn't handed over. While held, these are refused with 409 "1 old passport is missing:
+  record it when it comes, or clear the shortfall first." ("2 passports are missing (1 current, 1 old): record them
+  when they come, …"):
+  - the handover photo and the handover (0014)
+  - booking the delivery boy (0015)
+- **API**, for whoever can act on the case, at Passport back, whatever its status (step rule `RECEIVING`; desk staff
+  get 403). Both mark the case changed for open pages; the due time stays.
+  - `POST /api/visa/cases/:caseNo/passports-received/rest` with `{ booklets: { current, old }, updatedAt }`:
+    - each kind up to what's missing of it, at least one booklet. 400 under `booklets`: "Only 1 current passport is
+      missing.", "No old passport is missing.", "Count at least one booklet."
+    - 409 when nothing is missing ("Nothing is missing: every booklet that went out is back."), STALE
+    - also after a clear, for one that turns up after all; the clear is dropped once nothing is missing, so reports
+      don't count a passport that came back
+    - audited `visa.passports.receivedRest`: the counts before and after, what's missing, whether it was cleared
+  - `POST /api/visa/cases/:caseNo/passports-received/clear` with `{ reasonId, updatedAt }`:
+    - an active reason; 400 under `reasonId` ("Pick an active reason.")
+    - 409 when nothing is missing, or "The shortfall is already cleared.", STALE
+    - audited `visa.passports.shortfallCleared`: what's missing, and the reason
+  - `GET/POST/PATCH /api/masters/missing-passport-reasons`: Visa staff read, the Visa HOD or the Head edit, audited;
+    switched off, never deleted.
+- **The case** sends `passportsReceived.missing { current, old }` and `passportsReceived.shortfallCleared { at, by,
+  reason }` (null until cleared).
+- **Screen:**
+  - **Held**, on the Passports coming back card:
+    - a red line "1 old passport missing. The handover waits until it comes or the shortfall is cleared.", with
+      **Missing passport…** for whoever can act
+    - Hand over and Book the delivery boy hidden
+    - the due line reads "Find the missing passport"
+  - **The header** of an open held case shows **"Missing passport →"** to whoever can act; the desk sees no button.
+  - **The dialog** "The missing passport":
+    - **It came:** a box for each missing kind, up to what's missing
+    - **It won't come back:** the reason, then "The handover then goes ahead with what's in our stock: 1 current + 0 old."
+    - "Received by" or "Cleared by Neha Joshi, now"
+  - **Cleared:** an amber line "1 old passport missing · cleared by Neha Joshi, Sat 17 Oct, 17:20: Embassy kept it",
+    with **It came back…**; the handover is back. The line stays on the delivered case.
+  - **Mark received:** a short count adds "The handover will wait until the rest arrive or the shortfall is cleared."
+  - **Settings → Masters → Lists → Missing passport reasons.**
+- **Tests:** `tests/visaShortfall.test.ts` (11) and `tests/visaMasters.test.ts`; the whole suite passes (533).
 
 ### 6. Settings and seed data (golden rule 1)
 
