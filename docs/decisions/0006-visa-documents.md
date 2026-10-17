@@ -80,6 +80,19 @@ stranded the client's passports (nothing could move again):
 
     *Supersedes Decision 6's "with no due time" for these cases.* To confirm with Vimal: M41.
 
+    **Built 17 Oct 2026, component 1** (`4f9d2ca`, branch `fix/visa-cancel-custody`):
+    - **Step rules:** `cancelledToo` on `StepRule` (`caseLock.ts`), a new `RECALLING` (At vendor, WITH_VENDOR's
+      wording), and `RETURNING` and `IN_TRANSIT` allow a cancelled case.
+    - **"To hand back":** `TO_HAND_BACK` / `toHandBack` in `visibility.ts`.
+    - **Due times:** `cancel()` keeps a due time for such a case (audit `toHandBack: true`); Mark received gives a
+      cancelled case the handover check.
+    - **The Open list:** it also lists them, and its rows carry `toHandBack`.
+    - **Recall with nothing back:** for a cancelled case with no standing invoice, `invoiceNo: null`.
+    - **The case page:** a banner of what's left; the header's custody step ("Take the file back →" and the steps
+      after it); the recall reason preset; Change and the due lines on a cancelled case; a note in the cancel dialog.
+    - **Tests:** 5 new (`tests/visaCancelCustody.test.ts`). All 42 test files pass (510). Browser-checked on an isolated
+      copy.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
