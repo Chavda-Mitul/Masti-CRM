@@ -1,7 +1,9 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, uploadPdf } from '../../lib/api'
+import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
+import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
+import type { ScanType } from '../clients/scanFiles'
 import type {
   ClientLookup,
   CreateVisaCaseBody,
@@ -235,25 +237,26 @@ export function useUploadRefusalLetter(caseNo: string) {
   )
 }
 
-/**
- * Opens one of the case's files in a new tab, through a link that works for a few minutes. The tab is opened on the
- * click itself, so popup blockers allow it, and pointed at the file once the link arrives.
- */
+/** Opens one of the case's files in a new tab, through a link that works for a few minutes. */
 export function useOpenCaseFile(caseNo: string) {
-  const toast = useToast()
-  return (fileId: string) => {
-    const tab = window.open('', '_blank')
-    if (tab) tab.opener = null
-    api<{ url: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
-      .then(({ url }) => {
-        if (tab) tab.location.href = url
-        else window.location.href = url
-      })
-      .catch((err: unknown) => {
-        tab?.close()
-        toast({ tone: 'bad', message: err instanceof Error ? err.message : 'Couldn’t open the file. Please try again.' })
-      })
-  }
+  const open = useOpenSignedLink()
+  return (fileId: string) => open(`/visa/cases/${encodeURIComponent(caseNo)}/files/${fileId}/link`)
+}
+
+/**
+ * "Save scan" (0016 Decision 5): keeps one of a traveller's papers in the client's document vault. It doesn't tick the
+ * paper. The case action refreshes the client's queries too, so the client's Documents card follows.
+ */
+export function useSaveCaseScan(caseNo: string) {
+  return useCaseAction<{ documentId: string; file: File; type: ScanType }>(caseNo, (base, { documentId, file, type }) =>
+    uploadFile(`${base}/documents/${documentId}/scan`, file, type),
+  )
+}
+
+/** Opens a paper's copy in the client's vault: the one an On file paper came from, or else the current one. */
+export function useOpenCaseScan(caseNo: string) {
+  const open = useOpenSignedLink()
+  return (documentId: string) => open(`/visa/cases/${encodeURIComponent(caseNo)}/documents/${documentId}/scan/link`)
 }
 
 /** Names a traveller: links the client's family member. */

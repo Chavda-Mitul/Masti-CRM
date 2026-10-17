@@ -11,6 +11,7 @@ import { VISA_FLOW } from "../enquiries/enquiries.seed";
 import { assertCanSeeEnquiry } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
+import { currentScansOf } from "../clients/clientDocuments.service";
 import { getClientSettings } from "../clients/clients.settings";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
 import type { Actor, UserWithDepartments } from "../users/user";
@@ -252,11 +253,13 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 // ---------------------------------------------------------------------------
 
 /**
- * The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), the passport-warning setting, and the
- * largest final file allowed (the page checks it before uploading).
+ * The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), the passport-warning setting, the
+ * largest final file allowed (the page checks it before uploading), and the linked travellers' copies on file in the
+ * client's vault (0016 Decision 5).
  */
 async function toDto(row: VisaCaseRow) {
-  const [steps, clientSettings, visaSettings] = await Promise.all([
+  const memberIds = (row.visa?.travellers ?? []).flatMap((t) => (t.memberId ? [t.memberId] : []));
+  const [steps, clientSettings, visaSettings, scans] = await Promise.all([
     prisma.departmentStage.findMany({
       where: { departmentId: row.stage.departmentId, flow: row.stage.flow },
       orderBy: { sortOrder: "asc" },
@@ -264,8 +267,9 @@ async function toDto(row: VisaCaseRow) {
     }),
     getClientSettings(),
     getVisaSettings(),
+    currentScansOf(memberIds),
   ]);
-  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent);
+  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent, scans);
 }
 
 export async function getVisaCaseById(id: string) {

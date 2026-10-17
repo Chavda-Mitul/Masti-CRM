@@ -117,6 +117,20 @@ export const lookupQuerySchema = z.object({
   mobile: z.string().trim().min(1, "Enter a mobile number.").max(30),
 });
 
+/** The document vault's files (docs/decisions/0016-client-documents.md): a scanner's PDF or a phone photo, by extension. */
+export const SCAN_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" } as const;
+export type ScanType = keyof typeof SCAN_TYPES;
+export const isScanType = (contentType: string): contentType is ScanType => Object.hasOwn(SCAN_TYPES, contentType);
+
+/**
+ * Which paper a scan is, and whose. Sent as the upload's query, since the body is the file itself. No member means the
+ * client's own paper.
+ */
+export const addClientDocumentQuerySchema = z.object({
+  documentId: z.coerce.number().int().positive(),
+  memberId: z.uuid().optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Settings (rows in the Setting table; see clients.settings.ts)
 // ---------------------------------------------------------------------------
@@ -151,9 +165,15 @@ export const expiryWarningsSchema = z.object({
   passportRenewSoonMonths: z.number().int().min(0).max(60),
 });
 
+/** "clients.documents": the largest scan the document vault takes. */
+export const clientDocumentsSettingSchema = z.object({
+  maxMb: z.number().int().min(1).max(200),
+});
+
 export const updateClientSettingsSchema = z.object({
   invoiceReadiness: invoiceReadinessSchema.optional(),
   expiryWarnings: expiryWarningsSchema.optional(),
+  documents: clientDocumentsSettingSchema.optional(),
 });
 
 export type CreateClientInput = z.infer<typeof createClientSchema>;
@@ -164,7 +184,9 @@ export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 export type AddNoteInput = z.infer<typeof addNoteSchema>;
 export type ListClientsQuery = z.infer<typeof listClientsQuerySchema>;
+export type AddClientDocumentQuery = z.infer<typeof addClientDocumentQuerySchema>;
 export type ReadinessField = (typeof READINESS_FIELDS)[number];
 export type InvoiceReadiness = z.infer<typeof invoiceReadinessSchema>;
 export type ExpiryWarnings = z.infer<typeof expiryWarningsSchema>;
+export type ClientDocumentsSetting = z.infer<typeof clientDocumentsSettingSchema>;
 export type UpdateClientSettingsInput = z.infer<typeof updateClientSettingsSchema>;

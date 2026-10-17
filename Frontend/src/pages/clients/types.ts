@@ -1,6 +1,7 @@
 // Shapes returned by /api/clients (Backend/src/modules/clients/client.ts). Dates without a time are "YYYY-MM-DD".
 
 import type { OpenEnquiry } from '../enquiries/types'
+import type { ScanType } from './scanFiles'
 
 export type ClientKind = 'INDIVIDUAL' | 'CORPORATE'
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
@@ -69,6 +70,37 @@ export interface ClientNote {
   body: string
   author: { id: string; name: string }
   createdAt: string
+}
+
+/** One scan in the client document vault (docs/decisions/0016-client-documents.md). */
+export interface ClientDocumentScan {
+  id: string
+  fileName: string
+  contentType: ScanType
+  sizeBytes: number
+  /** A PDF's pages; null for a photo. */
+  pageCount: number | null
+  uploadedAt: string
+  uploadedBy: { id: string; name: string }
+}
+
+/** A paper from the document master: Passport, Aadhaar card… */
+export interface Paper {
+  id: number
+  name: string
+}
+
+/** One person's scans (no member: the client's own papers), each paper with its current scan and the older ones. */
+export interface ClientDocumentGroup {
+  member: { id: string; name: string; relation: string; archived: boolean } | null
+  papers: { paper: Paper; current: ClientDocumentScan; older: ClientDocumentScan[] }[]
+}
+
+/** The whole vault, for HODs and the Head: the groups, the papers a scan can be, and the largest scan. */
+export interface ClientDocuments {
+  groups: ClientDocumentGroup[]
+  papers: Paper[]
+  maxMb: number
 }
 
 export interface ClientProfile {

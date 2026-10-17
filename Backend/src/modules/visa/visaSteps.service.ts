@@ -1,9 +1,11 @@
+import type { VisaCaseDocument } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
-import { audit } from "../../lib/audit";
+import { audit, auditMany } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
-import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
+import { currentScan } from "../clients/clientDocuments.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
 import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
@@ -48,9 +50,32 @@ export async function startDocuments(caseNo: string, actor: Actor) {
   return getVisaCaseById(enquiry.id);
 }
 
+/** A paper's tick, for the audit log. */
+const tickOf = (d: VisaCaseDocument) => ({
+  name: d.name,
+  status: d.status,
+  receivedAs: d.receivedAs,
+  clientDocumentId: d.clientDocumentId,
+  receivedAt: d.receivedAt,
+  receivedById: d.receivedById,
+});
+
+/**
+ * The scan an On file tick uses (0016 Decision 5): the current copy of the paper for the traveller's person in the
+ * client's vault, picked under the case's lock. Refusals are plain 400s, so the checklist's toast says why.
+ */
+async function copyOnFile(db: Db, doc: VisaCaseDocument) {
+  const traveller = await db.visaCaseTraveller.findUniqueOrThrow({ where: { id: doc.travellerId }, select: { memberId: true, name: true } });
+  if (!traveller.memberId) throw badRequest("Name the traveller first: copies on file are kept per person.");
+  const scan = await currentScan(db, traveller.memberId, doc.documentId);
+  if (!scan) throw badRequest(`There's no copy of "${doc.name}" on file for ${traveller.name ?? "this traveller"}.`);
+  return scan.id;
+}
+
 /**
  * Ticks one paper (Decision 2): Original or Xerox for papers, Made for what we arrange, or Not needed; back to Pending
- * clears it. Each tick stamps who and when, to the minute; the audit log keeps the history.
+ * clears it. A paper that may be a xerox can also be On file: printed from the current copy in the client's vault, which
+ * the paper then names (0016 Decision 5). Each tick stamps who and when, to the minute; the audit log keeps the history.
  */
 export async function updateDocument(caseNo: string, documentId: string, input: UpdateCaseDocumentInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, COLLECTING);
@@ -61,6 +86,9 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
   if (input.status === "RECEIVED") {
     if (arranged) throw fieldError("status", "We arrange this one: mark it Made.");
     if (!input.receivedAs) throw fieldError("receivedAs", "Say whether the original or a xerox came in.");
+    if (input.receivedAs === "ON_FILE" && doc.requirement !== "XEROX_OK") {
+      throw badRequest("Only papers that may be a xerox can come from the copy on file.");
+    }
   }
   if (input.status === "MADE" && !arranged) throw fieldError("status", "Only things we arrange are marked Made. Tick it as Original or Xerox.");
 
@@ -71,9 +99,16 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
     const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     // The paper as it is now, under the lock: someone may have ticked it while this request waited.
     const before = await tx.visaCaseDocument.findUniqueOrThrow({ where: { id: doc.id } });
-    // Re-sending the same tick changes nothing (and doesn't move its time).
-    if (before.status === input.status && before.receivedAs === receivedAs) return;
-    const data = { status: input.status, receivedAs, receivedAt: done ? new Date() : null, receivedById: done ? actor.user.id : null };
+    const clientDocumentId = receivedAs === "ON_FILE" ? await copyOnFile(tx, before) : null;
+    // Re-sending the same tick changes nothing (and doesn't move its time). On file again after a newer scan moves to it.
+    if (before.status === input.status && before.receivedAs === receivedAs && before.clientDocumentId === clientDocumentId) return;
+    const data = {
+      status: input.status,
+      receivedAs,
+      clientDocumentId,
+      receivedAt: done ? new Date() : null,
+      receivedById: done ? actor.user.id : null,
+    };
     const after = await tx.visaCaseDocument.update({ where: { id: doc.id }, data });
     await audit(
       {
@@ -82,8 +117,8 @@ export async function updateDocument(caseNo: string, documentId: string, input: 
         entityType: "VisaCaseDocument",
         entityId: doc.id,
         clientId: enquiry.clientId,
-        before: { name: before.name, status: before.status, receivedAs: before.receivedAs, receivedAt: before.receivedAt, receivedById: before.receivedById },
-        after: { name: after.name, status: after.status, receivedAs: after.receivedAs, receivedAt: after.receivedAt, receivedById: after.receivedById },
+        before: tickOf(before),
+        after: tickOf(after),
         ip: actor.ip,
       },
       tx,
@@ -214,6 +249,25 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
         },
         tx,
       );
+      // Papers ticked On file came from the other person's copies (0016 Decision 5): they go back to Pending.
+      const onFile = await tx.visaCaseDocument.findMany({ where: { travellerId: traveller.id, receivedAs: "ON_FILE" } });
+      if (onFile.length > 0) {
+        const pending = { status: "PENDING" as const, receivedAs: null, clientDocumentId: null, receivedAt: null, receivedById: null };
+        await tx.visaCaseDocument.updateMany({ where: { id: { in: onFile.map((d) => d.id) } }, data: pending });
+        await auditMany(
+          onFile.map((d) => ({
+            actorId: actor.user.id,
+            action: "visa.document.update",
+            entityType: "VisaCaseDocument",
+            entityId: d.id,
+            clientId: enquiry.clientId,
+            before: tickOf(d),
+            after: tickOf({ ...d, ...pending }),
+            ip: actor.ip,
+          })),
+          tx,
+        );
+      }
       await advanceToDocuments(tx, locked, actor);
     })
     .catch(rethrowSameMember);
