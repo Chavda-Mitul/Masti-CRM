@@ -1246,6 +1246,18 @@ model RecallReason {
   visaCases VisaCase[]
 }
 
+/// Why fewer passports came back than went out, when the shortfall is cleared rather than found: "Embassy kept it",
+/// "Counted wrong at intake"… (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026). Never free
+/// text. Edited by the Visa HOD or the Head; switched off, never deleted.
+model MissingPassportReason {
+  id        Int     @id @default(autoincrement())
+  /// EMBASSY_KEPT… Never changes.
+  code      String  @unique
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// What an additional invoice charges for: "Urgent submission", "Photos"… (docs/decisions/0011-visa-at-vendor.md
 /// Decision 7). Picked, with the amount typed; never free text. Edited by the Visa HOD or the Head; switched off, never
 /// deleted.
