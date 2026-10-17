@@ -12,6 +12,7 @@ import { FileReadyDialog } from './FileReadyDialog'
 import { dayMonth, weekdayDay } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
+import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
@@ -59,6 +60,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
       </span>
     )
   }
+  // Received (0013 Decision 5): the step's own "Passports in our stock" ⚠️, as the demo shows it.
+  if (c.stage.code === 'PASSPORT_BACK' && c.passportsReceived) return <span className="chip chip-ok">{c.stage.statusLabel}</span>
   // On the way back (0013 Decision 2) ⚠️: the step's "Passports in our stock" isn't true until they're received.
   if (c.stage.code === 'PASSPORT_BACK' && c.passportsBack) return <span className="chip chip-warn">In transit · expected {weekdayDay(c.passportsBack.expectedOn)}</span>
   return <span className="chip chip-warn">{c.stage.statusLabel}</span>
@@ -68,7 +71,7 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
- * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3).
+ * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3), then "Mark received" (0013 Decision 5).
  * The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
@@ -83,6 +86,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [recording, setRecording] = useState(false)
   const [deciding, setDeciding] = useState(false)
   const [sending, setSending] = useState(false)
+  const [receiving, setReceiving] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -204,6 +208,17 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.code === 'DECISION' ? c.stage.nextStepLabel : 'Passports on the way back'} →
         </button>
         {sending && <PassportsBackDialog visaCase={c} onClose={() => setSending(false)} />}
+      </>
+    )
+  }
+  // In transit: "Mark received" (0013 Decision 5). The Passports coming back card has it too, for a case on hold.
+  if (c.stage.code === 'PASSPORT_BACK' && c.passportsBack && !c.passportsReceived && c.status === 'OPEN' && canAct) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setReceiving(true)}>
+          Mark received →
+        </button>
+        {receiving && <ReceivePassportsDialog visaCase={c} onClose={() => setReceiving(false)} />}
       </>
     )
   }

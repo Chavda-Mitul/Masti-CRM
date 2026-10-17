@@ -17,6 +17,7 @@ import {
   passportsBackCheckSchema,
   arrivalCheckSchema,
   assignCheckSchema,
+  handoverCheckSchema,
   collectionCheckSchema,
   type AwbSetting,
   type CollectionCheckSetting,
@@ -33,6 +34,7 @@ import {
   type PassportsBackCheckSetting,
   type ArrivalCheckSetting,
   type AssignCheckSetting,
+  type HandoverCheckSetting,
   type VendorConfirmSetting,
   type VisaSettings,
 } from "./visa.schemas";
@@ -53,6 +55,7 @@ export const RECALL_RETURN_KEY = "visa.recallReturn";
 export const PASSPORTS_BACK_CHECK_KEY = "visa.passportsBackCheck";
 export const ARRIVAL_CHECK_KEY = "visa.arrivalCheck";
 export const ASSIGN_CHECK_KEY = "visa.assignCheck";
+export const HANDOVER_CHECK_KEY = "visa.handoverCheck";
 export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
@@ -98,6 +101,8 @@ export const DEFAULT_ARRIVAL_CHECK: ArrivalCheckSetting = { afterDays: 0, at: "1
 
 /** ⚠️ 0006, amended 16 Oct 2026: a matured case is due with the Visa HOD to assign the next office day at 11:00. */
 export const DEFAULT_ASSIGN_CHECK: AssignCheckSetting = { afterDays: 1, at: "11:00" };
+/** ⚠️ 0013 Decision 5: once the passports are in our stock, the processor arranges the handover the next office day at 11:00. */
+export const DEFAULT_HANDOVER_CHECK: HandoverCheckSetting = { afterDays: 1, at: "11:00" };
 
 /** ⚠️ 0011 Decision 4 and §10.9: reminded the office day before the expected collection date, at 11:00. */
 export const DEFAULT_COLLECTION_CHECK: CollectionCheckSetting = { daysBefore: 1, at: "11:00" };
@@ -135,7 +140,7 @@ export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: num
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -151,6 +156,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const passportsBackCheck = passportsBackCheckSchema.safeParse(value(PASSPORTS_BACK_CHECK_KEY));
   const arrivalCheck = arrivalCheckSchema.safeParse(value(ARRIVAL_CHECK_KEY));
   const assignCheck = assignCheckSchema.safeParse(value(ASSIGN_CHECK_KEY));
+  const handoverCheck = handoverCheckSchema.safeParse(value(HANDOVER_CHECK_KEY));
   const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
@@ -168,6 +174,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     passportsBackCheck: passportsBackCheck.success ? passportsBackCheck.data : DEFAULT_PASSPORTS_BACK_CHECK,
     arrivalCheck: arrivalCheck.success ? arrivalCheck.data : DEFAULT_ARRIVAL_CHECK,
     assignCheck: assignCheck.success ? assignCheck.data : DEFAULT_ASSIGN_CHECK,
+    handoverCheck: handoverCheck.success ? handoverCheck.data : DEFAULT_HANDOVER_CHECK,
     collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,

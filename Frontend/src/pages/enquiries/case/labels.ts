@@ -52,6 +52,25 @@ export function longDate(day: string): string {
   return LONG_DATE.format(new Date(`${day}T00:00:00Z`))
 }
 
+/** "4 current + 3 old". Booklets are optional at intake (e-visas hand over none), so a blank count shows as 0. */
+export const bookletsText = (b: { current: number | null; old: number | null }) => `${b.current ?? 0} current + ${b.old ?? 0} old`
+
+/**
+ * What went to the vendor, as the docket counted it (0008 Decision 4): the current booklets counted at intake, else
+ * one per traveller, and the old ones. Receipt counts are compared with it (0013 Decision 5).
+ */
+export const bookletsSent = (c: VisaCase) => ({ current: c.booklets.current ?? c.travellers.length, old: c.booklets.old ?? 0 })
+
+/** How a count at receipt compares with intake (0013 Decision 5) ⚠️: "matches intake", or "1 old short of intake". */
+export function bookletsVsIntake(counted: { current: number; old: number }, sent: { current: number; old: number }) {
+  const part = (diff: number, what: string) => (diff < 0 ? `${-diff} ${what} short` : `${diff} ${what} extra`)
+  const parts = [
+    counted.current !== sent.current && part(counted.current - sent.current, 'current'),
+    counted.old !== sent.old && part(counted.old - sent.old, 'old'),
+  ].filter((p): p is string => !!p)
+  return parts.length === 0 ? { matches: true, text: 'matches intake' } : { matches: false, text: `${parts.join(', ')} of intake` }
+}
+
 /** "7 passports + 3 old": old passports go in the parcel too (0008 Decision 4). */
 export function passportTotal(current: number, old: number): string {
   const label = `${current} ${current === 1 ? 'passport' : 'passports'}`
