@@ -481,6 +481,8 @@ export interface RecallCheck {
 export interface CancelInvoiceCheck {
   invoiceNo: string
   alreadyCancelled: string | null
+  /** The case is cancelled: no corrected invoice follows, so only the Visa HOD or the Head may (0006 amendment 15). */
+  hodOnly: boolean
   blockers: { kind: string; label: string; items: string[] }[]
   preview: {
     creditNoteNo: string

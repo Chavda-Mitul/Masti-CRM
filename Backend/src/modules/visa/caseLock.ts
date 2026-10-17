@@ -108,6 +108,12 @@ export const INVOICED: StepRule = {
   wrongStage: "This case's invoice can't be changed at this step.",
 };
 
+/**
+ * "Cancel with a credit note" (0011 Decision 5): as INVOICED, and on a cancelled case too, so a client who dropped out
+ * can get their money back (docs/decisions/0006-visa-documents.md amendment 15). Raising an invoice stays INVOICED.
+ */
+export const CREDITING: StepRule = { ...INVOICED, cancelledToo: true };
+
 /** Trip details (0007 Decision 4): captured as the documents come in, and corrected during file preparation. */
 export const TRIP: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION"],
