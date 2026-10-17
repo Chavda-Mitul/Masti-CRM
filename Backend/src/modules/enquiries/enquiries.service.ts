@@ -166,7 +166,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       reason: row.reason,
       resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
       /** A visa case whose passports are still to hand back (a cancelled one stays on the Open tab until then). */
-      toHandBack: toHandBack(row.visa),
+      toHandBack: toHandBack(row),
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       source: row.source,
       origin: row.origin,

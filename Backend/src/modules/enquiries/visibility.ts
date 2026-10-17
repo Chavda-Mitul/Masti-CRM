@@ -18,29 +18,55 @@ import type { UserWithDepartments } from "../users/user";
 export const seesWholeDepartment = (user: UserWithDepartments, code: string) =>
   isHodOf(user, code as DepartmentCode) || !can(user, code as DepartmentCode, "EDIT");
 
-/** A visa case whose passports are in our stock: received at Step 7 and not yet handed over (0014 Decision 5). */
+/** The visa steps before the file goes to the vendor (Steps 1–4): its passports, if counted in, are at our office. */
+export const PRE_DISPATCH = ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH"];
+
+/**
+ * Passports held at our office before dispatch: counted in at intake (Step 2, or by the collection boy) and not handed
+ * back (docs/decisions/0006-visa-documents.md amendment 15, component 3). Where they are, whatever the case's status.
+ */
+const HELD_AT_OFFICE: Prisma.EnquiryWhereInput = {
+  stage: { code: { in: PRE_DISPATCH } },
+  visa: { handover: { is: null }, OR: [{ bookletsCurrent: { gt: 0 } }, { bookletsOld: { gt: 0 } }] },
+};
+
+type HeldFields = { stage: { code: string }; visa: { bookletsCurrent: number | null; bookletsOld: number | null; handover: unknown } | null };
+
+/** Whether a loaded case's passports are held at our office before dispatch, as HELD_AT_OFFICE says. */
+export function heldAtOffice(e: HeldFields) {
+  return PRE_DISPATCH.includes(e.stage.code) && !!e.visa && !e.visa.handover && (e.visa.bookletsCurrent ?? 0) + (e.visa.bookletsOld ?? 0) > 0;
+}
+
+/**
+ * A visa case whose passports are in our stock, ready to hand over at the desk: received at Step 7 and not yet handed
+ * over (0014 Decision 5), or a cancelled case's, held at our office before dispatch (0006 amendment 15).
+ */
 const IN_STOCK: Prisma.EnquiryWhereInput = {
-  stage: { code: "PASSPORT_BACK" },
-  visa: { passportsReceivedAt: { not: null }, handover: { is: null } },
+  OR: [
+    { stage: { code: "PASSPORT_BACK" }, visa: { passportsReceivedAt: { not: null }, handover: { is: null } } },
+    { status: "CANCELLED", ...HELD_AT_OFFICE },
+  ],
 };
 
 /** Whether a loaded case's passports are in our stock, as IN_STOCK says. */
-export function passportsInStock(e: { stage: { code: string }; visa: { passportsReceivedAt: Date | null; handover: unknown } | null }) {
-  return e.stage.code === "PASSPORT_BACK" && !!e.visa?.passportsReceivedAt && !e.visa.handover;
+export function passportsInStock(e: HeldFields & { status: string; visa: { passportsReceivedAt: Date | null } | null }) {
+  if (e.stage.code === "PASSPORT_BACK") return !!e.visa?.passportsReceivedAt && !e.visa.handover;
+  return e.status === "CANCELLED" && heldAtOffice(e);
 }
 
 /**
  * A visa case whose passports are still to hand back to the client: its file went to the vendor in a dispatched docket
- * and nothing is handed over yet (with the vendor, on the way back or in our stock). A cancelled one stays on its
- * owner's Open list until then (docs/decisions/0006-visa-documents.md amendment 15). An e-visa never is.
+ * and nothing is handed over yet (with the vendor, on the way back or in our stock), or they're held at our office
+ * before dispatch. A cancelled one stays on its owner's Open list until then (docs/decisions/0006-visa-documents.md
+ * amendment 15).
  */
 export const TO_HAND_BACK: Prisma.EnquiryWhereInput = {
-  visa: { docket: { is: { dispatchedAt: { not: null } } }, handover: { is: null } },
+  OR: [{ visa: { docket: { is: { dispatchedAt: { not: null } } }, handover: { is: null } } }, HELD_AT_OFFICE],
 };
 
 /** Whether a loaded visa case's passports are still to hand back, as TO_HAND_BACK says. */
-export function toHandBack(visa: { docket: { dispatchedAt: Date | null } | null; handover: unknown } | null) {
-  return !!visa?.docket?.dispatchedAt && !visa.handover;
+export function toHandBack(e: HeldFields & { visa: { docket: { dispatchedAt: Date | null } | null } | null }) {
+  return (!!e.visa?.docket?.dispatchedAt && !e.visa.handover) || heldAtOffice(e);
 }
 
 /**

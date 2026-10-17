@@ -6,12 +6,13 @@ import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useCancelCase, usePostponeCase } from '../queries'
 import type { VisaCase } from '../types'
-import { firstName, liveInvoice, toHandBack } from './labels'
+import { firstName, heldAtOffice, liveInvoice, toHandBack } from './labels'
 
 type Kind = 'POSTPONE' | 'CANCEL'
 
-/** Where a dispatched file's passports are now: "with the vendor", "on their way back" or "in our stock". */
+/** Where the passports are now: "in our office" (before dispatch), "with the vendor", "on their way back" or "in our stock". */
 function passportsWhere(c: VisaCase) {
+  if (heldAtOffice(c)) return 'in our office'
   if (c.passportsReceived) return 'in our stock'
   if (c.passportsBack) return 'on their way back'
   return 'with the vendor'
@@ -151,7 +152,7 @@ export function PostponeCancelDialog({ visaCase: c, onClose }: { visaCase: VisaC
             {/* The passports still come back to the client (0006 amendment 15). */}
             {toHandBack(c) && (
               <div className="alert alert-warn">
-                The passports are {passportsWhere(c)}. After you cancel, they still come back to the client, with the usual proof, and
+                The passports are {passportsWhere(c)}. After you cancel, they still go back to the client, with the usual proof, and
                 this case stays on {c.owner ? `${firstName(c.owner.name)}’s` : 'its owner’s'} list until they’re handed over.
               </div>
             )}

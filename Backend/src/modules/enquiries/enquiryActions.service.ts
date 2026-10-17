@@ -7,11 +7,11 @@ import { conflict, fieldError, forbidden, notFound } from "../../lib/httpError";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
-import { getVisaSettings } from "../visa/visa.settings";
+import { dueOnOfficeDay, getVisaSettings } from "../visa/visa.settings";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { assertNotInOpenDocket } from "../visa/visaDocket.service";
 import type { CancelInput, LogFollowUpInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
-import { assertCanActOnEnquiry, assertCanSeeEnquiry, toHandBack } from "./visibility";
+import { assertCanActOnEnquiry, assertCanSeeEnquiry, heldAtOffice, toHandBack } from "./visibility";
 
 // Follow-ups, postpone, cancel, resume and reassign (docs/decisions/0006-visa-documents.md Decision 6). They live on the shared
 // Enquiry, so every department's cases use them. Each one sends the updatedAt the page loaded: a change by someone else
@@ -20,7 +20,15 @@ import { assertCanActOnEnquiry, assertCanSeeEnquiry, toHandBack } from "./visibi
 const include = {
   department: { select: { code: true } },
   stage: { select: { code: true } },
-  visa: { select: { maturedById: true, docket: { select: { dispatchedAt: true } }, handover: { select: { enquiryId: true } } } },
+  visa: {
+    select: {
+      maturedById: true,
+      bookletsCurrent: true,
+      bookletsOld: true,
+      docket: { select: { dispatchedAt: true } },
+      handover: { select: { enquiryId: true } },
+    },
+  },
 } satisfies Prisma.EnquiryInclude;
 
 type LoadedEnquiry = Prisma.EnquiryGetPayload<{ include: typeof include }>;
@@ -174,17 +182,24 @@ export async function postpone(caseNo: string, input: PostponeInput, actor: Acto
  * whose passports are still to hand back: that one stays on its owner's list until the handover
  * (docs/decisions/0006-visa-documents.md amendment 15). It's due now when its file is with the vendor (to take it back)
  * or it was postponed (its due time was the resume day); otherwise it keeps the due time it had (the check after the
- * decision, the arrival day, the handover check). Read before the save: every custody step changes the case's
- * updatedAt, so the save's stale check refuses a cancel that one slipped in front of.
+ * decision, the arrival day, the handover check). Passports held at our office before dispatch are due to be handed back
+ * like received ones (visa.handoverCheck ⚠️). Read before the save: every custody step changes the case's updatedAt, so
+ * the save's stale check refuses a cancel that one slipped in front of.
  */
 export async function cancel(caseNo: string, input: CancelInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status !== "OPEN" && enquiry.status !== "POSTPONED") throw conflict("This case is already closed.");
   await activeReason(input.reasonId, "CANCEL");
-  const handBack = toHandBack(enquiry.visa);
+  const handBack = toHandBack(enquiry);
   const dueNow = enquiry.stage.code === "AT_VENDOR" || enquiry.status === "POSTPONED" || !enquiry.dueAt;
-  const dueAt = handBack ? (dueNow ? new Date() : enquiry.dueAt) : null;
+  const dueAt = !handBack
+    ? null
+    : heldAtOffice(enquiry)
+      ? await dueOnOfficeDay((await getVisaSettings()).handoverCheck)
+      : dueNow
+        ? new Date()
+        : enquiry.dueAt;
   const hold = onHold(enquiry.id, actor, "case cancelled");
   return save(
     enquiry,

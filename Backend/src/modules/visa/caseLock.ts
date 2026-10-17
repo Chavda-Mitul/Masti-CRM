@@ -2,7 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { conflict, HttpError, notFound } from "../../lib/httpError";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
-import { assertCanActOnEnquiry, assertCanEditDepartment, assertCanSeeEnquiry, passportsInStock } from "../enquiries/visibility";
+import { assertCanActOnEnquiry, assertCanEditDepartment, assertCanSeeEnquiry, passportsInStock, PRE_DISPATCH } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
 
 // Who may change a visa case, and at which step, for every Step 2, 3, 4 and 5 write (0006 amendment 12,
@@ -77,10 +77,12 @@ export const RECEIVING: StepRule = {
 
 /**
  * Step 8 (docs/decisions/0014-visa-delivered.md Decisions 5 and 7): the handover at the office, from Passport back, by
- * any Visa staff with EDIT (whoever is at the desk), whatever the case's status.
+ * any Visa staff with EDIT (whoever is at the desk), whatever the case's status. Also Steps 1–4: a cancelled case's
+ * passports held at our office are handed back there (0006 amendment 15, component 3); the handover's own checks say
+ * when (visaHandover.service.ts assertInStock).
  */
 export const HANDING_OVER: StepRule = {
-  stages: ["PASSPORT_BACK"],
+  stages: [...PRE_DISPATCH, "PASSPORT_BACK"],
   anyStatus: true,
   anyEditor: true,
   wrongStage: "Passports are handed over from Passport back.",
@@ -123,7 +125,9 @@ export const TRIP: StepRule = {
 const caseInclude = {
   department: { select: { code: true } },
   stage: true,
-  visa: { select: { enquiryId: true, passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
+  visa: {
+    select: { enquiryId: true, passportsReceivedAt: true, bookletsCurrent: true, bookletsOld: true, handover: { select: { enquiryId: true } } },
+  },
 } satisfies Prisma.EnquiryInclude;
 
 export type LockedCase = Prisma.EnquiryGetPayload<{ include: typeof caseInclude }>;
@@ -157,9 +161,12 @@ export async function findVisibleCase(caseNo: string, user: UserWithDepartments)
       id: true,
       clientId: true,
       ownerId: true,
+      status: true,
       department: { select: { code: true } },
       stage: { select: { code: true } },
-      visa: { select: { docketId: true, passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
+      visa: {
+        select: { docketId: true, passportsReceivedAt: true, bookletsCurrent: true, bookletsOld: true, handover: { select: { enquiryId: true } } },
+      },
     },
   });
   if (!row?.visa) throw notFound("Case not found.");

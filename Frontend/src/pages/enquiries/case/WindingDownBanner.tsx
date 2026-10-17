@@ -1,8 +1,9 @@
 import type { VisaCase } from '../types'
-import { firstName, windingDown } from './labels'
+import { bookletsText, firstName, heldAtOffice, stockOf, windingDown } from './labels'
 
 /** What's left before the passports are back with the client, from where they are now. */
 function stillToDo(c: VisaCase) {
+  if (heldAtOffice(c)) return `are in our office (counted in: ${bookletsText(stockOf(c))}). Hand them back`
   if (c.stage.code === 'AT_VENDOR') return 'are still with the vendor. Take the file back, then mark them received and hand them over'
   if (c.passportsReceived) return 'are in our stock. Hand them over'
   if (c.passportsBack) return 'are on their way back. Mark them received, then hand them over'

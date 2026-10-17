@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, type Agent } from "./visaHelpers";
+import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // A cancelled case's passports still come back (docs/decisions/0006-visa-documents.md amendment 15). Cancel stays
 // possible at every step, but a file that went to the vendor can still be taken back, sent on its way back (and its days
@@ -211,5 +211,94 @@ describe("a case cancelled with nothing to hand back is as before", () => {
     expect((await cancel(processor, e.caseNo)).status).toBe(200);
     expect(await load(processor, e.caseNo)).toMatchObject({ status: "CANCELLED", dueAt: null });
     expect((await listed(processor)).map((r) => r.caseNo)).not.toContain(e.caseNo);
+  });
+});
+
+describe("before dispatch: passports held at our office are handed back (component 3)", () => {
+  /** Aarti's case at Step 2 (Documents), with `booklets` counted in at intake unless none. */
+  async function atDocuments(booklets?: { current: number; old: number }) {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    expect((await staff.post(`/api/visa/cases/${c.caseNo}/start`).send({})).status).toBe(200);
+    if (booklets) {
+      const counted = await staff.patch(`/api/visa/cases/${c.caseNo}`).send({ bookletsCurrent: booklets.current, bookletsOld: booklets.old });
+      expect(counted.status).toBe(200);
+    }
+    return { staff, c };
+  }
+
+  /** "Hand back" at the desk: the photo first, then the count and who collected them. */
+  async function handBack(agent: Agent, caseNo: string, booklets: { current: number; old: number }) {
+    const { updatedAt } = await load(agent, caseNo);
+    const photo = await agent.post(`/api/visa/cases/${caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG);
+    if (photo.status !== 200) return photo;
+    return agent
+      .post(`/api/visa/cases/${caseNo}/handover`)
+      .send({ mode: "OFFICE", booklets, receiver: { name: "Sunita Mehta" }, photoId: photo.body.photo.id, updatedAt });
+  }
+
+  it("a cancelled case keeps them on the list, due for the hand-back; any Visa staff hands them back; it stays at its step", async () => {
+    const { staff, c } = await atDocuments({ current: 2, old: 1 });
+    expect((await cancel(staff, c.caseNo)).status).toBe(200);
+    expect(await load(staff, c.caseNo)).toMatchObject({ status: "CANCELLED", dueAt: await officeDay(1, "11:00") });
+    expect((await listed(staff)).find((r) => r.caseNo === c.caseNo)).toMatchObject({ status: "CANCELLED", toHandBack: true });
+
+    // Whoever is at the desk: a colleague who doesn't own the case can open it while the passports are with us.
+    await createUser({ name: "Kiran Desai", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const colleague = await loginAs("kiran@masti.test");
+    expect((await colleague.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(200);
+    expect((await listed(colleague)).map((r) => r.caseNo)).toEqual([c.caseNo]);
+
+    const short = await handBack(colleague, c.caseNo, { current: 1, old: 1 });
+    expect(short.status).toBe(400);
+    expect(short.body.issues.booklets).toEqual(["Count again: our stock has 2 current + 1 old. Find what's missing before handing over."]);
+
+    const res = await handBack(colleague, c.caseNo, { current: 2, old: 1 });
+    expect(res.status).toBe(200);
+    expect(res.body.case).toMatchObject({
+      status: "CANCELLED",
+      stage: { code: "DOCUMENTS" },
+      dueAt: null,
+      handover: { mode: "OFFICE", booklets: { current: 2, old: 1 }, receiver: { name: "Sunita Mehta" }, by: { name: "Kiran Desai" } },
+    });
+    const logged = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.handover" } });
+    expect(logged.after).toMatchObject({ stage: "DOCUMENTS", beforeDispatch: true, status: "CANCELLED" });
+
+    // Handed back: the colleague can't open it any more, and it's off the Open list.
+    expect((await colleague.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+    expect((await listed(staff)).map((r) => r.caseNo)).not.toContain(c.caseNo);
+    expect((await handBack(staff, c.caseNo, { current: 2, old: 1 })).body.message).toBe("The passports are already handed over.");
+  });
+
+  it("nothing counted in: no hand-back, no due time; and an open case's passports aren't handed back", async () => {
+    const { staff, c } = await atDocuments();
+    expect((await cancel(staff, c.caseNo)).status).toBe(200);
+    expect(await load(staff, c.caseNo)).toMatchObject({ status: "CANCELLED", dueAt: null });
+    expect((await listed(staff)).map((r) => r.caseNo)).not.toContain(c.caseNo);
+    const nothing = await handBack(staff, c.caseNo, { current: 1, old: 0 });
+    expect(nothing.status).toBe(409);
+    expect(nothing.body.message).toBe("No booklets were counted in for this case: there's nothing to hand back.");
+
+    const open = await saveCase(staff, { mobile: "98250 41236", clientName: "Kiran Bhatt" });
+    expect((await staff.post(`/api/visa/cases/${open.caseNo}/start`).send({})).status).toBe(200);
+    expect((await staff.patch(`/api/visa/cases/${open.caseNo}`).send({ bookletsCurrent: 1, bookletsOld: 0 })).status).toBe(200);
+    const notCancelled = await handBack(staff, open.caseNo, { current: 1, old: 0 });
+    expect(notCancelled.status).toBe(409);
+    expect(notCancelled.body.message).toBe("Only a cancelled case's passports are handed back before they go to the vendor.");
+  });
+
+  it("the delivery boy isn't booked for them: the office hand-back only", async () => {
+    const { staff, c } = await atDocuments({ current: 1, old: 0 });
+    await prisma.client.update({ where: { id: c.client.id }, data: { email: "rakesh@example.com", addressLine: "B-702, Raghuvir Residency", city: "Surat", pincode: "395007" } });
+    expect((await cancel(staff, c.caseNo)).status).toBe(200);
+    const ramesh = await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
+    const { updatedAt } = await load(staff, c.caseNo);
+    const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "EVENING" } });
+    const day = await nextOpenDay(addDays(istToday(), 1), { office: true });
+    const booked = await staff
+      .post(`/api/visa/cases/${c.caseNo}/field-jobs`)
+      .send({ kind: "DELIVERY", assigneeId: ramesh.id, day, slotId: slot.id, address: "B-702, Raghuvir Residency, Vesu, Surat 395007", updatedAt });
+    expect(booked.status).toBe(409);
+    expect(booked.body.message).toBe("Mark the passports received first.");
   });
 });

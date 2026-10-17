@@ -10,7 +10,7 @@ import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { HandoverDialog } from './HandoverDialog'
-import { dayMonth, passportsInStock, weekdayDay, windingDown } from './labels'
+import { dayMonth, heldAtOffice, passportsInStock, weekdayDay, windingDown } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
@@ -97,6 +97,19 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
   // Cancelled with its passports still out: only their way back works (0006 amendment 15).
   const winding = windingDown(c)
+
+  // Cancelled before dispatch, its passports held at our office: hand them back, by whoever is at the desk (component 3).
+  if (winding && heldAtOffice(c)) {
+    if (!me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
+          Hand back to the client →
+        </button>
+        {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
+      </>
+    )
+  }
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
     return (
@@ -331,7 +344,7 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
         <div className="case-head-actions">
           <StatusChip visaCase={c} />
           <HoldButton visaCase={c} />
-          {(c.status === 'OPEN' || windingDown(c)) && c.owner && <NextStepButton visaCase={c} />}
+          {((c.status === 'OPEN' && c.owner) || windingDown(c)) && <NextStepButton visaCase={c} />}
         </div>
       </div>
 
