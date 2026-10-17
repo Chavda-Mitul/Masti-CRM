@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { canActOnCase } from '../../../auth/permissions'
+import { canActOnCase, canHandOver } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import type { VisaCase } from '../types'
-import { bookletsSent, bookletsText, bookletsVsIntake, dayTime, firstName, weekdayDay } from './labels'
+import { HandoverDialog } from './HandoverDialog'
+import { bookletsSent, bookletsText, bookletsVsIntake, dayTime, firstName, passportsInStock, weekdayDay } from './labels'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 
@@ -26,11 +27,14 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const [changing, setChanging] = useState(false)
   const [receiving, setReceiving] = useState(false)
+  const [handing, setHanding] = useState(false)
   const p = c.passportsBack
   if (!p) return null
   const r = c.passportsReceived
   const canAct = !!me && canActOnCase(me, { department: c.department.code, owner: c.owner })
   const inTransit = c.stage.code === 'PASSPORT_BACK' && !r
+  // In our stock: whoever is at the desk hands them over, whatever the case's status (0014 Decisions 5 and 7).
+  const canHand = !!me && canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })
   const booklets = r && bookletsVsIntake(r.booklets, bookletsSent(c))
   const stickers = r && stickersSummary(c)
 
@@ -49,6 +53,11 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
               Mark received
             </button>
           </span>
+        )}
+        {canHand && (
+          <button type="button" className="btn btn-sm" onClick={() => setHanding(true)}>
+            Hand over
+          </button>
         )}
       </div>
       <div className="return-tiles">
@@ -99,6 +108,7 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
       </p>
       {changing && <PassportsBackDialog visaCase={c} onClose={() => setChanging(false)} />}
       {receiving && <ReceivePassportsDialog visaCase={c} onClose={() => setReceiving(false)} />}
+      {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
     </section>
   )
 }

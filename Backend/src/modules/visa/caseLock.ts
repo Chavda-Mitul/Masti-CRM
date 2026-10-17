@@ -2,7 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { conflict, HttpError, notFound } from "../../lib/httpError";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
-import { assertCanActOnEnquiry, assertCanSeeEnquiry } from "../enquiries/visibility";
+import { assertCanActOnEnquiry, assertCanEditDepartment, assertCanSeeEnquiry, passportsInStock } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
 
 // Who may change a visa case, and at which step, for every Step 2, 3, 4 and 5 write (0006 amendment 12,
@@ -15,6 +15,8 @@ export interface StepRule {
   wrongStage: string;
   /** Allowed whatever the case's status: postponed, closed or cancelled too. Who may, and at which step, still hold. */
   anyStatus?: boolean;
+  /** Any of the department's staff with EDIT may, not only the case's owner, its HOD or the Head (0014 Decision 5). */
+  anyEditor?: boolean;
 }
 
 /** Step 2: the checklist can change until maturity. After that it is the processor's to check. */
@@ -60,6 +62,17 @@ export const RECEIVING: StepRule = {
   wrongStage: "Passports are received at Passport back.",
 };
 
+/**
+ * Step 8 (docs/decisions/0014-visa-delivered.md Decisions 5 and 7): the handover at the office, from Passport back, by
+ * any Visa staff with EDIT (whoever is at the desk), whatever the case's status.
+ */
+export const HANDING_OVER: StepRule = {
+  stages: ["PASSPORT_BACK"],
+  anyStatus: true,
+  anyEditor: true,
+  wrongStage: "Passports are handed over from Passport back.",
+};
+
 /** The refusal letter (0012 Decision 4): once the decision is recorded, at any later step, whatever the case's status. */
 export const LETTERS: StepRule = {
   stages: ["DECISION", "PASSPORT_BACK", "DELIVERED"],
@@ -91,19 +104,20 @@ export const TRIP: StepRule = {
 const caseInclude = {
   department: { select: { code: true } },
   stage: true,
-  visa: { select: { enquiryId: true } },
+  visa: { select: { enquiryId: true, passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
 } satisfies Prisma.EnquiryInclude;
 
 export type LockedCase = Prisma.EnquiryGetPayload<{ include: typeof caseInclude }>;
 
 /**
  * Refuses unless this user may change the case and it is at one of the rule's steps: its owner, its HOD and the Head
- * may (only the HOD and the Head before a processor is assigned), and only while the case is open (unless the rule
- * allows any status).
+ * may (only the HOD and the Head before a processor is assigned), or any of the department's staff with EDIT when
+ * the rule says so; and only while the case is open (unless the rule allows any status).
  */
 function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
-  assertCanSeeEnquiry(actor.user, enquiry);
-  assertCanActOnEnquiry(actor.user, enquiry);
+  assertCanSeeEnquiry(actor.user, { ...enquiry, inStock: passportsInStock(enquiry) });
+  if (rule.anyEditor) assertCanEditDepartment(actor.user, enquiry);
+  else assertCanActOnEnquiry(actor.user, enquiry);
   if (!rule.anyStatus) {
     if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
     if (enquiry.status !== "OPEN") throw conflict("This case is closed, so it can't change.");
@@ -118,10 +132,17 @@ function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
 export async function findVisibleCase(caseNo: string, user: UserWithDepartments) {
   const row = await prisma.enquiry.findUnique({
     where: { caseNo: caseNo.toUpperCase() },
-    select: { id: true, clientId: true, ownerId: true, department: { select: { code: true } }, visa: { select: { docketId: true } } },
+    select: {
+      id: true,
+      clientId: true,
+      ownerId: true,
+      department: { select: { code: true } },
+      stage: { select: { code: true } },
+      visa: { select: { docketId: true, passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
+    },
   });
   if (!row?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(user, row);
+  assertCanSeeEnquiry(user, { ...row, inStock: passportsInStock(row) });
   return { id: row.id, clientId: row.clientId, docketId: row.visa.docketId };
 }
 

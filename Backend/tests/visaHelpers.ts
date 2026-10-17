@@ -1,10 +1,12 @@
 import { expect } from "vitest";
 import { addDays, addMonths, isoWeekday, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { gstinChecksumOk } from "../src/lib/shared.schemas";
+import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
-// Step 4 in visaDocket.test.ts, Steps 6 and 7 in visaRefusalLetter.test.ts and visaPassportsBack.test.ts).
+// Step 4 in visaDocket.test.ts, Steps 6 to 8 in visaRefusalLetter.test.ts, visaPassportsBack.test.ts and
+// visaHandover.test.ts).
 
 export type Agent = Awaited<ReturnType<typeof loginAs>>;
 
@@ -276,4 +278,21 @@ export async function recalledCase({ extra, vendorId }: { extra?: Record<string,
   const { invoice, updatedAt } = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/recall`).send({ invoiceNo: invoice.invoiceNo, reasonId, updatedAt })).status).toBe(200);
   return { c, processor };
+}
+
+/**
+ * Mehta's file (decidedCase: Rakesh approved, Aarav refused), on its way back and received into our stock (0013): 2
+ * current + 0 old counted, what went to the vendor, Rakesh's sticker matching. Step 8's starting point.
+ */
+export async function receivedCase(options: { extra?: Record<string, unknown>; vendorId?: number } = {}) {
+  const d = await decidedCase(options);
+  const { c, processor } = d;
+  const expectedOn = await nextOpenDay(addDays(istToday(), 2), { office: true });
+  const decided = await updatedAtOf(processor, c.caseNo);
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/passports-back`).send({ collectedOn: istToday(), expectedOn, updatedAt: decided })).status).toBe(200);
+  const inTransit = await updatedAtOf(processor, c.caseNo);
+  const stickers = [{ travellerId: d.adult, check: "MATCHES" }];
+  const received = await processor.post(`/api/visa/cases/${c.caseNo}/passports-received`).send({ booklets: { current: 2, old: 0 }, stickers, updatedAt: inTransit });
+  expect(received.status).toBe(200);
+  return d;
 }

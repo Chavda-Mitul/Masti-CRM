@@ -1,7 +1,7 @@
 # 0014 · Visa Step 8: delivered
 
-- **Status:** decided (17 Oct 2026, project lead). Being built one component at a time (Decision 1). A "Built" note is
-  added under each part as its component lands.
+- **Status:** decided (17 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: the office
+  handover (17 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
 - **Date:** 17 Oct 2026
 - **Scope:** handing the passports back to the client once they're in our stock (Step 7), and closing the file:
   - the client collects at our office
@@ -88,6 +88,38 @@ file (e.g. taken on a phone). On a phone or tablet the page opens the camera. Ca
 **Decided 17 Oct 2026 (project lead):** the passports are handed over whatever the case's status (chain of custody). An
 open or postponed case becomes **Delivered** and **closed**; a cancelled case stays cancelled, with its reason, but
 records the handover and moves to Delivered.
+
+**Built 17 Oct 2026** (component 1, the office handover, Decisions 3–7):
+- **Data** (migration `20261017120000_office_handover`): `VisaHandover` (one per case: `mode` OFFICE / DELIVERY, `at`,
+  `byId`, the booklets, `receiverTravellerId` or `receiverName`, `receiverPhotoId`); a case file of kind
+  `RECEIVER_PHOTO` (a JPEG or PNG, with no page count). CHECKs: exactly one receiver; the name not blank, 2–100; each count
+  0–50 and at least one; an office handover has its photo; a photo has no pages and a PDF has some
+  (`CaseFile_size_and_pages`); a closed enquiry has no due time or resume date (`Enquiry_closed_not_due`).
+- **Who sees and acts** (0006 amendment 13): `visibleEnquiryWhere` and `canSeeEnquiry` let Visa staff with EDIT see a
+  case whose passports are in our stock (`passportsInStock`); the step rule `HANDING_OVER` (Passport back, any status,
+  `anyEditor`) lets any of them hand over. Everything else on the case still needs its owner, the HOD or the Head.
+- `POST /api/visa/cases/:caseNo/handover/photo`, the JPEG or PNG itself as the body (checked by its first bytes,
+  `lib/images.ts`, shared with the company logo; size limit `visa.handoverPhoto`): stored privately under
+  `cases/<id>/handover/`, a case file audited as `visa.file.upload`; the case doesn't change.
+- `POST /api/visa/cases/:caseNo/handover` with `{ mode: "OFFICE", booklets, receiver: { travellerId } | { name },
+  photoId, updatedAt }`. Refused with 409 before the passports are in our stock or at another step, STALE; 400 under
+  `booklets` ("Count again: our stock has 2 current + 1 old. Find what's missing before handing over."), `receiver`,
+  `photoId` or `mode` (DELIVERY comes with component 4).
+- **In one transaction under the case lock:** the handover; the case moves to Delivered with no due time; an open or
+  postponed one closes (reason and resume date cleared), a cancelled one stays cancelled; audit `visa.handover`.
+- **The case** sends `handover { mode, at, by, booklets, receiver { name, travellerId }, photo }`.
+- **Screen:**
+  - "Hand over to the client →" in the header of an open case in our stock, for any Visa staff with EDIT, and **Hand
+    over** on the Passports coming back card for any status.
+  - **The form:** "Client collects from office" (the delivery boy's option comes later); blank booklet boxes beside "In
+    our stock: 2 current + 1 old", red and blocked until they match; who collected them (each traveller, or Someone
+    else with a name); **Take photo** (the computer's camera in the page) or **Upload a photo**, shrunk in the browser
+    to at most 1600 px and saved straight away, with Retake; "Handed over by {name}, now". A message goes as soon as
+    its field is fixed.
+  - **Handed back to the client** (demo screen 13): the chip "Delivered · Sat 17 Oct, 12:28" and tiles for the
+    booklets, who collected them, the photo (Open; "Saved" for desk staff, who can't open the case once it's
+    delivered) and who handed them over. The header chip reads "Delivered".
+  - The enquiries list has a **Closed** tab.
 
 ### 8. Settings and seed data (golden rule 1)
 

@@ -4,6 +4,7 @@ import { ApiError } from '../../../lib/api'
 import { errorText } from '../../../lib/apiErrors'
 import { departmentStyle } from '../../../lib/departments'
 import '../../../styles/case.css'
+import '../../../styles/handover.css'
 import { useVisaCase } from '../queries'
 import { ApplicationCard } from './ApplicationCard'
 import { ArrivalCard } from './ArrivalCard'
@@ -16,6 +17,7 @@ import { DecisionCard } from './DecisionCard'
 import { DispatchCard } from './DispatchCard'
 import { DocketCard } from './DocketCard'
 import { FollowUpsCard } from './FollowUpsCard'
+import { HandoverCard } from './HandoverCard'
 import { MaturedBanner } from './MaturedBanner'
 import { PassportsBackCard } from './PassportsBackCard'
 import { RecallCard } from './RecallCard'
@@ -64,6 +66,7 @@ export function VisaCasePage() {
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">
+          <HandoverCard visaCase={c} />
           <PassportsBackCard visaCase={c} />
           <DecisionCard visaCase={c} />
           <DocketCard visaCase={c} />

@@ -8,7 +8,7 @@ import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
-import { assertCanSeeEnquiry } from "../enquiries/visibility";
+import { assertCanSeeEnquiry, passportsInStock } from "../enquiries/visibility";
 import { nextOpenDay } from "../holidays/blockedDays";
 import { requireMobile } from "../clients/client";
 import { getClientSettings } from "../clients/clients.settings";
@@ -32,6 +32,7 @@ import {
   PASSPORTS_BACK_CHECK_KEY,
   ARRIVAL_CHECK_KEY,
   HANDOVER_CHECK_KEY,
+  HANDOVER_PHOTO_KEY,
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
@@ -272,11 +273,14 @@ export async function getVisaCaseById(id: string) {
   return toDto(await prisma.enquiry.findUniqueOrThrow({ where: { id }, include: visaCaseInclude }));
 }
 
-/** The case page. Staff open only their own cases, the HOD the department's, the Head all (0006 Decision 1). */
+/**
+ * The case page. Staff open only their own cases, the HOD the department's, the Head all (0006 Decision 1); Visa staff
+ * also open one whose passports are in our stock, to hand them over (0014 Decision 5).
+ */
 export async function getVisaCase(caseNo: string, user: UserWithDepartments) {
   const row = await prisma.enquiry.findUnique({ where: { caseNo: caseNo.toUpperCase() }, include: visaCaseInclude });
   if (!row?.visa) throw notFound("Case not found.");
-  assertCanSeeEnquiry(user, row);
+  assertCanSeeEnquiry(user, { ...row, inStock: passportsInStock(row) });
   return toDto(row);
 }
 
@@ -293,7 +297,7 @@ export async function getSettings() {
  * upload; a docket prefix to the next new docket; a sticker size to the next print; the GST rate to the quotes' preview
  * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch; the portal
  * check's timing to the next "Submitted online"; the file-number check's to the next "Vendor got it"; the collection
- * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the vendor email's wording to the next email. Only the keys sent and changed are written, each audited on its own.
+ * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the photo limit to the next receiver photo; the vendor email's wording to the next email. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -312,6 +316,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: PASSPORTS_BACK_CHECK_KEY, before: before.passportsBackCheck, after: input.passportsBackCheck },
     { key: ARRIVAL_CHECK_KEY, before: before.arrivalCheck, after: input.arrivalCheck },
     { key: HANDOVER_CHECK_KEY, before: before.handoverCheck, after: input.handoverCheck },
+    { key: HANDOVER_PHOTO_KEY, before: before.handoverPhoto, after: input.handoverPhoto },
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },

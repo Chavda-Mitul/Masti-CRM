@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, uploadPdf } from '../../lib/api'
+import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
 import type {
@@ -398,6 +398,34 @@ export function useReceivePassports(caseNo: string) {
     stickers: { travellerId: string; check: StickerCheck }[]
     updatedAt: string
   }>(caseNo, (base, body) => api(`${base}/passports-received`, { method: 'POST', body }))
+}
+
+/**
+ * The photo of the person collecting the passports (0014 Decision 6), uploaded as soon as it's taken: the case doesn't
+ * change until "Hand over" links it.
+ */
+export function useUploadHandoverPhoto(caseNo: string) {
+  return useMutation({
+    mutationFn: async (photo: Blob) =>
+      (
+        await uploadFile<{ photo: { id: string; fileName: string } }>(
+          `/visa/cases/${encodeURIComponent(caseNo)}/handover/photo`,
+          photo,
+          photo.type || 'image/jpeg',
+        )
+      ).photo,
+  })
+}
+
+/** "Hand over to the client" at the office (0014): the case is Delivered and closes. 400 under `booklets`, `receiver` or `photoId`. */
+export function useHandOver(caseNo: string) {
+  return useCaseAction<{
+    mode: 'OFFICE'
+    booklets: { current: number; old: number }
+    receiver: { travellerId: string } | { name: string }
+    photoId: string
+    updatedAt: string
+  }>(caseNo, (base, body) => api(`${base}/handover`, { method: 'POST', body }))
 }
 
 /** "Change" either day while the passports are on their way back (0013 component 2); the due time moves too. */

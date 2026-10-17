@@ -83,6 +83,9 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
   return { name: firstName(t.name), detail: t.isChild ? `child${age != null ? `, ${age}` : ''}` : 'adult' }
 }
 
+/** The passports are in our stock: received at Step 7, not yet handed over (0014 Decision 5). */
+export const passportsInStock = (c: VisaCase) => c.stage.code === 'PASSPORT_BACK' && !!c.passportsReceived && !c.handover
+
 /** The steps the follow-up person owns; processing owns the rest (§12.4). */
 export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
 

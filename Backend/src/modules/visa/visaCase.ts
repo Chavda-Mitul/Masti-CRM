@@ -133,6 +133,7 @@ export const visaCaseInclude = {
       decidedBy: personSelect,
       passportsInTransitBy: personSelect,
       passportsReceivedBy: personSelect,
+      handover: { include: { by: personSelect, receiverPhoto: { select: { id: true, fileName: true } } } },
       vendor: {
         select: {
           id: true,
@@ -175,6 +176,17 @@ export type VisaCaseRow = Prisma.EnquiryGetPayload<{ include: typeof visaCaseInc
 /** "Adult 1", "Child 1": placeholders until the traveller is linked to a family member in Step 2. */
 export function travellerLabel(t: { position: number; isChild: boolean }, adults: number) {
   return t.isChild ? `Child ${t.position - adults}` : `Adult ${t.position}`;
+}
+
+/** Who collected the passports (0014 Decision 3): the name typed in, or the traveller's as the case shows them. */
+function receiverName(
+  h: { receiverName: string | null; receiverTravellerId: string | null },
+  travellers: { id: string; position: number; isChild: boolean; name: string | null }[],
+  adults: number,
+) {
+  if (h.receiverName) return h.receiverName;
+  const t = travellers.find((x) => x.id === h.receiverTravellerId);
+  return t ? (t.name ?? travellerLabel(t, adults)) : "";
 }
 
 /** "Mehta" for "Rakesh Mehta": the client's last name, as the docket table and the saved file's name show it. */
@@ -474,6 +486,15 @@ export function toVisaCaseDto(
       at: visa.passportsReceivedAt,
       by: visa.passportsReceivedBy,
       booklets: { current: visa.bookletsBackCurrent!, old: visa.bookletsBackOld! },
+    },
+    /** Handed back to the client (0014): how, when and by whom, the booklets, who collected them and their photo. */
+    handover: visa.handover && {
+      mode: visa.handover.mode,
+      at: visa.handover.at,
+      by: visa.handover.by,
+      booklets: { current: visa.handover.bookletsCurrent, old: visa.handover.bookletsOld },
+      receiver: { name: receiverName(visa.handover, visa.travellers, adults), travellerId: visa.handover.receiverTravellerId },
+      photo: visa.handover.receiverPhoto,
     },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,

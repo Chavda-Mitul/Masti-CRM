@@ -1677,6 +1677,7 @@ Masti CRM/
 - **Any status:** an open or postponed case becomes Delivered and closed; a cancelled one stays cancelled but records the handover.
 - **The OTP** goes by email until SMS/WhatsApp is connected (M2); needed at the doorstep only.
 - **Not here:** cross-sell leads, WhatsApp, payment at delivery, the Step 2 pickup job.
+- **Built so far:** component 1, **the office handover** (17 Oct 2026). "Hand over to the client →" (and on the Passports coming back card, whatever the case's status) for any Visa staff with EDIT, who can open a case while its passports are in our stock: booklets counted into blank boxes (must match our stock), who collected them (a traveller, or someone else by name), a photo from the desk webcam or a file (shrunk to 1600 px, stored privately as a `RECEIVER_PHOTO` case file). The case moves to Delivered and closes (a cancelled one stays cancelled); the "Handed back to the client" card shows the demo's tiles; the enquiries list gains a Closed tab. Next: component 2, book a delivery.
 
 **Decided 16 Oct 2026 (project lead), for Visa Step 7 (Passport back).** The design is `docs/decisions/0013-visa-passport-back.md` (decided; being built).
 - **One component at a time:** passports on the way back → change the dates (both days, no reason asked) → mark received.

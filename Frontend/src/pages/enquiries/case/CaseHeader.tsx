@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { canActOnCase, canDispatchDocket } from '../../../auth/permissions'
+import { canActOnCase, canDispatchDocket, canHandOver } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDate, formatMonthYear, initials } from '../../../lib/format'
@@ -9,7 +9,8 @@ import type { VisaCase } from '../types'
 import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
-import { dayMonth, weekdayDay } from './labels'
+import { HandoverDialog } from './HandoverDialog'
+import { dayMonth, passportsInStock, weekdayDay } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
@@ -35,6 +36,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
     )
   }
   if (c.status === 'CANCELLED') return <span className="chip chip-bad">Cancelled{c.reason && ` · ${c.reason.name}`}</span>
+  // Handed back to the client and closed (0014): the step's own "Delivered" ⚠️.
+  if (c.status === 'CLOSED') return <span className="chip chip-ok">{c.stage.statusLabel}</span>
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
   // Instead of the step's "Dispatched" ⚠️, which isn't true until the docket is sent (0008 Decision 9).
   if (c.stage.code === 'DISPATCH' && c.docket?.status === 'OPEN') return <span className="chip chip-ok">In docket {c.docket.docketNo}</span>
@@ -71,7 +74,7 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
  * The step's own button: "Start collecting documents", "Mark documents complete" (0006 Decision 8), "File ready — add
  * to docket" (0007 Decision 9), then "Add to docket", which leads to the Docket card (0008 Decision 2), then "Dispatch
  * docket" (0008 Decision 9). An e-visa has "Submitted online" instead (0008 Decision 11). At the vendor, "Vendor got
- * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3), then "Mark received" (0013 Decision 5).
+ * it" (0011 Decision 2), then "Record the decision" (0012 Decision 6), then "Passports on the way back" (0013 Decision 3), then "Mark received" (0013 Decision 5), then "Hand over to the client" (0014).
  * The later steps show as "Soon" until they are built.
  */
 function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
@@ -87,6 +90,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [deciding, setDeciding] = useState(false)
   const [sending, setSending] = useState(false)
   const [receiving, setReceiving] = useState(false)
+  const [handing, setHanding] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
 
   if (c.stage.code === 'ENQUIRY' && canAct) {
@@ -208,6 +212,17 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
           {c.stage.code === 'DECISION' ? c.stage.nextStepLabel : 'Passports on the way back'} →
         </button>
         {sending && <PassportsBackDialog visaCase={c} onClose={() => setSending(false)} />}
+      </>
+    )
+  }
+  // In our stock: "Hand over to the client" (0014), for whoever is at the desk, not only the case's processor.
+  if (me && c.status === 'OPEN' && canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) {
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
+          {c.stage.nextStepLabel} →
+        </button>
+        {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
       </>
     )
   }

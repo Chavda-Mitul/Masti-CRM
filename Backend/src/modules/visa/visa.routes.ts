@@ -12,6 +12,7 @@ import {
   changeDecisionSchema,
   sendPassportsBackSchema,
   receivePassportsSchema,
+  handOverSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -44,6 +45,7 @@ import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
 import * as passportsBackService from "./visaPassportsBack.service";
+import * as handoverService from "./visaHandover.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -316,6 +318,31 @@ router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 router.post("/cases/:caseNo/passports-received", visaEdit, async (req, res) => {
   const body = receivePassportsSchema.parse(req.body);
   res.json({ case: await passportsBackService.receivePassports(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * The photo of the person collecting the passports (0014 Decision 6): the JPEG or PNG itself is the body, as for the
+ * refusal letter. Uploaded as soon as it's taken; "Hand over" then links it. The case and the size limit are checked
+ * before the body is read.
+ */
+router.post("/cases/:caseNo/handover/photo", visaEdit, async (req, res) => {
+  const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (type !== "image/jpeg" && type !== "image/png") throw new HttpError(415, "Upload the photo as a JPEG or PNG.");
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await handoverService.handoverPhotoLimit(caseNo, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ photo: await handoverService.uploadHandoverPhoto(caseNo, bytes, type, actor) });
+});
+
+/**
+ * "Hand over to the client" at the office (0014 Decisions 3–7): the booklets counted (they must match our stock), who
+ * collected them and their photo; by any Visa staff with EDIT, whatever the case's status. The case is Delivered and
+ * closes (a cancelled one stays cancelled). 400 under `booklets`, `receiver` or `photoId`.
+ */
+router.post("/cases/:caseNo/handover", visaEdit, async (req, res) => {
+  const body = handOverSchema.parse(req.body);
+  res.json({ case: await handoverService.handOver(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

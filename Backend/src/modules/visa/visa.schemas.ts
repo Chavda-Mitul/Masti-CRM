@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
+import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -97,6 +98,11 @@ export const arrivalCheckSchema = firstFollowUpSchema;
  */
 export const handoverCheckSchema = firstFollowUpSchema;
 
+/** The largest receiver photo the server takes, in MB (0014 Decision 6); the browser shrinks photos well below it. */
+export const handoverPhotoSchema = z.object({
+  maxMb: z.number().int().min(1).max(20),
+});
+
 /**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
@@ -150,6 +156,7 @@ export const visaSettingsSchema = z.object({
   passportsBackCheck: passportsBackCheckSchema,
   arrivalCheck: arrivalCheckSchema,
   handoverCheck: handoverCheckSchema,
+  handoverPhoto: handoverPhotoSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -190,6 +197,7 @@ export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
 export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
 export type HandoverCheckSetting = z.infer<typeof handoverCheckSchema>;
+export type HandoverPhotoSetting = z.infer<typeof handoverPhotoSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -465,6 +473,30 @@ export const receivePassportsSchema = z.object({
 
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
 export type ReceivePassportsInput = z.infer<typeof receivePassportsSchema>;
+
+/** Who collected the passports, by name, when it isn't a traveller on the case (0014 Decision 3). */
+const receiverName = z
+  .string()
+  .trim()
+  .min(2, "Enter the name of the person collecting.")
+  .max(100, "100 characters at most.")
+  .regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE);
+
+/**
+ * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 3 and 4): the booklets
+ * counted (the service checks them against our stock), who collected them (a traveller on the case, or someone else by
+ * name: exactly one) and the photo uploaded for it. The delivery boy's handover comes with component 4.
+ */
+export const handOverSchema = z.object({
+  mode: z.enum(["OFFICE"], "The delivery boy's handover comes with his phone screen."),
+  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
+  receiver: z
+    .object({ travellerId: z.string().trim().min(1).max(64).nullish(), name: receiverName.nullish() })
+    .refine((r) => !!r.travellerId !== !!r.name, "Pick who collected the passports."),
+  photoId: z.string("Take a photo of the person collecting.").trim().min(1, "Take a photo of the person collecting.").max(64),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+export type HandOverInput = z.infer<typeof handOverSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

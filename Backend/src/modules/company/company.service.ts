@@ -3,6 +3,7 @@ import { PDFDocument } from "pdf-lib";
 import type { CompanyImageKind } from "../../../generated/prisma/enums";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
+import { imageType, isImageType } from "../../lib/images";
 import { badRequest, fieldError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { saveSetting } from "../../lib/settings";
@@ -91,10 +92,6 @@ export async function updateInvoiceTerms(input: InvoiceTerms, actor: Actor) {
 /** A sanity limit for an image: 2 MB (checked in the database too). */
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-const SIGNATURES: Record<string, Buffer> = {
-  "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  "image/jpeg": Buffer.from([0xff, 0xd8, 0xff]),
-};
 
 /**
  * Saves a new logo or signature (the Head only; the route checks). It must really be the PNG or JPEG it says it is, and
@@ -103,10 +100,9 @@ const SIGNATURES: Record<string, Buffer> = {
  */
 export async function uploadCompanyImage(kindParam: CompanyImageKindParam, contentType: string, bytes: Buffer, actor: Actor) {
   const kind = KIND[kindParam];
-  const signature = SIGNATURES[contentType];
-  if (!signature) throw badRequest("Upload a PNG or JPEG image.");
+  if (!isImageType(contentType)) throw badRequest("Upload a PNG or JPEG image.");
   if (bytes.length === 0) throw badRequest("Pick the image to upload.");
-  if (!bytes.subarray(0, signature.length).equals(signature)) {
+  if (imageType(bytes) !== contentType) {
     throw badRequest(`This isn't a ${contentType === "image/png" ? "PNG" : "JPEG"} image. Save it as PNG or JPEG and upload it again.`);
   }
   try {

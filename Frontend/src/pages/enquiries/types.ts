@@ -56,7 +56,7 @@ export interface EnquiryListPage {
 }
 
 /** The list's Open / Postponed / Cancelled switch, plus "To assign" (open, nobody's yet) for the HOD and the Head. */
-export type ListStatus = Extract<EnquiryStatus, 'OPEN' | 'POSTPONED' | 'CANCELLED'> | 'TO_ASSIGN'
+export type ListStatus = Extract<EnquiryStatus, 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'CLOSED'> | 'TO_ASSIGN'
 
 export interface EnquiryListFilters {
   status: ListStatus
@@ -185,6 +185,16 @@ export interface TravellerDecision {
   visaNo: string | null
   validFrom: string | null
   validTo: string | null
+}
+
+/** The passports handed back to the client (docs/decisions/0014-visa-delivered.md): how, when and by whom, the booklets, who collected them, their photo. */
+export interface Handover {
+  mode: 'OFFICE' | 'DELIVERY'
+  at: string
+  by: PersonRef | null
+  booklets: { current: number; old: number }
+  receiver: { name: string; travellerId: string | null }
+  photo: { id: string; fileName: string } | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */
@@ -575,6 +585,8 @@ export interface VisaCase {
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
   /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted */
   passportsReceived: { at: string; by: PersonRef | null; booklets: { current: number; old: number } } | null
+  /** Handed back to the client (0014): null until then */
+  handover: Handover | null
   travellers: CaseTraveller[]
   /** The latest 20, newest first */
   followUps: CaseFollowUp[]
