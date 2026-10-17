@@ -44,6 +44,12 @@ export const RETURNING: StepRule = {
   wrongStage: "Passports go back after the decision, or after a recall.",
 };
 
+/** Step 7 (0013 component 2): "Change" the dates while the passports are on their way back. */
+export const IN_TRANSIT: StepRule = {
+  stages: ["PASSPORT_BACK"],
+  wrongStage: "The dates can only be changed while the passports are on their way back.",
+};
+
 /** The refusal letter (0012 Decision 4): once the decision is recorded, at any later step, whatever the case's status. */
 export const LETTERS: StepRule = {
   stages: ["DECISION", "PASSPORT_BACK", "DELIVERED"],

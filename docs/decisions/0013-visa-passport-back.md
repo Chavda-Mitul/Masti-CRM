@@ -1,12 +1,13 @@
 # 0013 · Visa Step 7: passport back
 
 - **Status:** decided (16 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: passports
-  on the way back (16 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
+  on the way back (16 Oct 2026, component 1); changing the dates (16 Oct 2026, component 2). A "Built" note is added
+  under each part as its component lands.
 - **Date:** 16 Oct 2026
 - **Scope:** the passports' way back from the vendor to our office, until they're in our passport stock and ready to
   hand over (Step 8):
   - "Passports on the way back": the day the vendor collected them and the day we expect them
-  - changing the expected day while they're in transit
+  - changing either day while they're in transit
   - "Mark received": the booklets counted, the stickers checked, and who received them
 - **Builds on:**
   - [0012](0012-visa-decision.md): the decision per traveller, with the sticker number and its dates (Decision 3)
@@ -52,7 +53,7 @@ the passport. There's no punching step.
 and committed before the next starts:
 
 1. **Passports on the way back** (Decisions 2–4): the form, the move to Step 7, and the Passports coming back card
-2. **Change the expected day** while the passports are in transit
+2. **Change the dates** while the passports are in transit
 3. **Mark received** (Decision 5): the booklets, the stickers and the receiver
 
 ### 2. Two states: in transit, then in our stock
@@ -102,6 +103,31 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
     (`OpenDayCalendar`, an embassy's days or the office's).
   - **The Passports coming back card**, above the Decision card: the demo's three tiles, when it's due back ("Check the
     passports have arrived") and the demo's footer.
+
+**Changing the dates.** **Decided 16 Oct 2026 (project lead):** vendors aren't systematic, so the expected day moves,
+and a collected day can be mistyped.
+- **"Change" edits both days** in the same form, filled in, with the same checks.
+- **No reason is asked:** the audit log keeps the old and new days, who and when. A delay-reasons list would be a
+  change request.
+
+**Defaults (not asked; say if any is wrong):**
+- **Who and when:** the processor, the Visa HOD or the Head, while the case is open at Passport back and the passports
+  are in transit (component 3 adds "not yet received").
+- **What stays:** who recorded them on the way back, and when. The due time moves with the expected day.
+- **Collected day:** no later than the day they were recorded on the way back.
+- **Saving:** a save that changes nothing writes nothing, and a stale page is refused.
+
+**Built 16 Oct 2026** (component 2, changing the dates):
+- `PUT /api/visa/cases/:caseNo/passports-back` with the same body, for whoever can act on the case. The step rule
+  `IN_TRANSIT` (Passport back only) refuses it at another step: "The dates can only be changed while the passports are
+  on their way back." Also refused:
+  - 409 before they're on the way back ("Mark the passports on the way back first."), STALE, postponed
+  - 400 as when first saved, plus a collected day after the day they were recorded on the way back ("Pick a day on or
+    before the day they were recorded on the way back.")
+- **In one transaction under the case lock:** the two days and the due time (`visa.arrivalCheck` from the new expected
+  day); audit `visa.passports.update` with the old and new values. The step and who recorded them on the way back stay.
+- **Screen:** **Change** on the Passports coming back card opens "Change the dates", filled in; the toast reads "Dates
+  saved. Expected Fri, 23 October 2026."; the chip, tiles and due line follow.
 
 ### 4. E-visas skip this step for now
 
