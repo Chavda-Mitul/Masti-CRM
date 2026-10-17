@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, addMonths, istDateTimeToUtc, istToday } from "../src/lib/dates";
+import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -407,6 +407,27 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
 
       // The owner is cleared, so whoever matured it no longer opens it: it is the HOD's to assign.
       expect((await staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+    });
+
+    it("waits while the collection boy is booked: the office calls him off first (0015)", async () => {
+      const staff = await visaStaff();
+      const c = await freshCase(staff);
+      const { updatedAt } = await completeCase(staff, c);
+      const ramesh = await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
+      const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+      const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
+      const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "EVENING" } });
+      const job = await prisma.fieldJob.create({
+        data: { departmentId: visa.id, kind: "PICKUP", enquiryId: c.id, assigneeId: ramesh.id, day: toDbDate(istToday()), slotId: slot.id, address: "B-702, Raghuvir Residency, Vesu", mobile: "+919825041234", createdById: aarti.id },
+      });
+
+      const refused = await mature(staff, c, updatedAt);
+      expect(refused.status).toBe(409);
+      expect(refused.body.message).toBe("The collection boy is still booked for this case. Cancel his pickup first.");
+      expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
+
+      await prisma.fieldJob.update({ where: { id: job.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: aarti.id } });
+      expect((await mature(staff, c, updatedAt)).status).toBe(200);
     });
 
     it("is due with the HOD as the setting says (visa.assignCheck)", async () => {

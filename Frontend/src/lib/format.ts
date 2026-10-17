@@ -35,6 +35,11 @@ export function istToday(): string {
   )
 }
 
+/** A day (YYYY-MM-DD) moved by n days: addDays("2026-10-31", 1) → "2026-11-01". */
+export function addDays(day: string, n: number): string {
+  return new Date(new Date(`${day}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10)
+}
+
 /** A moment as the day and the time it is in India: { date: "2026-10-09", time: "10:30" }, to fill date and time inputs. */
 export function istParts(iso: string): { date: string; time: string } {
   const parts = new Intl.DateTimeFormat('en-CA', {

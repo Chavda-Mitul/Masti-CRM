@@ -35,6 +35,13 @@ export function errorText(error: unknown): string | null {
   return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.'
 }
 
+/** A screen without form fields: the first per-field message of a 400 (issues), else the answer's own message. */
+export function issueText(error: unknown): string | null {
+  const issues = errorBody(error)?.issues
+  const first = issues && Object.values(issues).find((messages) => messages && messages.length > 0)?.[0]
+  return first ?? errorText(error)
+}
+
 /** Puts the backend's per-field validation messages (400 issues) next to the matching inputs. */
 export function applyServerIssues<T extends FieldValues>(error: unknown, setError: UseFormSetError<T>, fields: readonly string[]) {
   const issues = errorBody(error)?.issues

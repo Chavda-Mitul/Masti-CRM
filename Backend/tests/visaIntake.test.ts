@@ -292,6 +292,7 @@ describe("intake dropdowns and settings", () => {
       arrivalCheck: { afterDays: 0, at: "11:00" },
       assignCheck: { afterDays: 1, at: "11:00" },
       handoverCheck: { afterDays: 1, at: "11:00" },
+      handoverPhoto: { maxMb: 5 },
       collectionCheck: { daysBefore: 1, at: "11:00" },
       awb: { minLength: 4, maxLength: 30 },
       docketEmail: {

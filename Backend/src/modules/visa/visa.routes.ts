@@ -13,6 +13,11 @@ import {
   changeDecisionSchema,
   sendPassportsBackSchema,
   receivePassportsSchema,
+  receiveRestSchema,
+  clearShortfallSchema,
+  handOverSchema,
+  bookFieldJobSchema,
+  changeFieldJobSchema,
   checkCaseDocumentSchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
@@ -46,6 +51,9 @@ import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
 import * as passportsBackService from "./visaPassportsBack.service";
+import * as handoverService from "./visaHandover.service";
+import * as fieldJobService from "./visaFieldJobs.service";
+import { listFieldStaff } from "../fieldJobs/fieldJobs.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -318,6 +326,77 @@ router.put("/cases/:caseNo/passports-back", visaEdit, async (req, res) => {
 router.post("/cases/:caseNo/passports-received", visaEdit, async (req, res) => {
   const body = receivePassportsSchema.parse(req.body);
   res.json({ case: await passportsBackService.receivePassports(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Received the rest" of a short return (0013 Decision 5, amended 17 Oct 2026): the late booklets added to our stock,
+ * each kind up to what's missing; whatever the case's status. 400 under `booklets`; 409 when nothing is missing.
+ */
+router.post("/cases/:caseNo/passports-received/rest", visaEdit, async (req, res) => {
+  const body = receiveRestSchema.parse(req.body);
+  res.json({ case: await passportsBackService.receiveRest(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Clear the shortfall" (same amendment): the missing passports won't come back, with a reason from the list, so the
+ * handover can go ahead. 400 under `reasonId`; 409 when nothing is missing or it's cleared already.
+ */
+router.post("/cases/:caseNo/passports-received/clear", visaEdit, async (req, res) => {
+  const body = clearShortfallSchema.parse(req.body);
+  res.json({ case: await passportsBackService.clearShortfall(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** Who can be sent: the active field staff (0015), for "Book the collection boy". */
+router.get("/field-staff", visaView, async (_req, res) => {
+  res.json({ staff: await listFieldStaff() });
+});
+
+/**
+ * "Book the collection boy" (0015 phase 1): the boy, the day, the slot and where. 409 when one is booked already or
+ * the client has no email (code CLIENT_EMAIL_MISSING); 400 under `assigneeId`, `day`, `slotId`, `address` or `mapLink`.
+ */
+router.post("/cases/:caseNo/field-jobs", visaEdit, async (req, res) => {
+  const body = bookFieldJobSchema.parse(req.body);
+  res.json({ case: await fieldJobService.bookFieldJob(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** "Change" a booked job (0015): checked as when booked; the case's due time follows the day and slot. */
+router.put("/cases/:caseNo/field-jobs/:jobId", visaEdit, async (req, res) => {
+  const body = changeFieldJobSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await fieldJobService.changeFieldJob(caseNo, idParam.parse(req.params.jobId), body, actorOf(req)) });
+});
+
+/** "Cancel" a booked job (0015): called off, by whom and when. */
+router.post("/cases/:caseNo/field-jobs/:jobId/cancel", visaEdit, async (req, res) => {
+  const body = matureCaseSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await fieldJobService.cancelFieldJob(caseNo, idParam.parse(req.params.jobId), body, actorOf(req)) });
+});
+
+/**
+ * The photo of the person collecting the passports (0014 Decision 6): the JPEG or PNG itself is the body, as for the
+ * refusal letter. Uploaded as soon as it's taken; "Hand over" then links it. The case and the size limit are checked
+ * before the body is read.
+ */
+router.post("/cases/:caseNo/handover/photo", visaEdit, async (req, res) => {
+  const type = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+  if (type !== "image/jpeg" && type !== "image/png") throw new HttpError(415, "Upload the photo as a JPEG or PNG.");
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await handoverService.handoverPhotoLimit(caseNo, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ photo: await handoverService.uploadHandoverPhoto(caseNo, bytes, type, actor) });
+});
+
+/**
+ * "Hand over to the client" at the office (0014 Decisions 3–7): the booklets counted (they must match our stock), who
+ * collected them and their photo; by any Visa staff with EDIT, whatever the case's status. The case is Delivered and
+ * closes (a cancelled one stays cancelled). 400 under `booklets`, `receiver` or `photoId`.
+ */
+router.post("/cases/:caseNo/handover", visaEdit, async (req, res) => {
+  const body = handOverSchema.parse(req.body);
+  res.json({ case: await handoverService.handOver(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /**

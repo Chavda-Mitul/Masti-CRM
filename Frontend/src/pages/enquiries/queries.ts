@@ -32,6 +32,8 @@ import type {
   FollowUpScope,
   IntakeCountry,
   LogFollowUpBody,
+  FieldJob,
+  FieldStaff,
   ReceivedAs,
   StickerCheck,
   VisaCase,
@@ -403,6 +405,85 @@ export function useReceivePassports(caseNo: string) {
   }>(caseNo, (base, body) => api(`${base}/passports-received`, { method: 'POST', body }))
 }
 
+/**
+ * "Received the rest" of a short return (0013 Decision 5, amended 17 Oct 2026): the late booklets, each kind up to
+ * what's missing; whatever the case's status. 400 under `booklets`.
+ */
+export function useReceiveRest(caseNo: string) {
+  return useCaseAction<{ booklets: { current: number; old: number }; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/passports-received/rest`, { method: 'POST', body }),
+  )
+}
+
+/** "Clear the shortfall" (same amendment): why the missing passports won't come back, from the list. 400 under `reasonId`. */
+export function useClearShortfall(caseNo: string) {
+  return useCaseAction<{ reasonId: number; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/passports-received/clear`, { method: 'POST', body }),
+  )
+}
+
+/** Who can be sent (0015): the active field staff. */
+export function useFieldStaff() {
+  return useQuery({
+    queryKey: ['field-staff'],
+    queryFn: async () => (await api<{ staff: FieldStaff[] }>('/visa/field-staff')).staff,
+    staleTime: 60_000,
+  })
+}
+
+/** A field job's who, when and where (0015 Decisions 2 and 3). */
+type FieldJobBody = { assigneeId: string; day: string; slotId: number; address: string; mapLink: string | null; updatedAt: string }
+
+/**
+ * "Book the collection boy" (0015 phase 1) or "Book the delivery boy" (phase 2). 409 when the client has no email
+ * (CLIENT_EMAIL_MISSING) or one of the kind is booked.
+ */
+export function useBookFieldJob(caseNo: string) {
+  return useCaseAction<FieldJobBody & { kind: FieldJob['kind'] }>(caseNo, (base, body) => api(`${base}/field-jobs`, { method: 'POST', body }))
+}
+
+/** "Change" a booked job (0015). */
+export function useChangeFieldJob(caseNo: string) {
+  return useCaseAction<FieldJobBody & { jobId: string }>(caseNo, (base, { jobId, ...body }) =>
+    api(`${base}/field-jobs/${encodeURIComponent(jobId)}`, { method: 'PUT', body }),
+  )
+}
+
+/** "Cancel" a booked job (0015). */
+export function useCancelFieldJob(caseNo: string) {
+  return useCaseAction<{ jobId: string; updatedAt: string }>(caseNo, (base, { jobId, ...body }) =>
+    api(`${base}/field-jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body }),
+  )
+}
+
+/**
+ * The photo of the person collecting the passports (0014 Decision 6), uploaded as soon as it's taken: the case doesn't
+ * change until "Hand over" links it.
+ */
+export function useUploadHandoverPhoto(caseNo: string) {
+  return useMutation({
+    mutationFn: async (photo: Blob) =>
+      (
+        await uploadFile<{ photo: { id: string; fileName: string } }>(
+          `/visa/cases/${encodeURIComponent(caseNo)}/handover/photo`,
+          photo,
+          photo.type || 'image/jpeg',
+        )
+      ).photo,
+  })
+}
+
+/** "Hand over to the client" at the office (0014): the case is Delivered and closes. 400 under `booklets`, `receiver` or `photoId`. */
+export function useHandOver(caseNo: string) {
+  return useCaseAction<{
+    mode: 'OFFICE'
+    booklets: { current: number; old: number }
+    receiver: { travellerId: string } | { name: string }
+    photoId: string
+    updatedAt: string
+  }>(caseNo, (base, body) => api(`${base}/handover`, { method: 'POST', body }))
+}
+
 /** "Change" either day while the passports are on their way back (0013 component 2); the due time moves too. */
 export function useChangePassportsBack(caseNo: string) {
   return useCaseAction<{ collectedOn: string; expectedOn: string; updatedAt: string }>(caseNo, (base, body) =>
@@ -446,9 +527,9 @@ export function useRecallCheck(caseNo: string) {
   })
 }
 
-/** "Take the file back" (0011 Decision 6): `refunds` only for the HOD's "Change refund". */
+/** "Take the file back" (0011 Decision 6): `refunds` only for the HOD's "Change refund"; `invoiceNo` null when nothing goes back. */
 export function useRecallFile(caseNo: string) {
-  return useCaseAction<{ invoiceNo: string; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
+  return useCaseAction<{ invoiceNo: string | null; reasonId: number; refunds?: { position: number; refundPaise: number }[]; updatedAt: string }>(
     caseNo,
     (base, body) => api(`${base}/recall`, { method: 'POST', body }),
   )

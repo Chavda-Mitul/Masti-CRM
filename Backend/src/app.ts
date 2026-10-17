@@ -11,6 +11,7 @@ import clientRoutes from "./modules/clients/clients.routes";
 import departmentRoutes from "./modules/departments/departments.routes";
 import enquiryRoutes from "./modules/enquiries/enquiries.routes";
 import enquiryMasterRoutes from "./modules/enquiryMasters/enquiryMasters.routes";
+import fieldRoutes from "./modules/fieldJobs/field.routes";
 import healthRoutes from "./modules/health/health.routes";
 import companyRoutes from "./modules/company/company.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
@@ -43,6 +44,7 @@ app.use("/api/masters", enquiryMasterRoutes);
 app.use("/api/masters", vendorRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/visa", visaRoutes);
+app.use("/api/field", fieldRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);

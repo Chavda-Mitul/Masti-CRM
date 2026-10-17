@@ -90,6 +90,55 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
   return { name: firstName(t.name), detail: t.isChild ? `child${age != null ? `, ${age}` : ''}` : 'adult' }
 }
 
+/** The visa steps before the file goes to the vendor (Steps 1–4), as the server's PRE_DISPATCH. */
+export const PRE_DISPATCH = ['ENQUIRY', 'DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH']
+
+/**
+ * The passports are held at our office before dispatch: counted in at intake and not handed back, whatever the case's
+ * status (docs/decisions/0006-visa-documents.md amendment 15, component 3). As the server's heldAtOffice.
+ */
+export const heldAtOffice = (c: VisaCase) => PRE_DISPATCH.includes(c.stage.code) && !c.handover && (c.booklets.current ?? 0) + (c.booklets.old ?? 0) > 0
+
+/**
+ * The passports are in our stock, to hand over at the desk: received at Step 7 and not yet handed over (0014 Decision
+ * 5), or a cancelled case's held at our office before dispatch (0006 amendment 15).
+ */
+export const passportsInStock = (c: VisaCase) =>
+  c.stage.code === 'PASSPORT_BACK' ? !!c.passportsReceived && !c.handover : c.status === 'CANCELLED' && heldAtOffice(c)
+
+/** What our stock holds, which a handover's count must match: the booklets received at Step 7, else the intake count. */
+export const stockOf = (c: VisaCase) => c.passportsReceived?.booklets ?? { current: c.booklets.current ?? 0, old: c.booklets.old ?? 0 }
+
+/**
+ * The passports are still to hand back to the client: the file went to the vendor in a dispatched docket and nothing is
+ * handed over yet (with the vendor, on the way back or in our stock), or they're held at our office before dispatch. As
+ * the server's TO_HAND_BACK says.
+ */
+export const toHandBack = (c: VisaCase) => (c.docket?.status === 'DISPATCHED' && !c.handover) || heldAtOffice(c)
+
+/**
+ * A cancelled case whose passports are still to hand back: only their way back still works on it, and it stays on its
+ * owner's list until the handover (docs/decisions/0006-visa-documents.md amendment 15).
+ */
+export const windingDown = (c: VisaCase) => c.status === 'CANCELLED' && toHandBack(c)
+
+/** "1 old passport", "2 current passports", "2 passports (1 current, 1 old)": what a short return is missing ⚠️. */
+export function passportsMissing(m: { current: number; old: number }): string {
+  const total = m.current + m.old
+  const noun = total === 1 ? 'passport' : 'passports'
+  if (m.current > 0 && m.old > 0) return `${total} ${noun} (${m.current} current, ${m.old} old)`
+  return `${total} ${m.current > 0 ? 'current' : 'old'} ${noun}`
+}
+
+/** How many booklets that went out aren't back (0013 Decision 5, amended 17 Oct 2026); 0 until received. */
+export const missingCount = (c: VisaCase) => (c.passportsReceived ? c.passportsReceived.missing.current + c.passportsReceived.missing.old : 0)
+
+/**
+ * A short return holds the case (0013 Decision 5, amended 17 Oct 2026): in our stock, something that went out isn't
+ * back, and the shortfall isn't cleared. The handover and the delivery boy wait until it's settled.
+ */
+export const heldShort = (c: VisaCase) => passportsInStock(c) && missingCount(c) > 0 && !c.passportsReceived?.shortfallCleared
+
 /** The steps the follow-up person owns; processing owns the rest (§12.4). */
 export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
 

@@ -6,6 +6,7 @@ import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
+import { missingBooklets } from "./shortfall";
 
 // The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006), without the message log and
 // reminders, which come with the WhatsApp work.
@@ -73,8 +74,19 @@ export const docketSelect = {
 
 export const visaCaseInclude = {
   department: { select: { code: true, name: true } },
-  client: { select: { id: true, name: true, mobile: true } },
+  client: { select: { id: true, name: true, mobile: true, email: true, addressLine: true, area: true, city: true, pincode: true } },
   source: { select: { code: true, name: true } },
+  fieldJobs: {
+    orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
+    include: {
+      assignee: { select: { id: true, name: true, mobile: true } },
+      slot: { select: { id: true, name: true, startsAt: true, endsAt: true } },
+      createdBy: personSelect,
+      cancelledBy: personSelect,
+      failReason: { select: { id: true, name: true } },
+      selfie: { select: { id: true, fileName: true } },
+    },
+  },
   stage: true,
   owner: personSelect,
   createdBy: personSelect,
@@ -134,6 +146,9 @@ export const visaCaseInclude = {
       decidedBy: personSelect,
       passportsInTransitBy: personSelect,
       passportsReceivedBy: personSelect,
+      shortfallClearedBy: personSelect,
+      shortfallReason: { select: { name: true } },
+      handover: { include: { by: personSelect, receiverPhoto: { select: { id: true, fileName: true } } } },
       vendor: {
         select: {
           id: true,
@@ -181,6 +196,22 @@ export type VisaCaseRow = Prisma.EnquiryGetPayload<{ include: typeof visaCaseInc
 /** "Adult 1", "Child 1": placeholders until the traveller is linked to a family member in Step 2. */
 export function travellerLabel(t: { position: number; isChild: boolean }, adults: number) {
   return t.isChild ? `Child ${t.position - adults}` : `Adult ${t.position}`;
+}
+
+/** "B-702, Raghuvir Residency, Vesu, Surat 395007": the client's address in one line, for a field job (0015). */
+export function clientAddress(c: { addressLine: string | null; area: string | null; city: string | null; pincode: string | null }) {
+  return [c.addressLine, c.area, [c.city, c.pincode].filter(Boolean).join(" ")].filter((part) => part && part.trim()).join(", ");
+}
+
+/** Who collected the passports (0014 Decision 3): the name typed in, or the traveller's as the case shows them. */
+function receiverName(
+  h: { receiverName: string | null; receiverTravellerId: string | null },
+  travellers: { id: string; position: number; isChild: boolean; name: string | null }[],
+  adults: number,
+) {
+  if (h.receiverName) return h.receiverName;
+  const t = travellers.find((x) => x.id === h.receiverTravellerId);
+  return t ? (t.name ?? travellerLabel(t, adults)) : "";
 }
 
 /** "Mehta" for "Rakesh Mehta": the client's last name, as the docket table and the saved file's name show it. */
@@ -383,7 +414,32 @@ export function toVisaCaseDto(
     updatedAt: row.updatedAt,
     reason: row.reason,
     resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
-    client: row.client,
+    /** The client, with their email (the field boy's one-time code goes there, 0015) and address in one line. */
+    client: { id: row.client.id, name: row.client.name, mobile: row.client.mobile, email: row.client.email, address: clientAddress(row.client) },
+    /** The collection and delivery boy's jobs for this case (0015), newest first. */
+    fieldJobs: row.fieldJobs.map((j) => ({
+      id: j.id,
+      kind: j.kind,
+      status: j.status,
+      assignee: j.assignee,
+      day: fromDbDate(j.day),
+      slot: j.slot,
+      address: j.address,
+      mapLink: j.mapLink,
+      mobile: j.mobile,
+      bookedAt: j.createdAt,
+      bookedBy: j.createdBy,
+      cancelledAt: j.cancelledAt,
+      cancelledBy: j.cancelledBy,
+      /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it failed. */
+      finishedAt: j.finishedAt,
+      place: j.latitude !== null && j.longitude !== null && j.accuracyM !== null ? { lat: j.latitude, lng: j.longitude, accuracy: j.accuracyM } : null,
+      failReason: j.failReason,
+      /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+      counted: j.bookletsCurrent !== null && j.bookletsOld !== null ? { current: j.bookletsCurrent, old: j.bookletsOld } : null,
+      selfie: j.selfie,
+      otpConfirmedAt: j.otpConfirmedAt,
+    })),
     source: row.source,
     origin: row.origin,
     offeringId: visa.offeringId,
@@ -479,11 +535,32 @@ export function toVisaCaseDto(
       at: visa.passportsInTransitAt,
       by: visa.passportsInTransitBy,
     },
-    /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted. */
+    /**
+     * "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted (plus any
+     * received later). `missing`: per kind, what went out and isn't back; while any is and the shortfall isn't cleared,
+     * the handover waits (amended 17 Oct 2026). `shortfallCleared`: when, by whom and why it won't come back.
+     */
     passportsReceived: visa.passportsReceivedAt && {
       at: visa.passportsReceivedAt,
       by: visa.passportsReceivedBy,
       booklets: { current: visa.bookletsBackCurrent!, old: visa.bookletsBackOld! },
+      missing: missingBooklets({ ...visa, travellerCount: visa.travellers.length }),
+      shortfallCleared: visa.shortfallClearedAt && {
+        at: visa.shortfallClearedAt,
+        by: visa.shortfallClearedBy,
+        reason: visa.shortfallReason!.name,
+      },
+    },
+    /** Handed back to the client (0014): how, when and by whom, the booklets, who collected them and their photo. */
+    handover: visa.handover && {
+      mode: visa.handover.mode,
+      at: visa.handover.at,
+      by: visa.handover.by,
+      booklets: { current: visa.handover.bookletsCurrent, old: visa.handover.bookletsOld },
+      receiver: { name: receiverName(visa.handover, visa.travellers, adults), travellerId: visa.handover.receiverTravellerId },
+      photo: visa.handover.receiverPhoto,
+      /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) the case sends. */
+      fieldJobId: visa.handover.fieldJobId,
     },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,

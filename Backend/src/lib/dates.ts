@@ -54,6 +54,15 @@ export function daysInclusive(from: string, to: string): number {
   return Math.round((toDbDate(to).getTime() - toDbDate(from).getTime()) / 86_400_000) + 1;
 }
 
+const DAY_LABEL = new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "2026-10-19" → "Mon 19 Oct", for messages. */
+export function dayLabel(value: string): string {
+  const found = DAY_LABEL.formatToParts(toDbDate(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => found.find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")} ${part("day")} ${part("month")}`;
+}
+
 /** ISO weekday of a date: 1 = Monday … 7 = Sunday. */
 export function isoWeekday(value: string): number {
   return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;

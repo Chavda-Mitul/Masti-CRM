@@ -68,6 +68,8 @@ model User {
   sessions              Session[]
   auditEntries          AuditLog[]
   assignedFieldJobs     FieldJob[]         @relation("FieldJobAssignee")
+  fieldJobsBooked       FieldJob[]         @relation("FieldJobBookedBy")
+  fieldJobsCancelled    FieldJob[]         @relation("FieldJobCancelledBy")
   clientsCreated        Client[]           @relation("ClientCreatedBy")
   clientPhonesAdded     ClientPhone[]      @relation("ClientPhoneCreatedBy")
   clientMembersAdded    ClientMember[]     @relation("ClientMemberCreatedBy")
@@ -87,6 +89,8 @@ model User {
   visaCasesDecided      VisaCase[]         @relation("VisaCaseDecidedBy")
   visaCasesInTransit    VisaCase[]         @relation("VisaCasePassportsInTransitBy")
   visaCasesReceivedBack VisaCase[]         @relation("VisaCasePassportsReceivedBy")
+  visaShortfallsCleared VisaCase[]         @relation("VisaCaseShortfallClearedBy")
+  visaHandovers         VisaHandover[]     @relation("VisaHandoverBy")
   caseFilesUploaded     CaseFile[]         @relation("CaseFileUploadedBy")
   clientDocsUploaded    ClientDocument[]   @relation("ClientDocumentUploadedBy")
   docketsCreated        Docket[]           @relation("DocketCreatedBy")
@@ -117,19 +121,109 @@ model UserDepartment {
 // ---------------------------------------------------------------------------
 
 /// A field worker sees the jobs assigned to them, whatever department raised them.
-/// Skeleton only: job type and status (master tables), slot, address, amount and handover proof
-/// (OTP, photo/selfie links, lat/long, time) are added when the field module is built.
-model FieldJob {
-  id           String     @id @default(uuid())
-  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
-  departmentId Int
-  assigneeId   String?
-  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  assignee     User?      @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+/// What a field job is (docs/decisions/0015-field-staff-app.md): picking a case's documents up from the client, or
+/// delivering its passports. Fixed in code: the screens and the rules branch on it. (Collecting money comes with
+/// Accounts.)
+enum FieldJobKind {
+  PICKUP
+  DELIVERY
+}
 
-  @@index([assigneeId])
+/// Where a field job stands (0015): booked; done at the door; failed (a reason from a list, phase 4); or called off by
+/// the office.
+enum FieldJobStatus {
+  BOOKED
+  DONE
+  FAILED
+  CANCELLED
+}
+
+/// A time slot the boy is booked for (0015 Decision 2): a list the Head or an HOD edits, seeded with the demo's ⚠️.
+/// Times are IST, "HH:mm", ending after they start (checked in the migration). Switched off, never deleted.
+model FieldSlot {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  /// "4–6 pm"
+  name      String
+  startsAt  String
+  endsAt    String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  jobs      FieldJob[]
+}
+
+/// Why a visit failed (0015 Decision 5): a list the Head or an HOD edits, seeded with the demo's ⚠️ and "Client
+/// couldn't get the code" (no code, no pickup: decided 17 Oct 2026). Switched off, never deleted, so a failed job keeps
+/// its reason.
+model FieldFailReason {
+  id        Int        @id @default(autoincrement())
+  /// CLIENT_NOT_HOME… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  jobs      FieldJob[]
+}
+
+/// One stop on the boy's run (0002, 0015): which desk raised it, for which case, who goes, on which day and slot, where
+/// to (the client's address, copied at booking and correctable, with an optional Google Maps link) and the client's
+/// mobile for his Call button. One booked job of each kind per case, kept by the case lock. Cancelled: who and when,
+/// together. Finished (done, or couldn't complete with a reason, phase 4): when, and the place his phone gave. All
+/// checked in the migration.
+model FieldJob {
+  id              String           @id @default(uuid())
+  /// The desk that raised it (Visa, Accounts…), for its lists and reports.
+  departmentId    Int
+  kind            FieldJobKind
+  status          FieldJobStatus   @default(BOOKED)
+  enquiryId       String
+  /// An active FIELD user when booked (the service checks).
+  assigneeId      String
+  day             DateTime         @db.Date
+  slotId          Int
+  address         String
+  /// The client's location in Google Maps, when they shared one (0015 Decision 3).
+  mapLink         String?
+  mobile          String
+  createdById     String
+  cancelledAt     DateTime?        @db.Timestamptz(3)
+  cancelledById   String?
+  /// When he recorded it done or couldn't complete (0015 phase 4), with the place his phone gave (golden rule 5):
+  /// degrees, and the accuracy in whole metres. All four together, on a finished job only.
+  finishedAt      DateTime?        @db.Timestamptz(3)
+  latitude        Float?
+  longitude       Float?
+  accuracyM       Int?
+  /// Why he couldn't complete it (0015 Decision 5): set exactly when FAILED.
+  failReasonId    Int?
+  /// What he recorded at the door when it's DONE (Decision 4), and only then: the booklets he counted (at a pickup they
+  /// become the case's intake count) and his selfie, a case file of its own.
+  bookletsCurrent Int?             @db.SmallInt
+  bookletsOld     Int?             @db.SmallInt
+  selfieId        String?          @unique
+  /// The client's one-time code (Decision 4): only its hash (sha256 of the job and the code), when and where it went,
+  /// until when it works, the wrong tries, and when the client confirmed it. Cleared again if the email didn't go.
+  otpHash         String?
+  otpSentAt       DateTime?        @db.Timestamptz(3)
+  otpSentTo       String?
+  otpExpiresAt    DateTime?        @db.Timestamptz(3)
+  otpTries        Int              @default(0) @db.SmallInt
+  otpConfirmedAt  DateTime?        @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  enquiry         Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  assignee        User             @relation("FieldJobAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  slot            FieldSlot        @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  createdBy       User             @relation("FieldJobBookedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy     User?            @relation("FieldJobCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  failReason      FieldFailReason? @relation(fields: [failReasonId], references: [id], onDelete: Restrict)
+  selfie          CaseFile?        @relation("FieldJobSelfie", fields: [selfieId], references: [id], onDelete: Restrict)
+  /// The handover a delivery done at the door made (phase 5).
+  handover        VisaHandover?
+
+  @@index([assigneeId, day])
+  @@index([enquiryId])
   @@index([departmentId])
 }
 
@@ -832,6 +926,8 @@ model Enquiry {
   followUps      FollowUp[]
   files          CaseFile[]
   invoices       Invoice[]
+  /// The collection and delivery boy's jobs for it (0015).
+  fieldJobs      FieldJob[]
   creditNotes    CreditNote[]
 
   @@index([status, dueAt])
@@ -849,6 +945,12 @@ enum CaseFileKind {
   CREDIT_NOTE
   /// A refused traveller's refusal letter, scanned (docs/decisions/0012-visa-decision.md Decision 4). Has a traveller.
   REFUSAL_LETTER
+  /// A photo of the person the passports were handed to (docs/decisions/0014-visa-delivered.md Decision 3): a JPEG or
+  /// PNG, so it has no page count.
+  RECEIVER_PHOTO
+  /// The field boy's selfie at the client's door (docs/decisions/0015-field-staff-app.md Decision 4): a photo, no page
+  /// count. Linked to the job once he finishes it.
+  FIELD_SELFIE
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -862,7 +964,8 @@ model CaseFile {
   /// The name it opens and saves under: VISA-2026-0001_Mehta_file.pdf.
   fileName     String
   sizeBytes    Int
-  pageCount    Int
+  /// A PDF's pages; a photo has none (checked in the migration).
+  pageCount    Int?
   uploadedById String
   uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
   /// The traveller a refusal letter is for (0012 Decision 4): set for REFUSAL_LETTER and only for it (checked in the
@@ -873,6 +976,10 @@ model CaseFile {
   traveller    VisaCaseTraveller? @relation(fields: [travellerId], references: [id], onDelete: Restrict)
   invoice      Invoice?
   creditNote   CreditNote?
+  /// The handover this photo proves (0014): set once "Hand over" links it.
+  handover     VisaHandover?
+  /// The field job this selfie proves (0015): set once he finishes it.
+  fieldJob     FieldJob?          @relation("FieldJobSelfie")
 
   @@index([enquiryId, kind, uploadedAt])
   @@index([travellerId, uploadedAt])
@@ -918,21 +1025,21 @@ enum EntryType {
 /// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
 /// booklet counts are 0–50; returnOn is not before departOn; hotelStay is 1–200 characters.
 model VisaCase {
-  enquiryId              String              @id
+  enquiryId              String                 @id
   offeringId             Int
   /// The month they plan to travel, stored as the 1st (M9).
-  travelMonth            DateTime            @db.Date
+  travelMonth            DateTime               @db.Date
   /// The exact date, if the client knows it at intake.
-  travelDate             DateTime?           @db.Date
+  travelDate             DateTime?              @db.Date
   /// Step 2: "Client brings them" or "Send collection boy".
   arrival                DocumentArrival?
   /// Step 2: passports received (current + old). Checked again at handover.
-  bookletsCurrent        Int?                @db.SmallInt
-  bookletsOld            Int?                @db.SmallInt
+  bookletsCurrent        Int?                   @db.SmallInt
+  bookletsOld            Int?                   @db.SmallInt
   /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
   /// travelDate. "File ready" needs departOn, returnOn and entryType.
-  departOn               DateTime?           @db.Date
-  returnOn               DateTime?           @db.Date
+  departOn               DateTime?              @db.Date
+  returnOn               DateTime?              @db.Date
   entryType              EntryType?
   /// The hotel's name and city, for the forms: data, not a reason or a status.
   hotelStay              String?
@@ -940,74 +1047,84 @@ model VisaCase {
   /// (0007 Decision 7). Switched off later, it stays here; "File ready" then asks for an active one.
   vendorId               Int?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
-  maturedAt              DateTime?           @db.Timestamptz(3)
+  maturedAt              DateTime?              @db.Timestamptz(3)
   maturedById            String?
   /// "File ready — add to docket" (0007 Decision 9): Step 3 is done and the case moved to Docket & dispatch. Both set
   /// together (checked in the migration).
-  fileReadyAt            DateTime?           @db.Timestamptz(3)
+  fileReadyAt            DateTime?              @db.Timestamptz(3)
   fileReadyById          String?
   /// The docket it goes to the vendor in (0008 Decision 2). Set by "Add to docket", cleared by "Take out" while the
   /// docket is open.
   docketId               String?
   /// "Submitted online" (0008 Decision 11): an e-visa (Vendor needed off) went in on the portal, with no docket, and the
   /// case moved to At vendor. Both set together, and never with a docket (checked in the migration).
-  submittedOnlineAt      DateTime?           @db.Timestamptz(3)
+  submittedOnlineAt      DateTime?              @db.Timestamptz(3)
   submittedOnlineById    String?
   /// "Vendor got it, papers checked" (0011 Decision 2): the vendor has this file, at Step 5. Both set together, and only
   /// for a file sent in a docket (checked in the migration).
-  vendorReceivedAt       DateTime?           @db.Timestamptz(3)
+  vendorReceivedAt       DateTime?              @db.Timestamptz(3)
   vendorReceivedById     String?
   /// "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy it went to and the
   /// expected collection date, all saved together, with who first saved them and when. All set or none, only after the
   /// vendor got the file, and the file number's format (checked in the migration).
   vendorFileNo           String?
   embassyId              Int?
-  collectionOn           DateTime?           @db.Date
-  submittedAt            DateTime?           @db.Timestamptz(3)
+  collectionOn           DateTime?              @db.Date
+  submittedAt            DateTime?              @db.Timestamptz(3)
   submittedById          String?
   /// "Take the file back" (0011 Decision 6): recalled from the vendor, why and by whom; the case then goes to Passport
   /// back. All three set together, and only for a file sent in a docket (checked in the migration).
-  recalledAt             DateTime?           @db.Timestamptz(3)
+  recalledAt             DateTime?              @db.Timestamptz(3)
   recalledById           String?
   recallReasonId         Int?
   /// "Record the decision" (docs/decisions/0012-visa-decision.md Decision 6): every traveller's outcome was saved and
   /// the case moved to Decision, by whom and when. Set together, only after the embassy submission or "Submitted
   /// online", and never on a recalled file (checked in the migration).
-  decidedAt              DateTime?           @db.Timestamptz(3)
+  decidedAt              DateTime?              @db.Timestamptz(3)
   decidedById            String?
   /// "Passports on the way back" (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor collected
   /// the passports, the day they're expected at our office, and who recorded it when. They're in transit from then
   /// until they're marked received. All four set together, only after the decision or a recall, never for an e-visa,
   /// expected on or after collected, and collected no later than the day it was recorded (checked in the migration).
-  passportsCollectedOn   DateTime?           @db.Date
-  passportsExpectedOn    DateTime?           @db.Date
-  passportsInTransitAt   DateTime?           @db.Timestamptz(3)
+  passportsCollectedOn   DateTime?              @db.Date
+  passportsExpectedOn    DateTime?              @db.Date
+  passportsInTransitAt   DateTime?              @db.Timestamptz(3)
   passportsInTransitById String?
   /// "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet was opened at our office and
   /// the passports are in our stock, by whom and when, with the booklets counted (current and old). All four set
   /// together, only after they were on their way back, each count 0–50 and at least one booklet (checked in the
-  /// migration). Never changed once saved (decided 17 Oct 2026).
-  passportsReceivedAt    DateTime?           @db.Timestamptz(3)
+  /// migration). Never changed once saved (decided 17 Oct 2026), except that "Received the rest" adds the late booklets
+  /// of a short return, up to what went out (0013 Decision 5, amended 17 Oct 2026).
+  passportsReceivedAt    DateTime?              @db.Timestamptz(3)
   passportsReceivedById  String?
-  bookletsBackCurrent    Int?                @db.SmallInt
-  bookletsBackOld        Int?                @db.SmallInt
-  enquiry                Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  offering               VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  maturedBy              User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
-  fileReadyBy            User?               @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
-  submittedOnlineBy      User?               @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
-  vendorReceivedBy       User?               @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
-  submittedBy            User?               @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
-  recalledBy             User?               @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
-  decidedBy              User?               @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
-  passportsInTransitBy   User?               @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
-  passportsReceivedBy    User?               @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
-  recallReason           RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
-  embassy                Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
-  vendor                 Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  docket                 Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
+  bookletsBackCurrent    Int?                   @db.SmallInt
+  bookletsBackOld        Int?                   @db.SmallInt
+  /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
+  /// missing-passport-reasons list. All three set together, only once received (checked in the migration).
+  shortfallClearedAt     DateTime?              @db.Timestamptz(3)
+  shortfallClearedById   String?
+  shortfallReasonId      Int?
+  enquiry                Enquiry                @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  offering               VisaOffering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  maturedBy              User?                  @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  fileReadyBy            User?                  @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
+  submittedOnlineBy      User?                  @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
+  vendorReceivedBy       User?                  @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
+  submittedBy            User?                  @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  recalledBy             User?                  @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
+  decidedBy              User?                  @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  passportsInTransitBy   User?                  @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
+  passportsReceivedBy    User?                  @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
+  recallReason           RecallReason?          @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
+  shortfallClearedBy     User?                  @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
+  shortfallReason        MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)
+  embassy                Embassy?               @relation(fields: [embassyId], references: [id], onDelete: Restrict)
+  vendor                 Vendor?                @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  docket                 Docket?                @relation(fields: [docketId], references: [id], onDelete: Restrict)
   travellers             VisaCaseTraveller[]
   quote                  VisaQuote?
+  /// Step 8 (0014): the passports handed back to the client; null until then.
+  handover               VisaHandover?
 
   @@index([offeringId])
   @@index([embassyId])
@@ -1032,40 +1149,76 @@ enum StickerCheck {
 /// One person on the case. Created as placeholders at intake ("Adult 1", "Child 1"); named in Step 2 by linking
 /// the client's family member (0006 Decision 3), which brings the passport and the consent.
 model VisaCaseTraveller {
-  id             String             @id @default(uuid())
-  caseId         String
+  id                 String             @id @default(uuid())
+  caseId             String
   /// 1, 2, 3… Adults first, then children.
-  position       Int
-  isChild        Boolean
+  position           Int
+  isChild            Boolean
   /// Passport name, copied from the member when linked: what the case was filed under.
-  name           String?
-  memberId       String?
+  name               String?
+  memberId           String?
   /// From the government portal, typed in at File preparation (0007 Decision 5). Capitals and digits, 4–40 (checked
   /// in the migration).
-  ackNo          String?
+  ackNo              String?
   /// The portal appointment, entered as a day and a time in India.
-  appointmentAt  DateTime?          @db.Timestamptz(3)
+  appointmentAt      DateTime?          @db.Timestamptz(3)
   /// The embassy's decision (docs/decisions/0012-visa-decision.md): null until recorded.
-  outcome        VisaOutcome?
+  outcome            VisaOutcome?
   /// An approved visa's sticker number (an e-visa's number), and the dates it's valid. All three set for APPROVED and
   /// none otherwise; the number in capitals with single spaces; validTo on or after validFrom (checked in the migration).
-  visaNo         String?
-  validFrom      DateTime?          @db.Date
-  validTo        DateTime?          @db.Date
+  visaNo             String?
+  validFrom          DateTime?          @db.Date
+  validTo            DateTime?          @db.Date
   /// Checked when the passports are received (0013 Decision 5): only an approved traveller has a sticker (checked in the
   /// migration); null until then.
-  stickerCheck   StickerCheck?
-  visaCase       VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
-  member         ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  documents      VisaCaseDocument[]
-  quoteLine      VisaQuoteLine?
-  invoiceLines   InvoiceLine[]
+  stickerCheck       StickerCheck?
+  visaCase           VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
+  member             ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  documents          VisaCaseDocument[]
+  quoteLine          VisaQuoteLine?
+  invoiceLines       InvoiceLine[]
   /// Scanned refusal letters, newest current (0012 Decision 4); kept when the outcome changes.
-  refusalLetters CaseFile[]
+  refusalLetters     CaseFile[]
+  /// Handovers where this traveller collected the passports (0014 Decision 3).
+  handoversCollected VisaHandover[]
 
   @@unique([caseId, position])
   @@unique([caseId, memberId])
   @@index([memberId])
+}
+
+/// How the passports went back to the client (docs/decisions/0014-visa-delivered.md): collected at our office, or
+/// taken to them by our delivery boy (from component 4).
+enum HandoverMode {
+  OFFICE
+  DELIVERY
+}
+
+/// The passports handed back to the client (docs/decisions/0014-visa-delivered.md), once per case, never changed: how,
+/// when and by whom; the booklets counted (the service keeps them equal to the stock count, Decision 4); who collected
+/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person. At the client's
+/// door (mode DELIVERY, 0015 phase 5) it points at the boy's field job, which holds the client's code, his selfie and
+/// the place (checked in the migration).
+model VisaHandover {
+  enquiryId           String             @id
+  mode                HandoverMode
+  at                  DateTime           @db.Timestamptz(3)
+  byId                String
+  bookletsCurrent     Int                @db.SmallInt
+  bookletsOld         Int                @db.SmallInt
+  receiverTravellerId String?
+  receiverName        String?
+  receiverPhotoId     String             @unique
+  /// The delivery boy's job, at the door (mode DELIVERY), and only then.
+  fieldJobId          String?            @unique
+  visaCase            VisaCase           @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
+  by                  User               @relation("VisaHandoverBy", fields: [byId], references: [id], onDelete: Restrict)
+  receiverTraveller   VisaCaseTraveller? @relation(fields: [receiverTravellerId], references: [id], onDelete: Restrict)
+  receiverPhoto       CaseFile           @relation(fields: [receiverPhotoId], references: [id], onDelete: Restrict)
+  fieldJob            FieldJob?          @relation(fields: [fieldJobId], references: [id], onDelete: Restrict)
+
+  @@index([byId])
+  @@index([receiverTravellerId])
 }
 
 /// The consent & liability form: one per person, for life; stays valid if the passport changes (§10.5).
@@ -1144,6 +1297,19 @@ model CreditNoteReason {
 model RecallReason {
   id        Int        @id @default(autoincrement())
   /// EMBASSY_DELAY… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  visaCases VisaCase[]
+}
+
+/// Why fewer passports came back than went out, when the shortfall is cleared rather than found: "Embassy kept it",
+/// "Counted wrong at intake"… (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026). Never free
+/// text. Edited by the Visa HOD or the Head; switched off, never deleted.
+model MissingPassportReason {
+  id        Int        @id @default(autoincrement())
+  /// EMBASSY_KEPT… Never changes.
   code      String     @unique
   name      String
   sortOrder Int        @default(0)

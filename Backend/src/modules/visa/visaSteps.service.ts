@@ -20,7 +20,11 @@ import { countTravellers, travellerLabel } from "./visaCase";
  * Enquiry → Documents, once: the first name or tick does it, as does "Start collecting documents". The stage is matched
  * in the update, so two changes at the same moment move it only once. Returns whether it moved.
  */
-async function advanceToDocuments(tx: Db, enquiry: LockedCase, actor: Actor): Promise<boolean> {
+export async function advanceToDocuments(
+  tx: Db,
+  enquiry: Pick<LockedCase, "id" | "stageId" | "departmentId" | "clientId"> & { stage: { code: string } },
+  actor: Actor,
+): Promise<boolean> {
   if (enquiry.stage.code !== "ENQUIRY") return false;
   const documents = await visaStage(tx, enquiry.departmentId, "DOCUMENTS");
   const moved = await tx.enquiry.updateMany({ where: { id: enquiry.id, stageId: enquiry.stageId }, data: { stageId: documents.id } });
@@ -139,6 +143,10 @@ export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, act
     const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
     const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id } });
     const changes = onlyChanged(definedOnly(input), before);
+    // The collection boy is booked (0015): call him off first, so nobody goes for papers the client brings.
+    if (changes.arrival === "CLIENT_BRINGS" && (await tx.fieldJob.count({ where: { enquiryId: enquiry.id, kind: "PICKUP", status: "BOOKED" } })) > 0) {
+      throw conflict("Cancel the collection boy's pickup first.");
+    }
     const keys = Object.keys(changes);
     if (keys.length === 0) return;
     const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
@@ -315,6 +323,9 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
       ];
       throw new HttpError(409, `Not everything is in yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
     }
+    // The boy mustn't go for papers that are all in (0015): the office calls him off first, as for "Client brings them".
+    const pickup = await tx.fieldJob.findFirst({ where: { enquiryId: enquiry.id, kind: "PICKUP", status: "BOOKED" }, select: { id: true } });
+    if (pickup) throw conflict("The collection boy is still booked for this case. Cancel his pickup first.");
 
     const filePrep = await visaStage(tx, enquiry.departmentId, "FILE_PREPARATION");
     const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).assignCheck, tx);

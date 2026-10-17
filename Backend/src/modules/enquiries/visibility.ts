@@ -8,6 +8,8 @@ import type { UserWithDepartments } from "../users/user";
 // - view-only users see every enquiry of the department, read-only (e.g. Accounts handling fees and invoices)
 // - the HOD sees every enquiry of their department
 // - the Head sees everything
+// - Visa staff with EDIT also see a case whose passports are in our stock, to hand them over at the desk
+//   (docs/decisions/0014-visa-delivered.md Decision 5); only the handover is theirs
 // Changing an enquiry stays with its owner, its HOD or the Head (assertCanActOnEnquiry).
 // The list, the case page and the client profile all go through here, so they can't disagree. The one exception is the
 // New enquiry lookup, which shows colleagues' open cases so nobody opens a duplicate.
@@ -15,6 +17,57 @@ import type { UserWithDepartments } from "../users/user";
 /** Sees every enquiry of this department, not just their own: its HOD or the Head, or a view-only user. */
 export const seesWholeDepartment = (user: UserWithDepartments, code: string) =>
   isHodOf(user, code as DepartmentCode) || !can(user, code as DepartmentCode, "EDIT");
+
+/** The visa steps before the file goes to the vendor (Steps 1–4): its passports, if counted in, are at our office. */
+export const PRE_DISPATCH = ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH"];
+
+/**
+ * Passports held at our office before dispatch: counted in at intake (Step 2, or by the collection boy) and not handed
+ * back (docs/decisions/0006-visa-documents.md amendment 15, component 3). Where they are, whatever the case's status.
+ */
+const HELD_AT_OFFICE: Prisma.EnquiryWhereInput = {
+  stage: { code: { in: PRE_DISPATCH } },
+  visa: { handover: { is: null }, OR: [{ bookletsCurrent: { gt: 0 } }, { bookletsOld: { gt: 0 } }] },
+};
+
+type HeldFields = { stage: { code: string }; visa: { bookletsCurrent: number | null; bookletsOld: number | null; handover: unknown } | null };
+
+/** Whether a loaded case's passports are held at our office before dispatch, as HELD_AT_OFFICE says. */
+export function heldAtOffice(e: HeldFields) {
+  return PRE_DISPATCH.includes(e.stage.code) && !!e.visa && !e.visa.handover && (e.visa.bookletsCurrent ?? 0) + (e.visa.bookletsOld ?? 0) > 0;
+}
+
+/**
+ * A visa case whose passports are in our stock, ready to hand over at the desk: received at Step 7 and not yet handed
+ * over (0014 Decision 5), or a cancelled case's, held at our office before dispatch (0006 amendment 15).
+ */
+const IN_STOCK: Prisma.EnquiryWhereInput = {
+  OR: [
+    { stage: { code: "PASSPORT_BACK" }, visa: { passportsReceivedAt: { not: null }, handover: { is: null } } },
+    { status: "CANCELLED", ...HELD_AT_OFFICE },
+  ],
+};
+
+/** Whether a loaded case's passports are in our stock, as IN_STOCK says. */
+export function passportsInStock(e: HeldFields & { status: string; visa: { passportsReceivedAt: Date | null } | null }) {
+  if (e.stage.code === "PASSPORT_BACK") return !!e.visa?.passportsReceivedAt && !e.visa.handover;
+  return e.status === "CANCELLED" && heldAtOffice(e);
+}
+
+/**
+ * A visa case whose passports are still to hand back to the client: its file went to the vendor in a dispatched docket
+ * and nothing is handed over yet (with the vendor, on the way back or in our stock), or they're held at our office
+ * before dispatch. A cancelled one stays on its owner's Open list until then (docs/decisions/0006-visa-documents.md
+ * amendment 15).
+ */
+export const TO_HAND_BACK: Prisma.EnquiryWhereInput = {
+  OR: [{ visa: { docket: { is: { dispatchedAt: { not: null } } }, handover: { is: null } } }, HELD_AT_OFFICE],
+};
+
+/** Whether a loaded visa case's passports are still to hand back, as TO_HAND_BACK says. */
+export function toHandBack(e: HeldFields & { visa: { docket: { dispatchedAt: Date | null } | null } | null }) {
+  return (!!e.visa?.docket?.dispatchedAt && !e.visa.handover) || heldAtOffice(e);
+}
 
 /**
  * The enquiries this user may see, among `departments` (the ones they can VIEW). An unowned enquiry (e.g. matured,
@@ -26,14 +79,21 @@ export function visibleEnquiryWhere(user: UserWithDepartments, departments: { id
   const or: Prisma.EnquiryWhereInput[] = [];
   if (whole.length > 0) or.push({ departmentId: { in: whole } });
   if (ownOnly.length > 0) or.push({ departmentId: { in: ownOnly }, ownerId: user.id });
+  // Visa staff also see the cases whose passports are in our stock, to hand them over (0014 Decision 5).
+  const visaOwnOnly = departments.filter((d) => d.code === "VISA" && !seesWholeDepartment(user, d.code)).map((d) => d.id);
+  if (visaOwnOnly.length > 0) or.push({ departmentId: { in: visaOwnOnly }, ...IN_STOCK });
   return or.length > 0 ? { OR: or } : { id: { in: [] } };
 }
 
-/** May this user open this enquiry? */
-export function canSeeEnquiry(user: UserWithDepartments, enquiry: { department: { code: string }; ownerId: string | null }): boolean {
+/** May this user open this enquiry? `inStock`: a visa case whose passports are in our stock (passportsInStock). */
+export function canSeeEnquiry(
+  user: UserWithDepartments,
+  enquiry: { department: { code: string }; ownerId: string | null; inStock?: boolean },
+): boolean {
   const code = enquiry.department.code as DepartmentCode;
   if (!can(user, code, "VIEW")) return false;
-  return seesWholeDepartment(user, code) || (enquiry.ownerId !== null && enquiry.ownerId === user.id);
+  if (seesWholeDepartment(user, code) || (enquiry.ownerId !== null && enquiry.ownerId === user.id)) return true;
+  return code === "VISA" && enquiry.inStock === true;
 }
 
 /**
@@ -48,6 +108,14 @@ export function assertCanActOnEnquiry(user: UserWithDepartments, enquiry: { depa
   }
 }
 
-export function assertCanSeeEnquiry(user: UserWithDepartments, enquiry: { department: { code: string }; ownerId: string | null }) {
+/** May this user do what any of the department's staff with EDIT may (the handover at the desk, 0014 Decision 5)? */
+export function assertCanEditDepartment(user: UserWithDepartments, enquiry: { department: { code: string } }) {
+  if (!can(user, enquiry.department.code as DepartmentCode, "EDIT")) throw forbidden("Only the department's staff who can edit can do this.");
+}
+
+export function assertCanSeeEnquiry(
+  user: UserWithDepartments,
+  enquiry: { department: { code: string }; ownerId: string | null; inStock?: boolean },
+) {
   if (!canSeeEnquiry(user, enquiry)) throw forbidden("This case is someone else's. Only its owner, the department's HOD and the Head can open it.");
 }

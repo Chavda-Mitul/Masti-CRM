@@ -1,0 +1,63 @@
+/* Visa Step 8 (docs/decisions/0014-visa-delivered.md): the receiver's photo, live or taken, and the handover card. */
+.photo-capture {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.photo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.photo-preview {
+  width: 240px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--border-input);
+  background: var(--fill-tile);
+}
+.receiver-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.receiver-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.handover-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.handover-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.handover-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.handover-tiles .return-tile strong {
+  color: var(--ink);
+}
+@media (max-width: 760px) {
+  .handover-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* The collection boy on Step 2 (0015): Change and Cancel, or the in-page "Call off …?" question. */
+.pickup-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+}

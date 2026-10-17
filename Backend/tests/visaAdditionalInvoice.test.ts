@@ -214,6 +214,24 @@ describe("correcting it", () => {
     expect((await kiran.post(`/api/visa/cases/${c.caseNo}/invoice/cancel`).send({ invoiceNo: "MVI00000001-A", totalPaise: 200_000, reasonId: wrong.id })).status).toBe(403);
     expect(await prisma.creditNote.count()).toBe(0);
   });
+
+  it("on a cancelled case only the Visa HOD or the Head cancels it, and no -B follows (0006 amendment 15)", async () => {
+    const c = await invoiced();
+    expect((await addInvoice(c.staff, c.caseNo)).status).toBe(200);
+    const { updatedAt } = (await c.staff.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+    const reasonId = (await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } })).id;
+    expect((await c.staff.post(`/api/enquiries/${c.caseNo}/cancel`).send({ reasonId, updatedAt })).status).toBe(200);
+
+    expect((await cancel(c.staff, c.caseNo, "MVI00000001-A")).status).toBe(403);
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const res = await cancel(hod, c.caseNo, "MVI00000001-A");
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).additionalInvoice!.cancelled).toMatchObject({ creditNoteNo: "MCN00000001", totalPaise: 200_000 });
+    const corrected = await addInvoice(hod, c.caseNo);
+    expect(corrected.status).toBe(409);
+    expect(corrected.body.message).toMatch(/closed/);
+  });
 });
 
 describe("what is refused", () => {

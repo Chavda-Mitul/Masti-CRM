@@ -75,6 +75,17 @@ export const RECALL_REASONS = [
   { code: "DOCUMENTS_CHANGED", name: "Documents changed", sortOrder: 3 },
 ];
 
+/**
+ * Why fewer passports came back than went out, when the shortfall is cleared rather than found
+ * (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026): ours, for Masti ⚠️.
+ */
+export const MISSING_PASSPORT_REASONS = [
+  { code: "EMBASSY_KEPT", name: "Embassy kept it", sortOrder: 1 },
+  { code: "VENDOR_HAS_IT", name: "Vendor still has it", sortOrder: 2 },
+  { code: "COUNTED_WRONG", name: "Counted wrong at intake", sortOrder: 3 },
+  { code: "LOST_REPORTED", name: "Lost, reported to the vendor", sortOrder: 4 },
+];
+
 /** What an additional invoice charges for (docs/decisions/0011-visa-at-vendor.md Decision 7): ours, for Masti ⚠️. */
 export const EXTRA_CHARGES = [
   { code: "URGENT_SUBMISSION", name: "Urgent submission", sortOrder: 1 },
@@ -135,6 +146,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const reason of RECALL_REASONS) {
     await db.recallReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  }
+  for (const reason of MISSING_PASSPORT_REASONS) {
+    await db.missingPassportReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
   }
   for (const charge of EXTRA_CHARGES) {
     await db.extraCharge.upsert({ where: { code: charge.code }, update: {}, create: charge });

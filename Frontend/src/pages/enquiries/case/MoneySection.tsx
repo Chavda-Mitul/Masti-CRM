@@ -46,16 +46,13 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const additional = c.additionalInvoice
   const additionalCancelled = additional?.cancelled ?? null
   const actsOnCase = !!me && c.status === 'OPEN' && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  // A cancelled case's invoices can still be cancelled with a credit note (0006 amendment 15); nothing is raised on it.
+  // Only the Visa HOD or the Head may there, as it's a refund: the dialog tells anyone else to ask them.
+  const credits = !!me && (c.status === 'OPEN' || c.status === 'CANCELLED') && canActOnCase(me, { department: c.department.code, owner: c.owner })
   const canAdd = actsOnCase && !!liveInvoice(c) && (!additional || !!additionalCancelled)
-  const canCancelAdditional = actsOnCase && !!additional && !additionalCancelled
+  const canCancelAdditional = credits && !!additional && !additionalCancelled
   // An invoice a recall gave part of can't be cancelled whole (0011 Decision 5: never more than invoiced).
-  const canCancel =
-    !!me &&
-    c.status === 'OPEN' &&
-    !!invoice &&
-    !cancelled &&
-    invoice.partCredits.length === 0 &&
-    canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const canCancel = credits && !!invoice && !cancelled && invoice.partCredits.length === 0
 
   return (
     <div className="rail-section money-section" id="money">

@@ -4,7 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { formatDate } from '../../../lib/format'
 import type { VisaCase } from '../types'
 import { ChangeDecisionDialog } from './ChangeDecisionDialog'
-import { dayTime, firstName, weekdayDay } from './labels'
+import { dayTime, firstName, weekdayDay, windingDown } from './labels'
 import { RefusalLetterLine } from './RefusalLetterLine'
 
 /**
@@ -57,7 +57,8 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           )}
         </div>
       ))}
-      {c.stage.code === 'DECISION' && c.status === 'OPEN' && c.dueAt && (
+      {/* A cancelled case's passports still come back, and it stays due until then (0006 amendment 15). */}
+      {c.stage.code === 'DECISION' && (c.status === 'OPEN' || windingDown(c)) && c.dueAt && (
         <div className="kv">
           <span>
             {dayTime(c.dueAt)}

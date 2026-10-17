@@ -16,13 +16,15 @@ import type { DepartmentChip, EnquiryListFilters, EnquiryRow, ListStatus } from 
 const SELLING = new Set<string>(SELLING_DEPARTMENTS)
 
 /**
- * Open cases by default; postponed and cancelled ones are found here too (?status=postponed). "To assign" (open, nobody's
- * yet: matured and waiting for a processor) is for the HOD and the Head, who pick the processor (?status=to_assign).
+ * Open cases by default; postponed, cancelled and closed (delivered, 0014) ones are found here too (?status=postponed).
+ * "To assign" (open, nobody's yet: matured and waiting for a processor) is for the HOD and the Head, who pick the
+ * processor (?status=to_assign).
  */
 const STATUSES: { value: ListStatus; label: string; assignersOnly?: boolean }[] = [
   { value: 'OPEN', label: 'Open' },
   { value: 'POSTPONED', label: 'Postponed' },
   { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'CLOSED', label: 'Closed' },
   { value: 'TO_ASSIGN', label: 'To assign', assignersOnly: true },
 ]
 
@@ -32,7 +34,7 @@ function statusOf(param: string | null, assigns: boolean): ListStatus {
 
 /**
  * All enquiries (demo screens 02/03): every department in one list, late first, then by time due.
- * Open / Postponed / Cancelled, department, "Only mine" and search live in the URL
+ * Open / Postponed / Cancelled / Closed, department, "Only mine" and search live in the URL
  * (?status=postponed&department=VISA&mine=true&q=), so the sidebar can link to a department and Back returns to the same
  * list. Clicking a row opens its steps on the right.
  */
@@ -246,6 +248,7 @@ function summaryLine(status: ListStatus, total: number, late: number | undefined
   if (late === undefined) return 'Every open enquiry, late first, then by time due.'
   if (status === 'POSTPONED') return `${total} postponed · ${late} past their date · soonest back first · click a row to see its steps`
   if (status === 'CANCELLED') return `${total} cancelled · click a row to see its steps`
+  if (status === 'CLOSED') return `${total} closed · click a row to see its steps`
   if (status === 'TO_ASSIGN') return `${total} waiting for a processor · click a row to see its steps`
   return `${total} open · ${late} running late · late first, then by time due · click a row to see its steps`
 }

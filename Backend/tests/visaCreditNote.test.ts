@@ -1,5 +1,6 @@
 import { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it } from "vitest";
+import { addMonths, istToday, toDbDate } from "../src/lib/dates";
 import { getObject } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -211,6 +212,60 @@ describe("who may cancel it", () => {
     const other = await invoiced({ mobile: "98250 41235", clientName: "Sunil Shah" });
     const head = await loginAs("vimal@masti.test");
     expect((await cancel(head, other.caseNo)).status).toBe(200);
+  });
+});
+
+describe("on a cancelled case (0006 amendment 15)", () => {
+  /** "Postpone or cancel" → Cancel the case, reason Trip cancelled. Reads first: never await inside .send(...). */
+  async function cancelCase(agent: Agent, caseNo: string) {
+    const updatedAt = (await agent.get(`/api/visa/cases/${caseNo}`)).body.case.updatedAt;
+    const reason = (await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } })).id;
+    return agent.post(`/api/enquiries/${caseNo}/cancel`).send({ reasonId: reason, updatedAt });
+  }
+
+  it("only the Visa HOD or the Head cancels its invoice, a refund: no corrected invoice follows", async () => {
+    await mastiReady();
+    const c = await invoiced();
+    expect((await check(c.staff, c.caseNo)).body.hodOnly).toBe(false);
+    expect((await cancelCase(c.staff, c.caseNo)).status).toBe(200);
+    expect((await check(c.staff, c.caseNo)).body.hodOnly).toBe(true);
+
+    const clientCancelled = await reasonId("CLIENT_CANCELLED");
+    const own = await cancel(c.staff, c.caseNo, { reasonId: clientCancelled });
+    expect(own.status).toBe(403);
+    expect(own.body.message).toMatch(/only the Visa HOD or the Head/);
+    expect(await prisma.creditNote.count()).toBe(0);
+
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const res = await cancel(hod, c.caseNo, { reasonId: clientCancelled });
+    expect(res.status).toBe(200);
+    expect(res.body.case.status).toBe("CANCELLED");
+    expect((res.body.case as CaseDto).invoice!.cancelled).toMatchObject({ creditNoteNo: "MCN00000001", reason: "Client cancelled", issuedBy: { name: "Riya" } });
+
+    // Nothing is raised again on a cancelled case: no corrected invoice, and the quote stays as it is.
+    const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await hod.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body.preview;
+    const raised = await hod.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise });
+    expect(raised.status).toBe(409);
+    expect(raised.body.message).toMatch(/closed/);
+    const requoted = await requote(hod, c, 70_000);
+    expect(requoted.status).toBe(409);
+    expect(requoted.body.message).toMatch(/closed/);
+  });
+
+  it("a postponed case is resumed first, and a closed one keeps its invoice", async () => {
+    await mastiReady();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const c = await invoiced();
+    const later = (await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRAVEL_DATES_MOVED" } })).id;
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "POSTPONED", reasonId: later, resumeOn: toDbDate(addMonths(istToday(), 1)) } });
+    expect((await cancel(hod, c.caseNo)).body.message).toMatch(/Resume it first/);
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CLOSED", reasonId: null, resumeOn: null, dueAt: null } });
+    const closed = await cancel(hod, c.caseNo);
+    expect(closed.status).toBe(409);
+    expect(closed.body.message).toMatch(/closed/);
+    expect(await prisma.creditNote.count()).toBe(0);
   });
 });
 

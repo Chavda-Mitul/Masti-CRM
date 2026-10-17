@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
+import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -103,6 +104,11 @@ export const assignCheckSchema = firstFollowUpSchema;
  */
 export const handoverCheckSchema = firstFollowUpSchema;
 
+/** The largest receiver photo the server takes, in MB (0014 Decision 6); the browser shrinks photos well below it. */
+export const handoverPhotoSchema = z.object({
+  maxMb: z.number().int().min(1).max(20),
+});
+
 /**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
@@ -157,6 +163,7 @@ export const visaSettingsSchema = z.object({
   arrivalCheck: arrivalCheckSchema,
   assignCheck: assignCheckSchema,
   handoverCheck: handoverCheckSchema,
+  handoverPhoto: handoverPhotoSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -198,6 +205,7 @@ export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>
 export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
 export type AssignCheckSetting = z.infer<typeof assignCheckSchema>;
 export type HandoverCheckSetting = z.infer<typeof handoverCheckSchema>;
+export type HandoverPhotoSetting = z.infer<typeof handoverPhotoSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
@@ -387,9 +395,11 @@ export const cancelInvoiceSchema = z.object({
 /**
  * "Take the file back" (Decision 6): why, from the recall-reasons list, and the invoice and case as the dialog showed
  * them. `refunds` is only for the HOD's "Change refund": per traveller (the invoice's line position), what goes back.
+ * `invoiceNo` is null when nothing can go back: a cancelled case whose invoice was already cancelled whole
+ * (docs/decisions/0006-visa-documents.md amendment 15).
  */
 export const recallSchema = z.object({
-  invoiceNo: z.string().trim().toUpperCase().min(1).max(40),
+  invoiceNo: z.string().trim().toUpperCase().min(1).max(40).nullable(),
   reasonId: z.number("Pick why it's taken back.").int().positive("Pick why it's taken back."),
   refunds: z
     .array(z.object({ position: z.number().int().min(1), refundPaise: z.number().int().min(0).max(100_000_000) }))
@@ -471,8 +481,103 @@ export const receivePassportsSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
+/**
+ * "Received the rest" of a short return (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026):
+ * the late booklets, current and old, added to our stock. The service checks each against what's still missing.
+ */
+export const receiveRestSchema = z.object({
+  booklets: z.object({ current: bookletsBack("current"), old: bookletsBack("old") }),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Clear the shortfall" (same amendment): why the missing passports won't come back, picked from the list. */
+export const clearShortfallSchema = z.object({
+  reasonId: z.number("Pick why it won't come back.").int().positive("Pick why it won't come back."),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 export type RecordDecisionInput = z.infer<typeof recordDecisionSchema>;
 export type ReceivePassportsInput = z.infer<typeof receivePassportsSchema>;
+export type ReceiveRestInput = z.infer<typeof receiveRestSchema>;
+export type ClearShortfallInput = z.infer<typeof clearShortfallSchema>;
+
+/** Who collected the passports, by name, when it isn't a traveller on the case (0014 Decision 3). */
+const receiverName = z
+  .string()
+  .trim()
+  .min(2, "Enter the name of the person collecting.")
+  .max(100, "100 characters at most.")
+  .regex(PERSON_NAME_PATTERN, PERSON_NAME_MESSAGE);
+
+/** The booklets handed over (0014 Decision 4): counted, and checked against our stock by the service. */
+export const handOverBookletsSchema = z.object({ current: bookletsBack("current"), old: bookletsBack("old") });
+
+/** Who collected the passports (0014 Decision 3): a traveller on the case, or someone else by name; exactly one. */
+export const receiverSchema = z
+  .object({ travellerId: z.string().trim().min(1).max(64).nullish(), name: receiverName.nullish() })
+  .refine((r) => !!r.travellerId !== !!r.name, "Pick who collected the passports.");
+
+/**
+ * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 3 and 4): the booklets
+ * counted (the service checks them against our stock), who collected them (a traveller on the case, or someone else by
+ * name: exactly one) and the photo uploaded for it. The delivery boy hands over at the door from his phone (0015
+ * phase 5, fieldJobs/field.schemas.ts).
+ */
+export const handOverSchema = z.object({
+  mode: z.enum(["OFFICE"], "The delivery boy hands over from his phone."),
+  booklets: handOverBookletsSchema,
+  receiver: receiverSchema,
+  photoId: z.string("Take a photo of the person collecting.").trim().min(1, "Take a photo of the person collecting.").max(64),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+export type HandOverInput = z.infer<typeof handOverSchema>;
+
+/** Where Google Maps lives: a share link (maps.app.goo.gl, goo.gl/maps) or a google.com / google.co.in maps address. */
+const GOOGLE_HOSTS = new Set(["www.google.com", "google.com", "maps.google.com", "www.google.co.in", "google.co.in"]);
+
+/** Is this a Google Maps link (docs/decisions/0015-field-staff-app.md Decision 3)? */
+export function isGoogleMapsLink(text: string) {
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:") return false;
+    if (url.hostname === "maps.app.goo.gl") return true;
+    if (url.hostname === "goo.gl") return url.pathname.startsWith("/maps");
+    return GOOGLE_HOSTS.has(url.hostname) && url.pathname.startsWith("/maps");
+  } catch {
+    return false;
+  }
+}
+
+/** The client's location in Google Maps, when they shared one: optional; blank means none. */
+const mapLink = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+  z
+    .string()
+    .trim()
+    .max(500, "That link is too long.")
+    .refine(isGoogleMapsLink, "Paste a Google Maps link, e.g. https://maps.app.goo.gl/…")
+    .nullish(),
+);
+
+/**
+ * The collection or delivery boy's job (docs/decisions/0015-field-staff-app.md Decisions 2 and 3): who goes, on which
+ * day and slot, and where (the address, and the client's Google Maps link if they shared one). The service checks
+ * the boy, the day and the slot.
+ */
+export const changeFieldJobSchema = z.object({
+  assigneeId: z.string("Pick who goes.").trim().min(1, "Pick who goes.").max(64),
+  day: z.iso.date("Pick the day."),
+  slotId: z.number("Pick the time slot.").int().positive("Pick the time slot."),
+  address: z.string("Enter the address.").trim().min(1, "Enter the address.").max(300, "300 characters at most."),
+  mapLink,
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+/** "Book the collection boy" (phase 1) or "Book the delivery boy" (phase 2). */
+export const bookFieldJobSchema = changeFieldJobSchema.extend({
+  kind: z.enum(["PICKUP", "DELIVERY"], "Pick a pickup or a delivery."),
+});
+export type ChangeFieldJobInput = z.infer<typeof changeFieldJobSchema>;
+export type BookFieldJobInput = z.infer<typeof bookFieldJobSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

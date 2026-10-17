@@ -15,6 +15,14 @@ export function can(user: User, departmentCode: string, access: Access): boolean
 }
 
 /**
+ * Handing passports over at the office (docs/decisions/0014-visa-delivered.md Decision 5): any of the department's staff
+ * with EDIT, whoever is at the desk, while the case's passports are in our stock.
+ */
+export function canHandOver(user: User, c: { department: string; inStock: boolean }): boolean {
+  return c.inStock && can(user, c.department, 'EDIT')
+}
+
+/**
  * Dispatching a docket (0008 Decision 3): Visa EDIT, and the Visa HOD, the Head, or a processor who owns at least one
  * case in it.
  */
