@@ -70,10 +70,14 @@ stranded the client's passports (nothing could move again):
       more), and a whole credit note is refused after a part one, so a case cancelled at the vendor settles its refund
       in the recall dialog. If the invoice was already cancelled whole (no replacement), a cancelled case's recall
       gives nothing back and issues no credit note; an open case still raises a replacement first.
-    - **Following as their own components:** "Cancel with a credit note" on a cancelled case, with the cancel dialog
-      warning while an invoice stands (a cancellation charge Masti keeps is billed before cancelling); and a
-      "Hand back to the client", with the office handover's proof, for passports counted in before dispatch (not a
-      demo screen).
+    - **"Cancel with a credit note" on a cancelled case** (component 2): the main invoice or the additional one, at
+      any step. No corrected invoice follows, so it gives the client's money back, and **only the Visa HOD or the
+      Head** may issue it (decided 17 Oct 2026, as only an HOD gives back more on a recall); the processor sees the
+      button and is told to ask them. Nothing is raised on a cancelled case (no invoice, replacement, additional
+      invoice or quote change): a cancellation charge Masti keeps is billed before cancelling. The cancel dialog
+      warns about each invoice that still stands (at the vendor: its refund is set when the file is taken back).
+    - **Following as its own component:** a "Hand back to the client", with the office handover's proof, for
+      passports counted in before dispatch (not a demo screen).
     - **For the field app ([0015](0015-field-staff-app.md)):** a delivery booked to hand the passports back should
       stay booked when the case is cancelled, and booking one should give a cancelled case its due time, as on an
       open one. Until that's changed there, cancelling still calls off a booked job.
@@ -92,6 +96,17 @@ stranded the client's passports (nothing could move again):
       after it); the recall reason preset; Change and the due lines on a cancelled case; a note in the cancel dialog.
     - **Tests:** 5 new (`tests/visaCancelCustody.test.ts`). All 42 test files pass (510). Browser-checked on an isolated
       copy.
+
+    **Built 17 Oct 2026, component 2** (`5adc882`, branch `fix/visa-cancel-custody`):
+    - **Step rule:** `CREDITING` (`caseLock.ts`): INVOICED's steps, on a cancelled case too, for `cancelInvoice` only.
+      On a cancelled case only the Visa HOD or the Head (403 otherwise), checked again under the case lock.
+    - **The check:** `GET …/invoice/cancel/check` says `hodOnly` (the case is cancelled).
+    - **The Money section:** "Cancel with a credit note" shows on a cancelled case for the main and the additional
+      invoice. The dialog says no corrected invoice follows, starts on "Client cancelled", and for anyone but the HOD
+      or the Head explains and keeps Confirm off.
+    - **The cancel dialog:** a note per standing invoice.
+    - **Tests:** 3 new (`visaCreditNote`, `visaAdditionalInvoice`). Browser-checked: a case cancelled before dispatch,
+      its invoice cancelled by the HOD. All 42 test files pass (513).
 
 ## Context
 

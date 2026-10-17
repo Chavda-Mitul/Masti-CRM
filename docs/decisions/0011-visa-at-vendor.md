@@ -165,6 +165,8 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
+- **On a cancelled case too** (amended 17 Oct 2026, [0006](0006-visa-documents.md) amendment 15): no replacement follows
+  there, so it's a refund, and only the Visa HOD or the Head may issue it (step rule `CREDITING`).
 - **Masti's answer (15 Oct 2026, through the project lead):** a wrong invoice is never changed; it's corrected with a
   credit note. Masti has **no system today:** the CRM is their first. So there's no credit-note format to match and no
   series to continue.
