@@ -31,6 +31,7 @@
 | 0007, 12 Oct 2026 | The case's saved file stays one PDF. If a vault is confirmed, it keeps the passport's photo page per person, after a data-protection decision. |
 | Vimal, through the project lead, 17 Oct 2026 | Build it. Keep the scans **permanently**. Vimal will check this with the government himself. |
 | Project lead, 17 Oct 2026 | All papers for now, Aadhaar too. Tell the client by a WhatsApp message (no consent form change). Only HODs see a client's whole list; scans are kept on the client. Keep every version; no delete for now. "On file" in Step 2. Build it now. |
+| Project lead, 17 Oct 2026 (later) | Settled: the scans are kept **permanently**, with no removal; the full Aadhaar card is kept. No government check is waited for (M40 closed). Whether it's charged is the project lead's call; Shivanshu isn't asked (S12 closed). |
 
 **Why it's worth having.** A passport lasts ten years, and a family travels more than once. Today every trip means the
 same passport, PAN and Aadhaar copies again. With the vault, the office scans a paper once and prints it from the copy
@@ -71,8 +72,8 @@ The WhatsApp message (Decision 6) is recorded now and sent once the WhatsApp out
   person). A paper that's the client's own (a company's PAN card) has no member.
 - **Every version is kept.** The newest scan of a paper for a person is the current one; older copies stay and still
   open. A renewed passport keeps the old one's scan, which an embassy may ask for as an old passport.
-- **Nothing is deleted:** there is no delete button. If Vimal's check with the government (M40) says a client may ask
-  for removal, a Head-only delete, audited, is added then.
+- **Nothing is deleted:** there is no delete button. Settled 17 Oct 2026 (project lead): the scans are kept
+  permanently, and a client can't have them removed (M40 closed).
 - **In the private bucket** under `clients/<clientId>/<uuid>.<ext>`, opened only through short-lived links (rule 4).
 
 **Defaults (not asked; say if any is wrong):**
@@ -224,7 +225,7 @@ doesn't change and there's no "I agree" step.
 
 ## Not in this record
 
-- **Deleting a scan:** waits for Vimal's answer from the government (M40).
+- **Deleting a scan:** never; the scans are kept permanently (settled 17 Oct 2026).
 - **Reading a passport scan to fill forms** (Q13, S6): scope unconfirmed. The vault would be its input.
 - **Clients uploading their own papers:** never (rule 4).
 - **The field boy photographing papers:** scanning happens in the office (rule 4).
@@ -234,9 +235,7 @@ doesn't change and there's no "I agree" step.
 
 ## Still needed
 
-- **M40 (Vimal, after his check with the government):** may we keep scans permanently, and must a client be able to
-  ask for removal? Aadhaar: the full card, or only the masked one (first eight digits hidden)? Aadhaar has its own law,
-  stricter than the data-protection act (DPDP), so it needs its own clear answer before go-live.
-- **S12 (Shivanshu):** the vault isn't in the demo screens. Is it a free change or a paid one (PID: new major features
-  are charged and need Masti's written OK)?
 - **M1:** the real WhatsApp wording.
+
+Settled 17 Oct 2026 (project lead), no longer asked: **M40** (kept permanently, no removal, the full Aadhaar card) and
+**S12** (charging is the project lead's call).

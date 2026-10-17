@@ -476,12 +476,12 @@ These are used by every module.
   - **Saves use optimistic locking** on `updatedAt`.
 - **Document vault: being built** (decided 17 Oct 2026, project lead; Vimal wants the scans kept permanently). The design is `docs/decisions/0016-client-documents.md`. It replaces the 8 Oct "not built" and the 12 Oct "passport photo page only".
   - **What:** a scan of any paper in the document master (Aadhaar card and PAN card are added to it), as one PDF, JPEG or PNG, kept on the client and naming the family member it's for. In the private bucket (rule 4).
-  - **Kept forever:** every version stays, the newest is current, and nothing is deleted until Vimal's check with the government (M40).
+  - **Kept forever:** every version stays, the newest is current, and nothing is ever deleted (settled 17 Oct 2026: permanent, no removal on request).
   - **Aadhaar:** the card's scan is kept; a typed Aadhaar number is still never stored.
   - **Who:** the client's whole list is for HODs (any department) and the Head. Staff see "On file" on their case's papers, open that one copy, and save scans from the case. Every save and opening is audited.
   - **Step 2:** a xerox-OK paper can be ticked **On file** from the current copy, never automatically; originals can't be.
   - **The client is told** by one WhatsApp message on their first scan (sent once the outbox exists). The consent form doesn't change.
-  - **Open:** whether it's charged (S12), and the government answer on keeping scans and on Aadhaar (M40).
+  - **Settled 17 Oct 2026 (project lead):** kept permanently, no removal, the full Aadhaar card kept (M40 closed); charging is the project lead's call (S12 closed).
   - **Built so far:** component 1, **the Documents card** on the client page (17 Oct 2026). Table `ClientDocument`. `GET/POST /api/clients/:id/documents` (the file is the body; PDF, JPEG or PNG up to `clients.documents.maxMb`, 20 MB ⚠️) and `…/documents/:clientDocumentId/link`, for HODs and the Head only, every save and opening audited. Component 2, **the vault in Step 2** (17 Oct 2026): `ReceivedAs.ON_FILE` with `VisaCaseDocument.clientDocumentId` (CHECKs: set together; xerox-OK papers only); "Save scan" and "Open" on each paper from the case (`/api/visa/cases/:caseNo/documents/:documentId/scan[/link]`), for whoever can tick and whoever can see the case; relinking a traveller resets their On file papers. Waiting: the WhatsApp message (outbox).
 
 ### 10.2 Enquiry: the unit of work across departments
@@ -1667,14 +1667,14 @@ Masti CRM/
 - **AI fill-in from a message:** deferred; the manual form comes first.
 
 **Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
-- **Build it now:** Vimal wants clients' scans kept **permanently**, and will check that with the government himself (M40).
-- **All papers for now:** anything in the document master, plus Aadhaar card and PAN card. Aadhaar is kept as a scan; a typed number is still never stored.
-- **On the client, per family member.** Every version kept, newest current, no delete until M40 is answered.
+- **Build it now:** Vimal wants clients' scans kept **permanently**. Settled the same day: permanent, with no removal on request and no government check waited for (M40 closed).
+- **All papers for now:** anything in the document master, plus Aadhaar card and PAN card. Aadhaar is kept as the full card's scan; a typed number is still never stored.
+- **On the client, per family member.** Every version kept, newest current, never deleted.
 - **Only HODs (any department) and the Head see a client's whole list.** Staff see "On file" on their case's papers and save scans from the case.
 - **"On file" in Step 2,** one click for a xerox-OK paper with a current copy; never automatic.
 - **One WhatsApp message per client** on their first scan; no consent form change.
 - **One component at a time:** the Documents card on the client page → the vault in Step 2.
-- **Open:** free or paid (S12); Aadhaar full or masked, keeping forever, removal on request (M40).
+- **Charging:** the project lead's call; Shivanshu isn't asked (S12 closed, 17 Oct 2026).
 - **Built so far:** component 1, **the Documents card** (17 Oct 2026). Under Family & travellers, for HODs and the Head: each person's scans (the client's own papers first, anyone taken off the list last), each paper's current scan with "Older copies", **Open** in a new tab through a short-lived link, and **+ Add a scan** (whose, which paper, the file). Aadhaar card and PAN card joined the document master. Component 2, **the vault in Step 2** (17 Oct 2026): each paper of a named traveller shows "On file · saved 12 Mar · Open" when the client's vault has a copy, and **Save scan** keeps it there (it doesn't tick the paper). A xerox-OK paper can be ticked **On file**, never automatically; it counts as received, the processor opens and prints it in Step 3, and relinking the traveller puts it back to Pending.
 
 **Decided 13 Oct 2026 (project lead), for the visa invoice.** The design is `docs/decisions/0009-visa-invoice.md` (decided; all four components built).
@@ -1824,7 +1824,7 @@ Masti CRM/
 | 34 | **New:** Only Accounts (and the Head) may set the accounting code, billing cycle and payment habit. Is that right, or may each department set them when it creates a client? Built Accounts-only. | Y→C | 1 |
 | 35 | **New:** How long before expiry should a passport show "renew soon"? Seeded 12 months ⚠️ (matches the demo). | C | 1 |
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
-| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007). **17 Oct 2026, answered (project lead; Vimal wants it): build it,** all papers, Aadhaar too, kept permanently, HODs see the list, one WhatsApp notice (0016). Still open: free or paid (S12), and the government answer (M40) | S | 2 |
+| 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007). **17 Oct 2026, answered (project lead; Vimal wants it): build it,** all papers, Aadhaar too, kept permanently, HODs see the list, one WhatsApp notice (0016). Same day: permanent with no removal, the full Aadhaar card kept; S12 and M40 closed, nothing left to ask | S | 2 |
 | 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits. | C | 1 |
 
 Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.
