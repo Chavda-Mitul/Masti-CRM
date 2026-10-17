@@ -77,6 +77,11 @@ At each stop the boy also records, before he can finish:
   it), he records **Couldn't complete** with the reason "Client couldn't get the code". The office sorts it out: the
   client brings the papers, or the boy is booked again. This answers 0014 Decision 2's open question for the pickup;
   phase 5 settles the delivery.
+- **A short return holds the delivery** (decided 17 Oct 2026, [0013](0013-visa-passport-back.md) Decision 5, amended):
+  while fewer passports came back than went out and the shortfall isn't cleared, a delivery can't be booked, and the
+  doorstep handover (phase 5) must refuse the same way as the office handover. Built 17 Oct 2026 for the booking:
+  `assertNotHeldShort` (`Backend/src/modules/visa/shortfall.ts`) refuses it with 409. The doorstep handover calls the
+  same check when phase 5 lands.
 - **The code's email has fixed wording**, with Masti's name and phone from Company details: "Your code for Masti Tours
   & Travels: 482913 … Ramesh from Masti Tours & Travels is at your door to collect the documents for VISA-2026-0003.
   Give him this code to confirm … It works for 10 minutes. If you didn't expect this, don't share it, and call us on

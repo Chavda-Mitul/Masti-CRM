@@ -628,8 +628,18 @@ export interface VisaCase {
   decision: { at: string; by: PersonRef | null } | null
   /** "Passports on the way back" (0013 Decision 3): the day the vendor collected them, the day expected, who and when */
   passportsBack: { collectedOn: string; expectedOn: string; at: string; by: PersonRef | null } | null
-  /** "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted */
-  passportsReceived: { at: string; by: PersonRef | null; booklets: { current: number; old: number } } | null
+  /**
+   * "Mark received" (0013 Decision 5): in our passport stock, by whom and when, with the booklets counted (plus any
+   * received later). `missing`: per kind, what went out and isn't back; while any is and the shortfall isn't cleared, the
+   * handover waits (amended 17 Oct 2026). `shortfallCleared`: when, by whom and why it won't come back.
+   */
+  passportsReceived: {
+    at: string
+    by: PersonRef | null
+    booklets: { current: number; old: number }
+    missing: { current: number; old: number }
+    shortfallCleared: { at: string; by: PersonRef | null; reason: string } | null
+  } | null
   /** Handed back to the client (0014): null until then */
   handover: Handover | null
   travellers: CaseTraveller[]

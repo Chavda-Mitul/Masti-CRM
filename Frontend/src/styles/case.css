@@ -1061,6 +1061,14 @@ button.tick:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* A short return (0013 Decision 5, amended): what's missing and the button that settles it. */
+.return-missing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 /* Mark received: the two counts beside intake, and how they compare. */
 .receive-booklets {
   display: flex;

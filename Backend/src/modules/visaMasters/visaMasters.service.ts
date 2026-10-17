@@ -14,6 +14,7 @@ import type {
   CreateCourierInput,
   CreateCreditNoteReasonInput,
   CreateRecallReasonInput,
+  CreateMissingPassportReasonInput,
   CreateExtraChargeInput,
   CreateProcessingSpeedInput,
   CreateEmbassyInput,
@@ -26,6 +27,7 @@ import type {
   UpdateCourierInput,
   UpdateCreditNoteReasonInput,
   UpdateRecallReasonInput,
+  UpdateMissingPassportReasonInput,
   UpdateExtraChargeInput,
   UpdateProcessingSpeedInput,
   UpdateEmbassyInput,
@@ -327,6 +329,35 @@ export async function updateRecallReason(id: number, input: UpdateRecallReasonIn
     entityType: "RecallReason",
     entityId: id,
     write: (tx) => tx.recallReason.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Missing passport reasons (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026)
+// ---------------------------------------------------------------------------
+
+export async function listMissingPassportReasons(active?: boolean) {
+  return prisma.missingPassportReason.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createMissingPassportReason(input: CreateMissingPassportReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "missingPassportReason.create", "MissingPassportReason", (tx) => tx.missingPassportReason.create({ data: input }));
+}
+
+export async function updateMissingPassportReason(id: number, input: UpdateMissingPassportReasonInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.missingPassportReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Missing passport reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "missingPassportReason.update",
+    entityType: "MissingPassportReason",
+    entityId: id,
+    write: (tx) => tx.missingPassportReason.update({ where: { id }, data: changes }),
   });
 }
 

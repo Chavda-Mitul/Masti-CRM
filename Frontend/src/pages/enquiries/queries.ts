@@ -402,6 +402,23 @@ export function useReceivePassports(caseNo: string) {
   }>(caseNo, (base, body) => api(`${base}/passports-received`, { method: 'POST', body }))
 }
 
+/**
+ * "Received the rest" of a short return (0013 Decision 5, amended 17 Oct 2026): the late booklets, each kind up to
+ * what's missing; whatever the case's status. 400 under `booklets`.
+ */
+export function useReceiveRest(caseNo: string) {
+  return useCaseAction<{ booklets: { current: number; old: number }; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/passports-received/rest`, { method: 'POST', body }),
+  )
+}
+
+/** "Clear the shortfall" (same amendment): why the missing passports won't come back, from the list. 400 under `reasonId`. */
+export function useClearShortfall(caseNo: string) {
+  return useCaseAction<{ reasonId: number; updatedAt: string }>(caseNo, (base, body) =>
+    api(`${base}/passports-received/clear`, { method: 'POST', body }),
+  )
+}
+
 /** Who can be sent (0015): the active field staff. */
 export function useFieldStaff() {
   return useQuery({

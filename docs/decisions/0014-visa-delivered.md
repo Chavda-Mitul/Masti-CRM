@@ -69,7 +69,9 @@ no email is decided when component 4 is planned. *(The doorstep moved to 0015. F
 
 **Decided 17 Oct 2026 (project lead):** what's handed over must match the count when the passports came in (Step 7).
 If it doesn't, the handover is refused: something is missing in our office, so find it first. (Unlike Step 7, where a
-short packet is still received and shown red.)
+short packet is still received and shown red.) **Amended 17 Oct 2026:** a short packet now also holds the handover
+until the rest come in or the shortfall is cleared with a reason ([0013](0013-visa-passport-back.md) Decision 5,
+amended).
 
 ### 5. Who: any Visa staff at the desk
 

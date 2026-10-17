@@ -89,6 +89,7 @@ model User {
   visaCasesDecided      VisaCase[]         @relation("VisaCaseDecidedBy")
   visaCasesInTransit    VisaCase[]         @relation("VisaCasePassportsInTransitBy")
   visaCasesReceivedBack VisaCase[]         @relation("VisaCasePassportsReceivedBy")
+  visaShortfallsCleared VisaCase[]         @relation("VisaCaseShortfallClearedBy")
   visaHandovers         VisaHandover[]     @relation("VisaHandoverBy")
   caseFilesUploaded     CaseFile[]         @relation("CaseFileUploadedBy")
   docketsCreated        Docket[]           @relation("DocketCreatedBy")
@@ -1052,11 +1053,17 @@ model VisaCase {
   /// "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet was opened at our office and
   /// the passports are in our stock, by whom and when, with the booklets counted (current and old). All four set
   /// together, only after they were on their way back, each count 0–50 and at least one booklet (checked in the
-  /// migration). Never changed once saved (decided 17 Oct 2026).
+  /// migration). Never changed once saved (decided 17 Oct 2026), except that "Received the rest" adds the late booklets
+  /// of a short return, up to what went out (0013 Decision 5, amended 17 Oct 2026).
   passportsReceivedAt    DateTime?           @db.Timestamptz(3)
   passportsReceivedById  String?
   bookletsBackCurrent    Int?                @db.SmallInt
   bookletsBackOld        Int?                @db.SmallInt
+  /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
+  /// missing-passport-reasons list. All three set together, only once received (checked in the migration).
+  shortfallClearedAt     DateTime?           @db.Timestamptz(3)
+  shortfallClearedById   String?
+  shortfallReasonId      Int?
   enquiry                Enquiry             @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering               VisaOffering        @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy              User?               @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
@@ -1069,6 +1076,8 @@ model VisaCase {
   passportsInTransitBy   User?               @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
   passportsReceivedBy    User?               @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
   recallReason           RecallReason?       @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
+  shortfallClearedBy     User?               @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
+  shortfallReason        MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)
   embassy                Embassy?            @relation(fields: [embassyId], references: [id], onDelete: Restrict)
   vendor                 Vendor?             @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   docket                 Docket?             @relation(fields: [docketId], references: [id], onDelete: Restrict)
@@ -1245,6 +1254,19 @@ model CreditNoteReason {
 model RecallReason {
   id        Int        @id @default(autoincrement())
   /// EMBASSY_DELAY… Never changes.
+  code      String     @unique
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  visaCases VisaCase[]
+}
+
+/// Why fewer passports came back than went out, when the shortfall is cleared rather than found: "Embassy kept it",
+/// "Counted wrong at intake"… (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026). Never free
+/// text. Edited by the Visa HOD or the Head; switched off, never deleted.
+model MissingPassportReason {
+  id        Int     @id @default(autoincrement())
+  /// EMBASSY_KEPT… Never changes.
   code      String     @unique
   name      String
   sortOrder Int        @default(0)

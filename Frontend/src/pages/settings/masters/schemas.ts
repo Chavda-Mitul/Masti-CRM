@@ -197,6 +197,15 @@ export const recallReasonFormSchema = creditNoteReasonFormSchema.extend({
 })
 export type RecallReasonFormValues = z.infer<typeof recallReasonFormSchema>
 
+export const missingPassportReasonFormSchema = creditNoteReasonFormSchema.extend({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. EMBASSY_KEPT.'),
+})
+export type MissingPassportReasonFormValues = z.infer<typeof missingPassportReasonFormSchema>
+
 export const extraChargeFormSchema = creditNoteReasonFormSchema.extend({
   code: z
     .string()

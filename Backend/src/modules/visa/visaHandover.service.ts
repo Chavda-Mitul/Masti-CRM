@@ -11,6 +11,7 @@ import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import { MB } from "./casePdf";
 import type { EnquiryStatus } from "../../../generated/prisma/enums";
+import { assertNotHeldShort } from "./shortfall";
 import type { HandOverInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
@@ -20,9 +21,10 @@ import { countTravellers, travellerLabel } from "./visaCase";
 // any Visa staff with EDIT, who can open a case while its passports are in our stock (Decision 5), counts the booklets
 // (they must match our stock, Decision 4), records who collected them (a traveller, or someone else by name) and takes
 // their photo (Decisions 3 and 6), whatever the case's status (Decision 7). The case moves to Delivered and closes; a
-// cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it. Before dispatch, a
-// cancelled case's passports held at our office (counted in at intake) are handed back the same way, against the intake
-// count; that case stays at its step (docs/decisions/0006-visa-documents.md amendment 15, component 3).
+// cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it. A short return is
+// settled first (0013 Decision 5, amended 17 Oct 2026). Before dispatch, a cancelled case's passports held at our
+// office (counted in at intake) are handed back the same way, against the intake count; that case stays at its step
+// (docs/decisions/0006-visa-documents.md amendment 15, component 3).
 
 /** What a handover checks, read again under the lock (also the delivery boy's at the door, 0015 phase 5). */
 export async function gather(db: Db, enquiryId: string) {
@@ -30,10 +32,11 @@ export async function gather(db: Db, enquiryId: string) {
     where: { enquiryId },
     select: {
       passportsReceivedAt: true,
-      bookletsBackCurrent: true,
-      bookletsBackOld: true,
       bookletsCurrent: true,
       bookletsOld: true,
+      bookletsBackCurrent: true,
+      bookletsBackOld: true,
+      shortfallClearedAt: true,
       handover: { select: { enquiryId: true } },
       travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true } },
     },
@@ -43,14 +46,16 @@ export async function gather(db: Db, enquiryId: string) {
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
- * In our stock, and not handed over yet: received at Step 7, or before dispatch, a cancelled case's passports counted in
- * at intake. Returns what our stock holds, which the count must match. The delivery boy's handover at the door checks
- * the same (0015 phase 5).
+ * In our stock, and not handed over yet: received at Step 7 (and not held by a short return: the rest come in, or the
+ * shortfall is cleared, first; 0013 Decision 5, amended 17 Oct 2026), or before dispatch, a cancelled case's passports
+ * counted in at intake. Returns what our stock holds, which the count must match. The delivery boy's handover at the
+ * door checks the same (0015 phase 5).
  */
 export function assertInStock(g: Gathered, c: { status: string; stage: { code: string } }) {
   if (c.stage.code === "PASSPORT_BACK") {
     if (!g.passportsReceivedAt) throw conflict("Mark the passports received first.");
     if (g.handover) throw conflict("The passports are already handed over.");
+    assertNotHeldShort({ ...g, travellerCount: g.travellers.length });
     return { current: g.bookletsBackCurrent!, old: g.bookletsBackOld! };
   }
   if (g.handover) throw conflict("The passports are already handed over.");
