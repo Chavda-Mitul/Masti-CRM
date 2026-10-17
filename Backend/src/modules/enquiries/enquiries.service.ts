@@ -6,6 +6,7 @@ import { badRequest, forbidden } from "../../lib/httpError";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 import { countTravellers, travellersLabel } from "../visa/visaCase";
+import { visaNextStep } from "../visa/visaNextStep";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
@@ -154,6 +155,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       reason: row.reason,
       resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
+      /** This case's next step: the step's own, except where a visa case's state decides it (visaNextStep). */
+      nextStep: visaNextStep(row.stage, row.visa),
       source: row.source,
       origin: row.origin,
       owner: row.owner,

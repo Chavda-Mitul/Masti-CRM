@@ -285,7 +285,7 @@ function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; o
         </div>
         <StageBar step={row.stage.step} of={row.stage.of} color={style.solid} />
       </td>
-      <td className="small col-next">{statusNote(row) ?? row.stage.nextStepLabel}</td>
+      <td className="small col-next">{statusNote(row) ?? row.nextStep}</td>
       <td className={`small due due-${due.tone}`}>{due.text}</td>
       <td>
         {row.owner ? (
@@ -356,7 +356,7 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
       <div className="lbl" style={{ marginTop: 18 }}>
         {row.status === 'OPEN' ? 'Next step' : 'Status'}
       </div>
-      <div style={{ fontWeight: 700, marginTop: 4 }}>{statusNote(row) ?? row.stage.nextStepLabel}</div>
+      <div style={{ fontWeight: 700, marginTop: 4 }}>{statusNote(row) ?? row.nextStep}</div>
       <div className="small" style={{ marginTop: 2 }}>
         {row.dueAt && (
           <>

@@ -35,6 +35,8 @@ export interface EnquiryRow {
   /** When a postponed case comes back, YYYY-MM-DD. */
   resumeOn: string | null
   stage: StageRef
+  /** This case's next step: the step's own label, except where the case decides it ("Mark received" in transit). */
+  nextStep: string
   source: { code: string; name: string }
   origin: EnquiryOrigin
   owner: PersonRef | null
