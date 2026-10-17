@@ -74,7 +74,8 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
   our office is open: Sundays and office holidays are struck through on the calendar and refused by the server).
 - **The case moves to Step 7 · Passport back, In transit,** due on the expected day at 11:00 ⚠️
   (`visa.arrivalCheck`), on the processor's desk, to check the passports have arrived.
-- **Who:** the case's processor, the Visa HOD or the Head, while the case is open.
+- **Who:** the case's processor, the Visa HOD or the Head, while the case is open (or cancelled: amended 17 Oct 2026,
+  [0006](0006-visa-documents.md) amendment 15, so a cancelled case's passports still come back).
 - **From Step 6:** "Passports on the way back →" in the header.
 - **A recalled file** is already at Step 7, so the same button shows there until it's in transit. Everything else is
   the same, with no stickers to check later.
@@ -111,8 +112,8 @@ and a collected day can be mistyped.
   change request.
 
 **Defaults (not asked; say if any is wrong):**
-- **Who and when:** the processor, the Visa HOD or the Head, while the case is open at Passport back and the passports
-  are in transit (component 3 adds "not yet received").
+- **Who and when:** the processor, the Visa HOD or the Head, while the case is open (or cancelled: 0006 amendment 15)
+  at Passport back and the passports are in transit (component 3 adds "not yet received").
 - **What stays:** who recorded them on the way back, and when. The due time moves with the expected day.
 - **Collected day:** no later than the day they were recorded on the way back.
 - **Saving:** a save that changes nothing writes nothing, and a stale page is refused.
@@ -151,7 +152,9 @@ an e-visa.
 
 **Decided 17 Oct 2026 (project lead):**
 - **Whatever the case's status:** the passports can be marked received on a postponed or cancelled case too (chain of
-  custody: the packet is here). The case keeps its status; only an open case gets a new due time.
+  custody: the packet is here). The case keeps its status; an open or cancelled case gets the handover check as its
+  due time (a cancelled one since 0006 amendment 15, so it stays on the list until handed back); a postponed one keeps
+  its resume day.
 - **No correction for now:** a saved receipt is fixed, and audited. If Masti asks for corrections, it's its own
   component.
 - **Counting:** the booklet boxes start blank, with intake's count beside them; a difference turns red as staff type.

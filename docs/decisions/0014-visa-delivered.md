@@ -87,7 +87,8 @@ file (e.g. taken on a phone). On a phone or tablet the page opens the camera. Ca
 
 **Decided 17 Oct 2026 (project lead):** the passports are handed over whatever the case's status (chain of custody). An
 open or postponed case becomes **Delivered** and **closed**; a cancelled case stays cancelled, with its reason, but
-records the handover and moves to Delivered.
+records the handover and moves to Delivered. How a case cancelled after dispatch gets here (recall, on the way back,
+received) and stays on its owner's list until then: [0006](0006-visa-documents.md) amendment 15 (17 Oct 2026).
 
 **Built 17 Oct 2026** (component 1, the office handover, Decisions 3–7):
 - **Data** (migration `20261017120000_office_handover`): `VisaHandover` (one per case: `mode` OFFICE / DELIVERY, `at`,

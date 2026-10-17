@@ -47,6 +47,39 @@ Amended 17 Oct 2026 (project lead), with Step 8 ([0014](0014-visa-delivered.md) 
     [0015](0015-field-staff-app.md): booked from Step 2 with the boy, a day and a time slot; at the door he counts the
     booklets, takes the client's OTP and his selfie with place and time, and his count becomes the intake count.
 
+Amended 17 Oct 2026 (project lead), after the 17 Oct browser review found that a case cancelled at the vendor
+stranded the client's passports (nothing could move again):
+
+15. **Cancelling doesn't end the passports' way back.** Cancel stays possible at every step (Decision 6), but a paper
+    file that went to the vendor still comes back to the client, with the usual proof:
+    - **"To hand back":** a case whose file was dispatched in a docket and whose passports aren't handed over yet.
+      An e-visa never is.
+    - **What still works on such a cancelled case:** "Take the file back" ([0011](0011-visa-at-vendor.md) Decision 6),
+      "Passports on the way back" and its "Change" ([0013](0013-visa-passport-back.md) Decision 3, component 2), as
+      on an open case. Mark received and the handover already worked whatever the status (0013 Decision 5,
+      [0014](0014-visa-delivered.md) Decision 7). The case stays Cancelled, with its reason, and moves to Delivered
+      at the handover. Vendor got it, the submission, the decision and its correction, Log call and reassigning stay
+      refused.
+    - **It stays on its owner's list until the handover** (and on the HOD's): the enquiries list's Open tab shows it
+      too, as "Cancelled · reason · passports still to hand back", and it counts toward running late. Cancelling gives
+      it a due time instead of none: **now** at At vendor (take the file back) or when it was postponed (its due time
+      was the resume day); otherwise it **keeps the due time it had** (the check after the decision, the arrival day,
+      the handover check). Each later step sets its own, as on an open case: a cancelled case now also gets the
+      handover check when its passports are received. The handover clears it.
+    - **Money:** a recall issues its own part credit note (each traveller's embassy fee; the Visa HOD can give back
+      more), and a whole credit note is refused after a part one, so a case cancelled at the vendor settles its refund
+      in the recall dialog. If the invoice was already cancelled whole (no replacement), a cancelled case's recall
+      gives nothing back and issues no credit note; an open case still raises a replacement first.
+    - **Following as their own components:** "Cancel with a credit note" on a cancelled case, with the cancel dialog
+      warning while an invoice stands (a cancellation charge Masti keeps is billed before cancelling); and a
+      "Hand back to the client", with the office handover's proof, for passports counted in before dispatch (not a
+      demo screen).
+    - **For the field app ([0015](0015-field-staff-app.md)):** a delivery booked to hand the passports back should
+      stay booked when the case is cancelled, and booking one should give a cancelled case its due time, as on an
+      open one. Until that's changed there, cancelling still calls off a booked job.
+
+    *Supersedes Decision 6's "with no due time" for these cases.* To confirm with Vimal: M41.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
@@ -143,7 +176,8 @@ These live on the shared `Enquiry`, so Holidays, Hotels and the others reuse the
 
 **Cancel:**
 
-- Needs a CANCEL reason. Status becomes `CANCELLED`, with no due time.
+- Needs a CANCEL reason. Status becomes `CANCELLED`, with no due time (unless its passports are still to hand back:
+  amendment 15).
 - Not reopened in this build. If needed, it's a later HOD action.
 
 **Reassign:**

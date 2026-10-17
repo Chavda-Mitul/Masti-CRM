@@ -271,6 +271,11 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
   Masti's service charge**, so the part credit note carries no GST, and M38(b) doesn't arise.
 - **After the recall:** due the next office day at 11:00 ⚠️ (`visa.recallReturn`), to chase the vendor for the papers.
 
+**Amended 17 Oct 2026 (project lead), [0006](0006-visa-documents.md) amendment 15:** a **cancelled** case is recalled
+too (step rule `RECALLING`: At vendor, open or cancelled; a postponed case is still resumed first), so its passports
+come back. The reason starts on "Client cancelled the trip". If its invoice was already cancelled whole with no
+replacement, the recall gives nothing back and issues no credit note.
+
 **Built 15 Oct 2026** (component 4, in two steps):
 
 - **4a, the recall-reasons list** (`b868c7f`):
