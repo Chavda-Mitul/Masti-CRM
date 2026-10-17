@@ -4,7 +4,7 @@ import type { Actor } from "../users/user";
 
 // The field staff app (docs/decisions/0015-field-staff-app.md): what every desk's field jobs share, whatever the
 // department that raised them. The visa case's side (booking a pickup or a delivery) is in visa/visaFieldJobs.service.ts;
-// the boy's own side comes with his phone website (phase 3).
+// the boy's own side (his run, his stops, what he records) is in fieldStops.service.ts.
 
 /** The field staff a job can go to: active FIELD users (the Head adds them on the Users page), by name. */
 export async function listFieldStaff() {

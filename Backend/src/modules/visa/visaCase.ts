@@ -81,6 +81,8 @@ export const visaCaseInclude = {
       slot: { select: { id: true, name: true, startsAt: true, endsAt: true } },
       createdBy: personSelect,
       cancelledBy: personSelect,
+      failReason: { select: { id: true, name: true } },
+      selfie: { select: { id: true, fileName: true } },
     },
   },
   stage: true,
@@ -418,6 +420,14 @@ export function toVisaCaseDto(
       bookedBy: j.createdBy,
       cancelledAt: j.cancelledAt,
       cancelledBy: j.cancelledBy,
+      /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it failed. */
+      finishedAt: j.finishedAt,
+      place: j.latitude !== null && j.longitude !== null && j.accuracyM !== null ? { lat: j.latitude, lng: j.longitude, accuracy: j.accuracyM } : null,
+      failReason: j.failReason,
+      /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+      counted: j.bookletsCurrent !== null && j.bookletsOld !== null ? { current: j.bookletsCurrent, old: j.bookletsOld } : null,
+      selfie: j.selfie,
+      otpConfirmedAt: j.otpConfirmedAt,
     })),
     source: row.source,
     origin: row.origin,
@@ -526,6 +536,8 @@ export function toVisaCaseDto(
       booklets: { current: visa.handover.bookletsCurrent, old: visa.handover.bookletsOld },
       receiver: { name: receiverName(visa.handover, visa.travellers, adults), travellerId: visa.handover.receiverTravellerId },
       photo: visa.handover.receiverPhoto,
+      /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) the case sends. */
+      fieldJobId: visa.handover.fieldJobId,
     },
     /** The GST rate on the service charge (the setting visa.invoice), for a quote being entered. */
     gstRatePercent,

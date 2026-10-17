@@ -204,6 +204,14 @@ export interface FieldJob {
   bookedBy: PersonRef | null
   cancelledAt: string | null
   cancelledBy: PersonRef | null
+  /** Done or couldn't complete (0015 phase 4): when, the place his phone gave, and why it couldn't be. */
+  finishedAt: string | null
+  place: { lat: number; lng: number; accuracy: number } | null
+  failReason: { id: number; name: string } | null
+  /** Done (0015 Decision 4): the booklets he counted, his selfie, and when the client confirmed the code. */
+  counted: { current: number; old: number } | null
+  selfie: { id: string; fileName: string } | null
+  otpConfirmedAt: string | null
 }
 
 /** Who can be sent: the active field staff (GET /api/visa/field-staff). */
@@ -221,6 +229,8 @@ export interface Handover {
   booklets: { current: number; old: number }
   receiver: { name: string; travellerId: string | null }
   photo: { id: string; fileName: string } | null
+  /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) is on the case's field jobs. */
+  fieldJobId: string | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */

@@ -191,7 +191,7 @@ describe("what is refused", () => {
     const othersPhoto = (await photo(processor, other.c.caseNo)).body.photo.id;
     expect(await issue({ photoId: othersPhoto }, "photoId")).toEqual(["Take a photo of the person collecting."]);
     expect(await issue({ photoId: undefined }, "photoId")).toEqual(["Take a photo of the person collecting."]);
-    expect(await issue({ mode: "DELIVERY" }, "mode")).toEqual(["The delivery boy's handover comes with his phone screen."]);
+    expect(await issue({ mode: "DELIVERY" }, "mode")).toEqual(["The delivery boy hands over from his phone."]);
     expect(await prisma.visaHandover.count()).toBe(0);
   });
 
@@ -248,7 +248,7 @@ describe("afterwards", () => {
 });
 
 describe("the database", () => {
-  it("keeps a photo without pages, one receiver, an office photo, the counts, and a closed case undue", async () => {
+  it("keeps a photo without pages, one receiver, a photo, the door's job, the counts, and a closed case undue", async () => {
     const { c, adult } = await receivedCase();
     const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
     const file =(data: Record<string, unknown>) =>
@@ -264,9 +264,12 @@ describe("the database", () => {
     await expect(handover({ receiverName: "Sunita Patel" })).rejects.toThrow(/VisaHandover_one_receiver/);
     await expect(handover({ receiverTravellerId: null })).rejects.toThrow(/VisaHandover_one_receiver/);
     await expect(handover({ receiverTravellerId: null, receiverName: " " })).rejects.toThrow(/VisaHandover_receiver_name/);
-    await expect(handover({ receiverPhotoId: null })).rejects.toThrow(/VisaHandover_office_photo/);
+    // A handover at the door, and only one, points at the boy's job (0015 phase 5).
+    await expect(handover({ mode: "DELIVERY" })).rejects.toThrow(/VisaHandover_field_job/);
     await expect(handover({ bookletsCurrent: 0 })).rejects.toThrow(/VisaHandover_booklets_range/);
     await handover({});
+    // The photo is required for both kinds of handover (0015 phase 5).
+    await expect(prisma.$executeRaw`UPDATE "VisaHandover" SET "receiverPhotoId" = NULL`).rejects.toThrow(/receiverPhotoId/);
 
     await expect(prisma.enquiry.update({ where: { id: c.id }, data: { status: "CLOSED", dueAt: new Date() } })).rejects.toThrow(/Enquiry_closed_not_due/);
   });

@@ -340,3 +340,4 @@ export type MasterResource =
   | 'recall-reasons'
   | 'extra-charges'
   | 'field-slots'
+  | 'field-fail-reasons'

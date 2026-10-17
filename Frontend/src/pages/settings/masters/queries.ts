@@ -270,6 +270,7 @@ interface MasterRow {
   'recall-reasons': RecallReason
   'extra-charges': ExtraCharge
   'field-slots': FieldSlot
+  'field-fail-reasons': FollowUpOption
 }
 
 /** The JSON key each list and save comes back under. */
@@ -290,6 +291,7 @@ const LIST_KEY = {
   'recall-reasons': 'recallReasons',
   'extra-charges': 'extraCharges',
   'field-slots': 'slots',
+  'field-fail-reasons': 'reasons',
 } as const
 const ITEM_KEY = {
   countries: 'country',
@@ -308,6 +310,7 @@ const ITEM_KEY = {
   'recall-reasons': 'recallReason',
   'extra-charges': 'extraCharge',
   'field-slots': 'slot',
+  'field-fail-reasons': 'reason',
 } as const
 
 /** Every row, switched-off ones too: the screens filter. */
@@ -344,7 +347,7 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
         return
       }
       // The document problems, couriers and the reasons lists change nothing else: the case page reads these lists.
-      if (['document-problem-reasons', 'couriers', 'credit-note-reasons', 'recall-reasons', 'extra-charges', 'field-slots'].includes(resource)) return
+      if (['document-problem-reasons', 'couriers', 'credit-note-reasons', 'recall-reasons', 'extra-charges', 'field-slots', 'field-fail-reasons'].includes(resource)) return
       // A case's quote shows its processing speed by name.
       if (resource === 'processing-speeds') {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })

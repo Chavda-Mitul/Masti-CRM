@@ -2,7 +2,10 @@ import { prisma } from "../../config/prisma";
 import { definedOnly, onlyChanged } from "../../lib/changes";
 import { fieldError, forbidden, notFound } from "../../lib/httpError";
 import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
+import { saveSetting } from "../../lib/settings";
 import { isHodOfAny } from "../auth/permissions";
+import type { UpdateFieldSettingsInput } from "../fieldJobs/field.schemas";
+import { FIELD_SETTINGS_KEY, getFieldSettings } from "../fieldJobs/fieldJobs.settings";
 import type { Actor, UserWithDepartments } from "../users/user";
 import type {
   CreateOptionInput,
@@ -141,4 +144,46 @@ export async function updateSlot(id: number, input: UpdateSlotInput, actor: Acto
     entityId: id,
     write: (tx) => tx.fieldSlot.update({ where: { id }, data: changes }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Why a visit fails, for the boy's "Couldn't complete" (docs/decisions/0015-field-staff-app.md Decision 5)
+// ---------------------------------------------------------------------------
+
+export async function listFailReasons(active?: boolean) {
+  return prisma.fieldFailReason.findMany({ where: activeFilter(active), orderBy: order });
+}
+
+export async function createFailReason(input: CreateOptionInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  return createAudited(actor, "fieldFailReason.create", "FieldFailReason", (tx) => tx.fieldFailReason.create({ data: input }));
+}
+
+export async function updateFailReason(id: number, input: UpdateOptionInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  const before = await prisma.fieldFailReason.findUnique({ where: { id } });
+  if (!before) throw notFound("Reason not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "fieldFailReason.update",
+    entityType: "FieldFailReason",
+    entityId: id,
+    write: (tx) => tx.fieldFailReason.update({ where: { id }, data: changes }),
+  });
+}
+
+/**
+ * The field staff app's settings (0015 Decision 8), changed by the Head or any HOD like the field lists: only what was
+ * sent changes; an unchanged save writes nothing. Audited (setting.update).
+ */
+export async function updateFieldSettings(input: UpdateFieldSettingsInput, actor: Actor) {
+  assertCanEdit(actor.user);
+  const before = await getFieldSettings();
+  const after = { ...before, ...definedOnly(input) };
+  if (JSON.stringify(after) === JSON.stringify(before)) return before;
+  await prisma.$transaction((tx) => saveSetting(tx, { key: FIELD_SETTINGS_KEY, before, after, actorId: actor.user.id, ip: actor.ip }));
+  return getFieldSettings();
 }

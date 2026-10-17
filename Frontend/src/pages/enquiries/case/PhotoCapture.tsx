@@ -1,31 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { errorText } from '../../../lib/apiErrors'
+import { fileToJpeg, toJpeg } from '../../../lib/photos'
 import { useUploadHandoverPhoto } from '../queries'
-
-/** The longest side a photo is shrunk to before it's sent (0014 Decision 6): enough to know a face, quick to upload. */
-const MAX_SIDE = 1600
-
-/** Draws a picture no larger than MAX_SIDE and returns it as a JPEG. */
-function toJpeg(source: CanvasImageSource, width: number, height: number): Promise<Blob> {
-  const scale = Math.min(1, MAX_SIDE / Math.max(width, height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(width * scale)
-  canvas.height = Math.round(height * scale)
-  canvas.getContext('2d')?.drawImage(source, 0, 0, canvas.width, canvas.height)
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('The photo couldn’t be made. Take it again.'))), 'image/jpeg', 0.85),
-  )
-}
-
-/** A picked file, shrunk the same way. */
-async function fileToJpeg(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file)
-  try {
-    return await toJpeg(bitmap, bitmap.width, bitmap.height)
-  } finally {
-    bitmap.close()
-  }
-}
 
 /** A photo saved for the handover: its case file, and a local preview of it. */
 export interface UploadedPhoto {
@@ -55,13 +31,19 @@ export function PhotoCapture({
   const video = useRef<HTMLVideoElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  // Capture waits for the first frames: before them a picture would come out black.
+  const [live, setLive] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const hasCamera = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
   // The camera is switched off once a photo is taken, cancelled, or the dialog closes.
   useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream])
   useEffect(() => {
-    if (video.current && stream) video.current.srcObject = stream
+    const v = video.current
+    if (!v || !stream) return
+    v.srcObject = stream
+    // autoPlay alone doesn't start a camera stream everywhere (iOS Safari, a headless browser): ask for it.
+    void v.play().catch(() => undefined)
   }, [stream])
 
   const send = (blob: Blob) => {
@@ -75,6 +57,7 @@ export function PhotoCapture({
   const start = async () => {
     setProblem(null)
     try {
+      setLive(false)
       setStream(await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }))
     } catch {
       setProblem('The camera is blocked or missing. Upload a photo instead.')
@@ -123,10 +106,10 @@ export function PhotoCapture({
     <div className="photo-capture">
       {stream ? (
         <>
-          <video ref={video} className="photo-preview" autoPlay playsInline muted aria-label="Camera" />
+          <video ref={video} className="photo-preview" autoPlay playsInline muted aria-label="Camera" onPlaying={() => setLive(true)} />
           <span className="photo-actions">
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => void capture()}>
-              Capture
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => void capture()} disabled={!live}>
+              {live ? 'Capture' : 'Starting the camera…'}
             </button>
             <button type="button" className="btn btn-sm" onClick={() => setStream(null)}>
               Cancel

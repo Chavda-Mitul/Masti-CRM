@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { istToday } from '../../../lib/format'
+import { addDays, istToday } from '../../../lib/format'
 import { useBlockedDays } from '../../settings/masters/queries'
 import type { BlockTarget } from '../../settings/masters/types'
 import { longDate } from './labels'
@@ -12,7 +12,6 @@ const MAX_DAYS_AHEAD = 366
 
 const utc = (day: string) => new Date(`${day}T00:00:00Z`)
 const iso = (d: Date) => d.toISOString().slice(0, 10)
-const addDays = (day: string, n: number) => iso(new Date(utc(day).getTime() + n * 86_400_000))
 
 /** "2026-10": its first and last day, its length, and how many cells to leave before the 1st (Monday first). */
 function monthOf(ym: string) {

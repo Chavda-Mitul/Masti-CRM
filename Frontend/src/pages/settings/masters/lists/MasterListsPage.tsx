@@ -35,6 +35,7 @@ type ListTab =
   | 'recall-reasons'
   | 'extra-charges'
   | 'field-slots'
+  | 'field-fail-reasons'
 
 /** `visa`: read with Visa access, changed by the Visa HOD or the Head. `shared`: every department's, changed by any HOD. */
 const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User) => boolean; editors: string }[] = [
@@ -60,13 +61,14 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'field-slots', label: 'Time slots', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
+  { value: 'field-fail-reasons', label: 'Visit fail reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
 ]
 
 /**
  * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources,
  * vendors, couriers, credit-note and recall reasons and extra charges are the Visa department's;
- * embassies, the follow-up and reason dropdowns and the field staff's time slots are shared by every department
- * (changed by any HOD).
+ * embassies, the follow-up and reason dropdowns, and the field staff's time slots and visit fail reasons are shared by
+ * every department (changed by any HOD).
  */
 export function MasterListsPage() {
   const { data: me } = useMe()
@@ -122,7 +124,7 @@ export function MasterListsPage() {
       {tab === 'documents' && <DocumentsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'document-problem-reasons' && <DocumentProblemsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'enquiry-sources' && <EnquirySourcesTable canEdit={canEdit} showInactive={showInactive} />}
-      {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps' || tab === 'processing-speeds') && (
+      {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps' || tab === 'processing-speeds' || tab === 'field-fail-reasons') && (
         <FollowUpOptionsTable key={tab} resource={tab} canEdit={canEdit} showInactive={showInactive} />
       )}
       {tab === 'enquiry-reasons' && <EnquiryReasonsTable canEdit={canEdit} showInactive={showInactive} />}
