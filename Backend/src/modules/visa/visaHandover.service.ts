@@ -7,6 +7,7 @@ import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { deleteObject, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
+import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import { MB } from "./casePdf";
 import type { HandOverInput } from "./visa.schemas";
@@ -123,7 +124,8 @@ async function checkPhoto(db: Db, enquiryId: string, photoId: string) {
  * "Hand over to the client" at the office (Decisions 3–7), by any Visa staff with EDIT, whatever the case's status. In
  * one transaction under the case lock: the handover (how, when, who handed over, the booklets, who collected them,
  * their photo); the move to Delivered with no due time; an open or postponed case closes (its reason and resume date
- * cleared), a cancelled one stays cancelled; and the audit (visa.handover).
+ * cleared), a cancelled one stays cancelled; a delivery booked for the boy is called off (0015); and the audit
+ * (visa.handover).
  */
 export async function handOver(caseNo: string, input: HandOverInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, HANDING_OVER);
@@ -147,6 +149,8 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
       where: { id: enquiry.id },
       data: { stageId: delivered.id, dueAt: null, ...(closes ? { status: "CLOSED", reasonId: null, resumeOn: null } : {}) },
     });
+    // Handed over here: a delivery booked for the boy is called off (0015).
+    const fieldJobsCancelled = await cancelBookedFieldJobs(tx, enquiry.id, actor, "handed over at the office");
     await tx.visaHandover.create({
       data: {
         enquiryId: enquiry.id,
@@ -176,6 +180,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
           receiver,
           receiverIsTraveller: !!input.receiver.travellerId,
           photoId: input.photoId,
+          ...(fieldJobsCancelled.length > 0 ? { fieldJobsCancelled } : {}),
         },
         ip: actor.ip,
       },

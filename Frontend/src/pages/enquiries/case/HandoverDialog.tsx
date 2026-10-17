@@ -4,6 +4,7 @@ import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useHandOver } from '../queries'
 import type { VisaCase } from '../types'
+import { FieldJobDialog } from './FieldJobDialog'
 import { bookletsText } from './labels'
 import { PhotoCapture, type UploadedPhoto } from './PhotoCapture'
 
@@ -14,7 +15,8 @@ const SOMEONE_ELSE = 'someone-else'
  * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 3–7), for whoever is at the
  * desk: the booklets counted again into blank boxes (they must match our stock, or it's refused: find what's missing
  * first), who collected them (a traveller, or someone else by name) and a photo of that person. Saving it closes the
- * case. The delivery boy's handover comes with his phone screen.
+ * case. "Our delivery boy" books him instead, or changes his booking (0015 phase 2); the doorstep handover itself is his
+ * (phase 5).
  */
 export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const { data: me } = useMe()
@@ -30,6 +32,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
   const counted = current !== '' && old !== '' ? { current: Number(current), old: Number(old) } : null
   const matches = !!counted && counted.current === stock.current && counted.old === stock.old
   const busy = hand.isPending
+  const [delivery, setDelivery] = useState(false)
   /** A field's message goes as soon as it's changed. */
   const fixed = (field: string) => setErrors((all) => (all[field] ? { ...all, [field]: '' } : all))
 
@@ -84,6 +87,12 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
     </label>
   )
 
+  // "Our delivery boy": the booking form for the delivery (or the booked one's Change) takes over.
+  if (delivery) {
+    const booked = c.fieldJobs.find((j) => j.kind === 'DELIVERY' && j.status === 'BOOKED')
+    return <FieldJobDialog visaCase={c} kind="DELIVERY" job={booked} onClose={onClose} />
+  }
+
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog submission-dialog" role="dialog" aria-modal="true" aria-labelledby="handover-title" onClick={(e) => e.stopPropagation()}>
@@ -94,7 +103,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
           <button type="button" role="radio" aria-checked className="on">
             Client collects from office
           </button>
-          <button type="button" role="radio" aria-checked={false} disabled title="Comes next, with the delivery boy’s screen">
+          <button type="button" role="radio" aria-checked={false} disabled={busy} onClick={() => setDelivery(true)}>
             Our delivery boy
           </button>
         </span>

@@ -1,7 +1,7 @@
 # 0015 · The field staff app (collection and delivery boy)
 
 - **Status:** decided (17 Oct 2026, project lead). Being built one phase at a time (Decision 1). Built: booking a
-  pickup (17 Oct 2026, phase 1). A "Built" note is added under each part as its phase lands.
+  pickup (17 Oct 2026, phase 1); booking a delivery (17 Oct 2026, phase 2). A "Built" note is added under each part as its phase lands.
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home
@@ -104,6 +104,19 @@ recorded, and the case comes back to the office, due now, to book again.
   optional Google Maps link, the client's mobile he'll call; without the client's email it says so and won't book).
   Once booked: "Collection boy · Ramesh · Mon 19 Oct, 4–6 pm", "Pick up from · … · Map", **Change** and **Cancel**
   ("Call off Ramesh's pickup?", asked in the page).
+
+**Built 17 Oct 2026** (phase 2, book a delivery):
+- The same `POST /api/visa/cases/:caseNo/field-jobs` with `kind: "DELIVERY"`, by any Visa staff with EDIT, whatever the
+  case's status (the office handover's rule, `HANDING_OVER`), once the passports are in our stock. Refused with 409 at
+  another step, before they're received ("Mark the passports received first."), without the client's email, or when a
+  delivery is booked already. An open case is due at the slot's end; a postponed or cancelled one keeps its due time.
+  Change and Cancel as for a pickup.
+- **The office handover calls a booked delivery off**, in the same save (audited, "handed over at the office"; the
+  handover's audit lists it).
+- **Screen:** the office handover's **Our delivery boy** toggle opens "Book the delivery boy" (or the booked one's
+  Change), with "He hands over 2 current + 1 old"; on the Passports coming back card, "Delivery boy · Ramesh · Mon 19
+  Oct, 11 am – 1 pm", "Deliver to · …", Change and Cancel, or **Book the delivery boy**. The pickup and delivery lines
+  share `FieldJobLines`; the dialog takes the kind.
 
 ### 6. Settings and lists (golden rule 1)
 

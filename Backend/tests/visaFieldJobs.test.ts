@@ -5,12 +5,13 @@ import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { decidedCase, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The field staff app, phase 1 (docs/decisions/0015-field-staff-app.md): booking the collection boy to pick a case's
 // documents up at Steps 1–2. The boy (an active FIELD user), an open office day and a time slot from the list; the
 // address (with an optional Google Maps link); the client's email on file for their one-time code. One booked pickup
-// per case, changed or cancelled while booked; the case is due at the slot's end.
+// per case, changed or cancelled while booked; the case is due at the slot's end. Phase 2: the delivery boy, once the
+// passports are in our stock, booked by any Visa staff; the office handover calls him off.
 
 beforeEach(async () => {
   await resetDb();
@@ -292,5 +293,110 @@ describe("the database", () => {
     await expect(set({ status: "CANCELLED" })).rejects.toThrow(/FieldJob_cancelled/);
     await expect(set({ cancelledAt: new Date(), cancelledById: job.createdById })).rejects.toThrow(/FieldJob_cancelled/);
     await set({ status: "CANCELLED", cancelledAt: new Date(), cancelledById: job.createdById });
+  });
+});
+
+describe("Book the delivery boy (phase 2)", () => {
+  /** Mehta's passports in our stock (receivedCase: Neha's), the client's email on file, Ramesh, and Kiran at the desk. */
+  async function deliveryCase() {
+    const d = await receivedCase();
+    await prisma.client.update({ where: { id: d.c.client.id }, data: { email: "rakesh@example.com" } });
+    await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
+    await createUser({ name: "Kiran Desai", email: "kiran@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    return { ...d, kiran: await loginAs("kiran@masti.test") };
+  }
+  /** A small "JPEG": the server checks a photo's first bytes, not the picture. */
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+
+  it("any Visa staff books him for passports in our stock: the job, the case due at the slot's end, audited", async () => {
+    const { c, kiran } = await deliveryCase();
+    const before = await load(kiran, c.caseNo);
+    const day = await openDay();
+    const res = await book(kiran, c.caseNo, { kind: "DELIVERY", day });
+    expect(res.status).toBe(200);
+    const after = res.body.case as CaseDto;
+    expect(after.fieldJobs[0]).toMatchObject({ kind: "DELIVERY", status: "BOOKED", assignee: { name: "Ramesh" }, day, slot: { name: "4–6 pm" }, bookedBy: { name: "Kiran Desai" } });
+    expect(after.arrival).toBe(before.arrival);
+    expect(after.dueAt).toBe(istDateTimeToUtc(day, "18:00").toISOString());
+    expect((await prisma.auditLog.findFirstOrThrow({ where: { action: "field.job.book" } })).after).toMatchObject({ kind: "DELIVERY", boy: "Ramesh" });
+  });
+
+  it("not before the passports are in our stock, not twice, not without the client's email, not view-only", async () => {
+    const { c, processor } = await decidedCase();
+    await prisma.client.update({ where: { id: c.client.id }, data: { email: "rakesh@example.com" } });
+    await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
+    const atDecision = await book(processor, c.caseNo, { kind: "DELIVERY" });
+    expect(atDecision.status).toBe(409);
+    expect(atDecision.body.message).toBe("Passports are handed over from Passport back.");
+    const decided = (await load(processor, c.caseNo)).updatedAt;
+    const expectedOn = await openDay(2);
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/passports-back`).send({ collectedOn: istToday(), expectedOn, updatedAt: decided })).status).toBe(200);
+    const inTransit = await book(processor, c.caseNo, { kind: "DELIVERY" });
+    expect(inTransit.status).toBe(409);
+    expect(inTransit.body.message).toBe("Mark the passports received first.");
+
+    const other = await receivedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
+    const noEmail = await book(processor, other.c.caseNo, { kind: "DELIVERY" });
+    expect(noEmail.body.details.code).toBe("CLIENT_EMAIL_MISSING");
+    await prisma.client.update({ where: { id: other.c.client.id }, data: { email: "kiran@example.com" } });
+    expect((await book(processor, other.c.caseNo, { kind: "DELIVERY" })).status).toBe(200);
+    const twice = await book(processor, other.c.caseNo, { kind: "DELIVERY" });
+    expect(twice.status).toBe(409);
+    expect(twice.body.message).toBe("The delivery boy is already booked for this case.");
+
+    await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+    const seen = (await load(processor, other.c.caseNo)).updatedAt;
+    const ramesh = await prisma.user.findUniqueOrThrow({ where: { mobile: "+919825000001" } });
+    const body = { kind: "DELIVERY", assigneeId: ramesh.id, day: await openDay(), slotId: (await slot("EVENING")).id, address: ADDRESS, updatedAt: seen };
+    expect((await (await loginAs("meena@masti.test")).post(`/api/visa/cases/${other.c.caseNo}/field-jobs`).send(body)).status).toBe(403);
+  });
+
+  it("a postponed case can have its delivery booked; its due time stays", async () => {
+    const { c, kiran } = await deliveryCase();
+    await prisma.enquiry.update({
+      where: { id: c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addMonths(istToday(), 1)) },
+    });
+    const before = await load(kiran, c.caseNo);
+    const res = await book(kiran, c.caseNo, { kind: "DELIVERY" });
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).dueAt).toBe(before.dueAt);
+  });
+
+  it("desk staff change and cancel it", async () => {
+    const { c, processor, kiran } = await deliveryCase();
+    expect((await book(processor, c.caseNo, { kind: "DELIVERY" })).status).toBe(200);
+    const seen = await load(kiran, c.caseNo);
+    const job = seen.fieldJobs[0]!;
+    const morning = await slot("MORNING");
+    const changed = await kiran
+      .put(`/api/visa/cases/${c.caseNo}/field-jobs/${job.id}`)
+      .send({ assigneeId: job.assignee.id, day: job.day, slotId: morning.id, address: job.address, updatedAt: seen.updatedAt });
+    expect(changed.status).toBe(200);
+    expect((changed.body.case as CaseDto).fieldJobs[0]!.slot.name).toBe("11 am – 1 pm");
+    const fresh = (await load(kiran, c.caseNo)).updatedAt;
+    const cancelled = await kiran.post(`/api/visa/cases/${c.caseNo}/field-jobs/${job.id}/cancel`).send({ updatedAt: fresh });
+    expect(cancelled.status).toBe(200);
+    expect((cancelled.body.case as CaseDto).fieldJobs[0]).toMatchObject({ status: "CANCELLED", cancelledBy: { name: "Kiran Desai" } });
+  });
+
+  it("the office handover calls a booked delivery off", async () => {
+    const { c, processor } = await deliveryCase();
+    expect((await book(processor, c.caseNo, { kind: "DELIVERY" })).status).toBe(200);
+    const job = await prisma.fieldJob.findFirstOrThrow();
+    const photo = await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG);
+    expect(photo.status).toBe(200);
+    const seen = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+    const handed = await processor.post(`/api/visa/cases/${c.caseNo}/handover`).send({
+      mode: "OFFICE",
+      booklets: { current: 2, old: 0 },
+      receiver: { travellerId: seen.travellers[0].id },
+      photoId: photo.body.photo.id,
+      updatedAt: seen.updatedAt,
+    });
+    expect(handed.status).toBe(200);
+    expect(await prisma.fieldJob.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: "CANCELLED" });
+    expect((await prisma.auditLog.findFirstOrThrow({ where: { action: "field.job.cancel" } })).after).toMatchObject({ why: "handed over at the office" });
+    expect((await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.handover" } })).after).toMatchObject({ fieldJobsCancelled: [{ id: job.id, kind: "DELIVERY" }] });
   });
 });

@@ -30,6 +30,7 @@ import type {
   FollowUpScope,
   IntakeCountry,
   LogFollowUpBody,
+  FieldJob,
   FieldStaff,
   ReceivedAs,
   StickerCheck,
@@ -413,9 +414,12 @@ export function useFieldStaff() {
 /** A field job's who, when and where (0015 Decisions 2 and 3). */
 type FieldJobBody = { assigneeId: string; day: string; slotId: number; address: string; mapLink: string | null; updatedAt: string }
 
-/** "Book the collection boy" (0015 phase 1). 409 when the client has no email (CLIENT_EMAIL_MISSING) or one is booked. */
+/**
+ * "Book the collection boy" (0015 phase 1) or "Book the delivery boy" (phase 2). 409 when the client has no email
+ * (CLIENT_EMAIL_MISSING) or one of the kind is booked.
+ */
 export function useBookFieldJob(caseNo: string) {
-  return useCaseAction<FieldJobBody & { kind: 'PICKUP' }>(caseNo, (base, body) => api(`${base}/field-jobs`, { method: 'POST', body }))
+  return useCaseAction<FieldJobBody & { kind: FieldJob['kind'] }>(caseNo, (base, body) => api(`${base}/field-jobs`, { method: 'POST', body }))
 }
 
 /** "Change" a booked job (0015). */

@@ -6,7 +6,7 @@ import { useToast } from '../../../lib/toast'
 import { useUpdateVisaCase } from '../queries'
 import type { DocumentArrival, VisaCase } from '../types'
 import { bookletsText } from './labels'
-import { PickupJob } from './PickupJob'
+import { FieldJobLines } from './FieldJobLines'
 
 const ARRIVAL_LABEL: Record<DocumentArrival, string> = { CLIENT_BRINGS: 'Client brings them', COLLECTION_BOY: 'Send collection boy' }
 
@@ -42,7 +42,7 @@ function ArrivalView({ visaCase: c }: { visaCase: VisaCase }) {
         <span>How</span>
         <strong>{c.arrival ? ARRIVAL_LABEL[c.arrival] : <span className="muted">Not set yet</span>}</strong>
       </div>
-      {(c.arrival === 'COLLECTION_BOY' || c.fieldJobs.some((j) => j.kind === 'PICKUP')) && <PickupJob visaCase={c} canBook={false} />}
+      {(c.arrival === 'COLLECTION_BOY' || c.fieldJobs.some((j) => j.kind === 'PICKUP')) && <FieldJobLines visaCase={c} kind="PICKUP" canBook={false} />}
       <div className="kv">
         <span>Booklets received</span>
         <strong>{bookletsText(c.booklets)}</strong>
@@ -86,7 +86,7 @@ function ArrivalForm({ visaCase: c }: { visaCase: VisaCase }) {
           </button>
         ))}
       </div>
-      {c.arrival === 'COLLECTION_BOY' && <PickupJob visaCase={c} canBook />}
+      {c.arrival === 'COLLECTION_BOY' && <FieldJobLines visaCase={c} kind="PICKUP" canBook />}
 
       <div className="booklets-row">
         <span className="lbl">Booklets received</span>

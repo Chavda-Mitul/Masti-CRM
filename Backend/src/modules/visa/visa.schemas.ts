@@ -538,9 +538,9 @@ export const changeFieldJobSchema = z.object({
   mapLink,
   updatedAt: z.iso.datetime("Reload and try again."),
 });
-/** "Book the collection boy" (phase 1); deliveries come in phase 2. */
+/** "Book the collection boy" (phase 1) or "Book the delivery boy" (phase 2). */
 export const bookFieldJobSchema = changeFieldJobSchema.extend({
-  kind: z.enum(["PICKUP"], "Only a pickup can be booked here."),
+  kind: z.enum(["PICKUP", "DELIVERY"], "Pick a pickup or a delivery."),
 });
 export type ChangeFieldJobInput = z.infer<typeof changeFieldJobSchema>;
 export type BookFieldJobInput = z.infer<typeof bookFieldJobSchema>;

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { canActOnCase, canHandOver } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import type { VisaCase } from '../types'
+import { FieldJobLines } from './FieldJobLines'
 import { HandoverDialog } from './HandoverDialog'
 import { bookletsSent, bookletsText, bookletsVsIntake, dayTime, firstName, passportsInStock, weekdayDay } from './labels'
 import { PassportsBackDialog } from './PassportsBackDialog'
@@ -94,6 +95,8 @@ export function PassportsBackCard({ visaCase: c }: { visaCase: VisaCase }) {
           </div>
         </div>
       )}
+      {/* In our stock: the delivery boy, booked by whoever can hand over (0015 phase 2). */}
+      {r && c.stage.code === 'PASSPORT_BACK' && !c.handover && <FieldJobLines visaCase={c} kind="DELIVERY" canBook={canHand} />}
       {c.stage.code === 'PASSPORT_BACK' && c.status === 'OPEN' && c.dueAt && (
         <div className="kv">
           <span>

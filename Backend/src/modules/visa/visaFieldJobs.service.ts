@@ -10,31 +10,44 @@ import { COLLECTING, HANDING_OVER, loadCase, lockCase, type StepRule } from "./c
 import { MAX_COLLECTION_DAYS_AHEAD, type BookFieldJobInput, type ChangeFieldJobInput, type MatureCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 
-// The field staff app, the office side (docs/decisions/0015-field-staff-app.md, phase 1): booking the collection boy to
-// pick a case's documents up at Steps 1–2. Staff pick the boy (an active FIELD user), an open office day and a time slot
-// from the list (Decision 2); the address is copied from the client's (correctable), with an optional Google Maps link
-// (Decision 3). The client's email must be on file: the one-time code they give the boy goes there (Decision 4). One
-// booked pickup per case, kept by the case lock; it can be changed or cancelled while booked. While it's booked, the
+// The field staff app, the office side (docs/decisions/0015-field-staff-app.md): booking the collection boy to pick a
+// case's documents up at Steps 1–2 (phase 1), or the delivery boy to take its passports to the client once they're in
+// our stock (phase 2). Staff pick the boy (an active FIELD user), an open office day and a time slot from the list
+// (Decision 2); the address is copied from the client's (correctable), with an optional Google Maps link (Decision 3).
+// The client's email must be on file: the one-time code they give the boy goes there (Decision 4). One booked job of
+// each kind per case, kept by the case lock; it can be changed or cancelled while booked. While it's booked, an open
 // case is due at the slot's end that day, to check it happened.
 
-/** The step each kind of job is booked at: a pickup while the documents are collected (a delivery comes in phase 2). */
+/**
+ * The step each kind of job is booked at: a pickup while the documents are collected (the case's owner, the HOD or the
+ * Head); a delivery from Passport back, by any Visa staff with EDIT, whatever the case's status (as the office handover).
+ */
 const RULE: Record<FieldJobKind, StepRule> = { PICKUP: COLLECTING, DELIVERY: HANDING_OVER };
 
-/** What booking checks, read again under the lock: the client's email and mobile, and a pickup already booked. */
+/**
+ * What booking checks, read again under the lock: the client's email and mobile, a job of this kind already booked,
+ * and (for a delivery) whether the passports are in our stock.
+ */
 async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
   return db.enquiry.findUniqueOrThrow({
     where: { id: enquiryId },
     select: {
       client: { select: { email: true, mobile: true } },
       fieldJobs: { where: { kind, status: "BOOKED" }, select: { id: true } },
+      visa: { select: { passportsReceivedAt: true, handover: { select: { enquiryId: true } } } },
     },
   });
 }
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
-/** One booked job of a kind per case (0015 Defaults), and the client's email for their one-time code (Decision 4). */
+/**
+ * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock; and the client's email
+ * for their one-time code (Decision 4).
+ */
 function assertCanBook(g: Gathered, kind: FieldJobKind) {
+  if (kind === "DELIVERY" && !g.visa?.passportsReceivedAt) throw conflict("Mark the passports received first.");
+  if (kind === "DELIVERY" && g.visa?.handover) throw conflict("The passports are already handed over.");
   if (g.fieldJobs.length > 0) throw conflict(kind === "PICKUP" ? "The collection boy is already booked for this case." : "The delivery boy is already booked for this case.");
   if (!g.client.email) {
     throw new HttpError(409, "Add the client's email first: the one-time code they give the boy goes there.", { code: "CLIENT_EMAIL_MISSING" });
@@ -66,9 +79,10 @@ async function checkJob(db: Db, input: ChangeFieldJobInput, keepSlotId?: number)
 const jobView = (j: { boy: string; day: string; slot: string; address: string; mapLink: string | null }) => j;
 
 /**
- * "Book the collection boy" (phase 1), by whoever can act on the case at Steps 1–2. In one transaction under the case
- * lock: the job (with the client's mobile), "Send collection boy" as how the documents reach us, the case due at the
- * slot's end, and the audit (field.job.book).
+ * "Book the collection boy" (phase 1), by whoever can act on the case at Steps 1–2, or "Book the delivery boy"
+ * (phase 2), by any Visa staff with EDIT once the passports are in our stock. In one transaction under the case lock:
+ * the job (with the client's mobile); for a pickup, "Send collection boy" as how the documents reach us; an open case
+ * due at the slot's end; and the audit (field.job.book).
  */
 export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, actor: Actor) {
   const rule = RULE[input.kind];
@@ -84,8 +98,9 @@ export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, act
     assertCanBook(g, input.kind);
     const { boy, slot } = await checkJob(tx, input);
 
-    const dueAt = istDateTimeToUtc(input.day, slot.endsAt);
-    await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
+    // A postponed or cancelled case keeps its due time (a delivery can be booked for one; a pickup can't).
+    const dueAt = locked.status === "OPEN" ? istDateTimeToUtc(input.day, slot.endsAt) : locked.dueAt;
+    if (locked.status === "OPEN") await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
     if (input.kind === "PICKUP") await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { arrival: "COLLECTION_BOY" } });
     const job = await tx.fieldJob.create({
       data: {

@@ -6,16 +6,33 @@ import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useBookFieldJob, useChangeFieldJob, useFieldStaff } from '../queries'
 import type { FieldJob, VisaCase } from '../types'
-import { longDate } from './labels'
+import { bookletsText, longDate } from './labels'
 import { OpenDayCalendar } from './OpenDayCalendar'
 
+/** How the dialog talks about each kind of job (0015) ⚠️. */
+const WORDING = {
+  PICKUP: { book: 'Book the collection boy', change: 'Change the pickup', who: 'Pick the collection boy…', day: 'Pickup day', where: 'Pick up from', done: 'Collection boy booked', changed: 'Pickup changed.' },
+  DELIVERY: { book: 'Book the delivery boy', change: 'Change the delivery', who: 'Pick the delivery boy…', day: 'Delivery day', where: 'Deliver to', done: 'Delivery boy booked', changed: 'Delivery changed.' },
+} as const
+
 /**
- * "Book the collection boy" (docs/decisions/0015-field-staff-app.md, phase 1), or "Change" on a booked pickup: who goes
- * (the field staff), an open office day, a time slot from the list (on today, the ones already over can't be picked),
- * and where (the client's address, correctable, and their Google Maps link if they shared one). The client's email
- * must be on file: the one-time code they give the boy goes there.
+ * "Book the collection boy" (docs/decisions/0015-field-staff-app.md, phase 1) or "Book the delivery boy" (phase 2), or
+ * "Change" on a booked one: who goes (the field staff), an open office day, a time slot from the list (on today, the
+ * ones already over can't be picked), and where (the client's address, correctable, and their Google Maps link if they
+ * shared one). The client's email must be on file: the one-time code they give the boy goes there.
  */
-export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCase; job?: FieldJob; onClose: () => void }) {
+export function FieldJobDialog({
+  visaCase: c,
+  job,
+  kind = job?.kind ?? 'PICKUP',
+  onClose,
+}: {
+  visaCase: VisaCase
+  job?: FieldJob
+  kind?: FieldJob['kind']
+  onClose: () => void
+}) {
+  const words = WORDING[kind]
   const toast = useToast()
   const staff = useFieldStaff()
   const slots = useMasterList('field-slots')
@@ -48,7 +65,7 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
     const body = { assigneeId, day, slotId, address, mapLink: mapLink.trim() || null, updatedAt: c.updatedAt }
     const done = {
       onSuccess: () => {
-        toast({ tone: 'ok', message: job ? 'Pickup changed.' : `Collection boy booked for ${longDate(day)}.` })
+        toast({ tone: 'ok', message: job ? words.changed : `${words.done} for ${longDate(day)}.` })
         onClose()
       },
       onError: (err: unknown) => {
@@ -57,7 +74,7 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
       },
     }
     if (job) change.mutate({ ...body, jobId: job.id }, done)
-    else book.mutate({ ...body, kind: 'PICKUP' }, done)
+    else book.mutate({ ...body, kind }, done)
   }
   const message = errorBody(save.error)?.issues ? null : errorText(save.error)
 
@@ -65,11 +82,18 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog submission-dialog" role="dialog" aria-modal="true" aria-labelledby="field-job-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="field-job-title">
-          {job ? 'Change the pickup' : 'Book the collection boy'}
+          {job ? words.change : words.book}
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
-          He collects the documents from {c.client.name}. At the door the client gives him a one-time code from their email.
+          {kind === 'PICKUP' ? `He collects the documents from ${c.client.name}.` : `He takes the passports to ${c.client.name}.`} At the door
+          the client gives him a one-time code from their email.
         </p>
+        {kind === 'DELIVERY' && c.passportsReceived && (
+          <div className="kv">
+            <span>He hands over</span>
+            <strong>{bookletsText(c.passportsReceived.booklets)}</strong>
+          </div>
+        )}
         {noEmail && (
           <div className="alert alert-bad">
             Add {c.client.name}’s email first: the one-time code they give the boy goes there.{' '}
@@ -88,7 +112,7 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
             }}
             disabled={save.isPending}
           >
-            <option value="">{staff.isPending ? 'Loading…' : 'Pick the collection boy…'}</option>
+            <option value="">{staff.isPending ? 'Loading…' : words.who}</option>
             {(staff.data ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} · {s.mobile}
@@ -106,7 +130,7 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
           </span>
           <OpenDayCalendar
             target={{ office: true }}
-            label="Pickup day"
+            label={words.day}
             value={day}
             onChange={(d) => {
               setDay(d)
@@ -141,7 +165,7 @@ export function FieldJobDialog({ visaCase: c, job, onClose }: { visaCase: VisaCa
         </label>
 
         <label className="field">
-          <span className="lbl">Pick up from</span>
+          <span className="lbl">{words.where}</span>
           <textarea
             className="input textarea"
             rows={2}
