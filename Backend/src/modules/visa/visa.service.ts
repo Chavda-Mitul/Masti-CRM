@@ -31,6 +31,7 @@ import {
   RECALL_RETURN_KEY,
   PASSPORTS_BACK_CHECK_KEY,
   ARRIVAL_CHECK_KEY,
+  ASSIGN_CHECK_KEY,
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
@@ -310,6 +311,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: RECALL_RETURN_KEY, before: before.recallReturn, after: input.recallReturn },
     { key: PASSPORTS_BACK_CHECK_KEY, before: before.passportsBackCheck, after: input.passportsBackCheck },
     { key: ARRIVAL_CHECK_KEY, before: before.arrivalCheck, after: input.arrivalCheck },
+    { key: ASSIGN_CHECK_KEY, before: before.assignCheck, after: input.assignCheck },
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },

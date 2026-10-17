@@ -92,6 +92,12 @@ export const passportsBackCheckSchema = firstFollowUpSchema;
 export const arrivalCheckSchema = firstFollowUpSchema;
 
 /**
+ * When a matured case is due with the Visa HOD to be given to a processor (docs/decisions/0006-visa-documents.md,
+ * amended 16 Oct 2026): the next open office day, afterDays after maturity, at `at` (IST).
+ */
+export const assignCheckSchema = firstFollowUpSchema;
+
+/**
  * When a submitted file comes back to its processor before the expected collection date (0011 Decision 4): the open office
  * day daysBefore the date, at `at` (IST). The meeting's "reminded a day before to check with the vendor".
  */
@@ -143,6 +149,7 @@ export const visaSettingsSchema = z.object({
   recallReturn: recallReturnSchema,
   passportsBackCheck: passportsBackCheckSchema,
   arrivalCheck: arrivalCheckSchema,
+  assignCheck: assignCheckSchema,
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
@@ -182,6 +189,7 @@ export type SubmissionCheckSetting = z.infer<typeof submissionCheckSchema>;
 export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
 export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
+export type AssignCheckSetting = z.infer<typeof assignCheckSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;

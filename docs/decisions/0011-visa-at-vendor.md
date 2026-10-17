@@ -162,6 +162,17 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
   - The calendar is in the dialog rather than always on the card, so the file number and the date are always saved
     together.
 
+**Decided 16 Oct 2026 (project lead), after the end-to-end walkthrough** (a file was marked submitted six days before
+its appointment, with a collection date before the appointment):
+- **"Submitted at the embassy" can't be saved before the earliest traveller's appointment day** (409 "The embassy
+  appointment is Thu 22 Oct 2026. Mark it submitted on that day or after."). The dialog shows the same notice and keeps
+  Save off. A change later isn't held back.
+- **The expected collection date is after the latest appointment day,** at the first save and on Change (400 under
+  `collectionOn`, "Pick a day after the appointment (…)"). The calendar greys out the days up to it.
+- **No appointment booked** (an e-visa, or "Appointment needed" off): no rule.
+- **Snag:** appointments can't be edited after Step 3, so if one is moved earlier after dispatch, staff wait until the
+  day the CRM has before marking the file submitted.
+
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
