@@ -106,6 +106,9 @@ The placeholder page held office staff's only link to change their password. It 
 out (field staff keep theirs on `/tasks`). The placeholder's "Your access" card goes: the user card shows the role, and
 the Head has Settings → Staff & roles.
 
+The Head's sidebar shows only Log out: their "Change password" is on their own row in Settings → Staff & roles, beside
+Edit, where other rows have Reset password (project lead, 19 Oct 2026).
+
 ### 9. Up next
 
 **Decided 19 Oct 2026 (project lead), with component 2:**

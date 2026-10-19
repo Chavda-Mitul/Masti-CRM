@@ -122,9 +122,12 @@ export function AppShell() {
           </div>
         </div>
         <div className="user-actions">
-          <Link to="/change-password" className="btn btn-sm">
-            Change password
-          </Link>
+          {/* The Head changes theirs from their own row in Settings → Staff & roles. */}
+          {user.type !== 'HEAD' && (
+            <Link to="/change-password" className="btn btn-sm">
+              Change password
+            </Link>
+          )}
           <button className="btn btn-sm" onClick={onLogout} disabled={logout.isPending}>
             Log out
           </button>

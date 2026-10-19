@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import type { Department, User, UserDepartment, UserType } from '../auth/types'
 import { ME_KEY, useMe } from '../auth/useAuth'
 import { api, ApiError } from '../lib/api'
@@ -181,7 +182,11 @@ export function UsersPage() {
                       <button className="btn btn-sm" onClick={() => setEditing(u)}>
                         Edit
                       </button>
-                      {u.id !== me?.id && (
+                      {u.id === me?.id ? (
+                        <Link to="/change-password" className="btn btn-sm">
+                          Change password
+                        </Link>
+                      ) : (
                         <>
                           <button className="btn btn-sm" onClick={() => setConfirming({ kind: 'reset', user: u })}>
                             Reset password
