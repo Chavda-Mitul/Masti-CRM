@@ -145,7 +145,9 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
     - a later change keeps the stamp, and is audited as `visa.submission.update` with the old and new values
     - a save that changes nothing writes nothing
   - **`dueAt`:** the open office day `daysBefore` the date, walking back over Sundays and office holidays (the new
-    `previousOpenDay` in `holidays/blockedDays.ts`), and never before today, at `at`. The setting is
+    `previousOpenDay` in `holidays/blockedDays.ts`), at `at`. It's never already past (fixed 19 Oct 2026, code review):
+    once that time has gone, or the day was before today, it's the first open office day from today whose `at` is still
+    to come (it was clamped to today, even a closed day or after the time). The setting is
     `visa.collectionCheck` → `{ daysBefore: 1, at: "11:00" }` ⚠️.
   - The case sends `submission { vendorFileNo, embassy { id, name, city }, collectionOn, at, by }`.
 - **Screen:**

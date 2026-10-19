@@ -125,23 +125,37 @@ export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
 };
 
 /**
+ * `at` (IST) on `day`, unless that has already passed: then the first open office day from today whose `at` is still to
+ * come. A check is never due before it's set (fixed 19 Oct 2026, code review): passports expected today and saved
+ * after 11:00 were due at 11:00 that day, late at once, and a reminder clamped to today could land on a closed day.
+ */
+async function notPast(day: string, at: string, db: Db) {
+  const due = istDateTimeToUtc(day, at);
+  if (due.getTime() > Date.now()) return due;
+  const open = await nextOpenDay(istToday(), { office: true }, db);
+  const onOpen = istDateTimeToUtc(open, at);
+  if (onOpen.getTime() > Date.now()) return onOpen;
+  return istDateTimeToUtc(await nextOpenDay(addDays(open, 1), { office: true }, db), at);
+}
+
+/**
  * When a case comes back due on its processor's desk after a step: the next open office day (skipping Sundays and
- * office holidays), `afterDays` from `from` (today unless given), at `at` (IST). For the vendor confirmation, the
- * e-visa portal check, the file number, a recalled file's papers, and passports expected back on a day.
+ * office holidays), `afterDays` from `from` (today unless given), at `at` (IST), never already past (notPast). For the
+ * vendor confirmation, the e-visa portal check, the file number, a recalled file's papers, and passports expected back
+ * on a day.
  */
 export async function dueOnOfficeDay(timing: { afterDays: number; at: string }, db: Db = prisma, from: string = istToday()) {
   const day = await nextOpenDay(addDays(from, timing.afterDays), { office: true }, db);
-  return istDateTimeToUtc(day, timing.at);
+  return notPast(day, timing.at, db);
 }
 
 /**
  * When a case comes back due before a date: the open office day `daysBefore` it (walking back over Sundays and office
- * holidays), at `at` (IST), never earlier than today. For the collection reminder.
+ * holidays), at `at` (IST), never already past (notPast). For the collection reminder.
  */
 export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: number; at: string }, db: Db = prisma) {
   const day = await previousOpenDay(addDays(date, -timing.daysBefore), { office: true }, db);
-  const today = istToday();
-  return istDateTimeToUtc(day < today ? today : day, timing.at);
+  return notPast(day, timing.at, db);
 }
 
 /** Current settings. A missing or invalid row falls back to the default. */

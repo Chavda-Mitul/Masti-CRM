@@ -97,9 +97,16 @@ async function record(agent: Agent, caseNo: string, outcomes: Outcome[], updated
 const approved = (travellerId: string, visaNo = "0182 4471"): Outcome => ({ travellerId, outcome: "APPROVED", visaNo, validFrom: FROM, validTo: TO });
 const refused = (travellerId: string): Outcome => ({ travellerId, outcome: "REFUSED" });
 
-/** "Change" on one traveller's row at Step 6. */
-const change = (agent: Agent, caseNo: string, travellerId: string, body: Omit<Outcome, "travellerId">) =>
-  agent.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/decision`).send(body);
+/** The case's updatedAt now, read from the database (so it works for users who can't open the case too). */
+const caseUpdatedAt = async (caseNo: string) =>
+  (await prisma.enquiry.findUniqueOrThrow({ where: { caseNo }, select: { updatedAt: true } })).updatedAt.toISOString();
+
+/** "Change" on one traveller's row at Step 6, with the case's updatedAt as it is now (or `updatedAt`). */
+async function change(agent: Agent, caseNo: string, travellerId: string, body: Omit<Outcome, "travellerId">, updatedAt?: string) {
+  // Read first: a request awaited inside another's .send(...) breaks supertest.
+  const seen = updatedAt ?? (await caseUpdatedAt(caseNo));
+  return agent.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/decision`).send({ ...body, updatedAt: seen });
+}
 
 describe("Record the decision (Decisions 2, 3 and 6)", () => {
   it("saves everyone at once and moves the case to Decision, due the next open office day at 11:00", async () => {
@@ -290,10 +297,10 @@ describe("Change a traveller's decision (Decision 6)", () => {
     expect(refuse.status).toBe(200);
     const after = refuse.body.case as CaseDto;
     expect(after.travellers[0]!.decision).toEqual({ outcome: "REFUSED", visaNo: null, validFrom: null, validTo: null });
-    // The case's step, due time and "recorded by" stay, and no one else's open page goes stale.
+    // The case's step, due time and "recorded by" stay; its updatedAt moves, so a page opened before can't save over it.
     expect(after.stage.code).toBe("DECISION");
     expect(after.dueAt).toBe(before.dueAt);
-    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(after.updatedAt).not.toBe(before.updatedAt);
     expect(after.decision).toEqual(before.decision);
 
     const rows = await prisma.auditLog.findMany({ where: { action: "visa.decision.change" }, orderBy: { id: "asc" } });
@@ -316,6 +323,24 @@ describe("Change a traveller's decision (Decision 6)", () => {
     expect(await prisma.auditLog.count({ where: { action: "visa.decision.change" } })).toBe(3);
     // A change moves no money.
     expect(await prisma.creditNote.count()).toBe(0);
+  });
+
+  it("refuses a change saved after someone else's (STALE), so two open dialogs can't undo each other", async () => {
+    const { c, processor, adult } = await decided();
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    // Both open "Change" on the adult's row before either saves.
+    const opened = await caseUpdatedAt(c.caseNo);
+    const first = await change(await loginAs("riya@masti.test"), c.caseNo, adult, { outcome: "APPROVED", visaNo: "0182 4479", validFrom: FROM, validTo: TO }, opened);
+    expect(first.status).toBe(200);
+    const late = await change(processor, c.caseNo, adult, { outcome: "REFUSED" }, opened);
+    expect(late.status).toBe(409);
+    expect(late.body.details.code).toBe("STALE");
+    expect(late.body.message).toBe("Someone else changed this case after you opened it. Reload and try again.");
+    // Riya's number stands, and only her change is in the audit log.
+    expect((await prisma.visaCaseTraveller.findUniqueOrThrow({ where: { id: adult } })).visaNo).toBe("0182 4479");
+    expect(await prisma.auditLog.count({ where: { action: "visa.decision.change" } })).toBe(1);
+    // Reloaded, the processor's change goes through.
+    expect((await change(processor, c.caseNo, adult, { outcome: "REFUSED" })).status).toBe(200);
   });
 
   it("refuses details that don't fit the outcome, as when recorded", async () => {

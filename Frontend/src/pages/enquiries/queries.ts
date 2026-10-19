@@ -493,7 +493,7 @@ export function useChangePassportsBack(caseNo: string) {
 
 /** "Change" one traveller's decision while the case is at Decision (0012 Decision 6). 400 under `decision`. */
 export function useChangeDecision(caseNo: string) {
-  return useCaseAction<{ travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }>(
+  return useCaseAction<{ travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string; updatedAt: string }>(
     caseNo,
     (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/decision`, { method: 'PUT', body }),
   )

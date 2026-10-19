@@ -194,6 +194,37 @@ describe("what is refused", () => {
   });
 });
 
+describe("switching Vendor needed back on (decided 19 Oct 2026)", () => {
+  it("is refused while an e-visa waits at Docket & dispatch with no vendor, and allowed once it's submitted online", async () => {
+    const { c, processor } = await eVisa();
+    const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const switchOn = () => hod.patch(`/api/masters/visa-offerings/${offeringId}`).send({ vendorNeeded: true });
+
+    const refused = await switchOn();
+    expect(refused.status).toBe(409);
+    expect(refused.body.message).toBe(
+      `${c.caseNo} is at Docket & dispatch with no vendor. Submit it online first: with Vendor needed on, it couldn't be sent at all.`,
+    );
+    expect((await prisma.visaOffering.findUniqueOrThrow({ where: { id: offeringId } })).vendorNeeded).toBe(false);
+    expect(await prisma.auditLog.count({ where: { action: "visaOffering.update" } })).toBe(0);
+
+    // Postponed, it still counts: it would be stuck once it comes back.
+    await prisma.enquiry.update({
+      where: { id: c.id },
+      data: { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addMonths(istToday(), 1)) },
+    });
+    expect((await switchOn()).status).toBe(409);
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "OPEN", reasonId: null, resumeOn: null } });
+
+    // Submitted online, it's on its way: the switch goes on.
+    expect((await submit(processor, c.caseNo)).status).toBe(200);
+    expect((await switchOn()).status).toBe(200);
+    expect((await prisma.visaOffering.findUniqueOrThrow({ where: { id: offeringId } })).vendorNeeded).toBe(true);
+  });
+});
+
 describe("who may press it", () => {
   it("its processor, the Visa HOD and the Head; not other staff, view-only users or other departments", async () => {
     const { c } = await eVisa();

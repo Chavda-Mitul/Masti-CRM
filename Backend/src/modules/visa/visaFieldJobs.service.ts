@@ -196,7 +196,9 @@ export async function changeFieldJob(caseNo: string, jobId: string, input: Chang
     });
     const moved = was.day !== now.day || was.slotId !== now.slotId;
     const dueAt = moved && locked.status === "OPEN" ? istDateTimeToUtc(now.day, slot.endsAt) : locked.dueAt;
-    if (moved && locked.status === "OPEN") await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
+    // The due time follows the day or slot. The case's updatedAt moves with any change (a new boy, address or map link
+    // too), so a dialog opened before it can't save over it (fixed 19 Oct 2026).
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt, updatedAt: new Date() } });
     await audit(
       {
         actorId: actor.user.id,
