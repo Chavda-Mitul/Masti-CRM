@@ -302,6 +302,8 @@ describe("intake dropdowns and settings", () => {
         opening: "Docket {docketNo} is on its way to you: {files}, {passports} passports.",
         closing: "Please confirm when you receive it.",
       },
+      passportValidity: { monthsAfterReturn: 6 },
+      childAge: { adultFrom: 18 },
     });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);
 

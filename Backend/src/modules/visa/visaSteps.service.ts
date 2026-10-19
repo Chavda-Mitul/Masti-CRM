@@ -5,6 +5,7 @@ import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
+import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { currentScan } from "../clients/clientDocuments.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
@@ -12,6 +13,7 @@ import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, Upda
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import { passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
 // documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
@@ -189,7 +191,8 @@ function tripView(row: { departOn: Date | null; returnOn: Date | null; entryType
  */
 export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, TRIP);
-  const sent = definedOnly({ ...input, departOn: dbDate(input.departOn), returnOn: dbDate(input.returnOn) });
+  const { confirmWarnings, ...fields } = input;
+  const sent = definedOnly({ ...fields, departOn: dbDate(fields.departOn), returnOn: dbDate(fields.returnOn) });
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, TRIP);
@@ -204,6 +207,12 @@ export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: 
     const departOn = changes.departOn !== undefined ? changes.departOn : before.departOn;
     const returnOn = changes.returnOn !== undefined ? changes.returnOn : before.returnOn;
     if (departOn && returnOn && returnOn < departOn) throw fieldError("returnOn", "Coming back can't be before travelling out.");
+    // A new return: the linked passports should still run long enough after it (a warning, decided 19 Oct 2026).
+    let confirmed: Warning[] = [];
+    if (changes.returnOn) {
+      const travellers = await tx.visaCaseTraveller.findMany({ where: { caseId: enquiry.id }, orderBy: { position: "asc" }, select: travellerPapersSelect });
+      confirmed = checkWarnings(await passportWarnings(tx, fromDbDate(changes.returnOn), travellers), confirmWarnings);
+    }
 
     const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
     await audit(
@@ -214,7 +223,7 @@ export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: 
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: pick(tripView(before), keys),
-        after: pick(tripView(after), keys),
+        after: { ...pick(tripView(after), keys), ...confirmedWarningsNote(confirmed) },
         ip: actor.ip,
       },
       tx,
@@ -243,6 +252,12 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
       const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
       const traveller = await tx.visaCaseTraveller.findUniqueOrThrow({ where: { id: found.id } });
       if (traveller.memberId === member.id) return;
+      // The passport should still run long enough after the trip (a warning, decided 19 Oct 2026).
+      const trip = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { returnOn: true } });
+      const confirmed = checkWarnings(
+        await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), [{ name: member.name, member }]),
+        input.confirmWarnings,
+      );
       const after = await tx.visaCaseTraveller.update({ where: { id: traveller.id }, data: { memberId: member.id, name: member.name } });
       await audit(
         {
@@ -252,7 +267,7 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
           entityId: traveller.id,
           clientId: enquiry.clientId,
           before: { memberId: traveller.memberId, name: traveller.name },
-          after: { memberId: after.memberId, name: after.name },
+          after: { memberId: after.memberId, name: after.name, ...confirmedWarningsNote(confirmed) },
           ip: actor.ip,
         },
         tx,

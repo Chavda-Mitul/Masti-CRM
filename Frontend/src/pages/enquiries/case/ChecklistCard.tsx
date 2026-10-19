@@ -4,6 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDateTime, formatMonthYear } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { MemberFormDrawer } from '../../clients/MemberFormDrawer'
 import { useClient, useClientOptions } from '../../clients/queries'
 import { SCAN_ACCEPT, scanProblem, scanType } from '../../clients/scanFiles'
@@ -229,18 +230,23 @@ function TravellerPicker({
   const client = useClient(c.client.id)
   const options = useClientOptions()
   const link = useLinkTraveller(c.caseNo)
+  // A passport that runs out too soon after the trip: check, then name them anyway.
+  const guard = useWarningGuard()
   const [adding, setAdding] = useState(false)
 
   // Someone already on this case can't be a second traveller.
   const taken = new Set(c.travellers.filter((t) => t.id !== traveller.id && t.member).map((t) => t.member!.id))
   const members = (client.data?.members ?? []).filter((m) => !taken.has(m.id))
 
-  const pick = (memberId: string) =>
+  const pick = (memberId: string, confirmWarnings = false): void =>
     link.mutate(
-      { travellerId: traveller.id, memberId },
+      { travellerId: traveller.id, memberId, ...(confirmWarnings ? { confirmWarnings } : {}) },
       {
         onSuccess: onDone,
-        onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t name this traveller. Please try again.' }),
+        onError: (err) => {
+          if (guard.intercept(err, () => pick(memberId, true))) return
+          toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t name this traveller. Please try again.' })
+        },
       },
     )
 
@@ -281,6 +287,7 @@ function TravellerPicker({
           onSaved={(saved) => pick(saved.id)}
         />
       )}
+      {guard.modal}
     </div>
   )
 }

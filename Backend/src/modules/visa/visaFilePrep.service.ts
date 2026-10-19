@@ -14,6 +14,7 @@ import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateAppl
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
+import { passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -363,6 +364,12 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
     const { missing, country } = await missingForFileReady(tx, enquiry.id);
     const parts = describeMissing(missing, country);
     if (parts.length > 0) throw new HttpError(409, `Not ready yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
+    // The last look before the file goes out: a passport that runs out too soon after the trip (a warning, 19 Oct 2026).
+    const trip = await tx.visaCase.findUniqueOrThrow({
+      where: { enquiryId: enquiry.id },
+      select: { returnOn: true, travellers: { orderBy: { position: "asc" }, select: travellerPapersSelect } },
+    });
+    const confirmed = checkWarnings(await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), trip.travellers), input.confirmWarnings);
 
     const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt: now } });
@@ -381,7 +388,15 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: { stage: locked.stage.code, dueAt: locked.dueAt },
-        after: { stage: "DISPATCH", dueAt: now, fileReadyAt: now, fileReadyById: actor.user.id, vendorId: visa.vendorId, finalFileId: file.id },
+        after: {
+          stage: "DISPATCH",
+          dueAt: now,
+          fileReadyAt: now,
+          fileReadyById: actor.user.id,
+          vendorId: visa.vendorId,
+          finalFileId: file.id,
+          ...confirmedWarningsNote(confirmed),
+        },
         ip: actor.ip,
       },
       tx,

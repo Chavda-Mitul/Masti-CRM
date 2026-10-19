@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useMe } from '../../../auth/useAuth'
 import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { enquiryKeys, useMarkFileReady } from '../queries'
 import type { FileReadyMissing, TripField, VisaCase } from '../types'
 
@@ -41,6 +42,8 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
   const toast = useToast()
   const queryClient = useQueryClient()
   const markReady = useMarkFileReady(c.caseNo)
+  // A passport that runs out too soon after the trip: check, then send it anyway.
+  const guard = useWarningGuard()
 
   // The server's list wins when it disagrees (someone changed a check meanwhile).
   const serverMissing =
@@ -50,9 +53,9 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
   const message = serverMissing ? null : errorText(markReady.error)
   const staysWith = c.owner?.id === me?.id ? 'you' : (c.owner?.name ?? 'the processor')
 
-  const submit = () =>
+  const submit = (confirmWarnings = false): void =>
     markReady.mutate(
-      { updatedAt: c.updatedAt },
+      { updatedAt: c.updatedAt, ...(confirmWarnings ? { confirmWarnings } : {}) },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: 'File ready. The case is in Docket & dispatch.' })
@@ -60,6 +63,7 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
         },
         // Someone changed Step 3 meanwhile: reload the case so the cards behind the dialog show what its list says.
         onError: (err) => {
+          if (guard.intercept(err, () => submit(true))) return
           if (errorCode(err) === 'NOT_READY') void queryClient.invalidateQueries({ queryKey: enquiryKeys.case(c.caseNo) })
         },
       },
@@ -68,6 +72,7 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog file-ready-dialog" role="dialog" aria-modal="true" aria-labelledby="file-ready-title" onClick={(e) => e.stopPropagation()}>
+        {guard.modal}
         <h2 className="h2" id="file-ready-title">
           File ready — add to docket
         </h2>
@@ -117,7 +122,7 @@ export function FileReadyDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
           <button type="button" className="btn" onClick={onClose}>
             Close
           </button>
-          <button type="button" className="btn btn-primary" disabled={!ready || markReady.isPending} onClick={submit}>
+          <button type="button" className="btn btn-primary" disabled={!ready || markReady.isPending} onClick={() => submit()}>
             {markReady.isPending ? 'Saving…' : 'Mark file ready'}
           </button>
         </div>
