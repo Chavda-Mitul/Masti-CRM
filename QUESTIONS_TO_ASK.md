@@ -96,7 +96,7 @@ Every question we still need answered before or during the build, in one place. 
 | M29 | IVS: which service is it exactly (name or website), what does it cost, and how can we read its updates (login, email, export)? | It's a paid service; the cost and access method are unknown. | Q24 | |
 | M30 | Accounting software: what's its name? Do you need an export file from the CRM now, or is phase 2 fine? What format does it import? | Client codes are stored in the CRM; the export format decides the file layout. | Q26 | |
 | M31 | Reports: what should the Visa, Staff workload, Outstanding and Cross-sell reports show? | These tabs are in the demo but not designed. | Q27 | |
-| M32 | Dashboards: what should staff, HODs and you see on the home screen? | "My dashboard the way I want." | Q28 | |
+| M32 | Dashboards: what should staff, HODs and you see on the home screen? | "My dashboard the way I want." | Q28 | 19 Oct, project lead, until you answer: one Today page for everyone; staff see their own cases, an HOD the department, you everything (0017). |
 | M33 | Third follow-up on an invoice: who gives permission (only you, or HODs too)? Should the permission be requested inside the CRM? | The rule is clear; the approval flow isn't. | Q30 | |
 | M34 | Routine accounts tasks: keep them in the CRM, or leave them in Excel? If in the CRM, please send the task list with how often each happens and who does it. | You called them optional. | §17 #11, inputs B11 | |
 | M35 | Collection run: when the collection boy is off, does someone from the office (e.g. Accounts) do the run? Should they use the same phone screen? | Decides whether the phone screen is only for field staff or for anyone given a job. Cheap to change either way. | §18 #31 | |

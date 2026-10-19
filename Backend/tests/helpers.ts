@@ -20,7 +20,7 @@ const DEPARTMENTS = [
 /** Wipes every table and recreates the departments and client lookups. TRUNCATE is allowed on the append-only audit log. */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
+    'TRUNCATE "AuditLog", "Session", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
       '"CaseCounter", "FollowUpOutcomeDepartment", "FollowUpNextStepDepartment", "EnquiryReasonDepartment", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientDocument", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +

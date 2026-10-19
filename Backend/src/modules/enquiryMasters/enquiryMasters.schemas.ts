@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EnquiryReasonKind } from "../../../generated/prisma/enums";
+import { timeOfDay } from "../../lib/shared.schemas";
 
 // Follow-up and reason dropdowns (docs/decisions/0006-visa-documents.md Decision 7, tagged by department in 0018).
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
@@ -48,18 +49,15 @@ export const updateTaggedOptionSchema = updateOptionSchema.extend({ departments:
 export const createReasonSchema = createTaggedOptionSchema.extend({ kind: z.enum(EnquiryReasonKind) });
 export const updateReasonSchema = updateTaggedOptionSchema;
 
-/** A time: 24-hour "HH:mm", IST. */
-const hhmm = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time, e.g. 16:00.");
-
 /** A time slot the collection and delivery boy is booked for (docs/decisions/0015-field-staff-app.md Decision 2). */
 export const createSlotSchema = z
-  .object({ code: keyCode, name: text(40), startsAt: hhmm, endsAt: hhmm, sortOrder: sortOrder.default(0), isActive: z.boolean().default(true) })
+  .object({ code: keyCode, name: text(40), startsAt: timeOfDay, endsAt: timeOfDay, sortOrder: sortOrder.default(0), isActive: z.boolean().default(true) })
   .refine((s) => s.endsAt > s.startsAt, { path: ["endsAt"], message: "The slot must end after it starts." });
 /** The service checks the end is still after the start, with the times it doesn't change. */
 export const updateSlotSchema = z.object({
   name: text(40).optional(),
-  startsAt: hhmm.optional(),
-  endsAt: hhmm.optional(),
+  startsAt: timeOfDay.optional(),
+  endsAt: timeOfDay.optional(),
   sortOrder: sortOrder.optional(),
   isActive: z.boolean().optional(),
 });

@@ -76,6 +76,14 @@ export function canActOnCase(user: User, enquiry: { department: string; owner: {
   return isHodOf(user, enquiry.department) || enquiry.owner?.id === user.id
 }
 
+/**
+ * The visa team: office staff who work Visa cases (edit access) and the Visa HOD, not the Head. They get the visa team's
+ * login popup (docs/decisions/0017-today-dashboard.md Decision 12). Mirrors onVisaTeam in the backend.
+ */
+export function isVisaTeam(user: User): boolean {
+  return user.type === 'OFFICE' && can(user, 'VISA', 'EDIT')
+}
+
 /** HOD of any department, or the Head. Mirrors isHodOfAny in the backend. */
 export function isHodOfAny(user: User): boolean {
   if (!user.isActive) return false

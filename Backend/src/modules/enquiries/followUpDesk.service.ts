@@ -3,6 +3,7 @@ import { prisma } from "../../config/prisma";
 import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { isHodOfAny } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
+import { visaNextStep } from "../visa/visaNextStep";
 import type { FollowUpBucket, FollowUpDeskQuery, FollowUpScope } from "./enquiries.schemas";
 import { rowInclude, summaryOf, viewableDepartments } from "./enquiries.service";
 import { visibleEnquiryWhere } from "./visibility";
@@ -19,17 +20,20 @@ import { visibleEnquiryWhere } from "./visibility";
 /** Enough for one person's or one department's day. More shows a note to narrow it. */
 const DESK_LIMIT = 200;
 
-const deskInclude = {
+/** A list row plus each traveller's papers, for "8 of 11 documents pending" (whatFor). */
+export const withPapers = {
   ...rowInclude,
   visa: { include: { ...rowInclude.visa.include, travellers: { select: { isChild: true, documents: { select: { status: true } } } } } },
+} satisfies Prisma.EnquiryInclude;
+
+const deskInclude = {
+  ...withPapers,
   followUps: {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 1,
     include: { outcome: { select: { name: true } } },
   },
 } satisfies Prisma.EnquiryInclude;
-
-type DeskRow = Prisma.EnquiryGetPayload<{ include: typeof deskInclude }>;
 
 /** Not handed to processing yet: every department's cases, except visa cases that have matured. */
 const notMatured: Prisma.EnquiryWhereInput = { OR: [{ visa: { is: null } }, { visa: { is: { maturedAt: null } } }] };
@@ -42,13 +46,16 @@ function bucketWhere(bucket: FollowUpBucket, now: Date): Prisma.EnquiryWhereInpu
   return { status: { in: ["OPEN", "POSTPONED"] }, dueAt: { lt: before } };
 }
 
-/** "8 of 11 documents pending" while a visa case collects papers; otherwise the stage's next step. */
-function whatFor(row: DeskRow): string {
+/**
+ * "8 of 11 documents pending" while a visa case collects papers; otherwise its next step (visaNextStep). The desk and
+ * Today's Up next (docs/decisions/0017-today-dashboard.md Decision 9) say it the same way.
+ */
+export function whatFor(row: Prisma.EnquiryGetPayload<{ include: typeof withPapers }>): string {
   const docs = row.visa?.travellers.flatMap((t) => t.documents) ?? [];
   const needed = docs.filter((d) => d.status !== "NOT_NEEDED").length;
   const pending = docs.filter((d) => d.status === "PENDING").length;
   if (row.stage.code === "DOCUMENTS" && pending > 0) return `${pending} of ${needed} documents pending`;
-  return row.stage.nextStepLabel;
+  return visaNextStep(row.stage, row.visa);
 }
 
 /** One bucket of the desk for this user: cases they may see, not matured, theirs only with MINE. */

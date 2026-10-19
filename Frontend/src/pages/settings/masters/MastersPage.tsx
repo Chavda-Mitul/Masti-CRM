@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { canViewVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { TodaySettingsCard } from '../../today/TodaySettingsCard'
 import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { useMasterList, useOfferings } from './queries'
@@ -118,6 +119,7 @@ export function MastersPage() {
         )}
 
         <HolidaySettingsCard />
+        <TodaySettingsCard />
 
         {NOT_BUILT.map((name) => (
           <section key={name} className="card pad master-card master-card-soon" aria-disabled="true">

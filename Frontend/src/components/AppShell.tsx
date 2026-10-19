@@ -1,9 +1,10 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { can, canBrowseClients, isHodOfAny } from '../auth/permissions'
+import { can, canBrowseClients, isHodOfAny, isVisaTeam } from '../auth/permissions'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
 import { useFollowUpBadge, useToAssignCount } from '../pages/enquiries/queries'
+import { LoginPopup } from '../pages/notices/LoginPopup'
 import { ErrorBoundary } from './ErrorBoundary'
 import { NavIcon } from './NavIcon'
 
@@ -23,6 +24,7 @@ export function AppShell() {
   const overdue = badge.data?.overdue ?? 0
   const followUpsTo = overdue > 0 ? `/follow-ups?tab=overdue${badge.data?.scope === 'ALL' ? '&scope=all' : ''}` : '/follow-ups'
 
+  const onToday = location.pathname === '/' || location.pathname === '/notices'
   // The department sub-items are the list filtered by ?department=; the New enquiry form and visa case pages count as Visa.
   const onEnquiries = location.pathname === '/enquiries' || location.pathname.startsWith('/enquiries/')
   const onVisaPage = location.pathname === '/enquiries/new' || location.pathname.toUpperCase().startsWith('/ENQUIRIES/VISA-')
@@ -45,10 +47,11 @@ export function AppShell() {
           </div>
         </div>
 
-        <NavLink to="/" end className="nav">
+        {/* Today also hosts the notice board (§9): it stays highlighted there, as in the demo. */}
+        <Link to="/" className={`nav${onToday ? ' active' : ''}`} aria-current={onToday ? 'page' : undefined}>
           <NavIcon name="today" />
           Today
-        </NavLink>
+        </Link>
 
         <Link to="/enquiries" className={`nav${onEnquiries && !department && !onToAssign ? ' active' : ''}`}>
           <NavIcon name="enquiries" />
@@ -123,9 +126,17 @@ export function AppShell() {
             <div className="scope">{roleSummary(user)}</div>
           </div>
         </div>
-        <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={onLogout} disabled={logout.isPending}>
-          Log out
-        </button>
+        <div className="user-actions">
+          {/* The Head changes theirs from their own row in Settings → Staff & roles. */}
+          {user.type !== 'HEAD' && (
+            <Link to="/change-password" className="btn btn-sm">
+              Change password
+            </Link>
+          )}
+          <button className="btn btn-sm" onClick={onLogout} disabled={logout.isPending}>
+            Log out
+          </button>
+        </div>
       </aside>
 
       <main className="main">
@@ -133,6 +144,8 @@ export function AppShell() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      {/* What's new for the visa team, over whatever page they land on (0017 Decision 12). */}
+      {isVisaTeam(user) && <LoginPopup />}
     </div>
   )
 }

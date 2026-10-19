@@ -717,6 +717,8 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - *Unused ideas in the demo code, useful for HOD dashboards* ⚠️:
   - **Per-department cards:** "14 waiting on documents", "2 holds expire today", "11 expire in 30 days", "6 web check-ins in 72 h", "9 on 3rd+ follow-up".
   - **Attention list:** document reminders going out, passports arriving back (mark received), stops on the collection boy's run, invoices to chase, cross-sell leads without an answer.
+- **Decided 19 Oct 2026 (project lead):** `docs/decisions/0017-today-dashboard.md`. Until Vimal answers Q28, one page for everyone: staff count their own cases, an HOD the whole department, the Head everything. Cards with nothing to count yet (cross-sell, money to collect) say "Comes with …"; business lost waits for marking enquiries lost (cancelled isn't lost). The notice board and the visa login popup are built in Stage 1, after the cards; weather and IVS news wait for Q24/Q25. Built one component at a time: the banner and tiles → Up next → department bars and the "Comes with …" cards → notice board → login popup.
+- **Built so far:** component 1, **the banner and the four tiles** (19 Oct 2026). The date, the greeting and the day's sentence ("8 enquiries need someone today and 2 are running late. Start with the late ones."), rechecked every minute. **Due today** counts open, postponed and still-to-hand-back cases due from now until midnight, at any step; **Running late** those due before now, with the oldest ("oldest: 2 days"); **New enquiries** everything created since 18:00 ⚠️ on the previous office day ("since Sat, 6:00 pm" on a Monday), a setting the Head changes in Settings → Masters & holiday calendar → Today page; **Cross-sell to answer** shows "Comes with cross-sell". "Change password" moved to the sidebar's user card; the Head's is on their own row in Settings → Staff & roles instead. Component 2, **Up next** (19 Oct 2026, 0017 Decision 9): the cases behind those two tiles, late first, then by time due. Each row shows when (red "2 days late" / "Yesterday" / "10:00 am", blue "3:00 pm"), what to do in the lists' words ("Postponed to …", "Matured · assign a processor", "8 of 11 documents pending", the next step), client · case · summary, the department, and the owner on an HOD's or the Head's day. The first 7, then "Show all"; a row opens All enquiries with that case picked and its steps open (the list loads on until it shows); Due today and Running late jump to it. Component 3 (19 Oct 2026, 0017 Decision 10): the demo's two columns. **Open enquiries by department** counts what the list's Open tab counts (open, plus cancelled ones still to hand back), every selling department the person can see, at 0 until Stage 2; a row opens that department's list (Only mine ticked where the count is their own). **Business lost** keeps the four small tiles at "—" with "Comes with marking enquiries lost"; **Money to collect** shows "—" and "Comes with Accounts". Component 4 (19 Oct 2026, 0017 Decision 11): the **Notice board** card between the bars and Money to collect, with the demo's orange edge and "All notices": the latest 3 of the person's departments' notices (the Head: all) and the holiday-calendar entries still marked new ("Tue 20 Oct 2026 · Dussehra · Applies to French embassy, Mumbai."). The board itself is §12.18. Component 5 (19 Oct 2026, 0017 Decision 12): the visa team's login popup (§12.18). **Today is complete.**
 
 ### 12.2 Enquiries list and visa board
 
@@ -1135,6 +1137,7 @@ This is part of Stage 1 ✅.
   - The visa HOD suggested fetching updates automatically from embassy websites. Vimal said scraping scripts "don't come out right", and a login popup plus updates posted by the team is better *(transcript, 7:19–7:23 PM)*.
   - Masti decides what's authentic: "we just need the technology" *(8:40 PM)*.
 - A small calculator was mentioned in the meeting. It's not in the demo.
+- **Decided and built 19 Oct 2026 (project lead):** `docs/decisions/0017-today-dashboard.md` Decision 11. The board is at `/notices` ("All notices" on Today; Today stays highlighted). A notice has a department, what it's about (Airline / Embassy / Hotel / General), which one (typed: "China", "IndiGo", "Process"), a title, optional details, and our team or IVS as its source. A department's staff with edit access, its HOD and the Head post to it; the author, the HOD and the Head edit (refused over a newer save) or remove one, kept for the record and audited. Everyone in the office reads every department's notices: department tabs and the Everything / Airline / Embassy / Hotel pills in the URL, newest first, 30 at a time. Posting is a drawer (the demo's single box can't fill the filters). The weather and IVS cards stay on the page, saying they wait for Q25 and Q24. **The visa team's login popup** (built 19 Oct 2026, 0017 Decision 12): the Head and the Visa HOD tick "Show in the visa team's login popup" on a Visa notice (an "In the login popup" chip on the board). Visa staff and the Visa HOD (not the Head) get "Important for the visa team" over whatever page they're on when something is new to them: the picked notices and the holiday entries still new, only the new ones; what they posted, picked or added themselves isn't news to them. "Got it" / "All updates" marks them seen (per person, audited as `notice.popup.seen`).
 
 ### 12.19 Settings: portal logins (credential vault) ✅
 
@@ -1255,7 +1258,7 @@ This is the biggest technical unknown (§16.2).
 | Holiday / HolidayTarget (0005) | name, dates (range or weekly), status (active / removed), reference, added by; targets: all embassies / country / embassy / our office |
 | PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only |
 | PortalUsageLog | user, portal, at, case |
-| Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag |
+| Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag. **Built 19 Oct 2026** (0017 Decision 11): department, category, about (the tag), title, body, source (team / IVS), status (active / removed), posted by; holiday entries come from the calendar itself; the login-popup flag is `loginPopupAt` (when it was picked) and `loginPopupById` (who picked it; both or neither, 0017 Decision 12), with each user's `loginPopupSeenAt` |
 | MessageLog | template, recipient, channel (WhatsApp / SMS / email), payload, status, sent at, case |
 | RoutineTask | name, frequency, owner, due, done at |
 | Masters | reasons (by type), sources, visa types, entry types, document types, checklists, price breakups, competitors, markup floors, claim types, insurers/products, fare families, billing cycles, reminder rules, covering-letter templates (effective-dated) |
@@ -1481,7 +1484,9 @@ Masti CRM/
     │                                /enquiries/new, /clients, /clients/:id, /settings/* (masters, checklists, lists, users), /tasks (field staff)
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
     │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
-    ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage
+    ├── src/pages/                ← LoginPage, ChangePasswordPage, UsersPage
+    │   └── today/                ← TodayPage (the banner and tiles, 0017), UpNextCard, NoticeBoardCard, TodaySettingsCard (Settings → Masters), labels.ts, queries.ts
+    │   └── notices/              ← NoticeBoardPage (/notices, 0017 Decision 11), NoticeDrawer, labels.ts, queries.ts
     │   └── field/                ← FieldRunPage (/tasks: the field staff's run on his phone, 0015), queries.ts, types.ts
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
@@ -1591,7 +1596,7 @@ Masti CRM/
 
 **Not there yet:**
 - **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
-- **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
+- **Frontend:** the header search and New-enquiry button.
 - **Project setup:** CI/CD and deploy scripts.
 
 **Portability note:** production must run on Masti's own server or cloud. Keep plain PostgreSQL through `@prisma/adapter-pg`, and don't depend on hosted-only services (e.g. Prisma Accelerate or Prisma Postgres, or vendor-specific serverless platforms) unless Shivanshu and Masti agree. The Prisma "platform" skill in `Backend/.claude/skills/` describes such hosted products.
@@ -1671,6 +1676,15 @@ Masti CRM/
 - **Q29:** old clients come as an Excel file; an import job is built later.
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
+
+**Decided 19 Oct 2026 (project lead), for the Today dashboard.** The design is `docs/decisions/0017-today-dashboard.md` (decided; being built). Details are in §12.1.
+- **Q28 (our answer until Vimal's, M32):** one Today page for everyone. Staff count their own cases, an HOD the whole of each department they lead, the Head everything; view-only staff see an empty day, like their Follow-ups badge.
+- **Cards with nothing to count yet** say "Comes with …" (cross-sell, money to collect). **Business lost** waits for marking enquiries lost: cancelled isn't counted as lost.
+- **The notice board and the visa login popup** are built in Stage 1, after the cards. Weather and IVS news wait for Q24/Q25.
+- **New enquiries** count from 18:00 ⚠️ on the previous office day (the `today` setting, Head only).
+- **The notice board (Q24/Q25 still open):** a department's staff post to it, the author, HOD or Head change a notice; everyone reads every department's; Today shows the latest 3 of the person's departments plus new holiday entries; a notice stays until removed; the weather and IVS cards say what they wait for (0017 Decision 11).
+- **The visa team's login popup:** the Head and the Visa HOD pick Visa notices for it; Visa staff and the Visa HOD see it when something is new to them (picked notices and new holiday entries); "Got it" marks them seen, audited (0017 Decision 12).
+- **Built:** component 1, the banner and the four tiles; component 2, Up next; component 3, open enquiries by department with the "Comes with …" cards; component 4, the notice board and its Today card; component 5, the visa team's login popup (all 19 Oct 2026). **Today is complete.**
 
 **Decided 19 Oct 2026 (project lead), the follow-up and reason dropdowns by department.** The design is `docs/decisions/0018-dropdowns-by-department.md` (decided and built). It changes 0006 Decision 7.
 - **Each value is tagged with the departments it shows in** (one or more); a case lists and accepts only its department's values.
@@ -1843,7 +1857,7 @@ Masti CRM/
 | 25 | Notice-board auto-alerts and weather: sources; in or out? | S/C | 3 |
 | 26 | Accounting software: its name; export file now or in phase 2? | C | 3 |
 | 27 | Reports: what goes into the Visa, Staff workload, Outstanding and Cross-sell tabs | C | 3 |
-| 28 | Dashboards per role (Staff / HOD / Head) | C | 3 |
+| 28 | Dashboards per role (Staff / HOD / Head). **19 Oct:** for our side, one Today page for everyone: staff their own cases, an HOD the department, the Head everything (0017); confirm with Vimal (M32) | Y→C | 3 |
 | 29 | ~~Existing data to import~~ **Answered 8 Oct:** Excel file; import job built later | C | 1 |
 | 30 | Notification of the 3rd follow-up: the permission flow, and who approves | C | 3 |
 | 31 | Can office staff (e.g. Accounts) cover the collection run, using the same phone screen? The data model allows it; today `/tasks` is field staff only. | C | 1 |

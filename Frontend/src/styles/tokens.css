@@ -35,11 +35,18 @@
   --primary-tint: #e7effa;
   --primary-tint-2: #e2eaf6;
 
+  /* Today's banner: sea blue into a lighter blue and a sunset orange, with a sun (demo screen 01) */
+  --hero-blue-2: #2f7fd8;
+  --hero-orange: #f2994a;
+  --hero-sun: #ffd29a;
+
   /* Status chips: background / text */
   --ok-bg: #e5f5ec;
   --ok: #1f7a4b;
   --warn-bg: #fdf1da;
   --warn: #8a5a00;
+  /* A darker amber tile on --warn-bg (the visa team's login popup's icon) */
+  --warn-tile: #fde3a7;
   --bad-bg: #fdece7;
   --bad: #b9452a;
   --late: #e0623a;

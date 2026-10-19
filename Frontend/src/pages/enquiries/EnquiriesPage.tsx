@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { can, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
@@ -14,6 +14,9 @@ import type { DepartmentChip, EnquiryListFilters, EnquiryRow, ListStatus } from 
 
 /** The selling departments get a chip; any other department (Accounts…) only when it has open enquiries. */
 const SELLING = new Set<string>(SELLING_DEPARTMENTS)
+
+/** How far the list loads on to find a case another page handed over: 8 pages of 25. */
+const SEEK_PAGES = 8
 
 /**
  * Open cases by default; postponed, cancelled and closed (delivered, 0014) ones are found here too (?status=postponed).
@@ -45,8 +48,12 @@ export function EnquiriesPage() {
   const urlQ = params.get('q') ?? ''
   const [search, setSearch] = useState(urlQ)
   const q = useDebouncedValue(search.trim(), 300)
-  // The New enquiry form sends us here with the case it just saved: open it.
+  // The New enquiry form sends us here with the case it just saved, and Today's Up next with the case clicked: open it.
   const [selected, setSelected] = useState<string | null>((location.state as { selected?: string } | null)?.selected ?? null)
+  // That case may sit past the first page: the list loads on until it shows, then scrolls to it (below). Changing the
+  // list or picking a row ends the search.
+  const [seekId, setSeekId] = useState(selected)
+  const scrolledTo = useRef<string | null>(null)
 
   // Follow the URL when it changes without a remount (sidebar links, Back/Forward).
   const [seenUrlQ, setSeenUrlQ] = useState(urlQ)
@@ -66,6 +73,19 @@ export function EnquiriesPage() {
   }
   const list = useEnquiryList(filters)
 
+  // A handed-over case on a later page: fetch the next page, at most SEEK_PAGES in all, until its row is there.
+  const { data: pages, hasNextPage, isFetchingNextPage, fetchNextPage } = list
+  useEffect(() => {
+    if (!seekId || !pages) return
+    if (pages.pages.some((p) => p.enquiries.some((r) => r.id === seekId))) {
+      if (scrolledTo.current === seekId) return
+      scrolledTo.current = seekId
+      document.getElementById(`enquiry-${seekId}`)?.scrollIntoView({ block: 'center' })
+    } else if (hasNextPage && !isFetchingNextPage && pages.pages.length < SEEK_PAGES) {
+      void fetchNextPage()
+    }
+  }, [seekId, pages, hasNextPage, isFetchingNextPage, fetchNextPage])
+
   useEffect(() => {
     setParams(
       (prev) => {
@@ -78,7 +98,8 @@ export function EnquiriesPage() {
     )
   }, [q, setParams])
 
-  const setParam = (key: 'status' | 'department' | 'mine', value: string) =>
+  const setParam = (key: 'status' | 'department' | 'mine', value: string) => {
+    setSeekId(null)
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
@@ -88,6 +109,7 @@ export function EnquiriesPage() {
       },
       { replace: true },
     )
+  }
 
   if (!me) return null
 
@@ -158,7 +180,10 @@ export function EnquiriesPage() {
               className="input search"
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSeekId(null)
+                setSearch(e.target.value)
+              }}
               placeholder="Search a case number, client name or mobile"
               aria-label="Search enquiries"
             />
@@ -216,7 +241,15 @@ export function EnquiriesPage() {
               </thead>
               <tbody>
                 {rows.map((e) => (
-                  <EnquiryTableRow key={e.id} row={e} on={e.id === selected} onClick={() => setSelected(e.id === selected ? null : e.id)} />
+                  <EnquiryTableRow
+                    key={e.id}
+                    row={e}
+                    on={e.id === selected}
+                    onClick={() => {
+                      setSeekId(null)
+                      setSelected(e.id === selected ? null : e.id)
+                    }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -258,7 +291,7 @@ function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; o
   const due = dueOf(row.dueAt)
   const name = row.client.name
   return (
-    <tr className={on ? 'row-on' : undefined} onClick={onClick}>
+    <tr id={`enquiry-${row.id}`} className={on ? 'row-on' : undefined} onClick={onClick}>
       <td>
         <div className="client-cell">
           <span className="avatar" style={{ background: style.tint, color: style.text }}>

@@ -8,20 +8,26 @@ const IST_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', yea
 const IST_TIME = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })
 const IST_WEEKDAY_DATE = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' })
 
-const time = (d: Date) => IST_TIME.format(d).replace(/\s?am$/i, ' am').replace(/\s?pm$/i, ' pm')
+/** "11:00 am" in India. */
+export const istTime = (d: Date) => IST_TIME.format(d).replace(/\s?am$/i, ' am').replace(/\s?pm$/i, ' pm')
 const dayNumber = (ymd: string) => Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(5, 7)) - 1, Number(ymd.slice(8, 10))) / 86_400_000
+
+/** Days from today to this moment's day, in India: -1 yesterday, 0 today, 1 tomorrow. */
+export function daysFromToday(iso: string): number {
+  return dayNumber(IST_DAY.format(new Date(iso))) - dayNumber(istToday())
+}
 
 /** "Late · 2 days", "Late · yesterday", "Today, 11:00 am", "Tomorrow, 11:00 am", "Tue 6 Oct". */
 export function dueOf(iso: string | null, now = new Date()): { text: string; tone: DueTone } {
   if (!iso) return { text: '—', tone: 'later' }
   const due = new Date(iso)
-  const days = dayNumber(IST_DAY.format(due)) - dayNumber(istToday())
+  const days = daysFromToday(iso)
   if (due.getTime() < now.getTime()) {
-    if (days === 0) return { text: `Late · ${time(due)}`, tone: 'late' }
+    if (days === 0) return { text: `Late · ${istTime(due)}`, tone: 'late' }
     if (days === -1) return { text: 'Late · yesterday', tone: 'late' }
     return { text: `Late · ${-days} days`, tone: 'late' }
   }
-  if (days === 0) return { text: `Today, ${time(due)}`, tone: 'today' }
-  if (days === 1) return { text: `Tomorrow, ${time(due)}`, tone: 'later' }
+  if (days === 0) return { text: `Today, ${istTime(due)}`, tone: 'today' }
+  if (days === 1) return { text: `Tomorrow, ${istTime(due)}`, tone: 'later' }
   return { text: IST_WEEKDAY_DATE.format(due).replace(',', ''), tone: 'later' }
 }

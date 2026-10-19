@@ -11,6 +11,7 @@ import { FollowUpsPage } from './pages/followUps/FollowUpsPage'
 import { VisaCasePage } from './pages/enquiries/case/VisaCasePage'
 import { NewEnquiryPage } from './pages/enquiries/NewEnquiryPage'
 import { LoginPage } from './pages/LoginPage'
+import { NoticeBoardPage } from './pages/notices/NoticeBoardPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
 import { CompanyPage } from './pages/settings/company/CompanyPage'
@@ -18,7 +19,7 @@ import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
-import { TodayPage } from './pages/TodayPage'
+import { TodayPage } from './pages/today/TodayPage'
 import { UsersPage } from './pages/UsersPage'
 
 function NotFound() {
@@ -85,6 +86,7 @@ export default function App() {
         }
       >
         <Route index element={<TodayPage />} />
+        <Route path="notices" element={<NoticeBoardPage />} />
         <Route path="enquiries" element={<EnquiriesPage />} />
         <Route path="enquiries/new" element={<NewEnquiryPage />} />
         {/* Only visa cases exist so far; Stage 2 departments get their own case pages. */}

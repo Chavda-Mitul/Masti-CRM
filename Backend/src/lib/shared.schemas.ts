@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// Fields several modules' schemas validate the same way: the client's and Masti's own PAN, GSTIN and state, and a
-// person's name (clients, vendors). Zod only, like every *.schemas.ts, so any module's schemas may import it and it can
-// later be shared with the frontend.
+// Fields several modules' schemas validate the same way: the client's and Masti's own PAN, GSTIN and state, a person's
+// name (clients, vendors) and a time of day (settings, time slots). Zod only, like every *.schemas.ts, so any module's
+// schemas may import it and it can later be shared with the frontend.
 
 /** GST state codes (statutory, not business config). Decides the place of supply on invoices. */
 export const GST_STATES = [
@@ -85,3 +85,6 @@ export const gstin = upperNoSpaces.pipe(
     .refine(gstinChecksumOk, "This GSTIN's last character doesn't match. Check it for a typo."),
 );
 export const stateCode = z.string().trim().refine((code) => STATE_CODES.has(code), "Pick a state from the list.");
+
+/** A time of day in India, 24-hour "HH:mm": when a setting's work falls due, a field slot's start and end. */
+export const timeOfDay = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time, e.g. 11:00.");
