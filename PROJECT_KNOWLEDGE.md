@@ -717,7 +717,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
   - **Per-department cards:** "14 waiting on documents", "2 holds expire today", "11 expire in 30 days", "6 web check-ins in 72 h", "9 on 3rd+ follow-up".
   - **Attention list:** document reminders going out, passports arriving back (mark received), stops on the collection boy's run, invoices to chase, cross-sell leads without an answer.
 - **Decided 19 Oct 2026 (project lead):** `docs/decisions/0017-today-dashboard.md`. Until Vimal answers Q28, one page for everyone: staff count their own cases, an HOD the whole department, the Head everything. Cards with nothing to count yet (cross-sell, money to collect) say "Comes with …"; business lost waits for marking enquiries lost (cancelled isn't lost). The notice board and the visa login popup are built in Stage 1, after the cards; weather and IVS news wait for Q24/Q25. Built one component at a time: the banner and tiles → Up next → department bars and the "Comes with …" cards → notice board → login popup.
-- **Built so far:** component 1, **the banner and the four tiles** (19 Oct 2026). The date, the greeting and the day's sentence ("8 enquiries need someone today and 2 are running late. Start with the late ones."), rechecked every minute. **Due today** counts open, postponed and still-to-hand-back cases due from now until midnight, at any step; **Running late** those due before now, with the oldest ("oldest: 2 days"); **New enquiries** everything created since 18:00 ⚠️ on the previous office day ("since Sat, 6:00 pm" on a Monday), a setting the Head changes in Settings → Masters & holiday calendar → Today page; **Cross-sell to answer** shows "Comes with cross-sell". The tiles become links with Up next. "Change password" moved to the sidebar's user card.
+- **Built so far:** component 1, **the banner and the four tiles** (19 Oct 2026). The date, the greeting and the day's sentence ("8 enquiries need someone today and 2 are running late. Start with the late ones."), rechecked every minute. **Due today** counts open, postponed and still-to-hand-back cases due from now until midnight, at any step; **Running late** those due before now, with the oldest ("oldest: 2 days"); **New enquiries** everything created since 18:00 ⚠️ on the previous office day ("since Sat, 6:00 pm" on a Monday), a setting the Head changes in Settings → Masters & holiday calendar → Today page; **Cross-sell to answer** shows "Comes with cross-sell". "Change password" moved to the sidebar's user card. Component 2, **Up next** (19 Oct 2026, 0017 Decision 9): the cases behind those two tiles, late first, then by time due. Each row shows when (red "2 days late" / "Yesterday" / "10:00 am", blue "3:00 pm"), what to do in the lists' words ("Postponed to …", "Matured · assign a processor", "8 of 11 documents pending", the next step), client · case · summary, the department, and the owner on an HOD's or the Head's day. The first 7, then "Show all"; a row opens All enquiries with that case picked and its steps open (the list loads on until it shows); Due today and Running late jump to it.
 
 ### 12.2 Enquiries list and visa board
 
@@ -1482,7 +1482,7 @@ Masti CRM/
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
     │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
     ├── src/pages/                ← LoginPage, ChangePasswordPage, UsersPage
-    │   └── today/                ← TodayPage (the banner and tiles, 0017), TodaySettingsCard (Settings → Masters), labels.ts, queries.ts
+    │   └── today/                ← TodayPage (the banner and tiles, 0017), UpNextCard, TodaySettingsCard (Settings → Masters), labels.ts, queries.ts
     │   └── field/                ← FieldRunPage (/tasks: the field staff's run on his phone, 0015), queries.ts, types.ts
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
@@ -1592,7 +1592,7 @@ Masti CRM/
 
 **Not there yet:**
 - **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
-- **Frontend:** the header search and New-enquiry button; Today's Up next, department bars, notice board and login popup (0017, components 2–5).
+- **Frontend:** the header search and New-enquiry button; Today's department bars, notice board and login popup (0017, components 3–5).
 - **Project setup:** CI/CD and deploy scripts.
 
 **Portability note:** production must run on Masti's own server or cloud. Keep plain PostgreSQL through `@prisma/adapter-pg`, and don't depend on hosted-only services (e.g. Prisma Accelerate or Prisma Postgres, or vendor-specific serverless platforms) unless Shivanshu and Masti agree. The Prisma "platform" skill in `Backend/.claude/skills/` describes such hosted products.
@@ -1678,7 +1678,7 @@ Masti CRM/
 - **Cards with nothing to count yet** say "Comes with …" (cross-sell, money to collect). **Business lost** waits for marking enquiries lost: cancelled isn't counted as lost.
 - **The notice board and the visa login popup** are built in Stage 1, after the cards. Weather and IVS news wait for Q24/Q25.
 - **New enquiries** count from 18:00 ⚠️ on the previous office day (the `today` setting, Head only).
-- **Built so far:** component 1, the banner and the four tiles (19 Oct 2026). Next: Up next.
+- **Built so far:** component 1, the banner and the four tiles; component 2, Up next (both 19 Oct 2026). Next: the department bars and the "Comes with …" cards.
 
 **Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
 - **Build it now:** Vimal wants clients' scans kept **permanently**. Settled the same day: permanent, with no removal on request and no government check waited for (M40 closed).

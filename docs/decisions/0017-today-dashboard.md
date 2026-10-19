@@ -1,7 +1,7 @@
 # 0017 · The Today dashboard
 
 - **Status:** decided (19 Oct 2026, project lead). Being built one component at a time (Decision 7). Built: the banner
-  and the four tiles (19 Oct 2026, component 1).
+  and the four tiles (19 Oct 2026, component 1); Up next (19 Oct 2026, component 2).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -54,8 +54,8 @@ Per-role dashboards (Q28 / M32) stay open with Vimal; this is our answer until h
   singulars ("1 enquiry needs…", "1 is running late. Start with the late one.") and "Nothing is running late.",
   "Nothing new is due today, but 2 are running late…" and "Nothing is due today and nothing is running late."
 - **Rechecked every minute,** so a case turns late without a reload.
-- **The tiles aren't links yet** (the demo's open the whole Enquiries list). The list's Open tab leaves postponed cases
-  out, so its numbers wouldn't match. With Up next (component 2), Due today and Running late lead there.
+- **Due today and Running late lead to Up next** (Decision 9), not to the whole Enquiries list as the demo's do: the
+  list's Open tab leaves postponed cases out, so its numbers wouldn't match.
 
 ### 3. New enquiries: since the previous office day's evening ⚠️
 
@@ -91,7 +91,7 @@ Q25 are answered.
 
 Each component is planned, built, tested, checked in the browser and committed before the next starts:
 1. **The banner and the four tiles** (19 Oct 2026, built)
-2. **Up next**
+2. **Up next** (19 Oct 2026, built; Decision 9)
 3. **Open enquiries by department,** with the "Comes with …" cards (business lost, money to collect)
 4. **The notice board**
 5. **The visa team's login popup**
@@ -101,6 +101,24 @@ Each component is planned, built, tested, checked in the browser and committed b
 The placeholder page held office staff's only link to change their password. It moves under the user card, beside Log
 out (field staff keep theirs on `/tasks`). The placeholder's "Your access" card goes: the user card shows the role, and
 the Head has Settings → Staff & roles.
+
+### 9. Up next
+
+**Decided 19 Oct 2026 (project lead), with component 2:**
+- **What it lists:** the cases behind Due today and Running late (Decisions 1–2): late or due before midnight, in the
+  enquiries list's order (late first, then by time due). At most 200 come at once; past that the card says the rest are
+  in All enquiries.
+- **The first 7, then "Show all"** ("Show all 12" opens the rest in place). The demo stops at 7; this way nothing late
+  stays hidden.
+- **Each row, as in the demo:** when (late in red: "2 days late", "Yesterday", or the time for earlier today; later
+  today in blue: "3:00 pm"), a bar in the department's colour, what to do, "client · case number · summary", the
+  department chip, and the owner's initials on an HOD's or the Head's day (a staff member's rows are all their own).
+- **What to do, in the lists' words:** the status note (postponed, cancelled with passports still to hand back,
+  "Matured · assign a processor"), else the follow-up desk's "8 of 11 documents pending", else the case's next step.
+  The desk and Up next share it (`whatFor`).
+- **A row opens the All enquiries list** with that case picked and its steps panel open, as in the demo; a postponed
+  case opens on the Postponed tab. The list loads on, up to 8 pages, until the case shows. The New enquiry form's
+  "open the case I just saved" gained the same.
 
 ## Not in this record
 
