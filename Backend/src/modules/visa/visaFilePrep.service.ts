@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
-import { istDateTimeToUtc } from "../../lib/dates";
+import { dayLabel, fromDbDate, istDateTimeToUtc } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
+import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
@@ -85,7 +86,7 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
   const enquiry = await loadCase(caseNo, actor, PREPARING);
   const found = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
   if (!found) throw notFound("Traveller not found on this case.");
-  const { appointment, ...rest } = input;
+  const { appointment, confirmWarnings, ...rest } = input;
   const sent = definedOnly({
     ...rest,
     appointmentAt: appointment === undefined ? undefined : appointment && istDateTimeToUtc(appointment.on, appointment.at),
@@ -100,6 +101,19 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
     if (changes.appointmentAt && changes.appointmentAt.getTime() <= Date.now()) {
       throw fieldError("appointment", "Pick a time later than now.");
     }
+    // An appointment on or after the departure day can't bring the visa in time; it can still be right if the trip
+    // moves (a soft warning, decided 19 Oct 2026).
+    let confirmed: Warning[] = [];
+    if (changes.appointmentAt && appointment) {
+      const { departOn } = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { departOn: true } });
+      const depart = departOn && fromDbDate(departOn);
+      const name = before.name ?? "The traveller";
+      const warnings: Warning[] =
+        depart && appointment.on >= depart
+          ? [{ code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `${name}'s appointment (${dayLabel(appointment.on)}) is on or after the day the trip begins (${dayLabel(depart)}).` }]
+          : [];
+      confirmed = checkWarnings(warnings, confirmWarnings);
+    }
     const after = await tx.visaCaseTraveller.update({ where: { id: found.id }, data: changes });
     await audit(
       {
@@ -109,7 +123,7 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
         entityId: found.id,
         clientId: enquiry.clientId,
         before: { name: before.name, ...pick(before, keys) },
-        after: { name: after.name, ...pick(after, keys) },
+        after: { name: after.name, ...pick(after, keys), ...confirmedWarningsNote(confirmed) },
         ip: actor.ip,
       },
       tx,

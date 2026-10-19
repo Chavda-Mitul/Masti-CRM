@@ -1,12 +1,13 @@
+import { createPortal } from 'react-dom'
 import type { SaveWarning } from '../lib/apiErrors'
 
 /**
  * Shown when the backend answers 409 WARNING (decided 19 Oct 2026): something that's usually a mistake but can be right,
  * e.g. a visa that ends before the trip or an appointment after departure. Staff go back and check, or save anyway; the
- * confirmation is recorded in the audit log.
+ * confirmation is recorded in the audit log. Rendered on the page body, so a form inside a table row can show it too.
  */
 export function WarningModal({ warnings, onCancel, onConfirm }: { warnings: SaveWarning[]; onCancel: () => void; onConfirm: () => void }) {
-  return (
+  return createPortal(
     <div className="overlay overlay-center" style={{ zIndex: 30 }} onClick={onCancel}>
       <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="warn-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="warn-title">
@@ -29,6 +30,7 @@ export function WarningModal({ warnings, onCancel, onConfirm }: { warnings: Save
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

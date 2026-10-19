@@ -4,6 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDateTime, istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useUpdateApplication } from '../queries'
 import type { CaseTraveller, VisaCase } from '../types'
 import { travellerTab } from './labels'
@@ -74,6 +75,8 @@ type RowErrors = { ackNo?: string | undefined; appointment?: string | undefined 
 function ApplicationRow({ caseNo, traveller: t, appointmentNeeded }: { caseNo: string; traveller: CaseTraveller; appointmentNeeded: boolean }) {
   const toast = useToast()
   const update = useUpdateApplication(caseNo)
+  // An appointment on or after the departure day: check, then save anyway.
+  const guard = useWarningGuard()
   const saved = t.appointmentAt ? istParts(t.appointmentAt) : { date: '', time: '' }
   const [ackNo, setAckNo] = useState(t.ackNo ?? '')
   const [on, setOn] = useState(saved.date)
@@ -101,21 +104,25 @@ function ApplicationRow({ caseNo, traveller: t, appointmentNeeded }: { caseNo: s
       return
     }
     setSaveErrors({})
-    update.mutate(
-      {
-        travellerId: t.id,
-        ...(ackChanged ? { ackNo: ack || null } : {}),
-        ...(appointmentChanged ? { appointment: on && at ? { on, at } : null } : {}),
-      },
-      {
-        onSuccess: () => toast({ tone: 'ok', message: `Saved for ${name}.` }),
-        onError: (err) => {
-          const issues = errorBody(err)?.issues
-          if (issues?.ackNo || issues?.appointment) setSaveErrors({ ackNo: issues.ackNo?.[0], appointment: issues.appointment?.[0] })
-          else toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t save. Please try again.' })
+    const send = (confirmWarnings: boolean) =>
+      update.mutate(
+        {
+          travellerId: t.id,
+          ...(ackChanged ? { ackNo: ack || null } : {}),
+          ...(appointmentChanged ? { appointment: on && at ? { on, at } : null } : {}),
+          ...(confirmWarnings ? { confirmWarnings } : {}),
         },
-      },
-    )
+        {
+          onSuccess: () => toast({ tone: 'ok', message: `Saved for ${name}.` }),
+          onError: (err) => {
+            if (guard.intercept(err, () => send(true))) return
+            const issues = errorBody(err)?.issues
+            if (issues?.ackNo || issues?.appointment) setSaveErrors({ ackNo: issues.ackNo?.[0], appointment: issues.appointment?.[0] })
+            else toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t save. Please try again.' })
+          },
+        },
+      )
+    send(false)
   }
 
   return (
@@ -175,6 +182,7 @@ function ApplicationRow({ caseNo, traveller: t, appointmentNeeded }: { caseNo: s
         >
           {update.isPending ? 'Saving…' : 'Save'}
         </button>
+        {guard.modal}
       </td>
     </tr>
   )

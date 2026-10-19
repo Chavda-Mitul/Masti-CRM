@@ -275,7 +275,8 @@ export const checkCaseDocumentSchema = z
 export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;
 
 const blankToNull = (value: unknown) => (typeof value === "string" && value.trim() === "" ? null : value);
-const somethingToChange = (v: object) => Object.values(v).some((value) => value !== undefined);
+/** A partial update names at least one field (saving again past a warning, confirmWarnings, isn't a change). */
+const somethingToChange = (v: object) => Object.entries(v).some(([key, value]) => key !== "confirmWarnings" && value !== undefined);
 
 /**
  * Trip details (Decision 4). Each field is optional (only what changed is sent) and null clears it. The service checks
@@ -313,6 +314,8 @@ export const updateApplicationSchema = z
       })
       .nullable()
       .optional(),
+    /** Saving again past a warning (an appointment on or after the departure day). */
+    confirmWarnings,
   })
   .refine(somethingToChange, { message: "Nothing to change." });
 

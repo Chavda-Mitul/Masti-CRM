@@ -279,7 +279,7 @@ export function useUpdateTrip(caseNo: string) {
 
 /** One traveller's acknowledgement number and appointment (a day and a time in India); null clears either. */
 export function useUpdateApplication(caseNo: string) {
-  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null }>(
+  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null; confirmWarnings?: boolean }>(
     caseNo,
     (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/application`, { method: 'PATCH', body }),
   )

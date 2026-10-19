@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, addMonths, istDateTimeToUtc, istToday } from "../src/lib/dates";
+import { addDays, addMonths, dayLabel, istDateTimeToUtc, istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
@@ -174,6 +174,29 @@ describe("each traveller's portal details (Decision 5)", () => {
       after: { ackNo: "FRA1MU20260648", appointmentAt: istDateTimeToUtc(on, "10:30").toISOString() },
     });
     expect(entries[1]!.after).toMatchObject({ ackNo: null, appointmentAt: null });
+  });
+
+  it("warns about an appointment on or after the departure day; saved once confirmed (19 Oct 2026)", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { departOn: new Date(`${inDays(10)}T00:00:00Z`) } });
+    const [adult] = (await load(processor, c.caseNo)).travellers;
+
+    const late = await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(12), at: "10:30" } });
+    expect(late.status).toBe(409);
+    expect(late.body.details.warnings).toEqual([
+      { code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `Rakesh Mehta's appointment (${dayLabel(inDays(12))}) is on or after the day the trip begins (${dayLabel(inDays(10))}).` },
+    ]);
+    expect((await load(processor, c.caseNo)).travellers[0]!.appointmentAt).toBeNull();
+
+    const saved = await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(12), at: "10:30" }, confirmWarnings: true });
+    expect(saved.status).toBe(200);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.traveller.application" } });
+    expect(entry.after).toMatchObject({ confirmedWarnings: [{ code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE" }] });
+
+    // Before the departure day: no warning. Nothing to change is still refused, confirmWarnings or not.
+    expect((await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(5), at: "11:00" } })).status).toBe(200);
+    expect((await saveApplication(processor, c.caseNo, adult!.id, { confirmWarnings: true })).status).toBe(400);
   });
 
   it("refuses a badly formed number, a past appointment and half an appointment", async () => {
