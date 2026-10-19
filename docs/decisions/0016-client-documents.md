@@ -215,12 +215,43 @@ doesn't change and there's no "I agree" step.
 - **Not sent yet:** like every client message, it goes out once the WhatsApp outbox is built. The outbox sends it when
   a client's first scan is saved; nothing is stored for it now.
 
-### 7. Settings and seed data (golden rule 1)
+### 7. The "Scan not saved" warning
+
+Saving a scan stayed optional (Decision 5): nobody asked for it to be required. On 19 Oct 2026 the project lead asked
+for a warning instead, switched on per paper.
+
+**Decided 19 Oct 2026 (project lead):**
+- **A warning only:** it never stops a tick, a save or "Mark documents complete".
+- **Switched on per paper** in Settings → Documents ("Warn if no scan is saved"), by whoever edits the document master.
+  Seeded on for the **passport, Aadhaar card and PAN card** ⚠️; every other paper starts off.
+- **When it shows:** the paper is ticked as came in (**Original** or **Xerox**), and no scan of it was saved for that
+  person since the case was opened. A copy from an earlier trip doesn't count. A paper ticked **On file** never warns:
+  it came from the vault.
+- **Where:**
+  - an amber "Scan not saved" note on the paper's row, beside **Save scan**
+  - a "No scan saved yet" list in the **Mark documents complete** box, which still lets the case complete
+
+**Defaults added when building (19 Oct 2026; say if any is wrong):**
+- **An unnamed traveller never warns:** nothing can be saved for them until they're linked to a family member.
+- **The switch is read live:** turning it on reaches cases already open, unlike a checklist's names, which intake
+  copies.
+- **The row note shows only to someone who can save the scan,** while the papers are being ticked (Steps 1–2).
+
+**Built 19 Oct 2026:**
+- **Data:** `DocumentMaster.warnIfNoScan` (default off), migration `20261019170000_scan_warning`. Changing it is
+  audited `document.update`.
+- **The case DTO:** each paper sends `noScan`. The server works it out from the switch, the tick, the traveller's
+  link and the current copy's `uploadedAt` against the case's `createdAt`.
+- **Tests:** `visaMasters.test.ts` (seeded switches, who may change it, audit) and `visaCaseScans.test.ts` (when it
+  warns, an older copy, On file, an unnamed traveller, still matures).
+
+### 8. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | `clients.documents` (the largest scan, in MB) | `{ maxMb: 20 }` ⚠️ |
 | The document master | the papers already there, plus Aadhaar card and PAN card |
+| "Warn if no scan is saved" (Decision 7) | on for the passport, Aadhaar card and PAN card ⚠️ |
 | The file name and the WhatsApp wording | ours ⚠️ |
 
 ## Not in this record
