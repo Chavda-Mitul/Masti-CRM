@@ -5,6 +5,7 @@ import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
 import { departmentStyle } from '../../lib/departments'
 import { formatDate, formatMobile, initials } from '../../lib/format'
+import { statusNote } from '../enquiries/status'
 import '../../styles/clients.css'
 import { errorText } from './apiErrors'
 import { ReadinessBadge } from './ClientBadges'
@@ -14,7 +15,7 @@ import { MembersCard } from './MembersCard'
 import { NotesCard } from './NotesCard'
 import { PhonesCard } from './PhonesCard'
 import { useClient, useClientOptions } from './queries'
-import type { ClientOptions, ClientProfile } from './types'
+import type { ClientCase, ClientOptions, ClientProfile } from './types'
 
 /** The client profile (demo screen 23). Cases, money and messages join it as those modules are built. */
 export function ClientDetailPage() {
@@ -46,6 +47,7 @@ export function ClientDetailPage() {
   const c = client.data
   const name = c.name
   const place = [c.area, c.city].filter(Boolean).join(', ')
+  const openCases = c.cases.filter(isUnfinished)
 
   return (
     <>
@@ -85,7 +87,7 @@ export function ClientDetailPage() {
 
       <div className="tiles">
         <Tile label="Business with us" value="—" note="Comes with Accounts" />
-        <Tile label="Open now" value={String(c.openEnquiries.length)} note={openDepartments(c) || 'No open cases'} />
+        <Tile label="Open now" value={String(openCases.length)} note={departmentsOf(openCases) || 'No open cases'} />
         <Tile label="Still to pay" value="—" note="Comes with Accounts" />
         <Tile
           label="Pays"
@@ -114,23 +116,28 @@ export function ClientDetailPage() {
   )
 }
 
-/** "Visa, Holidays": the departments with an open case. */
-function openDepartments(client: ClientProfile) {
-  return [...new Set(client.openEnquiries.map((e) => departmentStyle(e.department).label))].join(', ')
+/** Not finished yet: a postponed case is still the client's case if they come back. */
+function isUnfinished(e: ClientCase) {
+  return e.status === 'OPEN' || e.status === 'POSTPONED'
 }
 
-/** Open cases for now. Finished cases join the list once a case can be finished (the case steps come next). */
+/** "Visa, Holidays": the departments these cases are in. */
+function departmentsOf(cases: ClientCase[]) {
+  return [...new Set(cases.map((e) => departmentStyle(e.department).label))].join(', ')
+}
+
+/** Every case of the family the user may open: open ones first, then finished ones (demo screen 23). */
 function CasesCard({ client }: { client: ClientProfile }) {
   return (
     <div className="card pad">
       <h2 className="h2">Everything we&apos;ve done for this family</h2>
-      {client.openEnquiries.length === 0 ? (
+      {client.cases.length === 0 ? (
         <p className="muted" style={{ margin: '8px 0 0' }}>
-          No open cases.
+          No cases yet.
         </p>
       ) : (
         <ul className="case-list">
-          {client.openEnquiries.map((e) => {
+          {client.cases.map((e) => {
             const style = departmentStyle(e.department)
             return (
               <li key={e.caseNo}>
@@ -144,7 +151,7 @@ function CasesCard({ client }: { client: ClientProfile }) {
                   <div className="muted small">{e.summary}</div>
                 </div>
                 <div className="small" style={{ textAlign: 'right' }}>
-                  {e.stage}
+                  <WhereItStands c={e} />
                   <div className="muted">{e.owner ? e.owner.name : 'Waiting for the HOD'}</div>
                 </div>
               </li>
@@ -154,6 +161,16 @@ function CasesCard({ client }: { client: ClientProfile }) {
       )}
     </div>
   )
+}
+
+/** An open case's step; a finished or waiting case says how it ended or why it waits. */
+function WhereItStands({ c }: { c: ClientCase }) {
+  // Closed: the last step's own label, e.g. "Delivered" ⚠️, as on the case page.
+  if (c.status === 'CLOSED') return <span className="chip chip-sm chip-ok">{c.stage.statusLabel}</span>
+  if (c.status === 'LOST') return <span className="chip chip-sm chip-muted">Lost{c.reason && ` · ${c.reason.name}`}</span>
+  if (c.status === 'CANCELLED') return <span className="chip chip-sm chip-bad">{statusNote(c)}</span>
+  if (c.status === 'POSTPONED') return <span className="chip chip-sm chip-muted">{statusNote(c)}</span>
+  return <>{c.stage.name}</>
 }
 
 function Tile({ label, value, note }: { label: string; value: string; note?: string | undefined }) {

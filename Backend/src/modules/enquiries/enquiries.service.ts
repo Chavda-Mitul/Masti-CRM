@@ -204,20 +204,14 @@ export async function toAssignCount(user: UserWithDepartments) {
 const OPEN_STATUSES = ["OPEN", "POSTPONED"] as const;
 
 /**
- * The client's unfinished cases, newest first, with whose they are.
- * - `visible` (the client profile): only the cases this user may open (visibility.ts).
- * - `department` (the New enquiry lookup): every case in the departments the user can view, colleagues' too, so staff spot
- *   an existing case before making a duplicate. It warns but doesn't block, since a family can plan two trips (0003).
+ * The New enquiry lookup: the client's unfinished cases, newest first, with whose they are. Every case in the departments
+ * the user can view, colleagues' too, so staff spot an existing case before making a duplicate. It warns but doesn't
+ * block, since a family can plan two trips (0003).
  */
-export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments, scope: "visible" | "department") {
+export async function listOpenEnquiriesOfClient(clientId: string, user: UserWithDepartments) {
   const departments = await viewableDepartments(user);
   const rows = await prisma.enquiry.findMany({
-    where: {
-      AND: [
-        { clientId, status: { in: [...OPEN_STATUSES] } },
-        scope === "visible" ? visibleEnquiryWhere(user, departments) : { departmentId: { in: departments.map((d) => d.id) } },
-      ],
-    },
+    where: { clientId, status: { in: [...OPEN_STATUSES] }, departmentId: { in: departments.map((d) => d.id) } },
     include: rowInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
@@ -226,6 +220,32 @@ export async function listOpenEnquiriesOfClient(clientId: string, user: UserWith
     department: row.department.code,
     summary: summaryOf(row),
     stage: row.stage.name,
+    owner: row.owner,
+  }));
+}
+
+/**
+ * "Everything we've done for this family" on the client profile: all of the client's cases this user may open
+ * (visibility.ts), finished ones too. Unfinished first, then finished; newest first in each.
+ */
+export async function listCasesOfClient(clientId: string, user: UserWithDepartments) {
+  const departments = await viewableDepartments(user);
+  const rows = await prisma.enquiry.findMany({
+    where: { AND: [{ clientId }, visibleEnquiryWhere(user, departments)] },
+    include: rowInclude,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  const unfinished = (row: EnquiryRow) => (OPEN_STATUSES as readonly string[]).includes(row.status);
+  return [...rows.filter(unfinished), ...rows.filter((row) => !unfinished(row))].map((row) => ({
+    caseNo: row.caseNo,
+    department: row.department.code,
+    summary: summaryOf(row),
+    status: row.status,
+    stage: { name: row.stage.name, statusLabel: row.stage.statusLabel },
+    reason: row.reason,
+    resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
+    /** A cancelled visa case whose passports are still to hand back (0006 amendment 15). */
+    toHandBack: toHandBack(row),
     owner: row.owner,
   }));
 }
