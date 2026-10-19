@@ -14,6 +14,9 @@ import { LoginPage } from './pages/LoginPage'
 import { NoticeBoardPage } from './pages/notices/NoticeBoardPage'
 import { ChecklistEditorPage } from './pages/settings/masters/checklists/ChecklistEditorPage'
 import { ChecklistsPage } from './pages/settings/masters/checklists/ChecklistsPage'
+import { CoveringLetterPage } from './pages/settings/masters/coveringLetters/CoveringLetterPage'
+import { CoveringLettersPage } from './pages/settings/masters/coveringLetters/CoveringLettersPage'
+import { NewCoveringLetterPage } from './pages/settings/masters/coveringLetters/NewCoveringLetterPage'
 import { CompanyPage } from './pages/settings/company/CompanyPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
@@ -100,6 +103,9 @@ export default function App() {
           <Route path="masters" element={<MastersPage />} />
           <Route path="masters/checklists" element={<ChecklistsPage />} />
           <Route path="masters/checklists/:offeringId" element={<ChecklistEditorPage />} />
+          <Route path="masters/covering-letters" element={<CoveringLettersPage />} />
+          <Route path="masters/covering-letters/new" element={<NewCoveringLetterPage />} />
+          <Route path="masters/covering-letters/:formatId" element={<CoveringLetterPage />} />
           <Route path="masters/lists" element={<MasterListsPage />} />
           <Route path="company" element={<CompanyPage />} />
           <Route
