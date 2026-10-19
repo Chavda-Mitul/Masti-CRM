@@ -181,6 +181,7 @@ describe("each traveller's portal details (Decision 5)", () => {
     const processor = await neha();
     await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { departOn: new Date(`${inDays(10)}T00:00:00Z`) } });
     const [adult] = (await load(processor, c.caseNo)).travellers;
+    await prisma.visaCaseTraveller.update({ where: { id: adult!.id }, data: { name: "Rakesh Mehta" } });
 
     const late = await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(12), at: "10:30" } });
     expect(late.status).toBe(409);
