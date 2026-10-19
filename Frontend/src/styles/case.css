@@ -761,6 +761,11 @@
   color: var(--text-muted);
   cursor: default;
 }
+/* Decision 7: the master asks for a scan of this paper and none was kept during this case. A warning only. */
+.doc-vault .doc-no-scan {
+  color: var(--warn);
+  font-weight: 700;
+}
 /* Three choices (Original | Xerox | On file) in the same column as two. */
 .seg-btn.seg-three button {
   padding: 5px 7px;

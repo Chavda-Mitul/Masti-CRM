@@ -37,6 +37,7 @@ export function DocumentsTable({ canEdit, showInactive }: { canEdit: boolean; sh
               <th>Code</th>
               <th>Document</th>
               <th>Shown to the client</th>
+              <th>Scan warning</th>
               <th>Status</th>
               {canEdit && <th aria-label="Actions" />}
             </tr>
@@ -47,6 +48,7 @@ export function DocumentsTable({ canEdit, showInactive }: { canEdit: boolean; sh
                 <td className="mono">{d.code}</td>
                 <td style={{ fontWeight: 700 }}>{d.name}</td>
                 <td className="muted">{d.detail ?? '—'}</td>
+                <td>{d.warnIfNoScan ? 'On' : <span className="muted">Off</span>}</td>
                 <td>{d.isActive ? <span className="chip chip-ok chip-sm">Active</span> : <span className="chip chip-muted chip-sm">Switched off</span>}</td>
                 {canEdit && (
                   <td>
@@ -78,18 +80,19 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       name: document?.name ?? '',
       detail: document?.detail ?? '',
       sortOrder: document?.sortOrder ?? 0,
+      warnIfNoScan: document?.warnIfNoScan ?? false,
     },
   })
   const { errors } = formState
 
   const onSubmit = handleSubmit((v) => {
-    const body = { name: v.name, detail: orNull(v.detail), sortOrder: v.sortOrder }
+    const body = { name: v.name, detail: orNull(v.detail), sortOrder: v.sortOrder, warnIfNoScan: v.warnIfNoScan }
     save.mutate(document ? { id: document.id, body } : { body: { ...body, code: v.code } }, {
       onSuccess: (saved) => {
         toast({ tone: 'ok', message: `${saved.name} saved.` })
         onClose()
       },
-      onError: (err) => applyServerIssues(err, setError, ['code', 'name', 'detail', 'sortOrder']),
+      onError: (err) => applyServerIssues(err, setError, ['code', 'name', 'detail', 'sortOrder', 'warnIfNoScan']),
     })
   })
 
@@ -116,6 +119,13 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       <FormField label="Shown to the client (optional)" error={errors.detail?.message} wide hint="Extra detail in the WhatsApp list.">
         <input className="input" {...register('detail')} placeholder="35×45 mm, white background" />
       </FormField>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label className="check">
+          <input type="checkbox" {...register('warnIfNoScan')} />
+          Warn if no scan is saved
+        </label>
+        <span className="hint">The case shows “Scan not saved” when this paper is ticked but no copy is kept for the next trip.</span>
+      </div>
     </MasterDrawer>
   )
 }

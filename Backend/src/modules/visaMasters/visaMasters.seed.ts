@@ -15,10 +15,11 @@ export const EMBASSIES = [{ code: "FR-MUM", countryCode: "FR", name: "French emb
 
 /**
  * The demo's France Tourist list ⚠️, plus the child alternatives (§10.4), plus the Aadhaar and PAN cards the client
- * document vault keeps (docs/decisions/0016-client-documents.md Decision 2).
+ * document vault keeps (docs/decisions/0016-client-documents.md Decision 2). The passport, Aadhaar and PAN start with the
+ * "Scan not saved" warning on (Decision 7) ⚠️.
  */
 export const DOCUMENTS = [
-  { code: "PASSPORT", name: "Passport", detail: null, sortOrder: 1 },
+  { code: "PASSPORT", name: "Passport", detail: null, sortOrder: 1, warnIfNoScan: true },
   { code: "OLD_PASSPORTS", name: "Old passports", detail: null, sortOrder: 2 },
   { code: "VISA_FORM", name: "Visa form, signed", detail: null, sortOrder: 3 },
   { code: "PHOTOS", name: "Photos", detail: "35×45 mm, white background", sortOrder: 4 },
@@ -32,8 +33,8 @@ export const DOCUMENTS = [
   { code: "FLIGHT_RESERVATION", name: "Flight reservation", detail: null, sortOrder: 12 },
   { code: "HOTEL_BOOKINGS", name: "Hotel bookings", detail: null, sortOrder: 13 },
   { code: "TRAVEL_INSURANCE", name: "Travel insurance", detail: null, sortOrder: 14 },
-  { code: "AADHAAR_CARD", name: "Aadhaar card", detail: null, sortOrder: 15 },
-  { code: "PAN_CARD", name: "PAN card", detail: null, sortOrder: 16 },
+  { code: "AADHAAR_CARD", name: "Aadhaar card", detail: null, sortOrder: 15, warnIfNoScan: true },
+  { code: "PAN_CARD", name: "PAN card", detail: null, sortOrder: 16, warnIfNoScan: true },
 ];
 
 /** Why a paper needs replacing (docs/decisions/0007-visa-file-prep.md Decision 3): placeholders ⚠️ until Masti sends its list. */

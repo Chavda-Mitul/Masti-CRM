@@ -165,6 +165,8 @@ export interface CaseDocument {
   onFile: { id: string; uploadedAt: string; contentType: ScanType; pageCount: number | null; sizeBytes: number } | null
   /** The copy an On file paper was printed from; it may be older than onFile. */
   fromScan: { id: string; uploadedAt: string } | null
+  /** "Scan not saved" (0016 Decision 7): ticked Original or Xerox, the master asks for a scan, none kept during this case. */
+  noScan: boolean
   /** Step 3: null until the processor checks it. */
   check: DocumentCheck | null
   /** Why it needs replacing, from Settings → Masters → Document problems. */

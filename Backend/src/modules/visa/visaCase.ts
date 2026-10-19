@@ -180,6 +180,8 @@ export const visaCaseInclude = {
               checkedBy: personSelect,
               checkReason: { select: { id: true, name: true } },
               clientDocument: { select: { id: true, uploadedAt: true } },
+              /** The master's switch as it is now, so turning it on reaches cases already open (0016 Decision 7). */
+              document: { select: { warnIfNoScan: true } },
             },
           },
           /** The current refusal letter (0012 Decision 4): the newest upload. Older ones are counted, not loaded. */
@@ -599,27 +601,40 @@ export function toVisaCaseDto(
         stickerCheck: t.stickerCheck,
         /** The refusal letter (0012 Decision 4): the current upload, shown only while the traveller is refused. */
         refusalLetter: refusalLetterOf(t),
-        documents: t.documents.map((d) => ({
-          id: d.id,
-          name: d.name,
-          detail: d.detail,
-          requirement: d.requirement,
-          quantity: d.quantity,
-          note: d.note,
-          status: d.status,
-          receivedAs: d.receivedAs,
-          receivedAt: d.receivedAt,
-          receivedBy: d.receivedBy,
-          /** The current copy of this paper in the client's vault (0016 Decision 5), for a traveller linked to a person. */
-          onFile: (t.memberId && scans.get(scanKey(t.memberId, d.documentId))) || null,
-          /** The copy an On file paper was printed from; it may be older than the current one. */
-          fromScan: d.clientDocument,
-          /** The processor's check in Step 3 (0007 Decision 3): null until checked. */
-          check: d.check,
-          checkReason: d.checkReason,
-          checkedAt: d.checkedAt,
-          checkedBy: d.checkedBy,
-        })),
+        documents: t.documents.map((d) => {
+          const onFile = (t.memberId && scans.get(scanKey(t.memberId, d.documentId))) || null;
+          return {
+            id: d.id,
+            name: d.name,
+            detail: d.detail,
+            requirement: d.requirement,
+            quantity: d.quantity,
+            note: d.note,
+            status: d.status,
+            receivedAs: d.receivedAs,
+            receivedAt: d.receivedAt,
+            receivedBy: d.receivedBy,
+            /** The current copy of this paper in the client's vault (0016 Decision 5), for a traveller linked to a person. */
+            onFile,
+            /** The copy an On file paper was printed from; it may be older than the current one. */
+            fromScan: d.clientDocument,
+            /**
+             * "Scan not saved" (0016 Decision 7), a warning only: the master asks for it, the paper came in as an
+             * original or a xerox, and no copy was kept since the case was opened. An older trip's copy doesn't count.
+             */
+            noScan:
+              d.document.warnIfNoScan &&
+              d.status === "RECEIVED" &&
+              (d.receivedAs === "ORIGINAL" || d.receivedAs === "XEROX") &&
+              !!t.memberId &&
+              (!onFile || onFile.uploadedAt < row.createdAt),
+            /** The processor's check in Step 3 (0007 Decision 3): null until checked. */
+            check: d.check,
+            checkReason: d.checkReason,
+            checkedAt: d.checkedAt,
+            checkedBy: d.checkedBy,
+          };
+        }),
         /** In or made; "8 / 11 for Rakesh". */
         done: t.documents.filter((d) => d.status === "RECEIVED" || d.status === "MADE").length,
         /** Everything not marked "Not needed". */

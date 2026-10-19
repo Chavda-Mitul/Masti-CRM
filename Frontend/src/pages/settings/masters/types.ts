@@ -210,6 +210,8 @@ export interface DocumentMaster {
   detail: string | null
   sortOrder: number
   isActive: boolean
+  /** "Scan not saved" on a case's paper (0016 Decision 7). */
+  warnIfNoScan: boolean
 }
 
 export interface Offering {
