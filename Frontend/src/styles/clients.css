@@ -223,7 +223,8 @@
   flex: 1;
   min-width: 0;
 }
-.case-list-main a {
+.case-list-main a,
+.case-list-main .case-no-link {
   font-weight: 700;
 }
 

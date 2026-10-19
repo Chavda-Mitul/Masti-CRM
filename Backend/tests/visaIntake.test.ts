@@ -4,6 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
+import { maturedCase } from "./visaHelpers";
 
 beforeEach(async () => {
   await resetDb();
@@ -397,13 +398,17 @@ describe("GET /api/clients/lookup: open enquiries", () => {
         resumeOn: null,
         toHandBack: false,
         owner: { id: expect.any(String), name: "Aarti Patel" },
+        canOpen: true,
       },
     ]);
 
-    // A colleague's case isn't on her profile view (the lookup still shows it).
+    // A colleague sees the open case too, as on the lookup, with whose it is, but can't open it (0006 amendment 17).
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([]);
+    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([
+      expect.objectContaining({ caseNo: saved.caseNo, owner: { id: expect.any(String), name: "Aarti Patel" }, canOpen: false }),
+    ]);
+    expect((await neha.get(`/api/visa/cases/${saved.caseNo}`)).status).toBe(403);
 
     // A save returns the profile with them as well.
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
@@ -440,9 +445,33 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     const lookup = (await staff.get("/api/clients/lookup?mobile=9825041234")).body.openEnquiries;
     expect(lookup.map((c: { caseNo: string }) => c.caseNo)).toEqual([open.caseNo]);
 
-    // A colleague still sees none of them, finished or not.
+    // A colleague sees only the open one, not to open; the finished ones stay off her view.
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${open.client.id}`)).body.client.cases).toEqual([]);
+    const theirs = (await neha.get(`/api/clients/${open.client.id}`)).body.client.cases;
+    expect(theirs.map((c: { caseNo: string; canOpen: boolean }) => [c.caseNo, c.canOpen])).toEqual([[open.caseNo, false]]);
+  });
+
+  it("shows a matured case waiting for the HOD to whoever matured it, without a link, not 'nothing open' (review finding 5)", async () => {
+    // Aarti matured it; it waits for the HOD with no owner, so she can't open it any more (0006 Decision 1).
+    const c = await maturedCase({ assigned: false });
+    const profile = (agent: Awaited<ReturnType<typeof loginAs>>) => agent.get(`/api/clients/${c.client.id}`);
+    const mine = (await profile(c.staff)).body.client.cases;
+    expect(mine).toEqual([
+      expect.objectContaining({ caseNo: c.caseNo, status: "OPEN", stage: expect.objectContaining({ name: "File preparation" }), owner: null, canOpen: false }),
+    ]);
+    expect((await c.staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+
+    // The HOD opens it.
+    await createUser({ name: "Riya Shah", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await profile(await loginAs("riya@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ caseNo: c.caseNo, canOpen: true })]);
+
+    // Given to Neha, it's hers to open; Aarti still sees it, with whose it is.
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { ownerId: neha.id } });
+    expect((await profile(await loginAs("neha@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ canOpen: true })]);
+    expect((await profile(c.staff)).body.client.cases).toEqual([
+      expect.objectContaining({ owner: { id: neha.id, name: "Neha Joshi" }, canOpen: false }),
+    ]);
   });
 });
