@@ -238,7 +238,7 @@ for a warning instead, switched on per paper.
 - **The row note shows only to someone who can save the scan,** while the papers are being ticked (Steps 1–2).
 
 **Built 19 Oct 2026:**
-- **Data:** `DocumentMaster.warnIfNoScan` (default off), migration `20261019170000_scan_warning`. Changing it is
+- **Data:** `DocumentMaster.warnIfNoScan` (default off), migration `20261019230000_scan_warning`. Changing it is
   audited `document.update`.
 - **The case DTO:** each paper sends `noScan`. The server works it out from the switch, the tick, the traveller's
   link and the current copy's `uploadedAt` against the case's `createdAt`.
