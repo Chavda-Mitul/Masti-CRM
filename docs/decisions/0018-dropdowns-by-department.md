@@ -12,7 +12,7 @@ The three lists were shared by every department. Only Visa is built, so that was
 Insurance and Tickets arrive each department would see the others' values: Visa staff would get "Sent hotel options",
 Hotels staff "Bank statement pending". Any HOD could also change a value another department relies on.
 
-It also matters for the follow-up note staff asked for (M43, change request 8). Until Vimal answers, the way for an
+It also matters for the follow-up note staff asked for (M44, change request 9). Until Vimal answers, the way for an
 employee to say "what to do next" is a more precise **Next step** value, and those values are department-specific.
 
 ## Decisions
@@ -68,5 +68,5 @@ Rows made before the migration have no departments and show nowhere: reset and r
 
 ## Not in this record
 
-- **A free-text note on a follow-up** (M43, change request 8): waits for Vimal.
+- **A free-text note on a follow-up** (M44, change request 9): waits for Vimal.
 - **Filtering the Settings lists by department.** Each row shows its departments; a filter can come when the lists grow.
