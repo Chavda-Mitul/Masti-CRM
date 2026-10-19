@@ -93,7 +93,8 @@ passport stock**. The demo's three tiles show this: Vendor collected → In tran
   - 400 under `expectedOn`: before today, more than a year ahead, or a day our office is closed ("Weekly off: our
     office is closed that day. Pick another.")
 - **In one transaction under the case lock:** the two days, who and when; the case moves to Passport back, due on the
-  expected day at 11:00 ⚠️ (`visa.arrivalCheck`, the next open office day `afterDays` after it); audit
+  expected day at 11:00 ⚠️ (`visa.arrivalCheck`, the next open office day `afterDays` after it; never already past:
+  expected today and saved after 11:00, it's the next open office day at 11:00, fixed 19 Oct 2026); audit
   `visa.passports.inTransit`.
 - **The case** sends `passportsBack { collectedOn, expectedOn, at, by }`.
 - **Screen:**
