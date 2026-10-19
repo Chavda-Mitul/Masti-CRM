@@ -141,7 +141,8 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
     way back →" stays "Soon" until Step 7.
 
 **Built 16 Oct 2026** (component 2, changing a traveller's decision):
-- `PUT /api/visa/cases/:caseNo/travellers/:travellerId/decision` with `{ outcome, visaNo?, validFrom?, validTo? }`, for
+- `PUT /api/visa/cases/:caseNo/travellers/:travellerId/decision` with `{ outcome, visaNo?, validFrom?, validTo?,
+  updatedAt }` (`updatedAt` since 19 Oct, below), for
   whoever can act on the case, only while it's at Decision (open, not postponed): "The decision can only be changed
   while the case is at Decision." It's checked as when recorded, with the messages under `decision`; a traveller of
   another case is a 404.
@@ -149,8 +150,12 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
   a refused one loses its number and dates) and the audit `visa.decision.change` with the old and new values.
 - **Defaults (not asked; say if any is wrong):**
   - **One traveller at a time:** each row has its own Change, already filled in.
-  - **The last save wins**, as with the other one-traveller edits (the portal details, the checklist): a change doesn't
-    make anyone else's open page stale. A save that changes nothing writes nothing.
+  - ~~**The last save wins**, as with the other one-traveller edits (the portal details, the checklist): a change doesn't
+    make anyone else's open page stale.~~ **Changed 19 Oct 2026** (code review, item 2 fixes): two dialogs opened on
+    the same row could undo each other, since each saves the whole row. "Change" now sends the case's `updatedAt` from
+    when the dialog opened: a save after someone else's change is refused (409 STALE, "Someone else changed this case
+    after you opened it. Reload and try again."). A saved change moves the case's `updatedAt`, so other open pages reload
+    before they act. A save that changes nothing writes nothing.
   - **The case stays as it was:** its step, its due time and "recorded {day} · {name}" on the card. Changes show only in
     the audit log; the demo has no "changed by" line. A change moves no money and sends no message.
   - A traveller changed to Approved keeps their refusal letters, which the case then doesn't show (Decision 4).

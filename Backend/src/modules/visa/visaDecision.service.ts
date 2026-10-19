@@ -48,7 +48,7 @@ function wording(g: Gathered) {
  * One traveller's outcome (Decision 3): an approved one with the number and both dates (valid-to on or after
  * valid-from), a refused one with none. The message names the traveller and goes under `field`.
  */
-function checkOne(field: string, name: string, number: string, o: ChangeDecisionInput) {
+function checkOne(field: string, name: string, number: string, o: Omit<ChangeDecisionInput, "updatedAt">) {
   if (o.outcome === "APPROVED") {
     if (!o.visaNo) throw fieldError(field, `Enter ${name}'s ${number}.`);
     if (!o.validFrom || !o.validTo) throw fieldError(field, `Enter the dates ${name}'s visa is valid.`);
@@ -139,12 +139,14 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
 
 /**
  * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision: the outcome, or
- * just the number or dates. In one transaction under the case lock: the traveller's entry and the audit
- * (visa.decision.change, with the old and new values). The last save wins, as with the other one-traveller edits, and
- * the case's step, due time and "recorded by" stay. A save that changes nothing writes nothing.
+ * just the number or dates. In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
+ * audit (visa.decision.change, with the old and new values). It sends the case's updatedAt from when the dialog opened,
+ * so a save after someone else's change is refused (409 STALE) instead of undoing it (amended 19 Oct 2026). The case's
+ * step, due time and "recorded by" stay. A save that changes nothing writes nothing.
  */
 export async function changeDecision(caseNo: string, travellerId: string, input: ChangeDecisionInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, DECIDED);
+  assertFresh(enquiry.updatedAt, input.updatedAt, "case");
   const check = (g: Gathered) => {
     const t = g.travellers.find((x) => x.id === travellerId);
     if (!t) throw notFound("Traveller not found on this case.");
@@ -155,7 +157,8 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
   check(await gather(prisma, enquiry.id));
 
   await prisma.$transaction(async (tx) => {
-    await lockCase(tx, enquiry.id, actor, DECIDED);
+    const locked = await lockCase(tx, enquiry.id, actor, DECIDED);
+    assertFresh(locked.updatedAt, input.updatedAt, "case");
     const name = check(await gather(tx, enquiry.id));
     const row = await tx.visaCaseTraveller.findUniqueOrThrow({
       where: { id: travellerId },
@@ -179,6 +182,8 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
         validTo: now.validTo ? toDbDate(now.validTo) : null,
       },
     });
+    // The case moves on too, so a page or dialog opened before this change can't save over it.
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { updatedAt: new Date() } });
     await audit(
       {
         actorId: actor.user.id,

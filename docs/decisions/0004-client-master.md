@@ -36,6 +36,9 @@ question #45, M43). It is close to Vimal's worry about staff who leave keeping a
   client from the Clients tab (`POST /api/clients` follows the list).
 - **Everything the case links to keeps working** for its owner: the client's name on the case, "Open the client" from
   Raise invoice and from booking the collection boy, and Step 2's family list and "Add person".
+- **With [0006](0006-visa-documents.md) amendment 17** (a client's page lists colleagues' cases, not to open): staff see
+  that list only on a client they can open, i.e. when they have a case of their own for the family. Whoever matured a
+  case that now waits for the HOD no longer opens the client.
 - **A refusal doesn't depend on whether the client exists**, so ids reveal nothing: "This client isn't on any of your
   cases. Ask your HOD."
 - **Not changed:** the Enquiries list still shows each visible case's client name and mobile, and the "Already on file"

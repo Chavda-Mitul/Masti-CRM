@@ -1,8 +1,8 @@
 import type { Prisma } from "../../../generated/prisma/client";
-import { prisma } from "../../config/prisma";
+import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { definedOnly, onlyChanged } from "../../lib/changes";
-import { badRequest, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
 import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
@@ -489,6 +489,28 @@ export async function createOffering(input: CreateOfferingInput, actor: Actor) {
   return toOfferingDto({ ...full, _count: { checklist: 0 } });
 }
 
+/**
+ * Switching "Vendor needed" on mustn't strand a case already at Docket & dispatch with no vendor: it could then be neither
+ * put in a docket nor submitted online, and only File preparation picks a vendor (decided 19 Oct 2026, project lead).
+ * Refused while any open or postponed case of this visa waits there without one; the message names them.
+ */
+async function assertNoneWaitWithoutVendor(db: Db, offeringId: number) {
+  const waiting = await db.enquiry.findMany({
+    where: { status: { in: ["OPEN", "POSTPONED"] }, stage: { code: "DISPATCH" }, visa: { is: { offeringId, vendorId: null } } },
+    select: { caseNo: true },
+    orderBy: { caseNo: "asc" },
+    take: 6,
+  });
+  if (waiting.length === 0) return;
+  const named = waiting.slice(0, 5).map((c) => c.caseNo);
+  const more = waiting.length > 5 ? " and more" : "";
+  const one = waiting.length === 1;
+  throw conflict(
+    `${named.join(", ")}${more} ${one ? "is" : "are"} at Docket & dispatch with no vendor. Submit ${one ? "it" : "them"} online first: with ` +
+      `Vendor needed on, ${one ? "it" : "they"} couldn't be sent at all.`,
+  );
+}
+
 export async function updateOffering(id: number, input: UpdateOfferingInput, actor: Actor) {
   assertCanEditVisaMasters(actor.user);
   const before = await prisma.visaOffering.findUnique({ where: { id } });
@@ -501,7 +523,10 @@ export async function updateOffering(id: number, input: UpdateOfferingInput, act
     action: "visaOffering.update",
     entityType: "VisaOffering",
     entityId: id,
-    write: (tx) => tx.visaOffering.update({ where: { id }, data: changes }),
+    write: async (tx) => {
+      if (changes.vendorNeeded === true) await assertNoneWaitWithoutVendor(tx, id);
+      return tx.visaOffering.update({ where: { id }, data: changes });
+    },
   });
   return toOfferingDto(await prisma.visaOffering.findUniqueOrThrow({ where: { id }, include: offeringInclude }));
 }

@@ -7,7 +7,7 @@ import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import type { Actor, UserWithDepartments } from "../users/user";
-import { listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
+import { listCasesOfClient, listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
 import {
   ACCOUNTS_FIELDS,
   assertCanBrowseClients,
@@ -226,7 +226,7 @@ export async function lookupByMobile(raw: string, user: UserWithDepartments) {
     ...secondary.map((p) => ({ ...p.client, matchedOn: "SECONDARY" as const })),
   ];
   const client = matches[0] ?? null;
-  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user, "department") : [];
+  const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user) : [];
   return { mobile, client, alsoMatches: matches.slice(1), openEnquiries };
 }
 
@@ -277,17 +277,17 @@ export async function listClients(query: ListClientsQuery, user: UserWithDepartm
   };
 }
 
-/** The client's profile, with their open cases in the departments this user can see. */
+/** The client's profile, with their cases (open and finished) that this user may open. */
 export async function getClient(id: string, user: UserWithDepartments) {
   await assertCanSeeClient(user, id);
   const client = await prisma.client.findUnique({ where: { id }, include: clientProfileInclude });
   if (!client) throw notFound("Client not found.");
-  const [notes, settings, openEnquiries] = await Promise.all([
+  const [notes, settings, cases] = await Promise.all([
     prisma.clientNote.findMany({ where: { clientId: id }, include: noteInclude, orderBy: { createdAt: "desc" }, take: PROFILE_NOTES }),
     getClientSettings(),
-    listOpenEnquiriesOfClient(id, user, "visible"),
+    listCasesOfClient(id, user),
   ]);
-  return { ...toClientProfile(client, notes, istToday(), settings), openEnquiries };
+  return { ...toClientProfile(client, notes, istToday(), settings), cases };
 }
 
 export async function getReadiness(id: string, user: UserWithDepartments) {

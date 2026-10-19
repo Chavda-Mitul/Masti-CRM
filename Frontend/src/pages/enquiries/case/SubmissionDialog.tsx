@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { canEditEmbassies } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -27,6 +27,9 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
   const [picked, setPicked] = useState<number | null>(s?.embassy.id ?? null)
   const [collectionOn, setCollectionOn] = useState<string | null>(s?.collectionOn ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // The case as it was when the dialog opened: the page refetches while it's open (another window, a colleague), and
+  // the save must not carry the new updatedAt over a form filled in from the old values.
+  const [openedAt] = useState(c.updatedAt)
   // The only embassy for the country is filled in (Decision 3).
   const embassyId = picked ?? (options.length === 1 ? options[0]!.id : null)
   // The travellers' embassy appointments (decided 16 Oct 2026): the file is marked submitted from the earliest one's
@@ -44,13 +47,15 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
     setErrors(missing)
     if (!embassyId || !collectionOn || Object.keys(missing).length) return
     save.mutate(
-      { vendorFileNo: fileNo, embassyId, collectionOn, updatedAt: c.updatedAt },
+      { vendorFileNo: fileNo, embassyId, collectionOn, updatedAt: openedAt },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: s ? 'Submission details saved.' : `${c.caseNo} is submitted at the embassy.` })
           onClose()
         },
         onError: (err) => {
+          // Someone else changed the case (the case is reloaded, with a warning): reopening fills the form in afresh.
+          if (isStale(err)) return onClose()
           const issues = errorBody(err)?.issues ?? {}
           setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
         },

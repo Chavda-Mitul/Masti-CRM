@@ -447,10 +447,14 @@ export const recordDecisionSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 
-/** "Change" on one traveller's row at Step 6 (Decision 6): the outcome and details, checked as when recorded. */
+/**
+ * "Change" on one traveller's row at Step 6 (Decision 6): the outcome and details, checked as when recorded. Sends the
+ * case's updatedAt as the dialog opened with it: a change by someone else since is a 409 STALE.
+ */
 export const changeDecisionSchema = z.object({
   outcome: z.enum(VisaOutcome, "Pick Approved or Refused."),
   ...decisionDetails,
+  updatedAt: z.iso.datetime("Reload and try again."),
 });
 
 /**
