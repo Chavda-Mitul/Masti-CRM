@@ -1,7 +1,8 @@
 # 0017 · The Today dashboard
 
 - **Status:** decided (19 Oct 2026, project lead). Being built one component at a time (Decision 7). Built: the banner
-  and the four tiles (19 Oct 2026, component 1); Up next (19 Oct 2026, component 2).
+  and the four tiles (19 Oct 2026, component 1); Up next (19 Oct 2026, component 2); open enquiries by department and
+  the "Comes with …" cards (19 Oct 2026, component 3).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -72,8 +73,10 @@ Per-role dashboards (Q28 / M32) stay open with Vimal; this is our answer until h
 **Decided 19 Oct 2026 (project lead):** they keep the demo's layout and say what brings them, like the client page's
 "Still to pay · Comes with Accounts":
 - **Cross-sell to answer:** "—", "Comes with cross-sell" (Stage 3)
-- **Money to collect:** comes with Accounts: payments, the outstanding amount and invoice follow-ups (Stage 3)
-- **Business lost this month:** Decision 5
+- **Money to collect:** a "—" and "Comes with Accounts: payments, the outstanding amount and invoice follow-ups"
+  (Stage 3)
+- **Business lost this month:** the demo's four small tiles (Queries in, Booked, Lost, Still open) showing "—", and
+  "Comes with marking enquiries lost" where the top three reasons go (Decision 5). No "Open report" link until Reports.
 
 ### 5. Business lost waits for "mark as Lost"
 
@@ -92,7 +95,8 @@ Q25 are answered.
 Each component is planned, built, tested, checked in the browser and committed before the next starts:
 1. **The banner and the four tiles** (19 Oct 2026, built)
 2. **Up next** (19 Oct 2026, built; Decision 9)
-3. **Open enquiries by department,** with the "Comes with …" cards (business lost, money to collect)
+3. **Open enquiries by department,** with the "Comes with …" cards (business lost, money to collect) (19 Oct 2026,
+   built; Decision 10)
 4. **The notice board**
 5. **The visa team's login popup**
 
@@ -119,6 +123,18 @@ the Head has Settings → Staff & roles.
 - **A row opens the All enquiries list** with that case picked and its steps panel open, as in the demo; a postponed
   case opens on the Postponed tab. The list loads on, up to 8 pages, until the case shows. The New enquiry form's
   "open the case I just saved" gained the same.
+
+### 10. Open enquiries by department
+
+**Decided 19 Oct 2026 (project lead), with component 3:**
+- **A bar counts what the list's Open tab counts:** open cases, plus cancelled ones whose passports are still to hand
+  back; postponed ones have their own tab. Whose cases follow Decision 1.
+- **A row opens that department's list** on the Open tab; where the count is the person's own cases (a department they
+  don't lead), with Only mine ticked, so the list shows the same number.
+- **Every selling department the person can see is listed, at 0 until Stage 2 brings its cases,** as in the demo; any
+  other department only when it has open cases (the list's chip rule). Each bar is sized against the largest.
+- **The layout is the demo's two columns:** Up next and Business lost on the left; the bars, then (component 4) the
+  notice board, then Money to collect in a 360 px column on the right. Below 1100 px they stack.
 
 ## Not in this record
 
