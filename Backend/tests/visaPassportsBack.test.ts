@@ -251,13 +251,19 @@ describe("races", () => {
 });
 
 describe("once the passports are on their way back", () => {
-  it("the decision can't be changed, and a refusal letter can still be added", async () => {
+  it("the decision can still be corrected, with no sticker to check yet, and a refusal letter can still be added", async () => {
     const { c, processor, adult, child } = await decidedCase();
     expect((await send(processor, c.caseNo)).status).toBe(200);
-    const { updatedAt } = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id }, select: { updatedAt: true } });
-    const change = await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`).send({ outcome: "REFUSED", updatedAt });
-    expect(change.status).toBe(409);
-    expect(change.body.message).toBe("The decision can only be changed while the case is at Decision.");
+    // Corrected in transit (amended 19 Oct 2026): the sticker is checked only once the passports are received.
+    const updatedAtNow = async () => (await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id }, select: { updatedAt: true } })).updatedAt;
+    const early = await processor
+      .put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`)
+      .send({ outcome: "REFUSED", stickerCheck: "MATCHES", updatedAt: await updatedAtNow() });
+    expect(early.status).toBe(400);
+    expect(early.body.issues.decision).toEqual(["The sticker is checked once the passports are received."]);
+    const change = await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`).send({ outcome: "REFUSED", updatedAt: await updatedAtNow() });
+    expect(change.status).toBe(200);
+    expect(change.body.case.stage.code).toBe("PASSPORT_BACK");
 
     const doc = await PDFDocument.create();
     doc.addPage();

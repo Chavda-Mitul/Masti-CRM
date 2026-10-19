@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useChangeDecision } from '../queries'
-import type { CaseTraveller, VisaCase } from '../types'
+import type { CaseTraveller, StickerCheck, VisaCase } from '../types'
 import { DecisionRow } from './DecisionRow'
 import { rowBody, rowProblem, type DecisionRowValue } from './decisionValues'
 
 /**
  * "Change" on one traveller's row of the Decision card (docs/decisions/0012-visa-decision.md Decision 6), while the case
- * is at Step 6: the outcome, or just the number or dates. It's checked as when recorded, and the audit log keeps the
- * old and new values. A save after someone else's change is refused (STALE), so it can't undo theirs.
+ * is at Step 6, or at Step 7 until the handover: the outcome, or just the number or dates. Once the passports are
+ * received, an approved traveller's sticker is checked again, as at Mark received (amended 19 Oct 2026). It's checked
+ * as when recorded, and the audit log keeps the old and new values. A save after someone else's change is refused
+ * (STALE), so it can't undo theirs.
  */
 export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { visaCase: VisaCase; traveller: CaseTraveller; onClose: () => void }) {
   const toast = useToast()
@@ -27,18 +29,21 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
   // The case as it was when the dialog opened: the page refetches while it's open (another window, a colleague), and
   // the save must not carry the new updatedAt over a form filled in from the old values.
   const [openedAt] = useState(c.updatedAt)
+  // Received: the sticker is checked again against the passport, starting from what Mark received recorded.
+  const [sticker, setSticker] = useState<StickerCheck | null>(t.stickerCheck)
+  const checking = !!c.passportsReceived && row.outcome === 'APPROVED'
 
   const press = () => {
-    const problem = rowProblem(row, online)
+    const problem = rowProblem(row, online) ?? (checking && !sticker ? 'Check the sticker against the passport: Matches or Doesn’t match.' : null)
     setError(problem ?? undefined)
     if (problem) return
     const body = rowBody(row)
     const same =
       body.outcome === was.outcome &&
       (body.outcome === 'REFUSED' || (row.visaNo.trim().replace(/\s+/g, ' ').toUpperCase() === was.visaNo && row.validFrom === was.validFrom && row.validTo === was.validTo))
-    if (same) return onClose()
+    if (same && (!checking || sticker === t.stickerCheck)) return onClose()
     change.mutate(
-      { travellerId: t.id, ...body, updatedAt: openedAt },
+      { travellerId: t.id, ...body, ...(checking && sticker ? { stickerCheck: sticker } : {}), updatedAt: openedAt },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.` })
@@ -77,6 +82,35 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
             change.reset()
           }}
         />
+        {checking && (
+          <div className="decision-row">
+            <span>
+              <strong>The sticker</strong>
+              <span className="muted small" style={{ display: 'block' }}>
+                Against the passport, as at Mark received
+              </span>
+            </span>
+            <span className="seg-btn" role="radiogroup" aria-label={`${name}: sticker`}>
+              {(['MATCHES', 'MISMATCH'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={sticker === value}
+                  className={sticker === value ? (value === 'MATCHES' ? 'on ok' : 'on bad') : ''}
+                  disabled={change.isPending}
+                  onClick={() => {
+                    setSticker(value)
+                    setError(undefined)
+                    change.reset()
+                  }}
+                >
+                  {value === 'MATCHES' ? 'Matches' : 'Doesn’t match'}
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
 
         {message && <div className="alert alert-bad">{message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

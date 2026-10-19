@@ -368,18 +368,19 @@ describe("Change a traveller's decision (Decision 6)", () => {
     expect((await load(processor, c.caseNo)).travellers.map((t) => t.decision?.outcome)).toEqual(["APPROVED", "REFUSED"]);
   });
 
-  it("only at Decision: not before it's recorded, once the case moves on, postponed or closed", async () => {
+  it("only at Decision or Passport back: not before it's recorded, once handed over, postponed or closed", async () => {
     const { c, processor, adult } = await atVendor();
     const atStep5 = await change(processor, c.caseNo, adult, { outcome: "REFUSED" });
     expect(atStep5.status).toBe(409);
-    expect(atStep5.body.message).toBe("The decision can only be changed while the case is at Decision.");
+    expect(atStep5.body.message).toBe("The decision can only be changed at Decision or Passport back, before the handover.");
 
     expect((await record(processor, c.caseNo, [approved(adult), refused((await load(processor, c.caseNo)).travellers[1]!.id)])).status).toBe(200);
     const { departmentId } = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } });
     const step = (code: string) => prisma.departmentStage.findFirstOrThrow({ where: { departmentId, code } });
-    await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: (await step("PASSPORT_BACK")).id } });
+    // Handed over (Step 8): locked.
+    await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: (await step("DELIVERED")).id } });
     expect((await change(processor, c.caseNo, adult, { outcome: "REFUSED" })).body.message).toBe(
-      "The decision can only be changed while the case is at Decision.",
+      "The decision can only be changed at Decision or Passport back, before the handover.",
     );
 
     await prisma.enquiry.update({

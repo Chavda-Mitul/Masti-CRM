@@ -160,6 +160,10 @@ an e-visa.
 - **Stickers checked** for each **approved** traveller: **Matches** or **Doesn't match** the passport's name and the
   dates recorded at Step 6. A mismatch is recorded and shown in red; the passports still go into stock. Fixing it with
   the embassy stays outside the CRM. A refused traveller and a recalled file have no sticker to check.
+  **Amended 19 Oct 2026 (project lead, review finding 3):** a mismatch that is our typing (a wrong number or date at
+  Step 6) is corrected with "Change" on the Decision card, which works at Passport back until the handover and checks
+  the sticker again ([0012](0012-visa-decision.md) Decision 6). A sticker the embassy got wrong is still fixed with the
+  embassy, outside the CRM.
 - **Received by** is whoever records it, **at the moment they record it** (to the minute, audited). Nobody records it
   for someone else.
 - The case then shows "Passports in our stock", next step "Hand over to the client" (Step 8).
@@ -170,7 +174,8 @@ an e-visa.
   due time (a cancelled one since 0006 amendment 15, so it stays on the list until handed back); a postponed one keeps
   its resume day.
 - **No correction for now:** a saved receipt is fixed, and audited. If Masti asks for corrections, it's its own
-  component.
+  component. (Since 19 Oct 2026 a sticker's check is redone through the decision's Change, above; the booklet count is
+  settled through the shortfall, Decision 5's amendment.)
 - **Counting:** the booklet boxes start blank, with intake's count beside them; a difference turns red as staff type.
 
 **Defaults (not asked; say if any is wrong):**
@@ -222,7 +227,7 @@ closed as Delivered with nobody asked to chase the fourth):
     vendor; no free text). Who: whoever can act on the case (the processor, the Visa HOD or the Head); desk staff who
     see the case through the in-stock rule can't.
   - Then the handover goes ahead with what's in our stock (0014 Decision 4).
-- **More back than went out** stays as before: shown, not held. A sticker that doesn't match is a separate question.
+- **More back than went out** stays as before: shown, not held. A sticker that doesn't match is corrected through the decision's Change (19 Oct 2026, above).
 - *Supersedes "a count that doesn't match is allowed" above for a shortfall: it's still recorded, but now held.* The
   field app's doorstep handover (0015 phase 5) respects the same hold. To confirm with Vimal: M42.
 

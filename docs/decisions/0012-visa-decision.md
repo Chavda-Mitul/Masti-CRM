@@ -116,6 +116,12 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
 - **Who:** the case's processor, the Visa HOD or the Head.
 - **Corrections:** "Change" on a traveller's row while the case is at Step 6, by the same people, recorded in the
   audit log. Locked once the case moves on.
+  - **Amended 19 Oct 2026 (project lead, review finding 3; M45 to confirm):** also at **Step 7 (Passport back), until
+    the handover**, so a sticker that doesn't match the passport (a number or date typed wrong) can be put right.
+  - **Once the passports are received**, the change checks an approved traveller's sticker again, Matches or Doesn't
+    match, as at Mark received. A refused traveller's check is cleared, and the audit keeps the old and new check.
+  - **Still refused:** a cancelled case, a file taken back before a decision, and anything once handed over (Step 8).
+  - **Same people:** the processor, the Visa HOD or the Head; desk staff who see the case in stock can't.
 - **The header chip** reads "Approved" (everyone), "Refused" (everyone) or "Approved 3 · Refused 1".
 
 **Built 15 Oct 2026** (component 1, recording the decision):

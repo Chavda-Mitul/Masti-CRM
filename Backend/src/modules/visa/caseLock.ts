@@ -45,8 +45,14 @@ export const RECALLING: StepRule = { ...WITH_VENDOR, cancelledToo: true };
 /** Step 6 (docs/decisions/0012-visa-decision.md): the decision is recorded from At vendor, once the file was submitted. */
 export const DECIDING: StepRule = { stages: ["AT_VENDOR"], wrongStage: "The decision is recorded while the file is at At vendor." };
 
-/** Step 6 (0012 Decision 6): a recorded decision is corrected while the case is at Decision, and locked once it moves on. */
-export const DECIDED: StepRule = { stages: ["DECISION"], wrongStage: "The decision can only be changed while the case is at Decision." };
+/**
+ * Steps 6–7 (0012 Decision 6, amended 19 Oct 2026): a recorded decision is corrected while the case is at Decision or at
+ * Passport back, so a sticker that doesn't match can be put right before the handover. Locked once handed over.
+ */
+export const DECIDED: StepRule = {
+  stages: ["DECISION", "PASSPORT_BACK"],
+  wrongStage: "The decision can only be changed at Decision or Passport back, before the handover.",
+};
 
 /**
  * Step 7 (docs/decisions/0013-visa-passport-back.md Decision 3): "Passports on the way back", from Decision, or at
