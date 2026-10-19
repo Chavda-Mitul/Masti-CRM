@@ -185,7 +185,8 @@ describe("each traveller's portal details (Decision 5)", () => {
     const late = await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(12), at: "10:30" } });
     expect(late.status).toBe(409);
     expect(late.body.details.warnings).toEqual([
-      { code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `Rakesh Mehta's appointment (${dayLabel(inDays(12))}) is on or after the day the trip begins (${dayLabel(inDays(10))}).` },
+      // Not named yet (maturedCase): named as the case names them.
+      { code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `Adult 1's appointment (${dayLabel(inDays(12))}) is on or after the day the trip begins (${dayLabel(inDays(10))}).` },
     ]);
     expect((await load(processor, c.caseNo)).travellers[0]!.appointmentAt).toBeNull();
 

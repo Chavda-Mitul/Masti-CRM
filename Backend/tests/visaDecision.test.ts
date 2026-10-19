@@ -239,7 +239,7 @@ describe("who may record it", () => {
     expect((hod.body.case as CaseDto).decision!.by!.name).toBe("Riya");
 
     const other = await atVendor({ extra: { mobile: "98250 41237", clientName: "Sunil Shah" }, vendorId: c.vendor.id, clientName: "Sunil Shah" });
-    expect((await record(await loginAs("vimal@masti.test"), other.c.caseNo, [approved(other.adult), approved(other.child, "0182 4472")])).status).toBe(200);
+    expect((await record(await loginAs("vimal@masti.test"), other.c.caseNo, [approved(other.adult, "0182 4473"), approved(other.child, "0182 4474")])).status).toBe(200);
   });
 });
 

@@ -105,8 +105,8 @@ describe("the handover at the door (phase 5)", () => {
     const stop = (await boy.get(`/api/field/jobs/${delivery.id}`)).body.stop;
     expect(stop).toMatchObject({ kind: "DELIVERY", booklets: { current: 2, old: 0 } });
     expect(stop.travellers).toEqual([
-      { id: adult, name: "Rakesh Mehta" },
-      { id: expect.any(String), name: "Aarav Mehta" },
+      { id: adult, name: "Rakesh Mehta", isChild: false },
+      { id: expect.any(String), name: "Aarav Mehta", isChild: true },
     ]);
 
     const receiverPhoto = (await photo(boy, delivery.id, "receiver-photo")).body.photo;

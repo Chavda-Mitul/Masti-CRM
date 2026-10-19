@@ -29,12 +29,12 @@ async function member(agent: Agent, clientId: string, name: string, passportExpi
 
 describe("a passport that runs out too soon after the trip", () => {
   it("is a warning at File ready, the last look before the file goes out", async () => {
-    const c = await readyCase(); // back in 41 days
-    const staff = await visaStaff();
-    const short = addMonths(inDays(41), 3);
-    const memberId = await member(staff, c.client.id, "Rakesh Mehta", short);
-    await prisma.visaCaseTraveller.update({ where: { id: c.travellers[0]!.id }, data: { memberId, name: "Rakesh Mehta" } });
+    const c = await readyCase(); // back in 41 days; Neha's case
     const neha = await loginAs("neha@masti.test");
+    const short = addMonths(inDays(41), 3);
+    // Staff edit the clients of their own cases only (0004 amendment 2): Neha adds the member.
+    const memberId = await member(neha, c.client.id, "Rakesh Mehta", short);
+    await prisma.visaCaseTraveller.update({ where: { id: c.travellers[0]!.id }, data: { memberId, name: "Rakesh Mehta" } });
 
     const warned = await neha.post(`/api/visa/cases/${c.caseNo}/file-ready`).send({ updatedAt: await updatedAtOf(c.caseNo) });
     expect(warned.status).toBe(409);

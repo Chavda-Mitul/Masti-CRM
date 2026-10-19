@@ -267,7 +267,9 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
       { travellerId: k!.id, outcome: "REFUSED" },
     ];
     const updatedAt = await updatedAtOf(processor, c.caseNo);
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt })).status).toBe(200);
+    // Every case here gets the same sticker number, which is a warning on the second one (19 Oct 2026); a fixture
+    // confirms it. The warnings themselves are tested in visaDecisionWarnings.test.ts.
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt, confirmWarnings: true })).status).toBe(200);
   }
   return { c, processor, adult: a!.id, child: k!.id };
 }
