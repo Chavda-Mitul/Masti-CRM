@@ -2,9 +2,9 @@ import { z } from 'zod'
 import { optionalEmail, optionalGstin, optionalMobile, optionalPan, optionalPersonName, panMatchesGstin } from '../../clients/schemas'
 
 // Form validation for the system masters. Mirrors Backend/src/modules/holidays/holidays.schemas.ts,
-// visaMasters/visaMasters.schemas.ts and vendors/vendors.schemas.ts, so mistakes show up before saving; the backend
-// checks everything again.
-// Backend/tests/frontendRules.test.ts fails if these limits drift from the backend's.
+// visaMasters/visaMasters.schemas.ts, vendors/vendors.schemas.ts and coveringLetters/coveringLetters.schemas.ts, so
+// mistakes show up before saving; the backend checks everything again.
+// Backend/tests/frontendRules.test.ts fails if these limits, or the covering letters' blanks, drift from the backend's.
 
 /** A dated holiday covers at most this many days. */
 export const MAX_RANGE_DAYS = 60
@@ -14,6 +14,10 @@ export const MAX_TARGETS = 10
 export const MAX_CHECKLIST_ITEMS = 60
 /** At most this many countries per vendor. */
 export const MAX_VENDOR_COUNTRIES = 50
+/** At most this many countries per covering letter. */
+export const MAX_LETTER_COUNTRIES = 50
+/** The longest covering-letter wording, a page or two. */
+export const MAX_LETTER_CHARS = 6000
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -300,6 +304,81 @@ export const vendorFormSchema = z.object({
   email: optionalEmail.refine((v) => v.trim() !== '', 'Enter the vendor’s email: the dispatch email goes to it.'),
 })
 export type VendorFormValues = z.infer<typeof vendorFormSchema>
+
+// ---------------------------------------------------------------------------
+// Covering letters (docs/decisions/0019-covering-letters.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The {blanks} a wording may use, in the backend's order, with what each prints. The examples are a made-up family (the
+ * demo's Mehtas) for the preview; a case fills in its own when the letter is made.
+ */
+export const LETTER_BLANKS = [
+  { token: 'date', label: 'The letter’s date', example: '20 October 2026' },
+  { token: 'clientName', label: 'The client', example: 'Rakesh Mehta' },
+  { token: 'clientAddress', label: 'The client’s address', example: '12 Shanti Park, Vesu, Surat 395007' },
+  { token: 'applicant', label: 'The first traveller', example: 'Rakesh Mehta' },
+  { token: 'passportNo', label: 'The first traveller’s passport no.', example: 'Z1234567' },
+  { token: 'travellerNames', label: 'Every traveller, in a sentence', example: 'Rakesh Mehta, Anita Mehta, Aarav Mehta and Diya Mehta' },
+  { token: 'travellerCount', label: 'How many travel', example: '4' },
+  { token: 'travellers', label: 'The table of travellers, on a line of its own', example: '' },
+  { token: 'country', label: 'The country', example: 'France' },
+  { token: 'visaType', label: 'The visa type', example: 'Tourist' },
+  { token: 'departOn', label: 'Travelling out', example: '10 December 2026' },
+  { token: 'returnOn', label: 'Coming back', example: '21 December 2026' },
+  { token: 'days', label: 'Days away', example: '12' },
+  { token: 'entry', label: 'Single, double or multiple', example: 'single' },
+  { token: 'hotel', label: 'The hotel stay', example: 'Hotel Lutetia, Paris' },
+] as const
+
+const BLANK = /\{([^{}]*)\}/g
+const TOKENS: readonly string[] = LETTER_BLANKS.map((b) => b.token)
+
+/** Windows line breaks become plain ones and the ends are trimmed, as the backend stores a wording. */
+export function normaliseWording(body: string): string {
+  return body.replace(/\r\n?/g, '\n').trim()
+}
+
+/** What's wrong with a wording's blanks, or null. Word for word the backend's messages. */
+export function wordingProblem(body: string): string | null {
+  const text = body.replace(/\r\n?/g, '\n')
+  for (const [, blank] of text.matchAll(BLANK)) {
+    if (!TOKENS.includes(blank!)) return `{${blank}} isn't one of the blanks. Pick blanks from the list.`
+  }
+  if (/[{}]/.test(text.replace(BLANK, ''))) return 'A { or } is left over. Blanks are written like {applicant}.'
+  const travellers = text.match(/\{travellers\}/g)?.length ?? 0
+  if (travellers > 1) return 'Use {travellers} only once: it prints the table of travellers.'
+  if (travellers === 1 && !/^[ \t]*\{travellers\}[ \t]*$/m.test(text)) return 'Put {travellers} on a line of its own: it prints as a table.'
+  return null
+}
+
+/** A covering letter's details: what it's called and which cases it fits. */
+export const coveringLetterFormSchema = z.object({
+  name: required(80, 'Give the letter a name.'),
+  visaTypeId: z.string().min(1, 'Pick a visa type.'),
+  party: z.enum(['ONE', 'SEVERAL'], 'Pick who travels.'),
+  countryIds: z
+    .array(z.string())
+    .min(1, 'Pick at least one country.')
+    .max(MAX_LETTER_COUNTRIES, `Pick at most ${MAX_LETTER_COUNTRIES} countries.`),
+  sortOrder,
+})
+export type CoveringLetterFormValues = z.infer<typeof coveringLetterFormSchema>
+
+/** A wording and the day it's used from. Today or later: the backend also keeps it within a year. */
+export const wordingFormSchema = z.object({
+  body: z.string().superRefine((value, ctx) => {
+    const body = normaliseWording(value)
+    const problem = !body
+      ? 'Write the letter.'
+      : body.length > MAX_LETTER_CHARS
+        ? `Keep the letter under ${MAX_LETTER_CHARS} characters.`
+        : wordingProblem(body)
+    if (problem) ctx.addIssue({ code: 'custom', message: problem })
+  }),
+  effectiveFrom: z.string().regex(isoDate, 'Pick the day it’s used from.'),
+})
+export type WordingFormValues = z.infer<typeof wordingFormSchema>
 
 export const documentFormSchema = z.object({
   code: z

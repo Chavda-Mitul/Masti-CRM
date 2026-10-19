@@ -1,6 +1,7 @@
 /**
  * Seeds the departments, the client lookup tables and settings, the system masters (dummy visa masters, the weekly
- * Sunday off, holiday settings), the enquiry sources and visa steps, the Today page's setting, and the first Head user.
+ * Sunday off, holiday settings, sample covering letters), the enquiry sources and visa steps, the Today page's setting,
+ * and the first Head user.
  *   npm run db:seed
  * Head details come from SEED_HEAD_NAME, SEED_HEAD_MOBILE, SEED_HEAD_EMAIL, SEED_HEAD_PASSWORD (Backend/.env).
  * If no password is given, a temporary one is generated and printed once. Safe to run again.
@@ -11,6 +12,7 @@ import { normaliseEmail, normaliseMobile } from "../src/lib/contact";
 import { generateTempPassword, hashPassword } from "../src/modules/auth/password";
 import { DEFAULT_OFFICE_NETWORK, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
 import { seedClientLookups } from "../src/modules/clients/clients.seed";
+import { seedCoveringLetters } from "../src/modules/coveringLetters/coveringLetters.seed";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
@@ -99,7 +101,12 @@ async function main() {
   // System masters (docs/decisions/0005-system-masters.md): dummy until Masti sends B1/B2. Existing rows are kept.
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
-  console.log("Visa masters (France Tourist dummy), document problem reasons, processing speeds, the weekly Sunday off and holiday settings ready.");
+  // Sample covering letters (docs/decisions/0019-covering-letters.md) until Masti sends its formats: only into a database
+  // with none.
+  await seedCoveringLetters(prisma);
+  console.log(
+    "Visa masters (France Tourist dummy), document problem reasons, processing speeds, the weekly Sunday off, holiday settings and sample covering letters ready.",
+  );
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
   await seedEnquiryMasters(prisma);
