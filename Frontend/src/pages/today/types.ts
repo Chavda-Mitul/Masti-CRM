@@ -36,6 +36,8 @@ export interface TodaySummary {
   newSince: string
   /** The cases behind Due today and Running late, at most 200 (more: there are others). */
   upNext: { rows: UpNextRow[]; more: boolean }
+  /** Each department the person can see: its cases on the list's Open tab (Decision 10). mine: only their own. */
+  openByDepartment: { code: string; name: string; count: number; mine: boolean }[]
 }
 
 export interface TodaySettings {

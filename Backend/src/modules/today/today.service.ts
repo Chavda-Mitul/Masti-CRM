@@ -3,7 +3,7 @@ import { prisma } from "../../config/prisma";
 import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf, type DepartmentCode } from "../auth/permissions";
-import { summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
+import { OPEN_TAB, summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
 import { whatFor, withPapers } from "../enquiries/followUpDesk.service";
 import { TO_HAND_BACK, toHandBack } from "../enquiries/visibility";
 import { previousOpenDay } from "../holidays/blockedDays";
@@ -44,6 +44,7 @@ async function todayScope(user: UserWithDepartments) {
   return {
     where: or.length > 0 ? { OR: or } : { id: { in: [] } },
     scope: { kind, departments: led.map((d) => d.name) },
+    departments,
   };
 }
 
@@ -55,15 +56,16 @@ async function newSince(now: Date) {
 }
 
 /**
- * The banner's sentence, the tiles, and Up next (Decision 9): the cases behind Due today and Running late, in the
- * enquiries list's order (late first, then by time due), each with what it needs.
+ * The banner's sentence, the tiles, Up next (Decision 9): the cases behind Due today and Running late, in the enquiries
+ * list's order (late first, then by time due), each with what it needs; and the department bars (Decision 10): each
+ * department's cases on the list's Open tab.
  */
 export async function todaySummary(user: UserWithDepartments, now: Date = new Date()) {
-  const [{ where, scope }, since] = await Promise.all([todayScope(user), newSince(now)]);
+  const [{ where, scope, departments }, since] = await Promise.all([todayScope(user), newSince(now)]);
   const midnight = istDateTimeToUtc(addDays(istToday(now), 1), "00:00");
   const due = (dueAt: { gte?: Date; lt: Date }): Prisma.EnquiryWhereInput => ({ AND: [where, needsSomeone, { dueAt }] });
 
-  const [dueToday, late, oldest, newEnquiries, upNext] = await Promise.all([
+  const [dueToday, late, oldest, newEnquiries, upNext, open] = await Promise.all([
     prisma.enquiry.count({ where: due({ gte: now, lt: midnight }) }),
     prisma.enquiry.count({ where: due({ lt: now }) }),
     prisma.enquiry.aggregate({ where: due({ lt: now }), _min: { dueAt: true } }),
@@ -75,6 +77,7 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
       orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       take: UP_NEXT_LIMIT + 1,
     }),
+    prisma.enquiry.groupBy({ by: ["departmentId"], where: { AND: [where, OPEN_TAB] }, _count: { _all: true } }),
   ]);
   return {
     scope,
@@ -100,6 +103,13 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
       })),
       more: upNext.length > UP_NEXT_LIMIT,
     },
+    // Every department the user can see; "mine": only their own cases there, so the list opens with Only mine ticked.
+    openByDepartment: departments.map((d) => ({
+      code: d.code,
+      name: d.name,
+      count: open.find((c) => c.departmentId === d.id)?._count._all ?? 0,
+      mine: !isHodOf(user, d.code as DepartmentCode),
+    })),
   };
 }
 

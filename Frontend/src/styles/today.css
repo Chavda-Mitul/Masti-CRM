@@ -122,6 +122,115 @@
   border-color: var(--border-input-hover);
 }
 
+/* The demo's two columns under the tiles: Up next and Business lost; the department bars and Money to collect. */
+.today-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+}
+.today-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.today-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Open enquiries by department (0017 Decision 10). */
+.today-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.today-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.today-bar-name {
+  flex: 0 0 84px;
+}
+.today-bar-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 99px;
+  background: var(--fill-muted);
+  overflow: hidden;
+  display: flex;
+}
+.today-bar-track > span {
+  height: 10px;
+  border-radius: 99px;
+}
+.today-bar-count {
+  flex: 0 0 26px;
+  text-align: right;
+}
+
+/* Business lost and Money to collect, until their numbers exist (0017 Decisions 4–5). */
+.today-lost {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.today-lost p {
+  margin: 0;
+}
+.today-mini-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.today-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--fill-tile);
+}
+.today-mini span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.today-mini strong {
+  font-size: 20px;
+  color: var(--text-faint);
+}
+.today-mini.is-ok {
+  background: var(--ok-bg);
+}
+.today-mini.is-bad {
+  background: var(--bad-bg);
+}
+.today-money {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.today-money-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+@media (max-width: 1100px) {
+  .today-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Up next (0017 Decision 9): the day's cases, late first, then by time due. */
 .up-next {
   overflow: hidden;

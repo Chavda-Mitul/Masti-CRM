@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { useMe } from '../../auth/useAuth'
 import { errorText } from '../../lib/apiErrors'
 import '../../styles/today.css'
+import { BusinessLostCard, MoneyToCollectCard } from './ComesWithCards'
+import { DepartmentBarsCard } from './DepartmentBarsCard'
 import { greetingNow, heroLine, longToday, newSinceLabel, oldestLabel, scopeLabel } from './labels'
 import { useToday } from './queries'
 import { UpNextCard } from './UpNextCard'
 
 /**
- * Today, everyone's home page (docs/decisions/0017-today-dashboard.md, demo screen 01): the day's sentence, four tiles
- * and Up next. The department bars, the notice board and the cards still to come are the next components.
+ * Today, everyone's home page (docs/decisions/0017-today-dashboard.md, demo screen 01): the day's sentence, four tiles,
+ * then two columns: Up next and Business lost; open enquiries by department and Money to collect. The notice board
+ * (component 4) joins the right-hand column.
  */
 export function TodayPage() {
   const { data: me } = useMe()
@@ -46,7 +49,18 @@ export function TodayPage() {
         )}
       </div>
 
-      {!today.isError && <UpNextCard day={day} />}
+      {!today.isError && (
+        <div className="today-grid">
+          <div className="today-col">
+            <UpNextCard day={day} />
+            <BusinessLostCard />
+          </div>
+          <div className="today-col">
+            <DepartmentBarsCard day={day} />
+            <MoneyToCollectCard />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -47,6 +47,9 @@ async function today(agent: Agent) {
   return res.body;
 }
 
+/** One department's bar on "Open enquiries" (0017 Decision 10). */
+const bar = (day: { openByDepartment: { code: string }[] }, code: string) => day.openByDepartment.find((d) => d.code === code);
+
 describe("GET /api/today", () => {
   it("counts each person's day: staff their own cases, an HOD the whole department, the Head everything", async () => {
     const yesterday = new Date(Date.now() - 86_400_000);
@@ -77,17 +80,30 @@ describe("GET /api/today", () => {
     const mine = await today(aarti);
     expect(mine).toMatchObject({ scope: { kind: "MINE", departments: [] }, late: 2, dueToday: 0, newEnquiries: 2, upNext: { more: false } });
     expect(mine.upNext.rows).toHaveLength(2);
+    // The department bars count the same cases; "mine" sends the click to the list with Only mine ticked.
+    expect(bar(mine, "VISA")).toEqual({ code: "VISA", name: "Visa", count: 2, mine: true });
     expect(await today(neha)).toMatchObject({ scope: { kind: "MINE" }, late: 1, newEnquiries: 1 });
     const hods = await of("riya@masti.test");
     expect(hods).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
     expect(hods.upNext.rows).toHaveLength(4);
+    expect(bar(hods, "VISA")).toMatchObject({ count: 4, mine: false });
     // A department they only view isn't theirs to work: the HOD's Hotels view adds nothing.
-    expect(await of("kiran@masti.test")).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
+    const kiran = await of("kiran@masti.test");
+    expect(kiran).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
+    expect(bar(kiran, "VISA")).toMatchObject({ count: 4, mine: false });
+    expect(bar(kiran, "HOTELS")).toMatchObject({ count: 0, mine: true });
     // View-only staff own no cases, so their day is empty, like their Follow-ups badge.
-    expect(await of("mona@masti.test")).toMatchObject({ scope: { kind: "MINE" }, late: 0, newEnquiries: 0, oldestLateAt: null, upNext: { rows: [] } });
+    const mona = await of("mona@masti.test");
+    expect(mona).toMatchObject({ scope: { kind: "MINE" }, late: 0, newEnquiries: 0, oldestLateAt: null, upNext: { rows: [] } });
+    expect(bar(mona, "VISA")).toMatchObject({ count: 0, mine: true });
     const head = await of("vimal@masti.test");
     expect(head).toMatchObject({ scope: { kind: "ALL" }, late: 5, newEnquiries: 5, oldestLateAt: yesterday.toISOString() });
     expect(head.upNext.rows).toHaveLength(5);
+    expect(bar(head, "VISA")).toMatchObject({ count: 4, mine: false });
+    expect(bar(head, "HOTELS")).toMatchObject({ count: 1, mine: false });
+    expect(head.openByDepartment.map((d: { code: string }) => d.code)).toEqual(
+      expect.arrayContaining(["VISA", "HOLIDAYS", "HOTELS", "INSURANCE", "TICKETS", "ACCOUNTS"]),
+    );
     expect(head.scope.departments).toEqual(expect.arrayContaining(["Visa", "Hotels"]));
 
     // Field staff have their run on /tasks; nobody signed out gets anything.
@@ -117,7 +133,10 @@ describe("todaySummary", () => {
     await prisma.visaCase.update({ where: { enquiryId: held.id }, data: { bookletsCurrent: 1 } });
     await caseWith(aarti, "9825000008", { dueAt: istDateTimeToUtc(addDays(day, -1), "11:00"), ...cancelled });
 
-    expect(await todaySummary(await userOf("aarti@masti.test"), now)).toMatchObject({ late: 2, dueToday: 3, oldestLateAt: oldest });
+    const summary = await todaySummary(await userOf("aarti@masti.test"), now);
+    expect(summary).toMatchObject({ late: 2, dueToday: 3, oldestLateAt: oldest });
+    // The Open tab's count: the four open cases and the cancelled one still to hand back; not the postponed ones.
+    expect(bar(summary, "VISA")).toMatchObject({ count: 5, mine: true });
   });
 
   it("counts new enquiries from 18:00 on the previous office day: on a Monday, from Saturday", async () => {

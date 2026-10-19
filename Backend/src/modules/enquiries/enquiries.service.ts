@@ -103,6 +103,13 @@ async function assigningDepartments(user: UserWithDepartments) {
   return departments;
 }
 
+/**
+ * The Open tab: open cases, plus a cancelled visa case whose passports are still to hand back, which stays on its owner's
+ * (and the HOD's) list until the handover (docs/decisions/0006-visa-documents.md amendment 15). Today's department bars
+ * count the same (docs/decisions/0017-today-dashboard.md Decision 10).
+ */
+export const OPEN_TAB: Prisma.EnquiryWhereInput = { OR: [{ status: "OPEN" }, { status: "CANCELLED", ...TO_HAND_BACK }] };
+
 export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDepartments) {
   const departments = query.unassigned ? await assigningDepartments(user) : await viewableDepartments(user);
   let shown = departments;
@@ -113,10 +120,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     }
   }
 
-  // The Open tab also lists a cancelled visa case whose passports are still to hand back: it stays on its owner's (and the
-  // HOD's) list until the handover (docs/decisions/0006-visa-documents.md amendment 15). "To assign" stays open cases only.
-  const statusWhere: Prisma.EnquiryWhereInput =
-    query.status === "OPEN" && !query.unassigned ? { OR: [{ status: "OPEN" }, { status: "CANCELLED", ...TO_HAND_BACK }] } : { status: query.status };
+  // "To assign" stays open cases only.
+  const statusWhere: Prisma.EnquiryWhereInput = query.status === "OPEN" && !query.unassigned ? OPEN_TAB : { status: query.status };
   // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
   // HODs their department's, the Head everything (visibility.ts).
   const base: Prisma.EnquiryWhereInput[] = [
