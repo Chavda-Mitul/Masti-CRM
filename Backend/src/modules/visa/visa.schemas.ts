@@ -452,6 +452,8 @@ export const recordDecisionSchema = z.object({
 export const changeDecisionSchema = z.object({
   outcome: z.enum(VisaOutcome, "Pick Approved or Refused."),
   ...decisionDetails,
+  /** Once the passports are received, an approved traveller's sticker checked again (0013 Decision 5, amended 19 Oct). */
+  stickerCheck: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullish(),
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 

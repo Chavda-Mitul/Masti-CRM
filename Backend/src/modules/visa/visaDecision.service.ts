@@ -14,7 +14,9 @@ import { travellerLabel } from "./visaCase";
 // online for an e-visa), "Record the decision" saves every traveller's outcome at once (Decision 6): Approved, with the
 // sticker (or e-visa) number and the dates it's valid (Decisions 3 and 5), or Refused. The case moves to Decision, due
 // the next open office day at 11:00 ⚠️ (visa.passportsBackCheck) to check the passports are on their way back. A refusal
-// changes no money. While the case is at Decision, "Change" corrects one traveller's entry; the audit log keeps both.
+// changes no money. While the case is at Decision, or at Passport back until the handover, "Change" corrects one
+// traveller's entry; once the passports are received it checks the sticker again (amended 19 Oct 2026). The audit log
+// keeps both.
 
 /** What recording checks, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
@@ -23,6 +25,8 @@ async function gather(db: Db, enquiryId: string) {
     select: {
       submittedAt: true,
       submittedOnlineAt: true,
+      decidedAt: true,
+      passportsReceivedAt: true,
       travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true } },
     },
   });
@@ -55,6 +59,19 @@ function checkOne(field: string, name: string, number: string, o: Omit<ChangeDec
     if (o.validTo < o.validFrom) throw fieldError(field, `${name}'s visa can't end before it starts.`);
   } else if (o.visaNo || o.validFrom || o.validTo) {
     throw fieldError(field, `${name} was refused: leave the ${number} and dates empty.`);
+  }
+}
+
+/**
+ * Once the passports are received (0013 Decision 5), an approved traveller's change carries the sticker check again,
+ * Matches or Doesn't match, so a corrected number or date can be marked as matching (amended 19 Oct 2026). Before then,
+ * and for a refused traveller, there's no sticker to check.
+ */
+function checkSticker(g: Gathered, name: string, o: ChangeDecisionInput) {
+  const checking = !!g.passportsReceivedAt && o.outcome === "APPROVED";
+  if (checking && !o.stickerCheck) throw fieldError("decision", `Check ${name}'s sticker against the passport: Matches or Doesn't match.`);
+  if (!checking && o.stickerCheck) {
+    throw fieldError("decision", g.passportsReceivedAt ? `${name} was refused: there's no sticker to check.` : "The sticker is checked once the passports are received.");
   }
 }
 
@@ -138,8 +155,9 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
 }
 
 /**
- * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision: the outcome, or
- * just the number or dates. In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
+ * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision or at Passport
+ * back until the handover (amended 19 Oct 2026): the outcome, or just the number or dates, and once the passports are
+ * received an approved traveller's sticker check (checkSticker); a refused one's is cleared. In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
  * audit (visa.decision.change, with the old and new values). It sends the case's updatedAt from when the dialog opened,
  * so a save after someone else's change is refused (409 STALE) instead of undoing it (amended 19 Oct 2026). The case's
  * step, due time and "recorded by" stay. A save that changes nothing writes nothing.
@@ -148,10 +166,13 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
   const enquiry = await loadCase(caseNo, actor, DECIDED);
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
   const check = (g: Gathered) => {
+    // A recalled file reaches Passport back with no decision: there's nothing to correct.
+    if (!g.decidedAt) throw conflict("This file was taken back before a decision: there's none to change.");
     const t = g.travellers.find((x) => x.id === travellerId);
     if (!t) throw notFound("Traveller not found on this case.");
     const { who, number } = wording(g);
     checkOne("decision", who(t), number, input);
+    checkSticker(g, who(t), input);
     return who(t);
   };
   check(await gather(prisma, enquiry.id));
@@ -159,19 +180,29 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, DECIDED);
     assertFresh(locked.updatedAt, input.updatedAt, "case");
-    const name = check(await gather(tx, enquiry.id));
+    const g = await gather(tx, enquiry.id);
+    const name = check(g);
     const row = await tx.visaCaseTraveller.findUniqueOrThrow({
       where: { id: travellerId },
-      select: { outcome: true, visaNo: true, validFrom: true, validTo: true },
+      select: { outcome: true, visaNo: true, validFrom: true, validTo: true, stickerCheck: true },
     });
     const was = {
       outcome: row.outcome,
       visaNo: row.visaNo,
       validFrom: row.validFrom && fromDbDate(row.validFrom),
       validTo: row.validTo && fromDbDate(row.validTo),
+      stickerCheck: row.stickerCheck,
     };
-    const now = { outcome: input.outcome, visaNo: input.visaNo ?? null, validFrom: input.validFrom ?? null, validTo: input.validTo ?? null };
-    if (was.outcome === now.outcome && was.visaNo === now.visaNo && was.validFrom === now.validFrom && was.validTo === now.validTo) return;
+    const now = {
+      outcome: input.outcome,
+      visaNo: input.visaNo ?? null,
+      validFrom: input.validFrom ?? null,
+      validTo: input.validTo ?? null,
+      // Checked again once received; a refused traveller has none (the database's CHECK).
+      stickerCheck: g.passportsReceivedAt && input.outcome === "APPROVED" ? (input.stickerCheck ?? null) : null,
+    };
+    const same = was.outcome === now.outcome && was.visaNo === now.visaNo && was.validFrom === now.validFrom && was.validTo === now.validTo;
+    if (same && was.stickerCheck === now.stickerCheck) return;
 
     await tx.visaCaseTraveller.update({
       where: { id: travellerId },
@@ -180,6 +211,7 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
         visaNo: now.visaNo,
         validFrom: now.validFrom ? toDbDate(now.validFrom) : null,
         validTo: now.validTo ? toDbDate(now.validTo) : null,
+        stickerCheck: now.stickerCheck,
       },
     });
     // The case moves on too, so a page or dialog opened before this change can't save over it.
