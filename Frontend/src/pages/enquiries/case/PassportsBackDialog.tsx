@@ -26,6 +26,9 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
   const [collectedOn, setCollectedOn] = useState(p?.collectedOn ?? today)
   const [expectedOn, setExpectedOn] = useState<string | null>(p?.expectedOn ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // The case as it was when the dialog opened: the page refetches while it's open (another window, a colleague), and
+  // the save must not carry the new updatedAt over a form filled in from the old values.
+  const [openedAt] = useState(c.updatedAt)
   // What intake counted (0006), or one per traveller when nobody did: the same booklets come back.
   const booklets = passportTotal(c.booklets.current ?? c.travellers.length, c.booklets.old ?? 0)
 
@@ -36,7 +39,7 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
     setErrors(missing)
     if (!collectedOn || !expectedOn) return
     send.mutate(
-      { collectedOn, expectedOn, updatedAt: c.updatedAt },
+      { collectedOn, expectedOn, updatedAt: openedAt },
       {
         onSuccess: () => {
           toast({

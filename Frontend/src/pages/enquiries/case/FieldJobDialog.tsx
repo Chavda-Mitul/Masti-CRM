@@ -45,6 +45,9 @@ export function FieldJobDialog({
   const [address, setAddress] = useState(job?.address ?? c.client.address)
   const [mapLink, setMapLink] = useState(job?.mapLink ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // The case as it was when the dialog opened: the page refetches while it's open (another window, a colleague), and
+  // the save must not carry the new updatedAt over a form filled in from the old values.
+  const [openedAt] = useState(c.updatedAt)
   const today = istToday()
   // The time in India when the dialog opened: on today, slots that have ended can't be picked.
   const [now] = useState(() => istParts(new Date().toISOString()).time)
@@ -62,7 +65,7 @@ export function FieldJobDialog({
     if (!address.trim()) missing.address = 'Enter the address.'
     setErrors(missing)
     if (!day || !slotId || Object.keys(missing).length) return
-    const body = { assigneeId, day, slotId, address, mapLink: mapLink.trim() || null, updatedAt: c.updatedAt }
+    const body = { assigneeId, day, slotId, address, mapLink: mapLink.trim() || null, updatedAt: openedAt }
     const done = {
       onSuccess: () => {
         toast({ tone: 'ok', message: job ? words.changed : `${words.done} for ${longDate(day)}.` })

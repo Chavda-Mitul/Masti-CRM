@@ -254,7 +254,8 @@ describe("once the passports are on their way back", () => {
   it("the decision can't be changed, and a refusal letter can still be added", async () => {
     const { c, processor, adult, child } = await decidedCase();
     expect((await send(processor, c.caseNo)).status).toBe(200);
-    const change = await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`).send({ outcome: "REFUSED" });
+    const { updatedAt } = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id }, select: { updatedAt: true } });
+    const change = await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${adult}/decision`).send({ outcome: "REFUSED", updatedAt });
     expect(change.status).toBe(409);
     expect(change.body.message).toBe("The decision can only be changed while the case is at Decision.");
 

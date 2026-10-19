@@ -9,7 +9,7 @@ import { rowBody, rowProblem, type DecisionRowValue } from './decisionValues'
 /**
  * "Change" on one traveller's row of the Decision card (docs/decisions/0012-visa-decision.md Decision 6), while the case
  * is at Step 6: the outcome, or just the number or dates. It's checked as when recorded, and the audit log keeps the
- * old and new values.
+ * old and new values. A save after someone else's change is refused (STALE), so it can't undo theirs.
  */
 export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { visaCase: VisaCase; traveller: CaseTraveller; onClose: () => void }) {
   const toast = useToast()
@@ -24,6 +24,9 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
   }
   const [row, setRow] = useState(was)
   const [error, setError] = useState<string | undefined>()
+  // The case as it was when the dialog opened: the page refetches while it's open (another window, a colleague), and
+  // the save must not carry the new updatedAt over a form filled in from the old values.
+  const [openedAt] = useState(c.updatedAt)
 
   const press = () => {
     const problem = rowProblem(row, online)
@@ -35,7 +38,7 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
       (body.outcome === 'REFUSED' || (row.visaNo.trim().replace(/\s+/g, ' ').toUpperCase() === was.visaNo && row.validFrom === was.validFrom && row.validTo === was.validTo))
     if (same) return onClose()
     change.mutate(
-      { travellerId: t.id, ...body },
+      { travellerId: t.id, ...body, updatedAt: openedAt },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.` })
