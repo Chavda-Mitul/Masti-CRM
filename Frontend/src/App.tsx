@@ -19,6 +19,7 @@ import { CoveringLettersPage } from './pages/settings/masters/coveringLetters/Co
 import { NewCoveringLetterPage } from './pages/settings/masters/coveringLetters/NewCoveringLetterPage'
 import { CompanyPage } from './pages/settings/company/CompanyPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
+import { CoveringLetterPrintPage } from './pages/print/CoveringLetterPrintPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
@@ -75,6 +76,16 @@ export default function App() {
           <RequireAuth>
             <RequireDesktop>
               <StickerPrintPage />
+            </RequireDesktop>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/print/covering-letter/:caseNo"
+        element={
+          <RequireAuth>
+            <RequireDesktop>
+              <CoveringLetterPrintPage />
             </RequireDesktop>
           </RequireAuth>
         }

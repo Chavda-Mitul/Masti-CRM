@@ -18,6 +18,26 @@
 .print-note {
   padding: 24px;
 }
+/* The covering letter (0019): an A4 sheet on screen, with the page's margins drawn as padding. On paper the @page
+   rules the page writes place it, so the sheet's own padding and frame go. */
+.letter-print {
+  background: var(--fill-muted);
+}
+.letter-sheet {
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: var(--letter-top) var(--letter-side) var(--letter-edge);
+  background: #fff;
+  box-shadow: var(--shadow-pop);
+}
+.letter-sheet .letter-paper {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  font-size: 12pt;
+}
 @media print {
   body {
     background: #fff;
@@ -33,5 +53,14 @@
   /* The label fills the page; its border would only fall on the cut. */
   .print-page .sticker {
     border: 0;
+  }
+  .letter-print {
+    background: #fff;
+  }
+  .letter-sheet {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
   }
 }

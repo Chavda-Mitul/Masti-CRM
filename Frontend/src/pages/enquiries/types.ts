@@ -1,5 +1,6 @@
 // API shapes for the enquiry screens. Mirrors Backend/src/modules/enquiries and Backend/src/modules/visa.
 
+import type { LetterTraveller } from '../../components/LetterPaper'
 import type { ScanType } from '../clients/scanFiles'
 
 export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
@@ -748,4 +749,47 @@ export interface LogFollowUpBody {
   nextOn: string
   at: string
   updatedAt: string
+}
+
+// ---------------------------------------------------------------------------
+// The covering letter (docs/decisions/0019-covering-letters.md Decisions 8–12)
+// ---------------------------------------------------------------------------
+
+/** The letter made for a case: the wording used, by whom and when. */
+export interface CoveringLetterMade {
+  formatId: number
+  formatName: string
+  versionId: number
+  effectiveFrom: string
+  madeAt: string
+  madeBy: { id: string; name: string } | null
+}
+
+/** GET /api/visa/cases/:caseNo/covering-letter: the card's view. */
+export interface CoveringLetterView {
+  /** The letters that fit the case, in their order; the first is picked when nothing else is. */
+  letters: { id: number; name: string; sample: boolean }[]
+  /** One letter filled in from the case today; null when none fits. A blank with no value is listed in missing. */
+  selected: {
+    formatId: number
+    name: string
+    versionId: number
+    effectiveFrom: string
+    sample: boolean
+    body: string
+    values: Record<string, string>
+    travellers: LetterTraveller[]
+    missing: string[]
+  } | null
+  made: CoveringLetterMade | null
+  fits: { visaType: string; country: string; travellers: number }
+}
+
+/** GET …/covering-letter/print: the letter made, as it was filled in, and the space to leave for the letterhead. */
+export interface CoveringLetterPrint extends CoveringLetterMade {
+  caseNo: string
+  body: string
+  values: Record<string, string>
+  travellers: LetterTraveller[]
+  letterheadMm: number
 }

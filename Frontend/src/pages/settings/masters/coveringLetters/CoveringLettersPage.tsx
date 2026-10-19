@@ -8,6 +8,7 @@ import { useToast } from '../../../../lib/toast'
 import { useCoveringLetters, useUpdateCoveringLetter } from '../queries'
 import type { CoveringLetterSummary } from '../types'
 import { coverage, PARTY_LABEL } from './labels'
+import { PrintingCard } from './PrintingCard'
 
 /**
  * Covering letters (docs/decisions/0019-covering-letters.md; demo screen 29's "Covering letters · 3 fixed formats"): one
@@ -90,6 +91,8 @@ export function CoveringLettersPage() {
           </table>
         )}
       </section>
+
+      <PrintingCard canEdit={canEdit} />
     </>
   )
 }

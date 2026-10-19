@@ -13,6 +13,7 @@ import { CaseRail } from './CaseRail'
 import { CollectionCard } from './CollectionCard'
 import { ChecklistCard } from './ChecklistCard'
 import { ConsentCard } from './ConsentCard'
+import { CoveringLetterCard } from './CoveringLetterCard'
 import { DecisionCard } from './DecisionCard'
 import { DispatchCard } from './DispatchCard'
 import { DocketCard } from './DocketCard'
@@ -95,7 +96,13 @@ export function VisaCasePage() {
           <ChecklistCard visaCase={c} />
           <TripCard visaCase={c} />
           <ApplicationCard visaCase={c} />
-          <SavedFileCard visaCase={c} />
+          {/* Side by side as in the demo (screen 08); both show once the case has matured. */}
+          {c.maturedAt && (
+            <div className="case-pair">
+              <CoveringLetterCard visaCase={c} />
+              <SavedFileCard visaCase={c} />
+            </div>
+          )}
           {/* While documents are collected, the Reminders card sits beside how they reach us (demo screen 07). */}
           {showsReminders(c) ? (
             <>

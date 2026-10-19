@@ -19,11 +19,13 @@ import {
   bookFieldJobSchema,
   changeFieldJobSchema,
   checkCaseDocumentSchema,
+  coveringLetterQuerySchema,
   createVisaCaseSchema,
   dispatchDocketSchema,
   fileReadySchema,
   idempotencyKeySchema,
   linkTravellerSchema,
+  makeCoveringLetterSchema,
   raiseInvoiceSchema,
   saveQuoteSchema,
   matureCaseSchema,
@@ -42,6 +44,7 @@ import {
 import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
 import * as caseScansService from "./visaCaseScans.service";
+import * as coveringLetterService from "./visaCoveringLetter.service";
 import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
@@ -156,6 +159,26 @@ router.post("/cases/:caseNo/file-ready", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/vendor", visaEdit, async (req, res) => {
   const body = setVendorSchema.parse(req.body);
   res.json({ case: await filePrepService.setVendor(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * The covering letter (docs/decisions/0019-covering-letters.md): the letters that fit the case, one filled in from it
+ * (?formatId=, else the one made, else the first), and the one made. Anyone who can open the case.
+ */
+router.get("/cases/:caseNo/covering-letter", visaView, async (req, res) => {
+  const { formatId } = coveringLetterQuerySchema.parse(req.query);
+  res.json({ letter: await coveringLetterService.coveringLetterView(caseNoParam.parse(req.params.caseNo), currentUser(req), formatId) });
+});
+
+/** "Make the letter", at File preparation: 409 LETTER_INCOMPLETE with details.missing while the case lacks a detail. */
+router.post("/cases/:caseNo/covering-letter", visaEdit, async (req, res) => {
+  const body = makeCoveringLetterSchema.parse(req.body);
+  res.json({ letter: await coveringLetterService.makeCoveringLetter(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The letter made, to print: the same letter every time. Anyone who can open the case; 409 before one is made. */
+router.get("/cases/:caseNo/covering-letter/print", visaView, async (req, res) => {
+  res.json({ print: await coveringLetterService.coveringLetterPrint(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
 });
 
 /** What stands in the way of raising the invoice, or what it will say (0009). Anyone who can open the case. */

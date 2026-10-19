@@ -103,6 +103,14 @@ export const passportValiditySchema = z.object({ monthsAfterReturn: z.number().i
 export const childAgeSchema = z.object({ adultFrom: z.number().int().min(1).max(25) });
 
 /**
+ * The covering letter's print (docs/decisions/0019-covering-letters.md Decision 11): the blank space at the top of the
+ * first page for the client's letterhead, in millimetres. The print page's "Plain paper" leaves it out.
+ */
+export const coveringLetterSettingSchema = z.object({
+  letterheadMm: z.number().int("Whole millimetres.").min(0, "0 mm at least.").max(120, "120 mm at most."),
+});
+
+/**
  * When a matured case is due with the Visa HOD to be given to a processor (docs/decisions/0006-visa-documents.md,
  * amended 16 Oct 2026): the next open office day, afterDays after maturity, at `at` (IST).
  */
@@ -195,8 +203,15 @@ export const visaSettingsSchema = z.object({
   passportValidity: passportValiditySchema,
   childAge: childAgeSchema,
   documentReminders: documentRemindersSchema,
+  coveringLetter: coveringLetterSettingSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
+
+/** The covering letter to fill in on the case's card (docs/decisions/0019-covering-letters.md): one that fits, or the default. */
+export const coveringLetterQuerySchema = z.object({ formatId: z.coerce.number().int().positive().optional() });
+
+/** "Make the letter" (0019 Decision 10): with one of the covering letters that fit the case. */
+export const makeCoveringLetterSchema = z.object({ formatId: z.number("Pick a covering letter.").int().positive("Pick a covering letter.") });
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
 export const createVisaCaseSchema = z
@@ -240,6 +255,8 @@ export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type PassportValiditySetting = z.infer<typeof passportValiditySchema>;
 export type ChildAgeSetting = z.infer<typeof childAgeSchema>;
 export type DocumentRemindersSetting = z.infer<typeof documentRemindersSchema>;
+export type CoveringLetterSetting = z.infer<typeof coveringLetterSettingSchema>;
+export type MakeCoveringLetterInput = z.infer<typeof makeCoveringLetterSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;

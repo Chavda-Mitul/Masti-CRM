@@ -23,8 +23,10 @@ import {
   passportValiditySchema,
   childAgeSchema,
   documentRemindersSchema,
+  coveringLetterSettingSchema,
   type AwbSetting,
   type ChildAgeSetting,
+  type CoveringLetterSetting,
   type PassportValiditySetting,
   type CollectionCheckSetting,
   type DocketEmailSetting,
@@ -70,6 +72,7 @@ export const DOCKET_EMAIL_KEY = "visa.docketEmail";
 export const PASSPORT_VALIDITY_KEY = "visa.passportValidity";
 export const CHILD_AGE_KEY = "visa.childAge";
 export const DOCUMENT_REMINDERS_KEY = "visa.documentReminders";
+export const COVERING_LETTER_KEY = "visa.coveringLetter";
 
 /** ⚠️ The demo: "A follow-up lands on Aarti's desk for tomorrow", at the reminder time 11:00. */
 export const DEFAULT_FIRST_FOLLOW_UP: FirstFollowUp = { afterDays: 1, at: "11:00" };
@@ -132,6 +135,9 @@ export const DEFAULT_CHILD_AGE: ChildAgeSetting = { adultFrom: 18 };
 
 /** ⚠️ 0003 Decision 7 and the demo: "Every 2 days at 11:00 on WhatsApp, listing only what's still missing." */
 export const DEFAULT_DOCUMENT_REMINDERS: DocumentRemindersSetting = { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" };
+
+/** ⚠️ 0019 Decision 11 (decided 19 Oct 2026): 45 mm left blank at the top of the letter for the client's letterhead. */
+export const DEFAULT_COVERING_LETTER: CoveringLetterSetting = { letterheadMm: 45 };
 
 /** ⚠️ 0008 Decision 8: the email to the vendor at dispatch, in our words until Masti approves them. */
 export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
@@ -203,7 +209,7 @@ export async function nextReminderAt(
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, DOCUMENT_REMINDERS_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, DOCUMENT_REMINDERS_KEY, COVERING_LETTER_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -227,6 +233,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const passportValidity = passportValiditySchema.safeParse(value(PASSPORT_VALIDITY_KEY));
   const childAge = childAgeSchema.safeParse(value(CHILD_AGE_KEY));
   const documentReminders = documentRemindersSchema.safeParse(value(DOCUMENT_REMINDERS_KEY));
+  const coveringLetter = coveringLetterSettingSchema.safeParse(value(COVERING_LETTER_KEY));
   return {
     firstFollowUp: firstFollowUp.success ? firstFollowUp.data : DEFAULT_FIRST_FOLLOW_UP,
     finalFile: finalFile.success ? finalFile.data : DEFAULT_FINAL_FILE,
@@ -250,5 +257,6 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     childAge: childAge.success ? childAge.data : DEFAULT_CHILD_AGE,
 
     documentReminders: documentReminders.success ? documentReminders.data : DEFAULT_DOCUMENT_REMINDERS,
+    coveringLetter: coveringLetter.success ? coveringLetter.data : DEFAULT_COVERING_LETTER,
   };
 }

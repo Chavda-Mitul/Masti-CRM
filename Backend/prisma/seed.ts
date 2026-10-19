@@ -36,6 +36,7 @@ import {
   DEFAULT_COLLECTION_CHECK,
   DEFAULT_PASSPORT_VALIDITY,
   DEFAULT_CHILD_AGE,
+  DEFAULT_COVERING_LETTER,
   DEFAULT_VENDOR_CONFIRM,
   DOCKET_EMAIL_KEY,
   DOCUMENT_REMINDERS_KEY,
@@ -56,6 +57,7 @@ import {
   COLLECTION_CHECK_KEY,
   PASSPORT_VALIDITY_KEY,
   CHILD_AGE_KEY,
+  COVERING_LETTER_KEY,
   VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
@@ -128,8 +130,8 @@ async function main() {
   // Decision 4) ⚠️, the credit-note series (0011 Decision 5) ⚠️, the recall's
   // follow-up (0011 Decision 6) ⚠️, the check after the decision (0012 Decision 7) ⚠️, the check on the day passports are expected back (0013
   // Decision 3) ⚠️, when a matured case is due to be assigned (0006, amended 16 Oct 2026) ⚠️, the handover check once
-  // the passports are received (0013 Decision 5) ⚠️, the receiver photo's size limit (0014 Decision 6) ⚠️, and Masti's
-  // own details.
+  // the passports are received (0013 Decision 5) ⚠️, the receiver photo's size limit (0014 Decision 6) ⚠️, the covering
+  // letter's letterhead space (0019 Decision 11) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -147,6 +149,7 @@ async function main() {
     [COLLECTION_CHECK_KEY, DEFAULT_COLLECTION_CHECK],
     [PASSPORT_VALIDITY_KEY, DEFAULT_PASSPORT_VALIDITY],
     [CHILD_AGE_KEY, DEFAULT_CHILD_AGE],
+    [COVERING_LETTER_KEY, DEFAULT_COVERING_LETTER],
     [AWB_KEY, DEFAULT_AWB],
     [DOCKET_EMAIL_KEY, DEFAULT_DOCKET_EMAIL],
     [DOCUMENT_REMINDERS_KEY, DEFAULT_DOCUMENT_REMINDERS],
@@ -156,7 +159,7 @@ async function main() {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
   console.log(
-    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, the vendor email's wording, the company details and the invoice terms ready.",
+    "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, the vendor email's wording, the covering letter's letterhead space, the company details and the invoice terms ready.",
   );
 
   // The Today page: when "New enquiries" start counting (docs/decisions/0017-today-dashboard.md Decision 3) ⚠️.
