@@ -48,8 +48,12 @@ const upload = (agent: Agent, caseNo: string, travellerId: string, body: Buffer,
   agent.post(`/api/visa/cases/${caseNo}/travellers/${travellerId}/refusal-letter`).set("Content-Type", type).send(body);
 const objectsOf = async (enquiryId: string) =>
   (await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: `cases/${enquiryId}/refusal/` }))).Contents ?? [];
-const change = (agent: Agent, caseNo: string, travellerId: string, body: Record<string, unknown>) =>
-  agent.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/decision`).send(body);
+/** "Change" on one traveller's row, with the case's updatedAt as it is now. */
+async function change(agent: Agent, caseNo: string, travellerId: string, body: Record<string, unknown>) {
+  // Read first: a request awaited inside another's .send(...) breaks supertest.
+  const { updatedAt } = await prisma.enquiry.findUniqueOrThrow({ where: { caseNo }, select: { updatedAt: true } });
+  return agent.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/decision`).send({ ...body, updatedAt: updatedAt.toISOString() });
+}
 
 describe("the refusal letter (Decision 4)", () => {
   it("stores a refused traveller's PDF in the bucket: pages counted, named after the case and the traveller, audited", async () => {

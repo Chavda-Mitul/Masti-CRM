@@ -1,6 +1,6 @@
 // Shapes returned by /api/clients (Backend/src/modules/clients/client.ts). Dates without a time are "YYYY-MM-DD".
 
-import type { OpenEnquiry } from '../enquiries/types'
+import type { EnquiryStatus } from '../enquiries/types'
 import type { ScanType } from './scanFiles'
 
 export type ClientKind = 'INDIVIDUAL' | 'CORPORATE'
@@ -127,8 +127,29 @@ export interface ClientProfile {
   phones: ClientPhone[]
   members: ClientMember[]
   notes: ClientNote[]
-  /** Unfinished cases, newest first, in the departments this user can see. */
-  openEnquiries: OpenEnquiry[]
+  /** Every case this user may open: unfinished first, then finished; newest first in each. */
+  cases: ClientCase[]
+}
+
+/** A row of "Everything we've done for this family". */
+export interface ClientCase {
+  caseNo: string
+  /** Department code, e.g. "VISA" */
+  department: string
+  /** "France (Schengen) · Tourist · 2 adults, 2 children" */
+  summary: string
+  status: EnquiryStatus
+  /** The step's name ("Documents") and its own status label ("Delivered" once a visa case is closed). */
+  stage: { name: string; statusLabel: string }
+  /** Why it was postponed, cancelled or lost. */
+  reason: { name: string } | null
+  resumeOn: string | null
+  /** A cancelled visa case whose passports are still to hand back. */
+  toHandBack: boolean
+  /** Whose case it is. Null while it waits for the HOD (e.g. matured, no processor yet). */
+  owner: { id: string; name: string } | null
+  /** Whether this user may open it. A colleague's case, or one waiting for the HOD, shows without a link. */
+  canOpen: boolean
 }
 
 export interface ClientOptions {

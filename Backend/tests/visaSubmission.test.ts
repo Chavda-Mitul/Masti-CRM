@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday, isoWeekday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { previousOpenDay } from "../src/modules/holidays/blockedDays";
+import { nextOpenDay, previousOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
@@ -119,13 +119,15 @@ describe("Submitted at the embassy (Decisions 3 and 4)", () => {
     expect((moved.body.case as CaseDto).dueAt).toBe(istDateTimeToUtc(addDays(later, -3), "10:30").toISOString());
   });
 
-  it("never comes due before today: a collection tomorrow is due today", async () => {
+  it("never comes due in the past or on a closed day: with the office closed today, a collection tomorrow is due on the next open day", async () => {
     const { c, processor } = await withVendor();
     const tomorrow = addDays(istToday(), 1);
     await closed(istToday(), [{ kind: "MASTI_OFFICE" }], "Office closed");
     const res = await submit(processor, c.caseNo, { collectionOn: tomorrow });
     expect(res.status).toBe(200);
-    expect((res.body.case as CaseDto).dueAt).toBe(istDateTimeToUtc(istToday(), "11:00").toISOString());
+    // The day before (today) is closed, so the first open office day from today, at 11:00 (fixed 19 Oct 2026).
+    const open = await nextOpenDay(istToday(), { office: true });
+    expect((res.body.case as CaseDto).dueAt).toBe(istDateTimeToUtc(open, "11:00").toISOString());
   });
 
   it("can be changed at Step 5: the stamp stays, the change is audited, and an unchanged save writes nothing", async () => {

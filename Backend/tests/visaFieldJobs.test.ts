@@ -213,6 +213,26 @@ describe("Change and Cancel", () => {
     expect(row.after).toMatchObject({ boy: "Suresh", day: later, slot: "11 am – 1 pm" });
   });
 
+  it("a change saved after someone else's is refused (STALE), even when theirs only changed the boy or address", async () => {
+    const { aarti, c } = await setup();
+    expect((await book(aarti, c.caseNo)).status).toBe(200);
+    const opened = await load(aarti, c.caseNo);
+    const job = opened.fieldJobs[0]!;
+    const suresh = await createUser({ name: "Suresh", mobile: "+919825000002", type: "FIELD" });
+    const put = (body: Body) => aarti.put(`/api/visa/cases/${c.caseNo}/field-jobs/${job.id}`).send(body);
+    const as = { assigneeId: job.assignee.id, day: job.day, slotId: job.slot.id, address: job.address, mapLink: null };
+
+    // Two dialogs open on the same job: one sends Suresh instead (same day and slot)...
+    const first = await put({ ...as, assigneeId: suresh.id, updatedAt: opened.updatedAt });
+    expect(first.status).toBe(200);
+    expect((first.body.case as CaseDto).updatedAt).not.toBe(opened.updatedAt);
+    // ...then the other, opened before, saves a new address with Ramesh still in it.
+    const late = await put({ ...as, address: "A-12, Green Park, Adajan, Surat 395009", updatedAt: opened.updatedAt });
+    expect(late.status).toBe(409);
+    expect(late.body.details.code).toBe("STALE");
+    expect((await prisma.fieldJob.findUniqueOrThrow({ where: { id: job.id }, include: { assignee: true } })).assignee.name).toBe("Suresh");
+  });
+
   it("cancels a booked job, after which another can be booked; a cancelled job can't change; another case's is 404", async () => {
     const { aarti, c } = await setup();
     expect((await book(aarti, c.caseNo)).status).toBe(200);

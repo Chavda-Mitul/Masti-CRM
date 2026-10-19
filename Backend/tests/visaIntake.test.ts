@@ -4,6 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
+import { maturedCase } from "./visaHelpers";
 
 beforeEach(async () => {
   await resetDb();
@@ -382,31 +383,95 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     expect(lookup.body.openEnquiries).toEqual([]);
   });
 
-  it("are on the client profile too, but only the cases the user may open", async () => {
+  it("are on the client profile too, finished ones included, but only the cases the user may open", async () => {
     const staff = await visaStaff();
     const saved = (await staff.post("/api/visa/cases").send(await body())).body.case;
     const profile = await staff.get(`/api/clients/${saved.client.id}`);
-    expect(profile.body.client.openEnquiries).toEqual([
+    expect(profile.body.client.cases).toEqual([
       {
         caseNo: saved.caseNo,
         department: "VISA",
         summary: "France (Schengen) · Tourist · 2 adults, 2 children",
-        stage: "Enquiry",
+        status: "OPEN",
+        stage: { name: "Enquiry", statusLabel: "Enquiry saved" },
+        reason: null,
+        resumeOn: null,
+        toHandBack: false,
         owner: { id: expect.any(String), name: "Aarti Patel" },
+        canOpen: true,
       },
     ]);
 
-    // A colleague's case isn't on her profile view (the lookup still shows it).
+    // A colleague sees the open case too, as on the lookup, with whose it is, but can't open it (0006 amendment 17).
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
+    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([
+      expect.objectContaining({ caseNo: saved.caseNo, owner: { id: expect.any(String), name: "Aarti Patel" }, canOpen: false }),
+    ]);
+    expect((await neha.get(`/api/visa/cases/${saved.caseNo}`)).status).toBe(403);
 
     // A save returns the profile with them as well.
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
-    expect(edited.body.client.openEnquiries).toHaveLength(1);
+    expect(edited.body.client.cases).toHaveLength(1);
 
     await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
     const holidays = await loginAs("hetal@masti.test");
-    expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
+    expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([]);
+  });
+
+  it("list finished cases on the profile after the open ones, newest first", async () => {
+    const staff = await visaStaff();
+    const delivered = (await staff.post("/api/visa/cases").send(await body())).body.case;
+    const cancelled = (await staff.post("/api/visa/cases").send(await body())).body.case;
+    const open = (await staff.post("/api/visa/cases").send(await body())).body.case;
+    const deliveredStage = await prisma.departmentStage.findFirstOrThrow({ where: { flow: "VISA", code: "DELIVERED" } });
+    const tripCancelled = await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } });
+    const now = Date.now();
+    await prisma.enquiry.update({
+      where: { caseNo: delivered.caseNo },
+      data: { status: "CLOSED", stageId: deliveredStage.id, dueAt: null, createdAt: new Date(now - 2 * 86_400_000) },
+    });
+    await prisma.enquiry.update({
+      where: { caseNo: cancelled.caseNo },
+      data: { status: "CANCELLED", reasonId: tripCancelled.id, dueAt: null, createdAt: new Date(now - 86_400_000) },
+    });
+
+    const cases = (await staff.get(`/api/clients/${open.client.id}`)).body.client.cases;
+    expect(cases.map((c: { caseNo: string }) => c.caseNo)).toEqual([open.caseNo, cancelled.caseNo, delivered.caseNo]);
+    expect(cases[1]).toMatchObject({ status: "CANCELLED", reason: { name: "Trip cancelled" }, toHandBack: false });
+    expect(cases[2]).toMatchObject({ status: "CLOSED", stage: { name: "Delivered", statusLabel: "Delivered" }, reason: null });
+
+    // The lookup still warns only about the open one.
+    const lookup = (await staff.get("/api/clients/lookup?mobile=9825041234")).body.openEnquiries;
+    expect(lookup.map((c: { caseNo: string }) => c.caseNo)).toEqual([open.caseNo]);
+
+    // A colleague sees only the open one, not to open; the finished ones stay off her view.
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    const theirs = (await neha.get(`/api/clients/${open.client.id}`)).body.client.cases;
+    expect(theirs.map((c: { caseNo: string; canOpen: boolean }) => [c.caseNo, c.canOpen])).toEqual([[open.caseNo, false]]);
+  });
+
+  it("shows a matured case waiting for the HOD to whoever matured it, without a link, not 'nothing open' (review finding 5)", async () => {
+    // Aarti matured it; it waits for the HOD with no owner, so she can't open it any more (0006 Decision 1).
+    const c = await maturedCase({ assigned: false });
+    const profile = (agent: Awaited<ReturnType<typeof loginAs>>) => agent.get(`/api/clients/${c.client.id}`);
+    const mine = (await profile(c.staff)).body.client.cases;
+    expect(mine).toEqual([
+      expect.objectContaining({ caseNo: c.caseNo, status: "OPEN", stage: expect.objectContaining({ name: "File preparation" }), owner: null, canOpen: false }),
+    ]);
+    expect((await c.staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+
+    // The HOD opens it.
+    await createUser({ name: "Riya Shah", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await profile(await loginAs("riya@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ caseNo: c.caseNo, canOpen: true })]);
+
+    // Given to Neha, it's hers to open; Aarti still sees it, with whose it is.
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { ownerId: neha.id } });
+    expect((await profile(await loginAs("neha@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ canOpen: true })]);
+    expect((await profile(c.staff)).body.client.cases).toEqual([
+      expect.objectContaining({ owner: { id: neha.id, name: "Neha Joshi" }, canOpen: false }),
+    ]);
   });
 });

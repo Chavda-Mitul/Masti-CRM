@@ -189,6 +189,11 @@ The details the forms and the covering letter will need, "captured as the docume
 - **Who edits them:** the Visa HOD or the Head, on the offering in Settings → Masters → Checklists (0005 Decision 8).
 - **Read live at "File ready",** not copied at intake. Checklists are copied so that editing them never changes an
   open case; a switch is different, because correcting it should help the cases already open.
+- **Switching "Vendor needed" on is refused while a case would be stranded** (decided 19 Oct 2026, project lead, after
+  the code review): an open or postponed case of that visa at Docket & dispatch with no vendor could then be neither put
+  in a docket nor submitted online, and only File preparation picks a vendor. The 409 names the cases ("VISA-2026-0004
+  is at Docket & dispatch with no vendor. Submit it online first…"). Switching it off is unaffected: a case already in a
+  docket keeps it (0008).
 
 **Built 12 Oct 2026:**
 

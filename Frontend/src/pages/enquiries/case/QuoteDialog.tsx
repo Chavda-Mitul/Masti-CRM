@@ -55,6 +55,9 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
   const speeds = useMasterList('processing-speeds')
   const q = c.quote
   const rate = q?.gstRatePercent ?? c.gstRatePercent
+  // The quote as it was when the dialog opened: a refetch while it's open mustn't let this save carry the new token
+  // over a form filled in from the old quote.
+  const [quoteSeen] = useState(q?.updatedAt ?? null)
 
   const [speedId, setSpeedId] = useState(q ? String(q.processingSpeed.id) : '')
   const [service, setService] = useState(q ? rupeesInput(q.serviceChargePaise) : '')
@@ -102,7 +105,7 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
         processingSpeedId: Number(chosenSpeed),
         serviceChargePaise: servicePaise,
         lines: lines.map((l) => ('line' in l.result ? l.result.line : null)).filter((l) => l !== null),
-        updatedAt: q?.updatedAt ?? null,
+        updatedAt: quoteSeen,
       },
       {
         onSuccess: () => {
