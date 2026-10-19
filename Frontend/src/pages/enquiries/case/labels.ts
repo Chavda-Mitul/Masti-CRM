@@ -1,4 +1,4 @@
-import type { CaseTraveller, DocumentRequirement, ReceivedAs, VisaCase } from '../types'
+import type { CaseDocument, CaseTraveller, DocumentRequirement, ReceivedAs, VisaCase } from '../types'
 
 // Wording shared by the case page's cards (demo screen 07 ⚠️).
 
@@ -9,6 +9,12 @@ export const REQUIREMENT_LABEL: Record<DocumentRequirement, string> = {
 }
 
 /** How a paper came in. On file: printed from the client's document vault (0016 Decision 5). */
+/**
+ * A paper the checklist needs as an original that came in as a xerox (decided 19 Oct 2026): allowed (0006 Decision 2),
+ * so it's only flagged, on its row and when the documents are marked complete.
+ */
+export const xeroxForOriginal = (d: CaseDocument) => d.status === 'RECEIVED' && d.requirement === 'ORIGINAL' && d.receivedAs === 'XEROX'
+
 export const RECEIVED_AS_LABEL: Record<ReceivedAs, string> = {
   ORIGINAL: 'Original',
   XEROX: 'Xerox',

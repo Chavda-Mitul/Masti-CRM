@@ -10,7 +10,7 @@ import { useClient, useClientOptions } from '../../clients/queries'
 import { SCAN_ACCEPT, scanProblem, scanType } from '../../clients/scanFiles'
 import { useCheckCaseDocument, useLinkTraveller, useOpenCaseScan, useSaveCaseScan, useUpdateCaseDocument } from '../queries'
 import type { CaseDocument, CaseTraveller, ReceivedAs, VisaCase } from '../types'
-import { dayMonth, RECEIVED_AS_LABEL, REQUIREMENT_LABEL, travellerTab } from './labels'
+import { dayMonth, RECEIVED_AS_LABEL, REQUIREMENT_LABEL, travellerTab, xeroxForOriginal } from './labels'
 import { NeedsReplacingDialog } from './NeedsReplacingDialog'
 
 /** The steps where the checklist can still change; after maturity it is the processor's (0006 Decision 8). */
@@ -435,6 +435,11 @@ function DocumentRow({
           {d.quantity > 1 && ` (${d.quantity})`}
         </span>
         {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+        {xeroxForOriginal(d) && (
+          <div style={{ marginTop: 4 }}>
+            <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
+          </div>
+        )}
         <VaultLine caseNo={caseNo} doc={d} canSave={canSave} travellerName={travellerName} maxMb={scanMaxMb} />
       </span>
       <span role="cell" className="small">
@@ -530,6 +535,11 @@ function CheckRow({
             {d.quantity > 1 && ` (${d.quantity})`}
           </span>
           {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+          {xeroxForOriginal(d) && (
+            <div style={{ marginTop: 4 }}>
+              <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
+            </div>
+          )}
           {/* The processor prints an On file paper from its copy (0016 Decision 5). */}
           {d.receivedAs === 'ON_FILE' && <VaultLine caseNo={caseNo} doc={d} canSave={false} travellerName={travellerName} maxMb={0} />}
         </span>
