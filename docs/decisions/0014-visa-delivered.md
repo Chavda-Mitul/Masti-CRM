@@ -61,7 +61,9 @@ no email is decided when component 4 is planned. *(The doorstep moved to 0015. F
 
 **Decided 17 Oct 2026 (project lead):**
 - **The booklets counted** again, current and old.
-- **Who collected them:** a traveller on the case, or someone else, by name.
+- **Who collected them:** a traveller on the case, or someone else, by name. **Amended 19 Oct 2026** (item 2 fixes;
+  M46 to confirm): picking a traveller younger than ⚠️ `visa.childAge` (seeded 18) today is a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`). With no birth date
+  on file, the test is being in a child's place. The delivery boy's doorstep handover does the same (0015).
 - **A photo of that person,** taken at the desk.
 - **Who handed them over, and when:** the staff member who saves it, now (audited).
 
