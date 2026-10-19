@@ -1,7 +1,7 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { fromDbDate, toDbDate } from "../../lib/dates";
+import { dayLabel, fromDbDate, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, notFound } from "../../lib/httpError";
 import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import type { Actor } from "../users/user";
@@ -28,7 +28,12 @@ async function gather(db: Db, enquiryId: string) {
       submittedOnlineAt: true,
       decidedAt: true,
       passportsReceivedAt: true,
-      travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true, visaNo: true } },
+      departOn: true,
+      returnOn: true,
+      travellers: {
+        orderBy: { position: "asc" },
+        select: { id: true, position: true, isChild: true, name: true, visaNo: true, validFrom: true, validTo: true },
+      },
     },
   });
 }
@@ -127,6 +132,31 @@ async function decisionWarnings(db: Db, enquiryId: string, g: Gathered, outcomes
 }
 
 /**
+ * Visa dates that don't cover the trip (a soft warning, decided 19 Oct 2026): valid from after the departure day, or valid
+ * to before the return. An embassy sometimes grants less, so it can be right.
+ */
+function tripWarnings(
+  g: Gathered,
+  outcomes: { travellerId: string; outcome: string; validFrom?: string | null | undefined; validTo?: string | null | undefined }[],
+): Warning[] {
+  const { who } = wording(g);
+  const depart = g.departOn ? fromDbDate(g.departOn) : null;
+  const back = g.returnOn ? fromDbDate(g.returnOn) : null;
+  return outcomes.flatMap((o) => {
+    const t = g.travellers.find((x) => x.id === o.travellerId);
+    if (!t || o.outcome !== "APPROVED" || !o.validFrom || !o.validTo) return [];
+    const found: Warning[] = [];
+    if (depart && o.validFrom > depart) {
+      found.push({ code: "VISA_STARTS_AFTER_DEPARTURE", message: `${who(t)}'s visa starts ${dayLabel(o.validFrom)}, after the trip begins (${dayLabel(depart)}).` });
+    }
+    if (back && o.validTo < back) {
+      found.push({ code: "VISA_ENDS_BEFORE_RETURN", message: `${who(t)}'s visa ends ${dayLabel(o.validTo)}, before the trip ends (${dayLabel(back)}).` });
+    }
+    return found;
+  });
+}
+
+/**
  * "Record the decision" (Decision 6), by whoever can act on the case, at At vendor once the file was submitted. In one
  * transaction under the case lock: each traveller's outcome, who recorded it and when, the move to Decision with its due
  * time, and the audit (visa.decision.record).
@@ -137,7 +167,8 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
   const pre = await gather(prisma, enquiry.id);
   assertSubmitted(pre);
   checkOutcomes(pre, input.outcomes);
-  checkWarnings(await decisionWarnings(prisma, enquiry.id, pre, input.outcomes), input.confirmWarnings);
+  const warnings = async (db: Db, g: Gathered) => [...(await decisionWarnings(db, enquiry.id, g, input.outcomes)), ...tripWarnings(g, input.outcomes)];
+  checkWarnings(await warnings(prisma, pre), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, DECIDING);
@@ -145,7 +176,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
     const g = await gather(tx, enquiry.id);
     assertSubmitted(g);
     const who = checkOutcomes(g, input.outcomes);
-    const confirmed = checkWarnings(await decisionWarnings(tx, enquiry.id, g, input.outcomes), input.confirmWarnings);
+    const confirmed = checkWarnings(await warnings(tx, g), input.confirmWarnings);
 
     const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).passportsBackCheck, tx);
     const decision = await visaStage(tx, locked.departmentId, "DECISION");
@@ -212,10 +243,17 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
     checkSticker(g, who(t), input);
     return who(t);
   };
-  /** The warnings for this change: a number only when it changed (an unchanged one was confirmed when it was saved). */
-  const warningsFor = (db: Db, g: Gathered) => {
-    const before = g.travellers.find((x) => x.id === travellerId)?.visaNo ?? null;
-    return decisionWarnings(db, enquiry.id, g, input.visaNo !== before ? [input] : []);
+  /** The warnings for this change, for what it changes: what's unchanged was confirmed when it was saved. */
+  const warningsFor = async (db: Db, g: Gathered) => {
+    const before = g.travellers.find((x) => x.id === travellerId);
+    const numberChanged = (input.visaNo ?? null) !== (before?.visaNo ?? null);
+    const datesChanged =
+      (input.validFrom ?? null) !== (before?.validFrom ? fromDbDate(before.validFrom) : null) ||
+      (input.validTo ?? null) !== (before?.validTo ? fromDbDate(before.validTo) : null);
+    return [
+      ...(await decisionWarnings(db, enquiry.id, g, numberChanged ? [input] : [])),
+      ...(datesChanged ? tripWarnings(g, [{ travellerId, ...input }]) : []),
+    ];
   };
   const pre = await gather(prisma, enquiry.id);
   check(pre);

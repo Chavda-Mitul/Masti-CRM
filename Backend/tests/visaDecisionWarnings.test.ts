@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, istToday } from "../src/lib/dates";
+import { addDays, dayLabel, istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { prisma, resetDb } from "./helpers";
@@ -84,5 +84,38 @@ describe("a number already on another case", () => {
     expect((await change(second.processor, second.c.caseNo, approved(second.adult, "0182 4471", addDays(FROM, 1)))).status).toBe(200);
     await prisma.visaCaseTraveller.update({ where: { id: first.child }, data: { outcome: "APPROVED", visaNo: "0182 4499", validFrom: new Date(`${FROM}T00:00:00Z`), validTo: new Date(`${TO}T00:00:00Z`) } });
     expect((await change(second.processor, second.c.caseNo, approved(second.adult, "0182 4499"))).status).toBe(409);
+  });
+});
+
+describe("visa dates that don't cover the trip", () => {
+  it("is a warning when the visa starts after departure or ends before the return; saved once confirmed", async () => {
+    const { c, processor, adult, child } = await decidedCase({ decided: false });
+    // The trip: out in 30 days, back in 41.
+    const late = addDays(istToday(), 35);
+    const early = addDays(istToday(), 38);
+    const outcomes = [approved(adult, "0182 4471", late, early), { travellerId: child, outcome: "REFUSED" }];
+    const warned = await record(processor, c.caseNo, outcomes);
+    expect(warned.status).toBe(409);
+    expect(warned.body.details.warnings).toEqual([
+      {
+        code: "VISA_STARTS_AFTER_DEPARTURE",
+        message: `Rakesh Mehta's visa starts ${dayLabel(late)}, after the trip begins (${dayLabel(addDays(istToday(), 30))}).`,
+      },
+      { code: "VISA_ENDS_BEFORE_RETURN", message: `Rakesh Mehta's visa ends ${dayLabel(early)}, before the trip ends (${dayLabel(addDays(istToday(), 41))}).` },
+    ]);
+    expect(warned.body.message).toBe("2 things to check before saving. Check, then save again to confirm.");
+
+    expect((await record(processor, c.caseNo, outcomes, true)).status).toBe(200);
+    // Changing only the number doesn't warn about the dates again; moving a date does.
+    expect((await change(processor, c.caseNo, approved(adult, "0182 4479", late, early))).status).toBe(200);
+    const moved = await change(processor, c.caseNo, approved(adult, "0182 4479", late, addDays(istToday(), 39)));
+    expect(moved.status).toBe(409);
+    expect(moved.body.details.warnings.map((w: { code: string }) => w.code)).toEqual(["VISA_STARTS_AFTER_DEPARTURE", "VISA_ENDS_BEFORE_RETURN"]);
+  });
+
+  it("isn't raised when the visa covers the trip", async () => {
+    const { c, processor, adult, child } = await decidedCase({ decided: false });
+    const res = await record(processor, c.caseNo, [approved(adult, "0182 4471"), { travellerId: child, outcome: "REFUSED" }]);
+    expect(res.status).toBe(200);
   });
 });
