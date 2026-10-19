@@ -17,10 +17,12 @@ import { DecisionCard } from './DecisionCard'
 import { DispatchCard } from './DispatchCard'
 import { DocketCard } from './DocketCard'
 import { FollowUpsCard } from './FollowUpsCard'
+import { showsReminders } from './labels'
 import { HandoverCard } from './HandoverCard'
 import { MaturedBanner } from './MaturedBanner'
 import { PassportsBackCard } from './PassportsBackCard'
 import { RecallCard } from './RecallCard'
+import { RemindersCard } from './RemindersCard'
 import { SavedFileCard } from './SavedFileCard'
 import { StickerCard } from './StickerCard'
 import { SubmitOnlineCard } from './SubmitOnlineCard'
@@ -94,10 +96,21 @@ export function VisaCasePage() {
           <TripCard visaCase={c} />
           <ApplicationCard visaCase={c} />
           <SavedFileCard visaCase={c} />
-          <div className="case-pair">
-            <ArrivalCard visaCase={c} />
-            <FollowUpsCard visaCase={c} />
-          </div>
+          {/* While documents are collected, the Reminders card sits beside how they reach us (demo screen 07). */}
+          {showsReminders(c) ? (
+            <>
+              <div className="case-pair">
+                <ArrivalCard visaCase={c} />
+                <RemindersCard visaCase={c} />
+              </div>
+              <FollowUpsCard visaCase={c} />
+            </>
+          ) : (
+            <div className="case-pair">
+              <ArrivalCard visaCase={c} />
+              <FollowUpsCard visaCase={c} />
+            </div>
+          )}
           <ConsentCard visaCase={c} />
         </div>
         <CaseRail visaCase={c} />

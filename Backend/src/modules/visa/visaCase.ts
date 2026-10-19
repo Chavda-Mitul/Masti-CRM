@@ -6,10 +6,25 @@ import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
+import type { DocumentRemindersSetting } from "./visa.schemas";
 import { missingBooklets } from "./shortfall";
 
-// The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006), without the message log and
-// reminders, which come with the WhatsApp work.
+// The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006), without the message log,
+// which comes with the WhatsApp work.
+
+/** The steps documents are collected in: the Reminders card shows there (0006 amendment 19). */
+export const COLLECTING_STAGES = ["ENQUIRY", "DOCUMENTS"];
+
+/**
+ * Whether the case would get a pending-document reminder now (0006 amendment 19): reminders on in Settings and on the
+ * case, the case open and still collecting, and a paper still pending.
+ */
+export function remindersDue(row: VisaCaseRow, setting: DocumentRemindersSetting) {
+  const visa = row.visa;
+  if (!visa || !setting.enabled || !visa.remindersOn) return false;
+  if (row.status !== "OPEN" || !COLLECTING_STAGES.includes(row.stage.code)) return false;
+  return visa.travellers.some((t) => t.documents.some((d) => d.status === "PENDING"));
+}
 
 /** The case page shows the latest follow-ups; older ones stay in the database and the audit log. */
 export const CASE_FOLLOW_UPS = 20;
@@ -386,6 +401,7 @@ function consentOf(t: TravellerRow) {
  * @param finalFileMaxMb the setting visa.finalFile.maxMb
  * @param gstRatePercent the setting visa.invoice.gstRatePercent, for the quote's GST
  * @param scans the current scan of each linked traveller's papers in the client's vault (currentScansOf)
+ * @param reminders the setting visa.documentReminders, and when the next reminder goes out (null if none is due)
  */
 export function toVisaCaseDto(
   row: VisaCaseRow,
@@ -395,6 +411,7 @@ export function toVisaCaseDto(
   finalFileMaxMb: number,
   gstRatePercent: number,
   scans: CurrentScans,
+  reminders: { setting: DocumentRemindersSetting; nextAt: Date | null },
 ) {
   const finalFile = row.files[0];
   const visa = row.visa;
@@ -463,6 +480,18 @@ export function toVisaCaseDto(
     dueAt: row.dueAt,
     arrival: visa.arrival,
     booklets: { current: visa.bookletsCurrent, old: visa.bookletsOld },
+    /**
+     * The Reminders card (0006 amendment 19): the case's switch, the setting, and the next one (null when none is due).
+     * Nothing is sent until WhatsApp is connected.
+     */
+    reminders: {
+      on: visa.remindersOn,
+      enabled: reminders.setting.enabled,
+      everyDays: reminders.setting.everyDays,
+      sendAt: reminders.setting.sendAt,
+      channel: reminders.setting.channel,
+      nextAt: reminders.nextAt,
+    },
     maturedAt: visa.maturedAt,
     maturedBy: visa.maturedBy,
     /** Step 3's saved file, kept as proof: the current one, how many were uploaded in all, and the size limit. */

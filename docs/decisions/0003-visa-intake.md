@@ -13,7 +13,7 @@ Since this record was proposed, the client master ([0004](0004-client-master.md)
 | Proposes `Client`, `Country`, `VisaType`, `VisaOffering`, `DocumentMaster`, `VisaChecklistItem` | Uses the built models (0004, 0005). |
 | `FeeHead`, `VisaFee` seeded with intake | **Dropped.** Price breakups are designed with the quote/invoice model (as 0005 §7 says). |
 | `MessageTemplate`, `OutboundMessage`, the preview endpoint, "Save and send document list" | **Deferred** to the WhatsApp provider work (M2). Saving writes the case only; the button says **"Save enquiry"** and the toast "Enquiry VISA-2026-0001 saved for …", so staff aren't told something was sent when it wasn't. For the same reason step 1's status label is seeded as **"Enquiry saved"**, not "Document list sent". All three go back to the demo wording when the outbox is built. |
-| `visa.documentReminders`, `VisaCase.remindersOn` / `nextReminderAt` | **Deferred** with messaging. Only `visa.firstFollowUp` is built, because `Enquiry.dueAt` drives the list. |
+| `visa.documentReminders`, `VisaCase.remindersOn` / `nextReminderAt` | **Deferred** with messaging. Only `visa.firstFollowUp` is built, because `Enquiry.dueAt` drives the list. *Built 19 Oct 2026 without sending (0006 amendment 19): the setting and `remindersOn`; the next reminder is worked out on each read, so there is no `nextReminderAt` column.* |
 | Follow-up due "tomorrow 11:00" | Today + `afterDays`, then moved to the next day the office is open (`nextOpenDay()` with the `MASTI_OFFICE` holidays, so the seeded Sunday off counts; embassy-only holidays don't). Otherwise Monday would open with Saturday's enquiries already late. |
 | `VisaCaseDocument` copies the name and requirement | Also copies `detail`, `quantity` and `note` (0005 added the last two to checklist lines). |
 | Owner picker, `GET /api/visa/assignees` | Not built. The owner is the person saving; reassigning comes with the enquiry actions. |
@@ -130,6 +130,9 @@ At intake the service sets:
 - `VisaCase.nextReminderAt`: the first reminder, e.g. in 2 days at 11:00 IST
 
 Actually sending reminders is the job runner's work, which isn't part of Step 1.
+
+*Amended 19 Oct 2026:* the setting and the card are built (0006 amendment 19). The next reminder is worked out on each
+read rather than stored, and a change to the setting applies to open cases at once.
 
 ### 8. Owner
 

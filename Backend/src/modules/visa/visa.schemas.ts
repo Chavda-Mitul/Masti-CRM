@@ -128,6 +128,21 @@ export const collectionCheckSchema = z.object({
   at: timeOfDay,
 });
 
+/** How a reminder reaches the client. */
+export const REMINDER_CHANNELS = ["WHATSAPP", "SMS"] as const;
+
+/**
+ * Pending-document reminders to the client (0003 Decision 7, 0006 amendment 19): on or off for every case, every
+ * everyDays days after the document list, at sendAt (IST), on WhatsApp or SMS. Nothing is sent until WhatsApp is
+ * connected.
+ */
+export const documentRemindersSchema = z.object({
+  enabled: z.boolean(),
+  everyDays: z.number().int().min(1, "1 day at least.").max(30, "30 days at most."),
+  sendAt: timeOfDay,
+  channel: z.enum(REMINDER_CHANNELS, "Pick WhatsApp or SMS."),
+});
+
 /** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */
 export const awbSettingSchema = z
   .object({ minLength: z.number().int().min(1).max(40), maxLength: z.number().int().min(1).max(40) })
@@ -179,6 +194,7 @@ export const visaSettingsSchema = z.object({
   docketEmail: docketEmailSettingSchema,
   passportValidity: passportValiditySchema,
   childAge: childAgeSchema,
+  documentReminders: documentRemindersSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
@@ -223,6 +239,7 @@ export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type PassportValiditySetting = z.infer<typeof passportValiditySchema>;
 export type ChildAgeSetting = z.infer<typeof childAgeSchema>;
+export type DocumentRemindersSetting = z.infer<typeof documentRemindersSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -258,6 +275,13 @@ export const updateVisaCaseSchema = z.object({
 });
 
 export type UpdateVisaCaseInput = z.infer<typeof updateVisaCaseSchema>;
+
+/** The case's Reminders switch (0006 amendment 19). A plain on/off, so no updatedAt, like a tick. */
+export const setRemindersSchema = z.object({
+  on: z.boolean("Say on or off."),
+});
+
+export type SetRemindersInput = z.infer<typeof setRemindersSchema>;
 
 /** "Mark documents complete" (Decision 8). Sends the updatedAt the page loaded: a change by someone else is a 409 STALE. */
 export const matureCaseSchema = z.object({

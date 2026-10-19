@@ -9,7 +9,7 @@ import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/wa
 import { currentScan } from "../clients/clientDocuments.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
-import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
+import type { LinkTravellerInput, MatureCaseInput, SetRemindersInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
@@ -166,6 +166,34 @@ export async function updateCase(caseNo: string, input: UpdateVisaCaseInput, act
       tx,
     );
     await advanceToDocuments(tx, locked, actor);
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * The Reminders card's On/Off (0006 amendment 19): the owner, the Visa HOD or the Head, while documents are collected.
+ * Audited when it changes.
+ */
+export async function setReminders(caseNo: string, input: SetRemindersInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, COLLECTING);
+  await prisma.$transaction(async (tx) => {
+    await lockCase(tx, enquiry.id, actor, COLLECTING);
+    const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { remindersOn: true } });
+    if (before.remindersOn === input.on) return;
+    await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { remindersOn: input.on } });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.reminders.update",
+        entityType: "VisaCase",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { remindersOn: before.remindersOn },
+        after: { remindersOn: input.on },
+        ip: actor.ip,
+      },
+      tx,
+    );
   });
   return getVisaCaseById(enquiry.id);
 }

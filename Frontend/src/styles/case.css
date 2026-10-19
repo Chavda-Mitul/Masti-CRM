@@ -1285,3 +1285,18 @@ button.tick:focus-visible {
   width: 110px;
   text-align: right;
 }
+/* The Reminders card (0006 amendment 19): the line about when, then a note that nothing is sent yet. */
+.reminders-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reminders-line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.reminders-note {
+  display: block;
+  margin-top: 4px;
+}

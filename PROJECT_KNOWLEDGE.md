@@ -613,7 +613,7 @@ All intervals are configurable masters. The values below are demo samples (⚠�
 
 | Trigger | Demo default |
 |---|---|
-| Visa pending-document reminder to the client | every 2 days at 11:00. An admin setting, not a constant (Q5, decided 8 Oct) |
+| Visa pending-document reminder to the client | every 2 days at 11:00. An admin setting, not a constant (Q5, decided 8 Oct). Setting and case card built 19 Oct, sending waits for WhatsApp (0006 amendment 19) |
 | Claim pending-document reminder | every 2 days |
 | Hotel hold expiring | 6 h before |
 | Web check-in list | 72 h before departure (Q21) |
@@ -830,6 +830,11 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 
 - **How documents reach us:** "Client brings them" or "Send collection boy" (who, slot, pickup address). Booklets received, e.g. "4 current + 3 old". "The booklet count is checked again at handover."
 - **Reminders card:** On/off; "Every 2 days at 11:00 on WhatsApp, listing only what's still missing. Next: Wed 7 Oct." ⚠️ The client asked for WhatsApp or SMS reminders at company-set intervals ✅.
+  - *Built 19 Oct 2026, without sending (0006 amendment 19):*
+    - the owner, the Visa HOD or the Head switches it per case
+    - "Next" counts from intake, skipping Sundays and office holidays
+    - the reason dropdown opens the Postpone / Cancel dialog pre-filled
+    - the setting is Settings → Masters → Reminder rules
 - **Postpone or cancel reason** ⚠️ values: Travel dates moved · Waiting for leave approval · Went with another agent · Trip cancelled. Copy: "Fixed reasons only — no free text anywhere." ✅
 - **Consent card** per traveller: "Agreed · 28 Sep", "On file from 2025", or "None on file — flagged".
 - **Captured as the documents come in** ✅: names, travel dates, duration, single/double/multiple entry, hotel stay, and anything else left incomplete.

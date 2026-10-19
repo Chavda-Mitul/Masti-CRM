@@ -155,6 +155,30 @@ without a word:
     - **An original that came as a xerox:** allowed (Decision 2), so it isn't asked. The row shows "Original needed ·
       came as a xerox", and "Mark documents complete" names such papers.
 
+Amended 19 Oct 2026 (project lead), building the demo's Step 2 Reminders card (screen 07), which 0003 Decision 7
+deferred "with messaging". WhatsApp and the job runner still aren't built:
+
+19. **The Reminders card and the reminder setting, with nothing sent yet.**
+    - **The setting** `visa.documentReminders` `{ enabled, everyDays (1–30), sendAt, channel (WHATSAPP | SMS) }`,
+      seeded ⚠️ `{ true, 2, "11:00", "WHATSAPP" }`. It's on Settings → Masters as **Reminder rules** (it was a "Soon"
+      card). The Head or the Visa HOD changes it, audited as `setting.update`; Visa staff read it. A change applies at
+      once to every open case's next reminder (0003 said open cases kept theirs; with nothing stored, there's nothing
+      to keep).
+    - **When:** every `everyDays` days from the intake day (the document list goes out at intake), at `sendAt` (IST).
+      A Sunday or an office holiday moves a reminder to the next open day, and the next one still counts from its
+      planned day, so the dates don't drift (`nextReminderAt` in `visa.settings.ts`).
+    - **Until:** the case isn't open (postponed, cancelled…), it leaves Enquiry/Documents (matured), or no paper is
+      pending. Then "Next" is null and the card says why.
+    - **Worked out on each read, not stored.** 0003 planned `VisaCase.nextReminderAt`. With no sender, nothing would
+      move a stored date on, so the card would show a past date. Only the case's switch is stored
+      (`VisaCase.remindersOn`, default true). The WhatsApp job adds what it needs (e.g. when each one went out).
+    - **The switch:** `PUT /api/visa/cases/:caseNo/reminders` `{ on }`. The owner, the Visa HOD or the Head, on an open
+      case still collecting documents (the `COLLECTING` rule, like a tick, so no `updatedAt`). Audited as
+      `visa.reminders.update` when it changes.
+    - **"Postpone or cancel — reason"** on the card lists the department's postpone and cancel reasons; picking one
+      opens the usual Postpone / Cancel dialog with that reason chosen. There is still one way to postpone or cancel.
+    - **The card says** "Sending starts once WhatsApp is connected", so nobody thinks a reminder went out.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
