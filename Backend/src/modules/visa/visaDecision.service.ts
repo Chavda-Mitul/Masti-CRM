@@ -3,6 +3,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { fromDbDate, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, notFound } from "../../lib/httpError";
+import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import type { Actor } from "../users/user";
 import { DECIDED, DECIDING, loadCase, lockCase, visaStage } from "./caseLock";
 import type { ChangeDecisionInput, RecordDecisionInput } from "./visa.schemas";
@@ -27,7 +28,7 @@ async function gather(db: Db, enquiryId: string) {
       submittedOnlineAt: true,
       decidedAt: true,
       passportsReceivedAt: true,
-      travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true } },
+      travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true, visaNo: true } },
     },
   });
 }
@@ -52,7 +53,7 @@ function wording(g: Gathered) {
  * One traveller's outcome (Decision 3): an approved one with the number and both dates (valid-to on or after
  * valid-from), a refused one with none. The message names the traveller and goes under `field`.
  */
-function checkOne(field: string, name: string, number: string, o: Omit<ChangeDecisionInput, "updatedAt">) {
+function checkOne(field: string, name: string, number: string, o: Pick<ChangeDecisionInput, "outcome" | "visaNo" | "validFrom" | "validTo">) {
   if (o.outcome === "APPROVED") {
     if (!o.visaNo) throw fieldError(field, `Enter ${name}'s ${number}.`);
     if (!o.validFrom || !o.validTo) throw fieldError(field, `Enter the dates ${name}'s visa is valid.`);
@@ -92,7 +93,37 @@ function checkOutcomes(g: Gathered, outcomes: RecordDecisionInput["outcomes"]) {
   }
   const missing = g.travellers.find((t) => !seen.has(t.id));
   if (missing) throw fieldError("outcomes", `Record ${who(missing)}'s decision too.`);
+  // Each visa has its own number: the same one twice on the case is a typo (decided 19 Oct 2026).
+  const numbered = new Map<string, string>();
+  for (const o of outcomes) {
+    if (o.outcome !== "APPROVED" || !o.visaNo) continue;
+    const name = who(byId.get(o.travellerId)!);
+    const first = numbered.get(o.visaNo);
+    if (first) throw fieldError("outcomes", `${first} and ${name} have the same ${number}: each visa has its own.`);
+    numbered.set(o.visaNo, name);
+  }
   return who;
+}
+
+/**
+ * What a decision may have wrong but can be right (soft warnings, decided 19 Oct 2026; lib/warnings.ts): an approved
+ * visa's number already on another case.
+ */
+async function decisionWarnings(db: Db, enquiryId: string, g: Gathered, outcomes: { outcome: string; visaNo?: string | null | undefined }[]): Promise<Warning[]> {
+  const numbers = outcomes.flatMap((o) => (o.outcome === "APPROVED" && o.visaNo ? [o.visaNo] : []));
+  if (numbers.length === 0) return [];
+  const { number } = wording(g);
+  const label = number.charAt(0).toUpperCase() + number.slice(1);
+  const elsewhere = await db.visaCaseTraveller.findMany({
+    where: { visaNo: { in: numbers }, caseId: { not: enquiryId } },
+    select: { visaNo: true, name: true, visaCase: { select: { enquiry: { select: { caseNo: true } } } } },
+    orderBy: [{ visaNo: "asc" }, { caseId: "asc" }],
+    take: 10,
+  });
+  return elsewhere.map((t) => ({
+    code: "VISA_NO_ELSEWHERE",
+    message: `${label} ${t.visaNo} is already on ${t.visaCase.enquiry.caseNo}${t.name ? ` (${t.name})` : ""}.`,
+  }));
 }
 
 /**
@@ -106,6 +137,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
   const pre = await gather(prisma, enquiry.id);
   assertSubmitted(pre);
   checkOutcomes(pre, input.outcomes);
+  checkWarnings(await decisionWarnings(prisma, enquiry.id, pre, input.outcomes), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, DECIDING);
@@ -113,6 +145,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
     const g = await gather(tx, enquiry.id);
     assertSubmitted(g);
     const who = checkOutcomes(g, input.outcomes);
+    const confirmed = checkWarnings(await decisionWarnings(tx, enquiry.id, g, input.outcomes), input.confirmWarnings);
 
     const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).passportsBackCheck, tx);
     const decision = await visaStage(tx, locked.departmentId, "DECISION");
@@ -145,6 +178,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
             const o = outcomes.get(t.id)!;
             return { name: who(t), outcome: o.outcome, visaNo: o.visaNo ?? null, validFrom: o.validFrom ?? null, validTo: o.validTo ?? null };
           }),
+          ...confirmedWarningsNote(confirmed),
         },
         ip: actor.ip,
       },
@@ -172,16 +206,27 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
     if (!t) throw notFound("Traveller not found on this case.");
     const { who, number } = wording(g);
     checkOne("decision", who(t), number, input);
+    // Each visa has its own number (decided 19 Oct 2026).
+    const twin = input.outcome === "APPROVED" && input.visaNo ? g.travellers.find((x) => x.id !== travellerId && x.visaNo === input.visaNo) : undefined;
+    if (twin) throw fieldError("decision", `${who(twin)} already has this ${number}: each visa has its own.`);
     checkSticker(g, who(t), input);
     return who(t);
   };
-  check(await gather(prisma, enquiry.id));
+  /** The warnings for this change: a number only when it changed (an unchanged one was confirmed when it was saved). */
+  const warningsFor = (db: Db, g: Gathered) => {
+    const before = g.travellers.find((x) => x.id === travellerId)?.visaNo ?? null;
+    return decisionWarnings(db, enquiry.id, g, input.visaNo !== before ? [input] : []);
+  };
+  const pre = await gather(prisma, enquiry.id);
+  check(pre);
+  checkWarnings(await warningsFor(prisma, pre), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, DECIDED);
     assertFresh(locked.updatedAt, input.updatedAt, "case");
     const g = await gather(tx, enquiry.id);
     const name = check(g);
+    const confirmed = checkWarnings(await warningsFor(tx, g), input.confirmWarnings);
     const row = await tx.visaCaseTraveller.findUniqueOrThrow({
       where: { id: travellerId },
       select: { outcome: true, visaNo: true, validFrom: true, validTo: true, stickerCheck: true },
@@ -224,7 +269,7 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
         entityId: travellerId,
         clientId: enquiry.clientId,
         before: { name, ...was },
-        after: { name, ...now },
+        after: { name, ...now, ...confirmedWarningsNote(confirmed) },
         ip: actor.ip,
       },
       tx,

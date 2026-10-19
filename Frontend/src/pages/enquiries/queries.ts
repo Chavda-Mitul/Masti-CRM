@@ -380,6 +380,7 @@ export function useRecordDecision(caseNo: string) {
   return useCaseAction<{
     outcomes: { travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }[]
     updatedAt: string
+    confirmWarnings?: boolean
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
 }
 
@@ -501,6 +502,7 @@ export function useChangeDecision(caseNo: string) {
     validTo?: string
     stickerCheck?: StickerCheck
     updatedAt: string
+    confirmWarnings?: boolean
   }>(
     caseNo,
     (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/decision`, { method: 'PUT', body }),

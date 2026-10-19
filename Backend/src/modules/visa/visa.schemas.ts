@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
-import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
+import { confirmWarnings, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -443,6 +443,8 @@ export const recordDecisionSchema = z.object({
     .min(1, "Record a decision for everyone.")
     .max(60),
   updatedAt: z.iso.datetime("Reload and try again."),
+  /** Saving again past a warning (a number already on another case, visa dates that don't cover the trip). */
+  confirmWarnings,
 });
 
 /**
@@ -455,6 +457,7 @@ export const changeDecisionSchema = z.object({
   /** Once the passports are received, an approved traveller's sticker checked again (0013 Decision 5, amended 19 Oct). */
   stickerCheck: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullish(),
   updatedAt: z.iso.datetime("Reload and try again."),
+  confirmWarnings,
 });
 
 /**
