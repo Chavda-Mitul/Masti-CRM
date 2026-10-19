@@ -560,6 +560,8 @@ export const handOverSchema = z.object({
   receiver: receiverSchema,
   photoId: z.string("Take a photo of the person collecting.").trim().min(1, "Take a photo of the person collecting.").max(64),
   updatedAt: z.iso.datetime("Reload and try again."),
+  /** Saving again past a warning (a child picked as who collected). */
+  confirmWarnings,
 });
 export type HandOverInput = z.infer<typeof handOverSchema>;
 

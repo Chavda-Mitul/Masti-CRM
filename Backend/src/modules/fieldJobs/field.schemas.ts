@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { confirmWarnings } from "../../lib/shared.schemas";
 import { handOverBookletsSchema, receiverSchema } from "../visa/visa.schemas";
 
 // The field staff app's own requests (docs/decisions/0015-field-staff-app.md). Only zod and other *.schemas.ts files
@@ -75,6 +76,8 @@ export const handOverAtDoorSchema = z.object({
   photoId: z.string("Take a photo of the person receiving.").min(1, "Take a photo of the person receiving."),
   selfieId: z.string("Take your selfie at the door.").min(1, "Take your selfie at the door."),
   place: placeSchema,
+  /** Handing over again past a warning (a child picked as who receives them). */
+  confirmWarnings,
 });
 
 export type Place = z.infer<typeof placeSchema>;

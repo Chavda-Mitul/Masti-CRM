@@ -488,6 +488,7 @@ export function useHandOver(caseNo: string) {
     receiver: { travellerId: string } | { name: string }
     photoId: string
     updatedAt: string
+    confirmWarnings?: boolean
   }>(caseNo, (base, body) => api(`${base}/handover`, { method: 'POST', body }))
 }
 

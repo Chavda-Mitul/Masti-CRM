@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { issueText } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
+import { useWarningGuard } from '../../lib/useWarningGuard'
 import { BookletsStep, CodeStep, Step } from './DoorSteps'
 import { countOf, handOverText, type TypedBooklets } from './labels'
 import { PhotoStep, type TakenPhoto } from './PhotoStep'
@@ -25,6 +26,8 @@ export function DeliverySteps({ stop, otp }: { stop: RunStop; otp: OtpState | nu
   const [photo, setPhoto] = useState<TakenPhoto | null>(null)
   const [selfie, setSelfie] = useState<TakenPhoto | null>(null)
   const handOver = useHandOverAtDoor(stop.id)
+  // A child picked as who receives them: check, then hand over anyway.
+  const guard = useWarningGuard()
   const toast = useToast()
   const navigate = useNavigate()
   const busy = handOver.isPending
@@ -40,14 +43,17 @@ export function DeliverySteps({ stop, otp }: { stop: RunStop; otp: OtpState | nu
   const confirmed = !!otp?.confirmedAt
   const left = [matches, confirmed, receiver !== null && photo !== null, selfie !== null].filter((done) => !done).length
 
-  const finish = () => {
+  const finish = (confirmWarnings = false): void => {
     if (!counted || !matches || !confirmed || !receiver || !photo || !selfie?.place) return
     handOver.mutate(
-      { booklets: counted, receiver, photoId: photo.id, selfieId: selfie.id, place: selfie.place },
+      { booklets: counted, receiver, photoId: photo.id, selfieId: selfie.id, place: selfie.place, ...(confirmWarnings ? { confirmWarnings } : {}) },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: 'Passports handed over.' })
           navigate('/tasks')
+        },
+        onError: (err) => {
+          guard.intercept(err, () => finish(true))
         },
       },
     )
@@ -76,6 +82,7 @@ export function DeliverySteps({ stop, otp }: { stop: RunStop; otp: OtpState | nu
             <label key={t.id} className={`field-reason${pick === t.id ? ' is-picked' : ''}`}>
               <input type="radio" name="receiver" checked={pick === t.id} onChange={() => setPick(t.id)} disabled={busy} />
               {t.name}
+              {t.isChild && <span className="muted"> · child</span>}
             </label>
           ))}
           <label className={`field-reason${pick === OTHER ? ' is-picked' : ''}`}>
@@ -100,8 +107,10 @@ export function DeliverySteps({ stop, otp }: { stop: RunStop; otp: OtpState | nu
         <PhotoStep jobId={stop.id} kind="selfie" value={selfie} onChange={setSelfie} disabled={busy} />
       </Step>
 
-      {handOver.error && <div className="alert alert-bad">{issueText(handOver.error)}</div>}
-      <button type="button" className="btn btn-primary field-finish" onClick={finish} disabled={left > 0 || busy}>
+      {/* A warning shows as "Check before saving", not here. */}
+      {issueText(handOver.error) && <div className="alert alert-bad">{issueText(handOver.error)}</div>}
+      {guard.modal}
+      <button type="button" className="btn btn-primary field-finish" onClick={() => finish()} disabled={left > 0 || busy}>
         {busy ? 'Saving…' : left > 0 ? `Finish handover · ${left} ${left === 1 ? 'step' : 'steps'} left` : 'Finish handover'}
       </button>
     </section>
