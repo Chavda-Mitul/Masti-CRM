@@ -30,6 +30,14 @@ export function canDispatchDocket(user: User, ownerIds: (string | null)[]): bool
   return can(user, 'VISA', 'EDIT') && (isHodOf(user, 'VISA') || ownerIds.includes(user.id))
 }
 
+/**
+ * The whole client list (the Clients tab): the Head, any HOD, or Accounts, who bill every client. Other staff open a
+ * client from their case. Mirrors canBrowseClients in Backend/src/modules/clients/access.ts.
+ */
+export function canBrowseClients(user: User): boolean {
+  return isHodOfAny(user) || can(user, 'ACCOUNTS', 'VIEW')
+}
+
 /** Clients are shared by every department: EDIT in any of them (or being Head) lets you change them. */
 export function canEditClients(user: User): boolean {
   if (user.type === 'HEAD') return user.isActive

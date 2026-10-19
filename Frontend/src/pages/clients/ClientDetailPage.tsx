@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { can, canEditClients, isHodOfAny } from '../../auth/permissions'
+import { can, canBrowseClients, canEditClients, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
 import { departmentStyle } from '../../lib/departments'
@@ -25,6 +25,8 @@ export function ClientDetailPage() {
   const options = useClientOptions()
   const [editing, setEditing] = useState(false)
   const canEdit = me ? canEditClients(me) : false
+  // Other staff reach a client only from their case, so they go back to Enquiries, not to the list (0004, 19 Oct 2026).
+  const canBrowse = me ? canBrowseClients(me) : false
   // Only Visa intake is built so far; other departments' intakes come in Stage 2.
   const canAddEnquiry = me ? can(me, 'VISA', 'EDIT') : false
   // The document vault is for HODs and the Head only (docs/decisions/0016-client-documents.md Decision 4).
@@ -38,7 +40,7 @@ export function ClientDetailPage() {
         <h1 className="h2">{missing ? 'Client not found' : 'Couldn’t load this client'}</h1>
         {!missing && <div className="alert alert-bad">{errorText(client.error)}</div>}
         <p className="muted">
-          <Link to="/clients">Back to all clients</Link>
+          {canBrowse ? <Link to="/clients">Back to all clients</Link> : <Link to="/enquiries">Back to Enquiries</Link>}
         </p>
       </div>
     )
@@ -51,9 +53,15 @@ export function ClientDetailPage() {
 
   return (
     <>
-      <Link to="/clients" className="back-link">
-        ← All clients
-      </Link>
+      {canBrowse ? (
+        <Link to="/clients" className="back-link">
+          ← All clients
+        </Link>
+      ) : (
+        <Link to="/enquiries" className="back-link">
+          ← Enquiries
+        </Link>
+      )}
 
       <div className="card pad client-head">
         <span className="avatar avatar-lg">{c.name ? initials(c.name) : '?'}</span>

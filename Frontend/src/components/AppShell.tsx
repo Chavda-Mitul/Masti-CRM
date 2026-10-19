@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { can, isHodOfAny } from '../auth/permissions'
+import { can, canBrowseClients, isHodOfAny } from '../auth/permissions'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
@@ -97,10 +97,12 @@ export function AppShell() {
             )}
           </Link>
         )}
-        <NavLink to="/clients" className="nav">
-          <NavIcon name="clients" />
-          Clients
-        </NavLink>
+        {user && canBrowseClients(user) && (
+          <NavLink to="/clients" className="nav">
+            <NavIcon name="clients" />
+            Clients
+          </NavLink>
+        )}
         <span className="nav nav-disabled">
           <NavIcon name="accounts" />
           Accounts <span className="tag">Soon</span>
