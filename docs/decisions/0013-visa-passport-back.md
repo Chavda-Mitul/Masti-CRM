@@ -113,6 +113,9 @@ the client", while the passports were still in transit.
   - "Passports on the way back" for a recalled file not yet sent back
   - "Mark received" in transit
   - the step's own label once the passports are received
+  - "Find the missing passport" (or "passports") while a short return holds the case (Decision 5, amended), as the
+    Passports coming back card says; the step's own label again once the rest come in or the shortfall is cleared
+    (added 19 Oct 2026)
   - "No passports to bring back (e-visa)" ⚠️ for an e-visa at Decision (Decision 4)
 
 **Changing the dates.** **Decided 16 Oct 2026 (project lead):** vendors aren't systematic, so the expected day moves,

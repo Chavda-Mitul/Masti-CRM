@@ -7,8 +7,9 @@ import { loginAs, prisma, resetDb } from "./helpers";
 import { decidedCase, dispatchCase, makeInvoiceable, mastiReady, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The enquiries list's next step follows the case at Steps 6–7, as the case page's header button does (visaNextStep):
-// the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5) and an e-visa, whose passports
-// never left the office (Decision 4). Every other step shows the step's own next step.
+// the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5), an e-visa, whose passports
+// never left the office (Decision 4), and a short return, held until the rest come in or the shortfall is cleared
+// (Decision 5, amended). Every other step shows the step's own next step.
 
 beforeEach(async () => {
   await resetDb();
@@ -42,12 +43,27 @@ async function sendBack(agent: Agent, caseNo: string) {
   expect((await agent.post(`/api/visa/cases/${caseNo}/passports-back`).send({ collectedOn: istToday(), expectedOn, updatedAt })).status).toBe(200);
 }
 
-/** "Mark received": as counted, every approved sticker matching. */
-async function receive(agent: Agent, caseNo: string) {
+type Booklets = { current: number; old: number };
+
+/** "Mark received": `booklets` counted (all 2 + 0 that went out, unless said), every approved sticker matching. */
+async function receive(agent: Agent, caseNo: string, booklets: Booklets = { current: 2, old: 0 }) {
   const c = await load(agent, caseNo);
   const stickers = c.travellers.filter((t) => t.decision?.outcome === "APPROVED").map((t) => ({ travellerId: t.id, check: "MATCHES" }));
-  const res = await agent.post(`/api/visa/cases/${caseNo}/passports-received`).send({ booklets: { current: 2, old: 0 }, stickers, updatedAt: c.updatedAt });
+  const res = await agent.post(`/api/visa/cases/${caseNo}/passports-received`).send({ booklets, stickers, updatedAt: c.updatedAt });
   expect(res.status).toBe(200);
+}
+
+/** "It came": the late booklets added to our stock. As in visaShortfall.test.ts. */
+async function receiveRest(agent: Agent, caseNo: string, booklets: Booklets) {
+  const { updatedAt } = await load(agent, caseNo);
+  expect((await agent.post(`/api/visa/cases/${caseNo}/passports-received/rest`).send({ booklets, updatedAt })).status).toBe(200);
+}
+
+/** "It won't come back": the shortfall cleared with "Embassy kept it". As in visaShortfall.test.ts. */
+async function clearShortfall(agent: Agent, caseNo: string) {
+  const { updatedAt } = await load(agent, caseNo);
+  const { id: reasonId } = await prisma.missingPassportReason.findUniqueOrThrow({ where: { code: "EMBASSY_KEPT" } });
+  expect((await agent.post(`/api/visa/cases/${caseNo}/passports-received/clear`).send({ reasonId, updatedAt })).status).toBe(200);
 }
 
 /** An e-visa (Vendor needed off), Neha's, invoiced, "Submitted online" and decided: at Decision. As in visaPassportsBack.test.ts. */
@@ -83,6 +99,29 @@ describe("the enquiries list's next step at Steps 6–7", () => {
     });
 
     await receive(processor, c.caseNo);
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Hand over to the client");
+  });
+
+  it("asks to find the missing passport while a short return holds the case, then the handover once it comes", async () => {
+    const { c, processor } = await decidedCase();
+    await sendBack(processor, c.caseNo);
+    // 2 + 0 went out; 1 + 0 came back.
+    await receive(processor, c.caseNo, { current: 1, old: 0 });
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Find the missing passport");
+
+    await receiveRest(processor, c.caseNo, { current: 1, old: 0 });
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Hand over to the client");
+  });
+
+  it("asks to find the missing passports (plural), then the handover once the shortfall is cleared", async () => {
+    const { c, processor } = await decidedCase();
+    await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { bookletsCurrent: 2, bookletsOld: 1 } });
+    await sendBack(processor, c.caseNo);
+    // 2 + 1 went out; 1 + 0 came back: 1 current and 1 old are missing.
+    await receive(processor, c.caseNo, { current: 1, old: 0 });
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Find the missing passports");
+
+    await clearShortfall(processor, c.caseNo);
     expect((await row(processor, c.caseNo)).nextStep).toBe("Hand over to the client");
   });
 
