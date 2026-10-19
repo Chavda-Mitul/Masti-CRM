@@ -226,15 +226,24 @@ export async function listOpenEnquiriesOfClient(clientId: string, user: UserWith
 
 /**
  * "Everything we've done for this family" on the client profile: all of the client's cases this user may open
- * (visibility.ts), finished ones too. Unfinished first, then finished; newest first in each.
+ * (visibility.ts), finished ones too, and the family's other unfinished cases in the departments the user can view, the
+ * ones the New enquiry lookup already shows. Those come with `canOpen: false` and show without a link. A matured visa
+ * case waits for the HOD with no owner, and the staff member who matured it saw the family as having nothing open
+ * (fixed 19 Oct 2026, review finding 5; 0006 amendment 17). Unfinished first, then finished; newest first in each.
  */
 export async function listCasesOfClient(clientId: string, user: UserWithDepartments) {
   const departments = await viewableDepartments(user);
-  const rows = await prisma.enquiry.findMany({
-    where: { AND: [{ clientId }, visibleEnquiryWhere(user, departments)] },
-    include: rowInclude,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  });
+  const visible = visibleEnquiryWhere(user, departments);
+  const unfinishedHere: Prisma.EnquiryWhereInput = { status: { in: [...OPEN_STATUSES] }, departmentId: { in: departments.map((d) => d.id) } };
+  const [rows, openable] = await Promise.all([
+    prisma.enquiry.findMany({
+      where: { AND: [{ clientId }, { OR: [visible, unfinishedHere] }] },
+      include: rowInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    prisma.enquiry.findMany({ where: { AND: [{ clientId }, visible] }, select: { id: true } }),
+  ]);
+  const canOpen = new Set(openable.map((row) => row.id));
   const unfinished = (row: EnquiryRow) => (OPEN_STATUSES as readonly string[]).includes(row.status);
   return [...rows.filter(unfinished), ...rows.filter((row) => !unfinished(row))].map((row) => ({
     caseNo: row.caseNo,
@@ -247,6 +256,8 @@ export async function listCasesOfClient(clientId: string, user: UserWithDepartme
     /** A cancelled visa case whose passports are still to hand back (0006 amendment 15). */
     toHandBack: toHandBack(row),
     owner: row.owner,
+    /** Whether this user may open it: a colleague's case, or one waiting for the HOD, is listed but not opened. */
+    canOpen: canOpen.has(row.id),
   }));
 }
 

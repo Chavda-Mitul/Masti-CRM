@@ -4,6 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
+import { maturedCase } from "./visaHelpers";
 
 beforeEach(async () => {
   await resetDb();
@@ -397,19 +398,23 @@ describe("GET /api/clients/lookup: open enquiries", () => {
         resumeOn: null,
         toHandBack: false,
         owner: { id: expect.any(String), name: "Aarti Patel" },
+        canOpen: true,
       },
     ]);
 
-    // A colleague's case isn't on her profile view (the lookup still shows it).
+    // A colleague can't open the client of a case that isn't theirs, nor the case (0004 Amendment 2, 0006 amendment
+    // 17); the lookup still shows the case.
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([]);
+    expect((await neha.get(`/api/clients/${saved.client.id}`)).status).toBe(403);
+    expect((await neha.get(`/api/visa/cases/${saved.caseNo}`)).status).toBe(403);
 
     // A save returns the profile with them as well.
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
     expect(edited.body.client.cases).toHaveLength(1);
 
-    await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
+    // The Holidays HOD may open every client, but sees only the cases of the departments she can view.
+    await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", role: "HOD" }] });
     const holidays = await loginAs("hetal@masti.test");
     expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([]);
   });
@@ -440,9 +445,34 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     const lookup = (await staff.get("/api/clients/lookup?mobile=9825041234")).body.openEnquiries;
     expect(lookup.map((c: { caseNo: string }) => c.caseNo)).toEqual([open.caseNo]);
 
-    // A colleague still sees none of them, finished or not.
+    // A colleague with her own case for the family opens the client (0004 Amendment 2) and sees Aarti's open one too,
+    // not to open; the finished ones stay off her view.
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${open.client.id}`)).body.client.cases).toEqual([]);
+    const hers = (await neha.post("/api/visa/cases").send(await body())).body.case;
+    const theirs = (await neha.get(`/api/clients/${open.client.id}`)).body.client.cases;
+    expect(theirs.map((c: { caseNo: string; canOpen: boolean }) => [c.caseNo, c.canOpen])).toEqual([
+      [hers.caseNo, true],
+      [open.caseNo, false],
+    ]);
+  });
+
+  it("shows a matured case waiting for the HOD to the HOD; whoever matured it no longer opens the client (review finding 5)", async () => {
+    // Aarti matured it; it waits for the HOD with no owner, so she can't open it any more (0006 Decision 1), and with no
+    // case of hers the client is closed to her too (0004 Amendment 2).
+    const c = await maturedCase({ assigned: false });
+    const profile = (agent: Awaited<ReturnType<typeof loginAs>>) => agent.get(`/api/clients/${c.client.id}`);
+    expect((await profile(c.staff)).status).toBe(403);
+    expect((await c.staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
+
+    // The HOD opens it.
+    await createUser({ name: "Riya Shah", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await profile(await loginAs("riya@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ caseNo: c.caseNo, canOpen: true })]);
+
+    // Given to Neha, it's hers to open; Aarti still can't open the client.
+    const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { ownerId: neha.id } });
+    expect((await profile(await loginAs("neha@masti.test"))).body.client.cases).toEqual([expect.objectContaining({ canOpen: true })]);
+    expect((await profile(c.staff)).status).toBe(403);
   });
 });

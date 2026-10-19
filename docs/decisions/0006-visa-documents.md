@@ -132,6 +132,15 @@ amendment 13 (this one and the in-stock rule above). Nothing cites this one by n
 
 16. **A matured case is due the next open office day at 11:00 ⚠️** (decided 16 Oct 2026, project lead, after the end-to-end walkthrough), as the setting `visa.assignCheck` `{ afterDays: 1, at: "11:00" }`. It was due the moment it was handed over, so the HOD's list showed it "Late" at once and counted it as running late. It turns late only if nobody's assigned it by then.
 
+Amended 19 Oct 2026 (project lead, item 2 fixes), after the 17 Oct browser review found that the staff member who
+matured a case then saw the client as having nothing open (review finding 5):
+
+17. **The client profile lists the family's open cases in the user's departments, as the intake lookup does.**
+    Decision 1 still decides who **opens** a case. A case the user can't open (a colleague's, or one waiting for the
+    HOD with no owner) is listed without a link, with whose it is or "Waiting for the HOD". It counts in "Open now".
+    Finished cases stay visible-only. It shows nothing the intake lookup doesn't already show to the same people.
+    Leaving the follow-up desk at maturity is unchanged (amendment 9): the desk is the owner's.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
@@ -155,7 +164,7 @@ What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12
   - the enquiries list
   - the case page and every case action
   - the follow-up desk
-  - the client profile's open cases
+  - the client profile's open cases (listed, not opened, for the rest of the department since 19 Oct: amendment 17)
 
 One function, `visibleEnquiryWhere(user)`, builds the where-clause, so the screens can't disagree.
 

@@ -148,6 +148,8 @@ export interface ClientCase {
   toHandBack: boolean
   /** Whose case it is. Null while it waits for the HOD (e.g. matured, no processor yet). */
   owner: { id: string; name: string } | null
+  /** Whether this user may open it. A colleague's case, or one waiting for the HOD, shows without a link. */
+  canOpen: boolean
 }
 
 export interface ClientOptions {
