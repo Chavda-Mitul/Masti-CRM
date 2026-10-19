@@ -1,5 +1,5 @@
 import type { Db } from "../../config/prisma";
-import { addMonths, dateLabel, fromDbDate } from "../../lib/dates";
+import { addMonths, dateLabel, fromDbDate, wholeYearsBetween } from "../../lib/dates";
 import type { Warning } from "../../lib/warnings";
 import { getVisaSettings } from "./visa.settings";
 
@@ -32,5 +32,27 @@ export async function passportWarnings(db: Db, returnOn: string | null, travelle
         message: `${t.name ?? t.member.name}'s passport expires ${dateLabel(expiry)}, less than ${months} month${months === 1 ? "" : "s"} after the trip comes back (${dateLabel(returnOn)}).`,
       },
     ];
+  });
+}
+
+/**
+ * An adult in a child's place on the case, or a child in an adult's: each place has its own checklist. Staff decide who
+ * is a child (0005, 0006); the age only catches a slip. Counted on `on` (the departure day, else today) against ⚠️
+ * visa.childAge (seeded 18). No birth date on file isn't checked.
+ */
+export async function ageWarnings(db: Db, on: string, travellers: { isChild: boolean; papers: TravellerPapers }[]): Promise<Warning[]> {
+  const adultFrom = (await getVisaSettings(db)).childAge.adultFrom;
+  return travellers.flatMap(({ isChild, papers: t }) => {
+    const born = t.member?.dateOfBirth ? fromDbDate(t.member.dateOfBirth) : null;
+    if (!t.member || !born) return [];
+    const age = wholeYearsBetween(born, on);
+    const name = t.name ?? t.member.name;
+    if (isChild && age >= adultFrom) {
+      return [{ code: "ADULT_IN_CHILD_PLACE", message: `${name} is ${age}, but this is a child's place on the case, with a child's checklist.` }];
+    }
+    if (!isChild && age < adultFrom) {
+      return [{ code: "CHILD_IN_ADULT_PLACE", message: `${name} is ${age}, but this is an adult's place on the case, with an adult's checklist.` }];
+    }
+    return [];
   });
 }

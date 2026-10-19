@@ -13,7 +13,7 @@ import type { LinkTravellerInput, MatureCaseInput, UpdateCaseDocumentInput, Upda
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
-import { passportWarnings, travellerPapersSelect } from "./visaWarnings";
+import { ageWarnings, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
 // documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
@@ -252,10 +252,14 @@ export async function linkTraveller(caseNo: string, travellerId: string, input: 
       const locked = await lockCase(tx, enquiry.id, actor, COLLECTING);
       const traveller = await tx.visaCaseTraveller.findUniqueOrThrow({ where: { id: found.id } });
       if (traveller.memberId === member.id) return;
-      // The passport should still run long enough after the trip (a warning, decided 19 Oct 2026).
-      const trip = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { returnOn: true } });
+      // The passport should still run long enough after the trip, and the age fit the place (warnings, 19 Oct 2026).
+      const trip = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { departOn: true, returnOn: true } });
+      const papers = { name: member.name, member };
       const confirmed = checkWarnings(
-        await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), [{ name: member.name, member }]),
+        [
+          ...(await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), [papers])),
+          ...(await ageWarnings(tx, trip.departOn ? fromDbDate(trip.departOn) : istToday(), [{ isChild: traveller.isChild, papers }])),
+        ],
         input.confirmWarnings,
       );
       const after = await tx.visaCaseTraveller.update({ where: { id: traveller.id }, data: { memberId: member.id, name: member.name } });

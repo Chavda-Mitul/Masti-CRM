@@ -19,10 +19,10 @@ const inDays = (days: number) => addDays(istToday(), days);
 const updatedAtOf = async (caseNo: string) =>
   (await prisma.enquiry.findUniqueOrThrow({ where: { caseNo }, select: { updatedAt: true } })).updatedAt.toISOString();
 
-/** A family member on the client's list, with a passport running out on `passportExpiry`. */
-async function member(agent: Agent, clientId: string, name: string, passportExpiry: string) {
+/** A family member on the client's list, with a passport running out on `passportExpiry` (or a birth date). */
+async function member(agent: Agent, clientId: string, name: string, passportExpiry?: string, dateOfBirth?: string) {
   const relationId = (await prisma.relation.findUniqueOrThrow({ where: { code: "SELF" } })).id;
-  const res = await agent.post(`/api/clients/${clientId}/members`).send({ name, relationId, passportExpiry });
+  const res = await agent.post(`/api/clients/${clientId}/members`).send({ name, relationId, passportExpiry, dateOfBirth });
   expect(res.status).toBe(201);
   return res.body.member.id as string;
 }
@@ -79,5 +79,34 @@ describe("a passport that runs out too soon after the trip", () => {
       create: { key: "visa.passportValidity", value: { monthsAfterReturn: 0 } },
     });
     expect((await staff.put(`/api/visa/cases/${saved.caseNo}/travellers/${child!.id}/member`).send({ memberId: shortId })).status).toBe(200);
+  });
+});
+
+describe("an age that doesn't fit the place on the case", () => {
+  it("is a warning for a child in an adult's place or an adult in a child's; the age is a setting", async () => {
+    const staff = await visaStaff();
+    const saved = await saveCase(staff); // one adult, one child; travelling out 40 days from now
+    await prisma.visaCase.update({ where: { enquiryId: saved.id }, data: { departOn: toDbDate(inDays(40)) } });
+    const [adult, child] = await prisma.visaCaseTraveller.findMany({ where: { caseId: saved.id }, orderBy: { position: "asc" } });
+    const aarav = await member(staff, saved.client.id, "Aarav Mehta", undefined, addMonths(istToday(), -12 * 12));
+    const kanta = await member(staff, saved.client.id, "Kanta Mehta", undefined, addMonths(istToday(), -71 * 12));
+    const link = (travellerId: string, memberId: string, confirmWarnings?: boolean) =>
+      staff.put(`/api/visa/cases/${saved.caseNo}/travellers/${travellerId}/member`).send({ memberId, ...(confirmWarnings ? { confirmWarnings } : {}) });
+
+    const young = await link(adult!.id, aarav);
+    expect(young.status).toBe(409);
+    expect(young.body.details.warnings).toEqual([
+      { code: "CHILD_IN_ADULT_PLACE", message: "Aarav Mehta is 12, but this is an adult's place on the case, with an adult's checklist." },
+    ]);
+    const old = await link(child!.id, kanta);
+    expect(old.status).toBe(409);
+    expect(old.body.details.warnings.map((w: { code: string }) => w.code)).toEqual(["ADULT_IN_CHILD_PLACE"]);
+
+    // Confirmed: linked, and the audit keeps it. With the age set to 12, a 12-year-old counts as an adult.
+    expect((await link(child!.id, kanta, true)).status).toBe(200);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.traveller.link" } });
+    expect(entry.after).toMatchObject({ confirmedWarnings: [{ code: "ADULT_IN_CHILD_PLACE" }] });
+    await prisma.setting.upsert({ where: { key: "visa.childAge" }, update: { value: { adultFrom: 12 } }, create: { key: "visa.childAge", value: { adultFrom: 12 } } });
+    expect((await link(adult!.id, aarav)).status).toBe(200);
   });
 });
