@@ -661,7 +661,9 @@ Record **who, when (to the minute) and where (for field work)** for ✅:
 - insurance products and claim types
 - routine tasks
 - departments and users
-- covering-letter templates (effective-dated: a change applies only from its effective date)
+- covering-letter templates (effective-dated: a change applies only from its effective date). **Built 19 Oct 2026**
+  (`docs/decisions/0019-covering-letters.md`): a format per visa type, countries and who travels, each wording used from
+  its own day; three samples until Masti's formats arrive.
 - airline fare families (implied)
 
 **Also needed:**
@@ -852,6 +854,12 @@ This worked example follows the demo's Mehta family case (France Schengen touris
   - Printed on the **customer's letterhead**.
   - A format change applies only from its effective date.
   - Formats are with Riya and Vimal ❓ (Q10).
+  - **Decided 19 Oct 2026 (project lead):** built now with three sample formats, which the Visa HOD replaces in Settings
+    when Masti's arrive (`docs/decisions/0019-covering-letters.md`).
+    - One letter per case, listing every traveller. It prints as the format says; staff can't type into it.
+    - A format is for one visa type, a set of countries, and one traveller or two or more (the "family type").
+    - Changing the wording adds a version with a "Use from" day. A wording in use is never changed.
+    - The formats in Settings are built (component 1). The card on the case and its print page come next.
 - **Saved file, kept as proof** ✅: the final file (application form, ITR, bank statement, passport scan…) is saved as **one PDF, linked under the case number** in Drive. "Every page as it went to the vendor, stored in your Drive; the CRM keeps the link." Masti already keeps a single scanned PDF like this today; the CRM links it to the case *(transcript, 7:18 PM)*.
 - The vendor comes from the approved list ✅.
 
@@ -884,7 +892,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - Two outcomes: **Approved** or **Refused**. The demo records them **per traveller**, with the visa sticker number and validity (§17 #3, Q11).
 - The refusal letter is a **Drive/OneDrive link**, not an attachment ("Open in Drive"): "Letters and scans stay in your Google Drive or OneDrive; the CRM keeps only the link so it stays fast."
 - If approved, the visa sticker comes back with the passport.
-- **Decided 15 Oct 2026 (project lead), `docs/decisions/0012-visa-decision.md`:** per traveller (M10 to confirm). An approved traveller needs the sticker number and valid-from / valid-to dates (an e-visa: its e-visa number). The refusal letter is a scanned PDF in our storage (rule 4), optional, uploadable any time once the traveller is refused, whatever the case's status (16 Oct). One form for the whole family, opened by "Record the decision →" at Step 5; saving it moves the case to Step 6. The processor, the Visa HOD or the Head can correct a traveller's entry while the case is at Step 6 (audited); since 19 Oct 2026 also at Step 7 until the handover, checking the sticker again once the passports are received, so a sticker that doesn't match can be put right (M45).
+- **Decided 15 Oct 2026 (project lead), `docs/decisions/0012-visa-decision.md`:** per traveller (M10 to confirm). An approved traveller needs the sticker number and valid-from / valid-to dates (an e-visa: its e-visa number). The refusal letter is a scanned PDF in our storage (rule 4), optional, uploadable any time once the traveller is refused, whatever the case's status (16 Oct). One form for the whole family, opened by "Record the decision →" at Step 5; saving it moves the case to Step 6. The processor, the Visa HOD or the Head can correct a traveller's entry while the case is at Step 6 (audited); since 19 Oct 2026 also at Step 7 until the handover, checking the sticker again once the passports are received, so a sticker that doesn't match can be put right (M45). **Warnings, decided 19 Oct 2026 (M46):** inputs that are usually a mistake but can be right stop the save once with "Check before saving", and staff save anyway, audited. They cover a sticker number already on another case (the same number twice on one case is refused), visa dates that don't cover the trip, an appointment on or after departure, a passport that runs out less than 6 ⚠️ months after the return, an age that doesn't fit the place (18 ⚠️), and a child collecting the passports. An original that came as a xerox is only flagged.
 
 **Step 7 · Passport back** ✅
 - Vendor collected → **In transit**. Vendors are "not systematic", so record an expected arrival date.
@@ -1788,7 +1796,7 @@ Masti CRM/
 
 **Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
 - **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.
-- **Pending (not built in Step 3):** the covering letter (formats to come from the project lead, M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
+- **Pending (not built in Step 3):** the covering letter, now its own record, `docs/decisions/0019-covering-letters.md`: the formats in Settings are built with samples (19 Oct 2026), the case card is next, and Masti's formats are still awaited (M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
 - **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
 - **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
 - **Built so far (12–13 Oct 2026):**
@@ -1844,7 +1852,7 @@ Masti CRM/
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
 | 8 | WhatsApp message step list and wording (urgent: Meta approval). **8 Oct:** placeholder text until then; still needed | C | 1 |
 | 9 | Consent wording (passport-transit risk, booking-before-visa risk) | C | 1 |
-| 10 | Covering-letter formats (which processes and family types); the "100 subscription" remark | C | 1 |
+| 10 | Covering-letter formats (which processes and family types); the "100 subscription" remark. **19 Oct:** built with three sample formats the Visa HOD replaces in Settings (0019); Masti's formats still needed | C | 1 |
 | 11 | Decision per traveller or per case? | C | 1 |
 | 12 | Handover OTP/photo flow: confirm the steps shown in the field app | C | 1 |
 | 13 | Visa form autofill from a passport MRZ scan: in scope? **12 Oct:** if confirmed, it reads a separate photo-page scan per person captured in Step 2, never the final PDF (which arrives after the form is filled; 0007) | S | 1 |
@@ -1931,7 +1939,7 @@ Both have Meta lead times.
 | C1 | Logo, brand colours, letterhead | Stage 1 |
 | C2 | WhatsApp wording (see above) | Urgent |
 | C3 | Consent wording | Stage 1 |
-| C4 | Covering-letter formats | Stage 1 |
+| C4 | Covering-letter formats (three samples in the build until they arrive, 0019) | Stage 1 |
 | C5 | Invoice and credit-note format, with GST details | Stage 1 |
 | C6 | Quotation formats (holiday, hotel, insurance, ticket) | Stage 2 |
 | C7 | Hotel voucher design and non-refundable consent wording | Stage 2 |

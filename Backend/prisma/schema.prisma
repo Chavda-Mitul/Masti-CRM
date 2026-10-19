@@ -56,59 +56,60 @@ enum Access {
 }
 
 model User {
-  id                    String             @id @default(uuid())
+  id                    String                  @id @default(uuid())
   name                  String
   /// Stored normalised as +91XXXXXXXXXX. A user needs a mobile, an email, or both. FIELD users need a mobile.
-  mobile                String?            @unique
+  mobile                String?                 @unique
   /// Stored lowercased.
-  email                 String?            @unique
+  email                 String?                 @unique
   passwordHash          String
-  type                  UserType           @default(OFFICE)
-  isActive              Boolean            @default(true)
-  mustChangePassword    Boolean            @default(true)
-  lastLoginAt           DateTime?          @db.Timestamptz(3)
+  type                  UserType                @default(OFFICE)
+  isActive              Boolean                 @default(true)
+  mustChangePassword    Boolean                 @default(true)
+  lastLoginAt           DateTime?               @db.Timestamptz(3)
   /// The visa team's login popup (docs/decisions/0017-today-dashboard.md Decision 12): dismissed up to this time; anything
   /// picked or added to the calendar after it is new to them. Null: everything is new.
-  loginPopupSeenAt      DateTime?          @db.Timestamptz(3)
-  createdAt             DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime           @updatedAt @db.Timestamptz(3)
+  loginPopupSeenAt      DateTime?               @db.Timestamptz(3)
+  createdAt             DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                @updatedAt @db.Timestamptz(3)
   departments           UserDepartment[]
   sessions              Session[]
   auditEntries          AuditLog[]
-  assignedFieldJobs     FieldJob[]         @relation("FieldJobAssignee")
-  fieldJobsBooked       FieldJob[]         @relation("FieldJobBookedBy")
-  fieldJobsCancelled    FieldJob[]         @relation("FieldJobCancelledBy")
-  clientsCreated        Client[]           @relation("ClientCreatedBy")
-  clientPhonesAdded     ClientPhone[]      @relation("ClientPhoneCreatedBy")
-  clientMembersAdded    ClientMember[]     @relation("ClientMemberCreatedBy")
-  clientNotes           ClientNote[]       @relation("ClientNoteAuthor")
-  holidaysAdded         Holiday[]          @relation("HolidayAddedBy")
-  enquiriesOwned        Enquiry[]          @relation("EnquiryOwner")
-  enquiriesCreated      Enquiry[]          @relation("EnquiryCreatedBy")
-  documentsReceived     VisaCaseDocument[] @relation("DocumentReceivedBy")
-  documentsChecked      VisaCaseDocument[] @relation("DocumentCheckedBy")
-  followUpsLogged       FollowUp[]         @relation("FollowUpBy")
-  visaCasesMatured      VisaCase[]         @relation("VisaCaseMaturedBy")
-  visaCasesFileReady    VisaCase[]         @relation("VisaCaseFileReadyBy")
-  visaCasesOnline       VisaCase[]         @relation("VisaCaseSubmittedOnlineBy")
-  visaCasesReceived     VisaCase[]         @relation("VisaCaseVendorReceivedBy")
-  visaCasesSubmitted    VisaCase[]         @relation("VisaCaseSubmittedBy")
-  visaCasesRecalled     VisaCase[]         @relation("VisaCaseRecalledBy")
-  visaCasesDecided      VisaCase[]         @relation("VisaCaseDecidedBy")
-  visaCasesInTransit    VisaCase[]         @relation("VisaCasePassportsInTransitBy")
-  visaCasesReceivedBack VisaCase[]         @relation("VisaCasePassportsReceivedBy")
-  visaShortfallsCleared VisaCase[]         @relation("VisaCaseShortfallClearedBy")
-  visaHandovers         VisaHandover[]     @relation("VisaHandoverBy")
-  caseFilesUploaded     CaseFile[]         @relation("CaseFileUploadedBy")
-  clientDocsUploaded    ClientDocument[]   @relation("ClientDocumentUploadedBy")
-  docketsCreated        Docket[]           @relation("DocketCreatedBy")
-  docketsDispatched     Docket[]           @relation("DocketDispatchedBy")
-  quotesUpdated         VisaQuote[]        @relation("VisaQuoteUpdatedBy")
-  companyImagesAdded    CompanyImage[]     @relation("CompanyImageUploadedBy")
-  invoicesIssued        Invoice[]          @relation("InvoiceIssuedBy")
-  creditNotesIssued     CreditNote[]       @relation("CreditNoteIssuedBy")
-  noticesPosted         Notice[]           @relation("NoticePostedBy")
-  noticesPicked         Notice[]           @relation("NoticePickedBy")
+  assignedFieldJobs     FieldJob[]              @relation("FieldJobAssignee")
+  fieldJobsBooked       FieldJob[]              @relation("FieldJobBookedBy")
+  fieldJobsCancelled    FieldJob[]              @relation("FieldJobCancelledBy")
+  clientsCreated        Client[]                @relation("ClientCreatedBy")
+  clientPhonesAdded     ClientPhone[]           @relation("ClientPhoneCreatedBy")
+  clientMembersAdded    ClientMember[]          @relation("ClientMemberCreatedBy")
+  clientNotes           ClientNote[]            @relation("ClientNoteAuthor")
+  holidaysAdded         Holiday[]               @relation("HolidayAddedBy")
+  enquiriesOwned        Enquiry[]               @relation("EnquiryOwner")
+  enquiriesCreated      Enquiry[]               @relation("EnquiryCreatedBy")
+  documentsReceived     VisaCaseDocument[]      @relation("DocumentReceivedBy")
+  documentsChecked      VisaCaseDocument[]      @relation("DocumentCheckedBy")
+  followUpsLogged       FollowUp[]              @relation("FollowUpBy")
+  visaCasesMatured      VisaCase[]              @relation("VisaCaseMaturedBy")
+  visaCasesFileReady    VisaCase[]              @relation("VisaCaseFileReadyBy")
+  visaCasesOnline       VisaCase[]              @relation("VisaCaseSubmittedOnlineBy")
+  visaCasesReceived     VisaCase[]              @relation("VisaCaseVendorReceivedBy")
+  visaCasesSubmitted    VisaCase[]              @relation("VisaCaseSubmittedBy")
+  visaCasesRecalled     VisaCase[]              @relation("VisaCaseRecalledBy")
+  visaCasesDecided      VisaCase[]              @relation("VisaCaseDecidedBy")
+  visaCasesInTransit    VisaCase[]              @relation("VisaCasePassportsInTransitBy")
+  visaCasesReceivedBack VisaCase[]              @relation("VisaCasePassportsReceivedBy")
+  visaShortfallsCleared VisaCase[]              @relation("VisaCaseShortfallClearedBy")
+  visaHandovers         VisaHandover[]          @relation("VisaHandoverBy")
+  caseFilesUploaded     CaseFile[]              @relation("CaseFileUploadedBy")
+  clientDocsUploaded    ClientDocument[]        @relation("ClientDocumentUploadedBy")
+  docketsCreated        Docket[]                @relation("DocketCreatedBy")
+  docketsDispatched     Docket[]                @relation("DocketDispatchedBy")
+  quotesUpdated         VisaQuote[]             @relation("VisaQuoteUpdatedBy")
+  companyImagesAdded    CompanyImage[]          @relation("CompanyImageUploadedBy")
+  invoicesIssued        Invoice[]               @relation("InvoiceIssuedBy")
+  creditNotesIssued     CreditNote[]            @relation("CreditNoteIssuedBy")
+  noticesPosted         Notice[]                @relation("NoticePostedBy")
+  noticesPicked         Notice[]                @relation("NoticePickedBy")
+  coveringLettersAdded  CoveringLetterVersion[] @relation("CoveringLetterVersionAddedBy")
 
   @@index([type, isActive])
 }
@@ -491,28 +492,30 @@ model ClientDocument {
 // ---------------------------------------------------------------------------
 
 model Country {
-  id             Int             @id @default(autoincrement())
+  id              Int                     @id @default(autoincrement())
   /// ISO 3166-1 alpha-2, e.g. "FR". Also how the bot names a country. Never changes.
-  code           String          @unique
-  name           String /// "France"
+  code            String                  @unique
+  name            String /// "France"
   /// Shown in brackets: "France (Schengen)".
-  zone           String?
-  sortOrder      Int             @default(0)
-  isActive       Boolean         @default(true)
-  offerings      VisaOffering[]
-  embassies      Embassy[]
-  holidayTargets HolidayTarget[]
-  vendors        VendorCountry[]
+  zone            String?
+  sortOrder       Int                     @default(0)
+  isActive        Boolean                 @default(true)
+  offerings       VisaOffering[]
+  embassies       Embassy[]
+  holidayTargets  HolidayTarget[]
+  vendors         VendorCountry[]
+  coveringLetters CoveringLetterCountry[]
 }
 
 model VisaType {
-  id        Int            @id @default(autoincrement())
+  id              Int                    @id @default(autoincrement())
   /// TOURIST, BUSINESS, STUDENT… Never changes.
-  code      String         @unique
-  name      String
-  sortOrder Int            @default(0)
-  isActive  Boolean        @default(true)
-  offerings VisaOffering[]
+  code            String                 @unique
+  name            String
+  sortOrder       Int                    @default(0)
+  isActive        Boolean                @default(true)
+  offerings       VisaOffering[]
+  coveringLetters CoveringLetterFormat[]
 }
 
 /// A post where files are submitted: an embassy, consulate or visa centre.
@@ -572,6 +575,73 @@ model VendorCountry {
 
   @@id([vendorId, countryId])
   @@index([countryId])
+}
+
+// ---------------------------------------------------------------------------
+// Covering letters (docs/decisions/0019-covering-letters.md): the fixed letter to the embassy for a visa and who
+// travels, filled in from the case and printed on the client's letterhead. Only the wording is effective-dated: a new
+// one applies from its "use from" day. Formats are switched off, never deleted.
+// ---------------------------------------------------------------------------
+
+/// Who travels on the cases a format is for (0019 Decision 3): the case offers only the formats that fit. Family,
+/// friends or a parent with a child are separate formats, told apart by name.
+enum CoveringLetterParty {
+  /// One traveller.
+  ONE
+  /// Two or more.
+  SEVERAL
+}
+
+/// A fixed format: "Schengen · tourist · family". Its wording is in CoveringLetterVersion (always at least one, kept by
+/// the service). Unique lower(name), and the name not blank: hand-written in the migration.
+model CoveringLetterFormat {
+  id         Int                     @id @default(autoincrement())
+  /// What staff pick it by. Never printed.
+  name       String
+  /// The process. With the countries and the party, it decides which cases the format fits.
+  visaTypeId Int
+  party      CoveringLetterParty
+  sortOrder  Int                     @default(0)
+  isActive   Boolean                 @default(true)
+  createdAt  DateTime                @default(now()) @db.Timestamptz(3)
+  /// Moved by every change, a wording added or removed too: the optimistic-lock token every write sends back.
+  updatedAt  DateTime                @updatedAt @db.Timestamptz(3)
+  visaType   VisaType                @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  countries  CoveringLetterCountry[]
+  versions   CoveringLetterVersion[]
+
+  @@index([visaTypeId])
+}
+
+/// The countries a format is for ("Schengen" = France, Germany…). Replaced as a set when the format is edited.
+model CoveringLetterCountry {
+  formatId  Int
+  countryId Int
+  format    CoveringLetterFormat @relation(fields: [formatId], references: [id], onDelete: Restrict)
+  country   Country              @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@id([formatId, countryId])
+  @@index([countryId])
+}
+
+/// One wording of a format, used from effectiveFrom (a day in India) until a later one starts; on the same day, the one
+/// added last (the higher id). Never edited, and removed only before its day (a trigger in the migration). The body is
+/// not blank and at most 6,000 characters (checked in the migration).
+model CoveringLetterVersion {
+  id            Int                  @id @default(autoincrement())
+  formatId      Int
+  /// "Use from": the first day letters use this wording.
+  effectiveFrom DateTime             @db.Date
+  /// Plain text with {blanks}; a blank line starts a new paragraph, a single line break stays.
+  body          String
+  /// Who added it. Null for the sample wordings the seed sets up (it runs before any user exists).
+  addedById     String?
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  format        CoveringLetterFormat @relation(fields: [formatId], references: [id], onDelete: Restrict)
+  addedBy       User?                @relation("CoveringLetterVersionAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+
+  @@index([formatId, effectiveFrom])
+  @@index([addedById])
 }
 
 // ---------------------------------------------------------------------------
@@ -1291,6 +1361,8 @@ model VisaCaseTraveller {
   @@unique([caseId, position])
   @@unique([caseId, memberId])
   @@index([memberId])
+  /// A sticker or e-visa number already on another case is a warning (0012, amended 19 Oct 2026).
+  @@index([visaNo])
 }
 
 /// How the passports went back to the client (docs/decisions/0014-visa-delivered.md): collected at our office, or

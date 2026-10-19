@@ -164,6 +164,27 @@ describe("the handover at the door (phase 5)", () => {
     expect((await handOver(boy, delivery.id, body)).body.message).toBe("This stop is already recorded.");
   });
 
+  it("asks before handing a child the passports, then hands over once confirmed (a warning, 19 Oct 2026)", async () => {
+    const { delivery, boy, c, child } = await setup();
+    // His stop marks the child on the list of who may receive them.
+    expect((await boy.get(`/api/field/jobs/${delivery.id}`)).body.stop.travellers).toEqual([
+      { id: expect.any(String), name: "Rakesh Mehta", isChild: false },
+      { id: child, name: "Aarav Mehta", isChild: true },
+    ]);
+    await confirmCode(boy, delivery.id);
+    const receiverPhoto = (await photo(boy, delivery.id, "receiver-photo")).body.photo;
+    const selfie = (await photo(boy, delivery.id, "selfie")).body.selfie;
+    const body = { booklets: { current: 2, old: 0 }, receiver: { travellerId: child }, photoId: receiverPhoto.id, selfieId: selfie.id, place: PLACE };
+
+    const warned = await handOver(boy, delivery.id, body);
+    expect(warned.status).toBe(409);
+    expect(warned.body.details.warnings.map((w: { code: string }) => w.code)).toEqual(["CHILD_COLLECTS"]);
+    expect((await prisma.fieldJob.findUniqueOrThrow({ where: { id: delivery.id } })).status).toBe("BOOKED");
+
+    expect((await handOver(boy, delivery.id, { ...body, confirmWarnings: true })).status).toBe(200);
+    expect(await prisma.visaHandover.findUniqueOrThrow({ where: { enquiryId: c.id } })).toMatchObject({ mode: "DELIVERY", receiverTravellerId: child });
+  });
+
   it("takes someone else by name; a cancelled case stays cancelled", async () => {
     const { delivery, boy, c, processor } = await setup();
     // Cancelling calls a booked job off, so the delivery is booked again afterwards, as the office handover allows.

@@ -141,6 +141,20 @@ matured a case then saw the client as having nothing open (review finding 5):
     Finished cases stay visible-only. It shows nothing the intake lookup doesn't already show to the same people.
     Leaving the follow-up desk at maturity is unchanged (amendment 9): the desk is the owner's.
 
+Amended 19 Oct 2026 (project lead, item 2 fixes; M46 to confirm), after the 17 Oct browser review let these through
+without a word:
+
+18. **Warnings in Step 2, never blocks.** Each is a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`).
+    - **A passport that runs out too soon:** less than ⚠️ `visa.passportValidity` months (seeded 6) after the trip comes
+      back. Checked when a traveller is linked, when the trip's return changes, and again at File ready (0007
+      Decision 9).
+    - **An age that doesn't fit the place:** 18 ⚠️ or over (`visa.childAge`, seeded 18) linked into a child's place, or
+      younger into an adult's, counted on the departure day (today if there's none yet). Each place has its own
+      checklist. Staff still decide who is a child (Decision 1, 0005); this only catches a slip. With no birth date on
+      file, it isn't checked.
+    - **An original that came as a xerox:** allowed (Decision 2), so it isn't asked. The row shows "Original needed ·
+      came as a xerox", and "Mark documents complete" names such papers.
+
 Amended 19 Oct 2026 (project lead), building the demo's Step 2 Reminders card (screen 07), which 0003 Decision 7
 deferred "with messaging". WhatsApp and the job runner still aren't built:
 

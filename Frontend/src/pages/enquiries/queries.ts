@@ -269,14 +269,20 @@ export function useOpenCaseScan(caseNo: string) {
 
 /** Names a traveller: links the client's family member. */
 export function useLinkTraveller(caseNo: string) {
-  return useCaseAction<{ travellerId: string; memberId: string }>(caseNo, (base, { travellerId, memberId }) =>
-    api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body: { memberId } }),
+  return useCaseAction<{ travellerId: string; memberId: string; confirmWarnings?: boolean }>(caseNo, (base, { travellerId, ...body }) =>
+    api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body }),
   )
 }
 
 /** Trip details: only the fields that changed; null clears one. */
 export function useUpdateTrip(caseNo: string) {
-  return useCaseAction<{ departOn?: string | null; returnOn?: string | null; entryType?: EntryType | null; hotelStay?: string | null }>(
+  return useCaseAction<{
+    departOn?: string | null
+    returnOn?: string | null
+    entryType?: EntryType | null
+    hotelStay?: string | null
+    confirmWarnings?: boolean
+  }>(
     caseNo,
     (base, body) => api(`${base}/trip`, { method: 'PATCH', body }),
   )
@@ -284,7 +290,7 @@ export function useUpdateTrip(caseNo: string) {
 
 /** One traveller's acknowledgement number and appointment (a day and a time in India); null clears either. */
 export function useUpdateApplication(caseNo: string) {
-  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null }>(
+  return useCaseAction<{ travellerId: string; ackNo?: string | null; appointment?: { on: string; at: string } | null; confirmWarnings?: boolean }>(
     caseNo,
     (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/application`, { method: 'PATCH', body }),
   )
@@ -292,7 +298,7 @@ export function useUpdateApplication(caseNo: string) {
 
 /** "File ready — add to docket" (0007 Decision 9): 409 NOT_READY lists what Step 3 still lacks. */
 export function useMarkFileReady(caseNo: string) {
-  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/file-ready`, { method: 'POST', body }))
+  return useCaseAction<{ updatedAt: string; confirmWarnings?: boolean }>(caseNo, (base, body) => api(`${base}/file-ready`, { method: 'POST', body }))
 }
 
 /** The case's vendor (0007 Decision 7), from the active vendors covering its country; null clears it. */
@@ -385,6 +391,7 @@ export function useRecordDecision(caseNo: string) {
   return useCaseAction<{
     outcomes: { travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }[]
     updatedAt: string
+    confirmWarnings?: boolean
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
 }
 
@@ -486,6 +493,7 @@ export function useHandOver(caseNo: string) {
     receiver: { travellerId: string } | { name: string }
     photoId: string
     updatedAt: string
+    confirmWarnings?: boolean
   }>(caseNo, (base, body) => api(`${base}/handover`, { method: 'POST', body }))
 }
 
@@ -506,6 +514,7 @@ export function useChangeDecision(caseNo: string) {
     validTo?: string
     stickerCheck?: StickerCheck
     updatedAt: string
+    confirmWarnings?: boolean
   }>(
     caseNo,
     (base, { travellerId, ...body }) => api(`${base}/travellers/${travellerId}/decision`, { method: 'PUT', body }),

@@ -212,6 +212,60 @@ export interface Vendor {
   updatedAt: string
 }
 
+/** Who travels on the cases a covering letter is for (docs/decisions/0019-covering-letters.md). */
+export type CoveringLetterParty = 'ONE' | 'SEVERAL'
+
+/** In use today, still to come, or replaced by a later one. The server decides, by today in India. */
+export type WordingStatus = 'IN_USE' | 'SCHEDULED' | 'EARLIER'
+
+/** Null for a sample wording, set up with the system. */
+export type WordingAuthor = { id: string; name: string } | null
+
+/** A covering-letter format in the list: its details, and the wording in use without its text. */
+export interface CoveringLetterSummary {
+  id: number
+  name: string
+  visaType: { id: number; code: string; name: string; isActive: boolean }
+  party: CoveringLetterParty
+  /** By name. A country switched off since stays on the letter. */
+  countries: { id: number; code: string; name: string; zone: string | null; isActive: boolean }[]
+  sortOrder: number
+  isActive: boolean
+  /** The wording in use today; null while the first one is still to come. */
+  inUse: { id: number; effectiveFrom: string; addedBy: WordingAuthor } | null
+  /** The soonest wording still to come. */
+  next: { id: number; effectiveFrom: string } | null
+  createdAt: string
+  /** The lock token every change sends back. */
+  updatedAt: string
+}
+
+/** One wording: plain text with {blanks}, used from effectiveFrom. */
+export interface CoveringLetterWording {
+  id: number
+  effectiveFrom: string
+  body: string
+  addedBy: WordingAuthor
+  createdAt: string
+  status: WordingStatus
+}
+
+export interface CoveringLetter extends CoveringLetterSummary {
+  /** Every wording, newest day first. */
+  versions: CoveringLetterWording[]
+}
+
+/** POST /masters/covering-letters: the details and the first wording. */
+export interface CoveringLetterBody {
+  name: string
+  visaTypeId: number
+  party: CoveringLetterParty
+  countryIds: number[]
+  sortOrder: number
+  body: string
+  effectiveFrom: string
+}
+
 export interface DocumentMaster {
   id: number
   code: string

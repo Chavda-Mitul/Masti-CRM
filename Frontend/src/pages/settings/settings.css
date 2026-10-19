@@ -471,3 +471,117 @@ fieldset:disabled .seg-sm label {
   gap: 10px 12px;
   width: 100%;
 }
+
+/* Covering letters (docs/decisions/0019-covering-letters.md): the list, one letter's page and its wording editor. The
+   letter itself is drawn by components/LetterPaper.tsx (styles/letter.css). */
+.letters-tools {
+  border-bottom: 1px solid var(--divider);
+}
+.letters-sample {
+  margin-left: 6px;
+}
+.letter-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.letter-page > .page-head {
+  margin-bottom: 4px;
+}
+.letter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.letter-card .card-head {
+  padding-bottom: 0;
+}
+.letter-toggle {
+  align-self: flex-start;
+  font-size: 15px;
+}
+.wording-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+.wording-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wording-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* The text and its day on the left, the blanks beside them, the preview underneath. */
+.wording-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px 20px;
+}
+.wording-write {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wording-text {
+  min-height: 360px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.wording-day {
+  max-width: 260px;
+}
+.wording-warn {
+  color: var(--warn);
+}
+.wording-blanks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wording-blanks > p {
+  margin: 0 0 6px;
+}
+.wording-blank {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wording-blank:hover {
+  background: var(--fill-hover);
+}
+.wording-blank:focus-visible {
+  outline: 2px solid var(--primary);
+}
+.wording-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wording-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 900px) {
+  .wording-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

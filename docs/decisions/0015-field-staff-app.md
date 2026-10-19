@@ -60,6 +60,10 @@ Google Maps link: no maps account, key or cost.
 
 ### 4. Proof: an OTP from the client, at both ends
 
+**Amended 19 Oct 2026** (item 2 fixes; M46 to confirm): at the doorstep handover, picking a child as who receives the
+passports is a warning, as at the office (0014 Decision 3). His phone marks a child on the list, asks "Check before
+saving", and hands over once he confirms. The audit keeps it.
+
 **Decided 17 Oct 2026 (project lead):** the client confirms with a **one-time code**, so we can prove who **gave** us
 the documents (pickup) and who **got** the passports (delivery). Until SMS or WhatsApp is connected (M2), the code goes
 to the **client's email** (0014 Decision 2), so **booking either job needs the client's email** on file: staff add it

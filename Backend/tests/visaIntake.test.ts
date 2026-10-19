@@ -302,6 +302,8 @@ describe("intake dropdowns and settings", () => {
         opening: "Docket {docketNo} is on its way to you: {files}, {passports} passports.",
         closing: "Please confirm when you receive it.",
       },
+      passportValidity: { monthsAfterReturn: 6 },
+      childAge: { adultFrom: 18 },
       documentReminders: { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" },
     });
     expect((await staff.put("/api/visa/settings").send({ firstFollowUp: { afterDays: 2, at: "10:00" } })).status).toBe(403);

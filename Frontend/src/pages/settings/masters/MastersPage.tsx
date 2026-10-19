@@ -5,10 +5,10 @@ import { TodaySettingsCard } from '../../today/TodaySettingsCard'
 import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { ReminderRulesCard } from './ReminderRulesCard'
-import { useMasterList, useOfferings } from './queries'
+import { useCoveringLetters, useMasterList, useOfferings } from './queries'
 
 /** Masters on the demo that aren't built yet. Shown greyed out, like Phase-2 items in the sidebar. */
-const NOT_BUILT = ['Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
+const NOT_BUILT = ['Hotels — minimum markup', 'Accounts routine tasks']
 
 /**
  * Settings → Masters & holiday calendar (demo screen 29): "The lists and rules the rest of the system reads from."
@@ -29,6 +29,7 @@ export function MastersPage() {
   const nextSteps = useMasterList('follow-up-next-steps')
   const reasons = useMasterList('enquiry-reasons')
   const vendors = useMasterList('vendors', visa)
+  const letters = useCoveringLetters(visa)
 
   const active = (rows: { isActive: boolean }[] | undefined) => (rows ? String(rows.filter((r) => r.isActive).length) : '…')
 
@@ -54,6 +55,23 @@ export function MastersPage() {
             </div>
             <Link to="/settings/masters/checklists" className="btn btn-sm">
               Open checklists
+            </Link>
+          </section>
+        )}
+
+        {visa && (
+          <section className="card pad master-card">
+            <h2 className="h2">Covering letters</h2>
+            <p className="muted small">
+              The fixed letter to the embassy for each visa and who travels, filled in from the case and printed on the client’s
+              letterhead.
+            </p>
+            <div className="kv-line">
+              <span>Fixed formats</span>
+              <strong>{active(letters.data)}</strong>
+            </div>
+            <Link to="/settings/masters/covering-letters" className="btn btn-sm">
+              Open covering letters
             </Link>
           </section>
         )}

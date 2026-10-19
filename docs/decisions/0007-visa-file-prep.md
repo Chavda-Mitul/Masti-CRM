@@ -34,7 +34,8 @@ What the sources say (PROJECT_KNOWLEDGE.md §10.8, §12.4 Step 3, §12.20, §16.
 1. **Vendor master with basic fields.** Only the HOD or the Head adds a vendor, and it is approved as it is added: there
    is no "Waiting HOD" state.
 2. **Pending, not built here:**
-   - the covering letter (the formats will be supplied: M13/Q10)
+   - the covering letter (the formats will be supplied: M13/Q10). *Now [0019](0019-covering-letters.md) (19 Oct 2026):
+     built with sample formats until Masti's arrive.*
    - "Log in for me" (§16.2)
    - Read passport scan, Fill from consent & trip details, and Print application form (S6/Q13)
 3. **"File ready" needs:**
@@ -162,6 +163,9 @@ The details the forms and the covering letter will need, "captured as the docume
 | --- | --- |
 | Acknowledgement no. | Typed in from the portal. Capitals and digits, 4–40 characters, e.g. `FRA1MU20261006481`. |
 | Appointment | Date and time (IST). It can't be in the past when entered. There is no holiday check, because the portal gave that slot. Asked for only when the visa's **Appointment needed** is on. |
+
+**Amended 19 Oct 2026 (project lead, item 2 fixes; M46 to confirm):** an appointment **on or after the trip's departure
+day** is a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`). It can still be right if the trip moves.
 
 **Built 12 Oct 2026:**
 
@@ -330,6 +334,11 @@ Pressed by the processor, the HOD or the Head. **Refused** (`409 NOT_READY`, lis
 - every traveller has an **appointment** (if the visa's Appointment needed is on)
 - the **final PDF** is uploaded
 - an **active vendor that covers the case's country** is picked (if the visa's Vendor needed is on)
+
+**Amended 19 Oct 2026 (project lead, item 2 fixes; M46 to confirm):** File ready is the last look before the file goes
+out. A passport that runs out less than ⚠️ `visa.passportValidity` months (seeded 6) after the trip comes back is
+a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`). Many embassies refuse it, but it can be right. The same check runs when a traveller is linked and when the
+return changes (0006 amendment 18).
 - the **trip details** are in: travelling out, coming back and the entry type
 
 **When it succeeds,** in one transaction, under the case lock:
@@ -485,7 +494,7 @@ change is audited with `clientId`.
 ## Not in this record
 
 - **The covering letter:** fixed formats per process and family type, on the client's letterhead. Waiting for the
-  formats (M13/Q10).
+  formats (M13/Q10). *Since 19 Oct 2026: [0019](0019-covering-letters.md), built with sample formats.*
 - **"Log in for me"** and the portal vault (§16.2, §12.19): a spike first.
 - **Read passport scan, Fill from consent & trip details, Print application form:** scope unconfirmed (S6/Q13).
 - **Step 4** (docket, sticker, invoice before dispatch, vendor email). It also decides what an e-visa (no vendor, no

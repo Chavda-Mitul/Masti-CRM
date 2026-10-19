@@ -34,6 +34,8 @@ import {
   RECALL_RETURN_KEY,
   PASSPORTS_BACK_CHECK_KEY,
   ARRIVAL_CHECK_KEY,
+  CHILD_AGE_KEY,
+  PASSPORT_VALIDITY_KEY,
   ASSIGN_CHECK_KEY,
   HANDOVER_CHECK_KEY,
   HANDOVER_PHOTO_KEY,
@@ -334,6 +336,8 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },
+    { key: PASSPORT_VALIDITY_KEY, before: before.passportValidity, after: input.passportValidity },
+    { key: CHILD_AGE_KEY, before: before.childAge, after: input.childAge },
     { key: DOCUMENT_REMINDERS_KEY, before: before.documentReminders, after: input.documentReminders },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));
   if (changes.length === 0) return before;

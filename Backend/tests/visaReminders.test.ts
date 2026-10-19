@@ -76,7 +76,7 @@ async function firstReminder() {
   return iso(await nextOpenDay(addDays(istToday(), 2), { office: true }), "11:00");
 }
 
-const setReminders = (agent: Agent, caseNo: string, body: unknown) => agent.put(`/api/visa/cases/${caseNo}/reminders`).send(body);
+const setReminders = (agent: Agent, caseNo: string, body: object) => agent.put(`/api/visa/cases/${caseNo}/reminders`).send(body);
 
 describe("the case's Reminders card", () => {
   it("a new case shows the setting and its first reminder", async () => {
