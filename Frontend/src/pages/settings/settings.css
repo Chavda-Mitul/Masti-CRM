@@ -598,3 +598,10 @@ fieldset:disabled .seg-sm label {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Settings → Visa: the timings and the warnings' values, one form across two cards */
+.visa-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

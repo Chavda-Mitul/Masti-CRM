@@ -64,12 +64,15 @@ function SettingForm({ setting }: { setting: InvoiceSetting }) {
   const serverIssue = errorBody(save.error)?.issues?.invoice?.[0]
 
   const onSubmit = handleSubmit((values) =>
-    save.mutate(values, {
-      onSuccess: (saved) => {
-        reset(saved)
-        toast({ tone: 'ok', message: 'Invoice numbering saved.' })
+    save.mutate(
+      { invoice: values },
+      {
+        onSuccess: (saved) => {
+          reset(saved.invoice)
+          toast({ tone: 'ok', message: 'Invoice numbering saved.' })
+        },
       },
-    }),
+    ),
   )
 
   return (
