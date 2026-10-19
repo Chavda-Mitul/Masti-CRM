@@ -20,10 +20,12 @@ import {
   handoverCheckSchema,
   handoverPhotoSchema,
   collectionCheckSchema,
+  documentRemindersSchema,
   type AwbSetting,
   type CollectionCheckSetting,
   type DocketEmailSetting,
   type DocketSetting,
+  type DocumentRemindersSetting,
   type FinalFileSetting,
   type FirstFollowUp,
   type InvoiceSetting,
@@ -42,7 +44,6 @@ import {
 } from "./visa.schemas";
 
 // Visa timing Masti can change without a deploy (§7 rule 1, M5). One Setting row per key.
-// Document reminders (visa.documentReminders in 0003) come with the WhatsApp work.
 
 export const FIRST_FOLLOW_UP_KEY = "visa.firstFollowUp";
 export const FINAL_FILE_KEY = "visa.finalFile";
@@ -62,6 +63,7 @@ export const HANDOVER_PHOTO_KEY = "visa.handoverPhoto";
 export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
 export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
+export const DOCUMENT_REMINDERS_KEY = "visa.documentReminders";
 
 /** ⚠️ The demo: "A follow-up lands on Aarti's desk for tomorrow", at the reminder time 11:00. */
 export const DEFAULT_FIRST_FOLLOW_UP: FirstFollowUp = { afterDays: 1, at: "11:00" };
@@ -116,6 +118,9 @@ export const DEFAULT_COLLECTION_CHECK: CollectionCheckSetting = { daysBefore: 1,
 /** ⚠️ 0008 Decision 6: a slip number is 4–30 capitals and digits (ours; Masti's couriers' formats aren't known). */
 export const DEFAULT_AWB: AwbSetting = { minLength: 4, maxLength: 30 };
 
+/** ⚠️ 0003 Decision 7 and the demo: "Every 2 days at 11:00 on WhatsApp, listing only what's still missing." */
+export const DEFAULT_DOCUMENT_REMINDERS: DocumentRemindersSetting = { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" };
+
 /** ⚠️ 0008 Decision 8: the email to the vendor at dispatch, in our words until Masti approves them. */
 export const DEFAULT_DOCKET_EMAIL: DocketEmailSetting = {
   subject: "Docket {docketNo} · {files} · {company}",
@@ -158,9 +163,35 @@ export async function dueBeforeOfficeDay(date: string, timing: { daysBefore: num
   return notPast(day, timing.at, db);
 }
 
+/** A sanity bound on the walk forward: 400 reminders is over a year at one a day. */
+const MAX_REMINDER_STEPS = 400;
+
+/**
+ * When the next pending-document reminder goes out (0006 amendment 19), worked out on each read since nothing sends
+ * them yet: every `everyDays` days from `listDay` (the day the document list went out, the intake), at `sendAt` (IST).
+ * A Sunday or an office holiday moves a reminder to the next open day, and the one after still counts from its planned
+ * day, so the dates don't drift. The first one whose time is still to come; null if none is found within the bound.
+ */
+export async function nextReminderAt(
+  listDay: string,
+  setting: Pick<DocumentRemindersSetting, "everyDays" | "sendAt">,
+  db: Db = prisma,
+  now: Date = new Date(),
+): Promise<Date | null> {
+  // Start a step before today: a planned day just gone may have moved forward to today or later.
+  const elapsed = Math.round((Date.parse(istToday(now)) - Date.parse(listDay)) / 86_400_000);
+  const first = Math.max(1, Math.floor(elapsed / setting.everyDays));
+  for (let k = first; k < first + MAX_REMINDER_STEPS; k++) {
+    const day = await nextOpenDay(addDays(listDay, k * setting.everyDays), { office: true }, db);
+    const at = istDateTimeToUtc(day, setting.sendAt);
+    if (at.getTime() > now.getTime()) return at;
+  }
+  return null;
+}
+
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, DOCUMENT_REMINDERS_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -181,6 +212,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
   const awb = awbSettingSchema.safeParse(value(AWB_KEY));
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
+  const documentReminders = documentRemindersSchema.safeParse(value(DOCUMENT_REMINDERS_KEY));
   return {
     firstFollowUp: firstFollowUp.success ? firstFollowUp.data : DEFAULT_FIRST_FOLLOW_UP,
     finalFile: finalFile.success ? finalFile.data : DEFAULT_FINAL_FILE,
@@ -200,5 +232,6 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,
     awb: awb.success ? awb.data : DEFAULT_AWB,
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,
+    documentReminders: documentReminders.success ? documentReminders.data : DEFAULT_DOCUMENT_REMINDERS,
   };
 }

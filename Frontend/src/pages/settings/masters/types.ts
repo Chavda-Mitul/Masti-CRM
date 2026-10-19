@@ -129,6 +129,15 @@ export interface InvoiceSetting {
   sac: string
 }
 
+/** The setting visa.documentReminders (0006 amendment 19): pending-document reminders to the client. */
+export interface DocumentRemindersSetting {
+  enabled: boolean
+  everyDays: number
+  /** "11:00", India time. */
+  sendAt: string
+  channel: 'WHATSAPP' | 'SMS'
+}
+
 /** 409 DUPLICATE from the holidays API. */
 export interface HolidayDuplicate {
   id: string

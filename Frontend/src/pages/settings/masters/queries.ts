@@ -10,6 +10,7 @@ import type {
   ChecklistLineBody,
   Country,
   DocumentMaster,
+  DocumentRemindersSetting,
   DocumentProblemReason,
   ProcessingSpeed,
   Courier,
@@ -212,6 +213,36 @@ export function useSaveVisaInvoiceSetting() {
       (await api<{ settings: { invoice: InvoiceSetting } }>('/visa/settings', { method: 'PUT', body: { invoice } })).settings.invoice,
     onSuccess: (invoice) => {
       queryClient.setQueryData(visaSettingsKey, invoice)
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+    },
+  })
+}
+
+const documentRemindersKey = ['visa', 'settings', 'documentReminders'] as const
+
+/** The pending-document reminders (0006 amendment 19), for Settings → Masters. */
+export function useDocumentRemindersSetting(enabled = true) {
+  return useQuery({
+    queryKey: documentRemindersKey,
+    queryFn: async () => (await api<{ settings: { documentReminders: DocumentRemindersSetting } }>('/visa/settings')).settings.documentReminders,
+    staleTime: MASTER_STALE,
+    enabled,
+  })
+}
+
+/** The Visa HOD or the Head. Every open case's next reminder follows at once, so they reload. */
+export function useSaveDocumentRemindersSetting() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (documentReminders: DocumentRemindersSetting) =>
+      (
+        await api<{ settings: { documentReminders: DocumentRemindersSetting } }>('/visa/settings', {
+          method: 'PUT',
+          body: { documentReminders },
+        })
+      ).settings.documentReminders,
+    onSuccess: (saved) => {
+      queryClient.setQueryData(documentRemindersKey, saved)
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
     },
   })

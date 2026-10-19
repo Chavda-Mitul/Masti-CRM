@@ -130,6 +130,11 @@ function useCaseAction<Vars>(
   })
 }
 
+/** The Reminders card's On/Off (0006 amendment 19). */
+export function useSetReminders(caseNo: string) {
+  return useCaseAction<{ on: boolean }>(caseNo, (base, body) => api(`${base}/reminders`, { method: 'PUT', body }))
+}
+
 /** How the documents reach us, and booklets received. */
 export function useUpdateVisaCase(caseNo: string) {
   return useCaseAction<{ arrival?: DocumentArrival | null; bookletsCurrent?: number | null; bookletsOld?: number | null }>(

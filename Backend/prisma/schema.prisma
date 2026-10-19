@@ -1139,6 +1139,9 @@ model VisaCase {
   /// Step 2: passports received (current + old). Checked again at handover.
   bookletsCurrent        Int?                   @db.SmallInt
   bookletsOld            Int?                   @db.SmallInt
+  /// Step 2's Reminders switch (0006 amendment 19): off stops this case's pending-document reminders. When the next one
+  /// goes out is worked out from the intake day and the setting visa.documentReminders, not stored.
+  remindersOn            Boolean                @default(true)
   /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
   /// travelDate. "File ready" needs departOn, returnOn and entryType.
   departOn               DateTime?              @db.Date

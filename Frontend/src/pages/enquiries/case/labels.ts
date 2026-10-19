@@ -144,3 +144,8 @@ export const isFollowUpStep = (c: VisaCase) => c.stage.step <= 2
 
 /** The case's invoice while it stands; null when there's none, or a credit note cancelled it (0011 Decision 5). */
 export const liveInvoice = (c: VisaCase) => (c.invoice && !c.invoice.cancelled ? c.invoice : null)
+
+/** The Reminders card shows while documents are collected, on an open or postponed case (0006 amendment 19). */
+export function showsReminders(c: VisaCase) {
+  return (c.stage.code === 'ENQUIRY' || c.stage.code === 'DOCUMENTS') && (c.status === 'OPEN' || c.status === 'POSTPONED')
+}

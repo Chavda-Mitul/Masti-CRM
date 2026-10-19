@@ -551,6 +551,23 @@ export interface SaveQuoteBody {
   updatedAt: string | null
 }
 
+/** How a reminder reaches the client (the setting visa.documentReminders). */
+export type ReminderChannel = 'WHATSAPP' | 'SMS'
+
+/** Pending-document reminders on one case. Nothing is sent until WhatsApp is connected. */
+export interface CaseReminders {
+  /** The case's own switch. */
+  on: boolean
+  /** On for every case in Settings. */
+  enabled: boolean
+  everyDays: number
+  /** "11:00", India time. */
+  sendAt: string
+  channel: ReminderChannel
+  /** When the next one goes out; null when none is due (off, not open, or nothing missing). */
+  nextAt: string | null
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -584,6 +601,8 @@ export interface VisaCase {
   dueAt: string | null
   arrival: DocumentArrival | null
   booklets: { current: number | null; old: number | null }
+  /** The Reminders card (0006 amendment 19): the case's switch, the setting, and the next one (null when none is due). */
+  reminders: CaseReminders
   maturedAt: string | null
   maturedBy: PersonRef | null
   /** Step 3's saved file, kept as proof: the current upload, or null. */

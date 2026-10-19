@@ -464,3 +464,10 @@ fieldset:disabled .seg-sm label {
   gap: 10px 12px;
   width: 100%;
 }
+/* Reminder rules: every N days · at · on, side by side when the card is wide enough. */
+.reminder-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px 12px;
+  width: 100%;
+}

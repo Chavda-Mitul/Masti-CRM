@@ -35,6 +35,7 @@ import {
   updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
+  setRemindersSchema,
   saveSubmissionSchema,
   vendorReceivedSchema,
 } from "./visa.schemas";
@@ -95,6 +96,12 @@ router.post("/cases/:caseNo/start", visaEdit, async (req, res) => {
 router.patch("/cases/:caseNo", visaEdit, async (req, res) => {
   const body = updateVisaCaseSchema.parse(req.body);
   res.json({ case: await stepsService.updateCase(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** The Reminders card's On/Off (0006 amendment 19). */
+router.put("/cases/:caseNo/reminders", visaEdit, async (req, res) => {
+  const body = setRemindersSchema.parse(req.body);
+  res.json({ case: await stepsService.setReminders(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** Tick one paper: Original/Xerox, Made, Not needed, or back to Pending. */

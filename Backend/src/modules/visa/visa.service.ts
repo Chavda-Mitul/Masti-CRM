@@ -20,10 +20,12 @@ import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schema
 import {
   AWB_KEY,
   DOCKET_EMAIL_KEY,
+  DOCUMENT_REMINDERS_KEY,
   DOCKET_KEY,
   FINAL_FILE_KEY,
   FIRST_FOLLOW_UP_KEY,
   getVisaSettings,
+  nextReminderAt,
   INVOICE_KEY,
   CREDIT_NOTE_KEY,
   ONLINE_CHECK_KEY,
@@ -38,7 +40,7 @@ import {
   COLLECTION_CHECK_KEY,
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
-import { toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
+import { remindersDue, toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
 // Nothing is sent to the client yet: the WhatsApp outbox comes with the provider integration.
@@ -256,8 +258,8 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 
 /**
  * The DTO for a loaded row: its flow's steps (the step chips, "step 2 of 8"), the passport-warning setting, the
- * largest final file allowed (the page checks it before uploading), and the linked travellers' copies on file in the
- * client's vault (0016 Decision 5).
+ * largest final file allowed (the page checks it before uploading), the linked travellers' copies on file in the
+ * client's vault (0016 Decision 5), and the next pending-document reminder.
  */
 async function toDto(row: VisaCaseRow) {
   const memberIds = (row.visa?.travellers ?? []).flatMap((t) => (t.memberId ? [t.memberId] : []));
@@ -271,7 +273,13 @@ async function toDto(row: VisaCaseRow) {
     getVisaSettings(),
     currentScansOf(memberIds),
   ]);
-  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent, scans);
+  const reminders = visaSettings.documentReminders;
+  // The document list goes out at intake, so reminders count from that day (0006 amendment 19).
+  const nextAt = remindersDue(row, reminders) ? await nextReminderAt(istToday(row.createdAt), reminders) : null;
+  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent, scans, {
+    setting: reminders,
+    nextAt,
+  });
 }
 
 export async function getVisaCaseById(id: string) {
@@ -302,7 +310,7 @@ export async function getSettings() {
  * upload; a docket prefix to the next new docket; a sticker size to the next print; the GST rate to the quotes' preview
  * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch; the portal
  * check's timing to the next "Submitted online"; the file-number check's to the next "Vendor got it"; the collection
- * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the photo limit to the next receiver photo; the vendor email's wording to the next email. Only the keys sent and changed are written, each audited on its own.
+ * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the photo limit to the next receiver photo; the vendor email's wording to the next email; the document reminders at once, to every open case's next reminder. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -326,6 +334,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },
     { key: AWB_KEY, before: before.awb, after: input.awb },
     { key: DOCKET_EMAIL_KEY, before: before.docketEmail, after: input.docketEmail },
+    { key: DOCUMENT_REMINDERS_KEY, before: before.documentReminders, after: input.documentReminders },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));
   if (changes.length === 0) return before;
   await prisma.$transaction(async (tx) => {

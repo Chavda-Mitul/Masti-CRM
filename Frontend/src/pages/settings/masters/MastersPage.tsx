@@ -4,10 +4,11 @@ import { useMe } from '../../../auth/useAuth'
 import { TodaySettingsCard } from '../../today/TodaySettingsCard'
 import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
+import { ReminderRulesCard } from './ReminderRulesCard'
 import { useMasterList, useOfferings } from './queries'
 
 /** Masters on the demo that aren't built yet. Shown greyed out, like Phase-2 items in the sidebar. */
-const NOT_BUILT = ['Reminder rules', 'Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
+const NOT_BUILT = ['Hotels — minimum markup', 'Covering letters', 'Accounts routine tasks']
 
 /**
  * Settings → Masters & holiday calendar (demo screen 29): "The lists and rules the rest of the system reads from."
@@ -120,6 +121,7 @@ export function MastersPage() {
 
         <HolidaySettingsCard />
         <TodaySettingsCard />
+        {visa && <ReminderRulesCard />}
 
         {NOT_BUILT.map((name) => (
           <section key={name} className="card pad master-card master-card-soon" aria-disabled="true">

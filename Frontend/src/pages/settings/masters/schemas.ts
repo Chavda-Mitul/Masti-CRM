@@ -128,6 +128,16 @@ export const invoiceSettingFormSchema = z.object({
 
 export type InvoiceSettingFormValues = z.infer<typeof invoiceSettingFormSchema>
 
+/** The pending-document reminders (Backend visa.schemas.ts documentRemindersSchema, the same limits). */
+export const documentRemindersFormSchema = z.object({
+  enabled: z.boolean(),
+  everyDays: z.number({ error: 'Enter a number.' }).int('Whole days only.').min(1, '1 day at least.').max(30, '30 days at most.'),
+  sendAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour time, e.g. 11:00.'),
+  channel: z.enum(['WHATSAPP', 'SMS'], 'Pick WhatsApp or SMS.'),
+})
+
+export type DocumentRemindersFormValues = z.infer<typeof documentRemindersFormSchema>
+
 // ---------------------------------------------------------------------------
 // Small master lists
 // ---------------------------------------------------------------------------
