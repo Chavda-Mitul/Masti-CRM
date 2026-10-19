@@ -716,6 +716,8 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - *Unused ideas in the demo code, useful for HOD dashboards* ⚠️:
   - **Per-department cards:** "14 waiting on documents", "2 holds expire today", "11 expire in 30 days", "6 web check-ins in 72 h", "9 on 3rd+ follow-up".
   - **Attention list:** document reminders going out, passports arriving back (mark received), stops on the collection boy's run, invoices to chase, cross-sell leads without an answer.
+- **Decided 19 Oct 2026 (project lead):** `docs/decisions/0017-today-dashboard.md`. Until Vimal answers Q28, one page for everyone: staff count their own cases, an HOD the whole department, the Head everything. Cards with nothing to count yet (cross-sell, money to collect) say "Comes with …"; business lost waits for marking enquiries lost (cancelled isn't lost). The notice board and the visa login popup are built in Stage 1, after the cards; weather and IVS news wait for Q24/Q25. Built one component at a time: the banner and tiles → Up next → department bars and the "Comes with …" cards → notice board → login popup.
+- **Built so far:** component 1, **the banner and the four tiles** (19 Oct 2026). The date, the greeting and the day's sentence ("8 enquiries need someone today and 2 are running late. Start with the late ones."), rechecked every minute. **Due today** counts open, postponed and still-to-hand-back cases due from now until midnight, at any step; **Running late** those due before now, with the oldest ("oldest: 2 days"); **New enquiries** everything created since 18:00 ⚠️ on the previous office day ("since Sat, 6:00 pm" on a Monday), a setting the Head changes in Settings → Masters & holiday calendar → Today page; **Cross-sell to answer** shows "Comes with cross-sell". The tiles become links with Up next. "Change password" moved to the sidebar's user card.
 
 ### 12.2 Enquiries list and visa board
 
@@ -1479,7 +1481,8 @@ Masti CRM/
     │                                /enquiries/new, /clients, /clients/:id, /settings/* (masters, checklists, lists, users), /tasks (field staff)
     ├── src/auth/                 ← useMe/useLogin/useLogout/useChangePassword, RequireAuth, RequireDesktop, RequireField, RequireHead,
     │                                permissions.ts (can, isHodOf, isHodOfAny, canEditClients, canEditVisaMasters, canEditHolidays…: mirrors the backend)
-    ├── src/pages/                ← LoginPage, ChangePasswordPage, TodayPage (placeholder), UsersPage
+    ├── src/pages/                ← LoginPage, ChangePasswordPage, UsersPage
+    │   └── today/                ← TodayPage (the banner and tiles, 0017), TodaySettingsCard (Settings → Masters), labels.ts, queries.ts
     │   └── field/                ← FieldRunPage (/tasks: the field staff's run on his phone, 0015), queries.ts, types.ts
     │   └── clients/              ← ClientDirectoryPage, ClientDetailPage, form drawers (react-hook-form + zod mirroring the backend),
     │                                queries.ts (TanStack Query), useDuplicateGuard + DuplicateWarningModal (confirmDuplicates), apiErrors.ts
@@ -1589,7 +1592,7 @@ Masti CRM/
 
 **Not there yet:**
 - **Backend:** a job scheduler, WhatsApp/SMS/email, PDF/sticker generation, reminder rules / vendors / dropdown-reason masters, any business module beyond the client master and the 0005 masters.
-- **Frontend:** the header search and New-enquiry button, the Today dashboard (placeholder only).
+- **Frontend:** the header search and New-enquiry button; Today's Up next, department bars, notice board and login popup (0017, components 2–5).
 - **Project setup:** CI/CD and deploy scripts.
 
 **Portability note:** production must run on Masti's own server or cloud. Keep plain PostgreSQL through `@prisma/adapter-pg`, and don't depend on hosted-only services (e.g. Prisma Accelerate or Prisma Postgres, or vendor-specific serverless platforms) unless Shivanshu and Masti agree. The Prisma "platform" skill in `Backend/.claude/skills/` describes such hosted products.
@@ -1669,6 +1672,13 @@ Masti CRM/
 - **Q29:** old clients come as an Excel file; an import job is built later.
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
+
+**Decided 19 Oct 2026 (project lead), for the Today dashboard.** The design is `docs/decisions/0017-today-dashboard.md` (decided; being built). Details are in §12.1.
+- **Q28 (our answer until Vimal's, M32):** one Today page for everyone. Staff count their own cases, an HOD the whole of each department they lead, the Head everything; view-only staff see an empty day, like their Follow-ups badge.
+- **Cards with nothing to count yet** say "Comes with …" (cross-sell, money to collect). **Business lost** waits for marking enquiries lost: cancelled isn't counted as lost.
+- **The notice board and the visa login popup** are built in Stage 1, after the cards. Weather and IVS news wait for Q24/Q25.
+- **New enquiries** count from 18:00 ⚠️ on the previous office day (the `today` setting, Head only).
+- **Built so far:** component 1, the banner and the four tiles (19 Oct 2026). Next: Up next.
 
 **Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
 - **Build it now:** Vimal wants clients' scans kept **permanently**. Settled the same day: permanent, with no removal on request and no government check waited for (M40 closed).
@@ -1835,7 +1845,7 @@ Masti CRM/
 | 25 | Notice-board auto-alerts and weather: sources; in or out? | S/C | 3 |
 | 26 | Accounting software: its name; export file now or in phase 2? | C | 3 |
 | 27 | Reports: what goes into the Visa, Staff workload, Outstanding and Cross-sell tabs | C | 3 |
-| 28 | Dashboards per role (Staff / HOD / Head) | C | 3 |
+| 28 | Dashboards per role (Staff / HOD / Head). **19 Oct:** for our side, one Today page for everyone: staff their own cases, an HOD the department, the Head everything (0017); confirm with Vimal (M32) | Y→C | 3 |
 | 29 | ~~Existing data to import~~ **Answered 8 Oct:** Excel file; import job built later | C | 1 |
 | 30 | Notification of the 3rd follow-up: the permission flow, and who approves | C | 3 |
 | 31 | Can office staff (e.g. Accounts) cover the collection run, using the same phone screen? The data model allows it; today `/tasks` is field staff only. | C | 1 |
