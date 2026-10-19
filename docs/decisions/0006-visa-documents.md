@@ -244,6 +244,8 @@ These live on the shared `Enquiry`, so Holidays, Hotels and the others reuse the
 ### 7. Masters: follow-up outcomes, next steps, reasons
 
 Three admin-editable tables, shared by all departments, switched off rather than deleted. Codes never change.
+*Changed 19 Oct 2026 by [0018](0018-dropdowns-by-department.md): each value is tagged with the departments it shows in,
+and the Head or an HOD of every one of them edits it.*
 
 | Table | Seeded with the demo values ⚠️ |
 | --- | --- |

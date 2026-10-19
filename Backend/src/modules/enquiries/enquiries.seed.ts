@@ -32,33 +32,40 @@ export const VISA_STAGES = [
   { code: "DELIVERED", name: "Delivered", statusLabel: "Delivered", nextStepLabel: "See cross-sell leads" },
 ];
 
+/**
+ * The departments a dropdown value shows in (0018). General values go to every selling department; the ones about
+ * collecting papers or the visa itself go to Visa only. Masti's HODs and the Head re-tag them in Settings.
+ */
+const ALL = ["VISA", "HOLIDAYS", "HOTELS", "INSURANCE", "TICKETS"];
+const VISA = ["VISA"];
+
 /** Follow-up "What happened" ⚠️ demo values (PROJECT_KNOWLEDGE.md §10.3, docs/decisions/0006-visa-documents.md). */
 export const FOLLOW_UP_OUTCOMES = [
-  { code: "SPOKE_DOCS_COMING", name: "Spoke — documents coming", sortOrder: 1 },
-  { code: "NO_ANSWER", name: "No answer", sortOrder: 2 },
-  { code: "CALL_LATER", name: "Asked to call later", sortOrder: 3 },
-  { code: "WANTS_POSTPONE", name: "Wants to postpone", sortOrder: 4 },
-  { code: "WANTS_CANCEL", name: "Wants to cancel", sortOrder: 5 },
-  { code: "DOCS_COMPLETE", name: "Documents complete", sortOrder: 6 },
+  { code: "SPOKE_DOCS_COMING", name: "Spoke — documents coming", sortOrder: 1, departments: VISA },
+  { code: "NO_ANSWER", name: "No answer", sortOrder: 2, departments: ALL },
+  { code: "CALL_LATER", name: "Asked to call later", sortOrder: 3, departments: ALL },
+  { code: "WANTS_POSTPONE", name: "Wants to postpone", sortOrder: 4, departments: ALL },
+  { code: "WANTS_CANCEL", name: "Wants to cancel", sortOrder: 5, departments: ALL },
+  { code: "DOCS_COMPLETE", name: "Documents complete", sortOrder: 6, departments: VISA },
 ];
 
 /** Follow-up "Next step" ⚠️ demo values. */
 export const FOLLOW_UP_NEXT_STEPS = [
-  { code: "SEND_COLLECTION_BOY", name: "Send collection boy", sortOrder: 1 },
-  { code: "CLIENT_VISITS_OFFICE", name: "Client will visit office", sortOrder: 2 },
-  { code: "CALL_AGAIN", name: "Call again", sortOrder: 3 },
+  { code: "SEND_COLLECTION_BOY", name: "Send collection boy", sortOrder: 1, departments: VISA },
+  { code: "CLIENT_VISITS_OFFICE", name: "Client will visit office", sortOrder: 2, departments: ALL },
+  { code: "CALL_AGAIN", name: "Call again", sortOrder: 3, departments: ALL },
 ];
 
 /** Postpone and cancel reasons ⚠️ demo values (§12.4 Step 2 and §12.20). */
 export const ENQUIRY_REASONS = [
-  { kind: "POSTPONE", code: "TRAVEL_DATES_MOVED", name: "Travel dates moved", sortOrder: 1 },
-  { kind: "POSTPONE", code: "WAITING_LEAVE_APPROVAL", name: "Waiting for leave approval", sortOrder: 2 },
-  { kind: "CANCEL", code: "WENT_WITH_ANOTHER_AGENT", name: "Went with another agent", sortOrder: 3 },
-  { kind: "CANCEL", code: "TRIP_CANCELLED", name: "Trip cancelled", sortOrder: 4 },
-  { kind: "CANCEL", code: "PRICE_HIGHER", name: "Price higher", sortOrder: 5 },
-  { kind: "CANCEL", code: "VISA_NOT_NEEDED", name: "Visa not needed", sortOrder: 6 },
-  { kind: "CANCEL", code: "DOCUMENTS_NOT_AVAILABLE", name: "Documents not available", sortOrder: 7 },
-  { kind: "CANCEL", code: "NO_REPLY", name: "No reply", sortOrder: 8 },
+  { kind: "POSTPONE", code: "TRAVEL_DATES_MOVED", name: "Travel dates moved", sortOrder: 1, departments: ALL },
+  { kind: "POSTPONE", code: "WAITING_LEAVE_APPROVAL", name: "Waiting for leave approval", sortOrder: 2, departments: ALL },
+  { kind: "CANCEL", code: "WENT_WITH_ANOTHER_AGENT", name: "Went with another agent", sortOrder: 3, departments: ALL },
+  { kind: "CANCEL", code: "TRIP_CANCELLED", name: "Trip cancelled", sortOrder: 4, departments: ALL },
+  { kind: "CANCEL", code: "PRICE_HIGHER", name: "Price higher", sortOrder: 5, departments: ALL },
+  { kind: "CANCEL", code: "VISA_NOT_NEEDED", name: "Visa not needed", sortOrder: 6, departments: VISA },
+  { kind: "CANCEL", code: "DOCUMENTS_NOT_AVAILABLE", name: "Documents not available", sortOrder: 7, departments: VISA },
+  { kind: "CANCEL", code: "NO_REPLY", name: "No reply", sortOrder: 8, departments: ALL },
 ] as const;
 
 /** ⚠️ 0015 Decision 2: the demo's slots for the collection and delivery boy ("Tue 6 Oct, 4–6 pm", "11–1", "2–4 pm"). */
@@ -81,18 +88,21 @@ export const FIELD_FAIL_REASONS = [
   { code: "COUNT_MISMATCH", name: "Passports don't match our count", sortOrder: 6 },
 ] as const;
 
+/** A dropdown value's department links, created with it (only on create, so Masti's re-tagging is kept). */
+const tagged = (codes: readonly string[]) => ({ create: codes.map((code) => ({ department: { connect: { code } } })) });
+
 export async function seedEnquiryMasters(db: Db) {
   for (const source of ENQUIRY_SOURCES) {
     await db.enquirySource.upsert({ where: { code: source.code }, update: {}, create: source });
   }
-  for (const outcome of FOLLOW_UP_OUTCOMES) {
-    await db.followUpOutcome.upsert({ where: { code: outcome.code }, update: {}, create: outcome });
+  for (const { departments, ...outcome } of FOLLOW_UP_OUTCOMES) {
+    await db.followUpOutcome.upsert({ where: { code: outcome.code }, update: {}, create: { ...outcome, departments: tagged(departments) } });
   }
-  for (const step of FOLLOW_UP_NEXT_STEPS) {
-    await db.followUpNextStep.upsert({ where: { code: step.code }, update: {}, create: step });
+  for (const { departments, ...step } of FOLLOW_UP_NEXT_STEPS) {
+    await db.followUpNextStep.upsert({ where: { code: step.code }, update: {}, create: { ...step, departments: tagged(departments) } });
   }
-  for (const reason of ENQUIRY_REASONS) {
-    await db.enquiryReason.upsert({ where: { code: reason.code }, update: {}, create: reason });
+  for (const { departments, ...reason } of ENQUIRY_REASONS) {
+    await db.enquiryReason.upsert({ where: { code: reason.code }, update: {}, create: { ...reason, departments: tagged(departments) } });
   }
   for (const slot of FIELD_SLOTS) {
     await db.fieldSlot.upsert({ where: { code: slot.code }, update: {}, create: slot });
