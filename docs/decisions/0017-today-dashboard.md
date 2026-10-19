@@ -2,7 +2,7 @@
 
 - **Status:** decided (19 Oct 2026, project lead). Being built one component at a time (Decision 7). Built: the banner
   and the four tiles (19 Oct 2026, component 1); Up next (19 Oct 2026, component 2); open enquiries by department and
-  the "Comes with …" cards (19 Oct 2026, component 3).
+  the "Comes with …" cards (19 Oct 2026, component 3); the notice board and its card on Today (19 Oct 2026, component 4).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -97,7 +97,7 @@ Each component is planned, built, tested, checked in the browser and committed b
 2. **Up next** (19 Oct 2026, built; Decision 9)
 3. **Open enquiries by department,** with the "Comes with …" cards (business lost, money to collect) (19 Oct 2026,
    built; Decision 10)
-4. **The notice board**
+4. **The notice board** (19 Oct 2026, built; Decision 11): the board itself (4a), then its card on Today (4b)
 5. **The visa team's login popup**
 
 ### 8. "Change password" moves to the sidebar
@@ -139,6 +139,29 @@ Edit, where other rows have Reset password (project lead, 19 Oct 2026).
 - **The layout is the demo's two columns:** Up next and Business lost on the left; the bars, then (component 4) the
   notice board, then Money to collect in a 360 px column on the right. Below 1100 px they stack.
 
+### 11. The notice board
+
+**Decided 19 Oct 2026 (project lead), with component 4** (demo screen 27, PROJECT_KNOWLEDGE.md §12.18):
+- **What a notice is:** a department, what it's about (Airline / Embassy / Hotel / General, the board's filters), which
+  one ("China", "IndiGo", "Marriott Dubai", or a word such as "Process" for a general one), a title, optional details,
+  and where it came from: our team, or the IVS visa-news feed. Airlines and hotels have no master yet, so "which one" is
+  typed; it isn't a reason or a status (golden rule 2).
+- **Who posts and changes:** a department's staff with edit access, its HOD and the Head (anywhere) post to it. The
+  author (while still working there), the department's HOD and the Head edit or remove a notice. Edits are refused over
+  someone else's newer save; everything is audited (`notice.create` / `notice.update` / `notice.remove`).
+- **Who reads:** everyone in the office reads every department's notices on the board (`/notices`): department tabs
+  (All, the six departments) and Everything / Airline / Embassy / Hotel pills, kept in the URL; newest first, 30 at a
+  time. A general notice shows under Everything, as in the demo. Today stays highlighted in the sidebar there.
+- **A notice stays until someone removes it.** No end date; removing keeps the row and its history.
+- **Posting is a drawer** (department, about, which one, title, details, "From the IVS visa-news feed"): the demo's
+  single "What should the team know?" box can't fill the filters.
+- **The demo's weather and IVS cards** stay on the page, saying what they wait for (Q25, Q24).
+- **Today's card** (between the department bars and Money to collect, with the demo's orange edge and "All notices"):
+  the latest 3 of two kinds, newest first:
+  - notices from the person's departments (the Head: all);
+  - holiday-calendar entries still marked new: added by staff within `holidays.newForDays` (7 days ⚠️, the calendar's
+    own "new" chip), and not over yet. The seeded Sunday off has nobody's name on it and never shows.
+
 ## Not in this record
 
 - **The header search and the header's New enquiry button,** and the sidebar's department counts: their own items.
@@ -149,3 +172,5 @@ Edit, where other rows have Reset password (project lead, 19 Oct 2026).
 
 - **M32 (Q28):** what staff, HODs and Vimal should see on the home screen. Decision 1 stands until then.
 - **The 18:00 cut-off ⚠️:** Masti's own "evening".
+- **Q24 (the IVS feed) and Q25 (weather, automatic alerts):** until then, the board's two cards say what they wait for,
+  and IVS news is posted by hand "From the IVS visa-news feed".
