@@ -9,6 +9,7 @@ import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
 import { mobileChars } from '../lib/inputFilters'
+import { useDepartments } from '../lib/useDepartments'
 
 type AccessChoice = '' | 'STAFF_VIEW' | 'STAFF_EDIT' | 'HOD'
 
@@ -49,11 +50,7 @@ export function UsersPage() {
   const queryClient = useQueryClient()
   const { data: me } = useMe()
   const users = useQuery({ queryKey: ['users'], queryFn: async () => (await api<{ users: User[] }>('/users')).users })
-  const departments = useQuery({
-    queryKey: ['departments'],
-    queryFn: async () => (await api<{ departments: Department[] }>('/departments')).departments,
-    staleTime: 5 * 60_000,
-  })
+  const departments = useDepartments()
 
   const [editing, setEditing] = useState<User | 'new' | null>(null)
   const [confirming, setConfirming] = useState<{ kind: 'deactivate' | 'reset'; user: User } | null>(null)

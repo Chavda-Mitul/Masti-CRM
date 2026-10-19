@@ -199,7 +199,14 @@ function DeskRow({
       {logging && (
         <tr className="row-on desk-form-row">
           <td colSpan={6}>
-            <LogCallForm caseNo={row.caseNo} updatedAt={row.updatedAt} postponed={row.status === 'POSTPONED'} onDone={onClose} onCancel={onClose} />
+            <LogCallForm
+              caseNo={row.caseNo}
+              departmentCode={row.department.code}
+              updatedAt={row.updatedAt}
+              postponed={row.status === 'POSTPONED'}
+              onDone={onClose}
+              onCancel={onClose}
+            />
           </td>
         </tr>
       )}

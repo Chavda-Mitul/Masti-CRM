@@ -83,7 +83,16 @@ export const canEditVisaMasters = (user: User) => isHodOf(user, 'VISA')
 export const canEditHolidays = (user: User) => isHodOfAny(user)
 /** Embassies are holiday targets for every department: the Head or any HOD. */
 export const canEditEmbassies = (user: User) => isHodOfAny(user)
-/** Follow-up outcomes, next steps and postpone/cancel reasons are shared by every department: the Head or any HOD (0006). */
+/**
+ * The follow-up, reason and field lists: the Head or any HOD may add to them. A follow-up or reason value is then
+ * changed only by the Head or an HOD of every department it is for (canEditTagged).
+ */
 export const canEditEnquiryMasters = (user: User) => isHodOfAny(user)
+/**
+ * May this user tag a follow-up or reason value with these departments, or change one tagged with them? The Head, or
+ * an HOD of every one (docs/decisions/0018-dropdowns-by-department.md). Mirrors assertCanTag in the backend.
+ */
+export const canEditTagged = (user: User, departmentCodes: string[]) =>
+  isHodOfAny(user) && departmentCodes.every((code) => isHodOf(user, code))
 /** The visa masters are readable with Visa VIEW (the Head always). */
 export const canViewVisaMasters = (user: User) => can(user, 'VISA', 'VIEW')

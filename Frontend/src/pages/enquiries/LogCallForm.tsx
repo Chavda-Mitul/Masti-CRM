@@ -7,17 +7,19 @@ import { useLogFollowUp } from './queries'
 
 /**
  * "Log call" (0006 Decision 6, demo screen 21): What happened → Next step → When. Both lists are masters, so there is
- * no free text. "When" starts empty (decided 10 Oct 2026); the server refuses a past time or a day the office is closed.
+ * no free text, and list only the values tagged with the case's department (0018). "When" starts empty (decided 10 Oct 2026); the server refuses a past time or a day the office is closed.
  * Logging a call on a postponed case resumes it.
  */
 export function LogCallForm({
   caseNo,
+  departmentCode,
   updatedAt,
   postponed,
   onDone,
   onCancel,
 }: {
   caseNo: string
+  departmentCode: string
   updatedAt: string
   postponed: boolean
   onDone: () => void
@@ -69,7 +71,7 @@ export function LogCallForm({
           <select className="select" value={outcomeId} onChange={(e) => setOutcomeId(e.target.value)} disabled={busy} autoFocus>
             <option value="">{busy ? 'Loading…' : 'Pick…'}</option>
             {(outcomes.data ?? [])
-              .filter((o) => o.isActive)
+              .filter((o) => o.isActive && o.departments.includes(departmentCode))
               .map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -84,7 +86,7 @@ export function LogCallForm({
           <select className="select" value={nextStepId} onChange={(e) => setNextStepId(e.target.value)} disabled={busy}>
             <option value="">{busy ? 'Loading…' : 'Pick…'}</option>
             {(nextSteps.data ?? [])
-              .filter((o) => o.isActive)
+              .filter((o) => o.isActive && o.departments.includes(departmentCode))
               .map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
