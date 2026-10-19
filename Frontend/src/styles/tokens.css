@@ -55,6 +55,8 @@
   --font-display: "Outfit", system-ui, sans-serif;
   --font-body: "Nunito Sans", system-ui, sans-serif;
   --font-mono: "DM Mono", ui-monospace, monospace;
+  /* The covering letter, as the demo's preview shows it (screen 08) */
+  --font-letter: Georgia, "Times New Roman", serif;
 
   /* Shape */
   --radius-card: 20px;

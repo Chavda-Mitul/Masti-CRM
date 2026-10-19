@@ -8,6 +8,9 @@ import type {
   BlockTarget,
   Checklist,
   ChecklistLineBody,
+  CoveringLetter,
+  CoveringLetterBody,
+  CoveringLetterSummary,
   Country,
   DocumentMaster,
   DocumentProblemReason,
@@ -60,6 +63,9 @@ export const masterKeys = {
   list: (resource: MasterResource) => ['masters', resource] as const,
   offerings: ['masters', 'offerings'] as const,
   checklist: (offeringId: number) => ['masters', 'checklist', offeringId] as const,
+  /** The list; one letter's key sits under it, so invalidating this refreshes both. */
+  coveringLetters: ['masters', 'covering-letters'] as const,
+  coveringLetter: (id: number) => ['masters', 'covering-letters', id] as const,
 }
 
 /**
@@ -345,6 +351,8 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
       }
       // A vendor lists its countries by name.
       if (resource === 'countries') void queryClient.invalidateQueries({ queryKey: masterKeys.list('vendors') })
+      // So does a covering letter, with its visa type.
+      if (resource === 'countries' || resource === 'visa-types') void queryClient.invalidateQueries({ queryKey: masterKeys.coveringLetters })
       // A case shows its vendor's name, city and contact, and whether it was switched off since; the case's picker
       // reads this same list.
       if (resource === 'vendors') {
@@ -432,5 +440,80 @@ export function useReplaceChecklist(offeringId: number) {
       // A visa is offered at intake only once it has a checklist.
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Covering letters (docs/decisions/0019-covering-letters.md)
+// ---------------------------------------------------------------------------
+
+export function useCoveringLetters(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: masterKeys.coveringLetters,
+    queryFn: async () => (await api<{ formats: CoveringLetterSummary[] }>('/masters/covering-letters')).formats,
+    staleTime: MASTER_STALE,
+  })
+}
+
+export function useCoveringLetter(id: number, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: masterKeys.coveringLetter(id),
+    queryFn: async () => (await api<{ format: CoveringLetter }>(`/masters/covering-letters/${id}`)).format,
+    // A wording being written is its own draft; a background refetch must not look like someone else's change.
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** Every save answers with the whole letter: it replaces the cached one, and the list catches up. */
+function useLetterSaved() {
+  const queryClient = useQueryClient()
+  return (format: CoveringLetter) => {
+    queryClient.setQueryData(masterKeys.coveringLetter(format.id), format)
+    void queryClient.invalidateQueries({ queryKey: masterKeys.coveringLetters, exact: true })
+  }
+}
+
+export function useCreateCoveringLetter() {
+  const onSaved = useLetterSaved()
+  return useMutation({
+    mutationFn: async (body: CoveringLetterBody) =>
+      (await api<{ format: CoveringLetter }>('/masters/covering-letters', { method: 'POST', body })).format,
+    onSuccess: onSaved,
+  })
+}
+
+/** The details, or switching it off or on. On 409 STALE the latest is loaded and the user is told. */
+export function useUpdateCoveringLetter() {
+  const onSaved = useLetterSaved()
+  const onStale = useStaleRecovery(masterKeys.coveringLetters, 'covering letter')
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: number; body: Partial<Omit<CoveringLetterBody, 'body' | 'effectiveFrom'>> & { isActive?: boolean; updatedAt: string } }) =>
+      (await api<{ format: CoveringLetter }>(`/masters/covering-letters/${id}`, { method: 'PATCH', body })).format,
+    onSuccess: onSaved,
+    onError: onStale,
+  })
+}
+
+/** A new wording, or a change to one still to come (replacesId). A 409 STALE is left to the editor, which keeps the draft. */
+export function useAddWording(id: number) {
+  const onSaved = useLetterSaved()
+  return useMutation({
+    mutationFn: async (body: { body: string; effectiveFrom: string; replacesId?: number; updatedAt: string }) =>
+      (await api<{ format: CoveringLetter }>(`/masters/covering-letters/${id}/versions`, { method: 'POST', body })).format,
+    onSuccess: onSaved,
+  })
+}
+
+/** Removes a wording still to come. On 409 STALE the latest is loaded and the user is told. */
+export function useRemoveWording(id: number) {
+  const onSaved = useLetterSaved()
+  const onStale = useStaleRecovery(masterKeys.coveringLetters, 'covering letter')
+  return useMutation({
+    mutationFn: async ({ versionId, updatedAt }: { versionId: number; updatedAt: string }) =>
+      (await api<{ format: CoveringLetter }>(`/masters/covering-letters/${id}/versions/${versionId}`, { method: 'DELETE', body: { updatedAt } })).format,
+    onSuccess: onSaved,
+    onError: onStale,
   })
 }

@@ -29,9 +29,27 @@ export function isDuplicateWarning(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && errorCode(error) === 'DUPLICATE'
 }
 
-/** The message to show in a form, or null when the error is handled elsewhere (duplicate modal, stale toast). */
+/** One thing to check before saving (Backend/src/lib/warnings.ts). */
+export interface SaveWarning {
+  code: string
+  message: string
+}
+
+/** 409 WARNING: usually a mistake but can be right; saving again with confirmWarnings: true goes ahead (useWarningGuard). */
+export function isSaveWarning(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && errorCode(error) === 'WARNING'
+}
+
+/** What a 409 WARNING asks staff to check, or null for any other error. */
+export function readSaveWarnings(error: unknown): SaveWarning[] | null {
+  if (!isSaveWarning(error)) return null
+  const warnings = errorBody(error)?.details?.warnings
+  return Array.isArray(warnings) ? (warnings as SaveWarning[]) : null
+}
+
+/** The message to show in a form, or null when the error is handled elsewhere (duplicate or warning modal, stale toast). */
 export function errorText(error: unknown): string | null {
-  if (!error || isDuplicateWarning(error) || isStale(error)) return null
+  if (!error || isDuplicateWarning(error) || isSaveWarning(error) || isStale(error)) return null
   return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.'
 }
 

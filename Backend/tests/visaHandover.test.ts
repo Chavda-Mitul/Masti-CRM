@@ -126,6 +126,34 @@ describe("the office handover (Decisions 3 and 7)", () => {
   });
 });
 
+describe("a child picked as who collected (a warning, 19 Oct 2026)", () => {
+  it("asks first, then hands over once confirmed; the audit keeps it", async () => {
+    const { c, processor, child } = await receivedCase(); // Aarav is in a child's place, with no birth date on file
+    const warned = await handOver(processor, c.caseNo, { receiver: { travellerId: child } });
+    expect(warned.status).toBe(409);
+    expect(warned.body.details.warnings).toEqual([
+      { code: "CHILD_COLLECTS", message: "Aarav Mehta is on the case as a child: passports are usually handed to an adult." },
+    ]);
+    expect(await prisma.visaHandover.count()).toBe(0);
+
+    const res = await handOver(processor, c.caseNo, { receiver: { travellerId: child }, confirmWarnings: true });
+    expect(res.status).toBe(200);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.handover" } });
+    expect(entry.after).toMatchObject({ receiver: "Aarav Mehta", confirmedWarnings: [{ code: "CHILD_COLLECTS" }] });
+  });
+
+  it("goes by the age when a birth date is on file: an adult in a child's place collects without a warning", async () => {
+    const { c, processor, child } = await receivedCase();
+    const staff = processor;
+    const relationId = (await prisma.relation.findUniqueOrThrow({ where: { code: "SELF" } })).id;
+    const { clientId } = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id }, select: { clientId: true } });
+    const member = await staff.post(`/api/clients/${clientId}/members`).send({ name: "Aarav Mehta", relationId, dateOfBirth: "2000-01-15" });
+    expect(member.status).toBe(201);
+    await prisma.visaCaseTraveller.update({ where: { id: child }, data: { memberId: member.body.member.id } });
+    expect((await handOver(processor, c.caseNo, { receiver: { travellerId: child } })).status).toBe(200);
+  });
+});
+
 describe("whoever is at the desk (Decision 5)", () => {
   it("any Visa staff with EDIT opens and hands over a case whose passports are in our stock, and only that", async () => {
     const before = await decidedCase();

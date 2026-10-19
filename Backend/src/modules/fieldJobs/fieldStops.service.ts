@@ -5,6 +5,7 @@ import { audit } from "../../lib/audit";
 import { dayLabel, fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { sendEmail } from "../../lib/email";
 import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { checkWarnings, confirmedWarningsNote } from "../../lib/warnings";
 import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { MB } from "../../lib/pdf";
@@ -13,7 +14,7 @@ import { getCompanyDetails } from "../company/company.settings";
 import type { Actor } from "../users/user";
 import { countTravellers, travellerLabel } from "../visa/visaCase";
 import { advanceToDocuments } from "../visa/visaSteps.service";
-import { assertInStock, checkHandover, deliverCase, gather as gatherHandover } from "../visa/visaHandover.service";
+import { assertInStock, checkHandover, deliverCase, gather as gatherHandover, receiverWarnings } from "../visa/visaHandover.service";
 import type { FieldSettings, HandOverAtDoorInput, MarkDoneInput, MarkFailedInput } from "./field.schemas";
 import { getFieldSettings } from "./fieldJobs.settings";
 import { otpEmail } from "./otpEmail";
@@ -98,7 +99,8 @@ function toStop(j: StopRow) {
       j.kind === "PICKUP" && visa
         ? visa.travellers.flatMap((t) => t.documents.map((d) => ({ document: d.name, traveller: t.name ?? travellerLabel(t, adults) })))
         : [],
-    travellers: j.kind === "DELIVERY" && visa ? visa.travellers.map((t) => ({ id: t.id, name: t.name ?? travellerLabel(t, adults) })) : [],
+    // Who may receive the passports at the door; a child is marked, as handing them to one is a warning (19 Oct 2026).
+    travellers: j.kind === "DELIVERY" && visa ? visa.travellers.map((t) => ({ id: t.id, name: t.name ?? travellerLabel(t, adults), isChild: t.isChild })) : [],
     finishedAt: j.finishedAt,
     failReason: j.failReason?.name ?? null,
   };
@@ -539,6 +541,7 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
     if (!job.otpConfirmedAt) throw conflict("The client hasn't confirmed with the code yet.");
     const g = await gatherHandover(tx, enquiry.id);
     const receiver = checkHandover(g, assertInStock(g, enquiry), input);
+    const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
     await checkDoorPhoto(tx, enquiry.id, input.photoId, "RECEIVER_PHOTO", actor, "photoId", "Take a photo of the person receiving.");
     await checkDoorPhoto(tx, enquiry.id, input.selfieId, "FIELD_SELFIE", actor, "selfieId", "Take your selfie at the door.");
 
@@ -591,6 +594,7 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
           fieldJobId: jobId,
           place: input.place,
           ...(fieldJobsCancelled.length > 0 ? { fieldJobsCancelled } : {}),
+          ...confirmedWarningsNote(confirmed),
         },
         ip: actor.ip,
       },

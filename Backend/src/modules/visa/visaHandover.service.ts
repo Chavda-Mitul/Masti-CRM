@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
+import { fromDbDate, istToday, wholeYearsBetween } from "../../lib/dates";
 import { badRequest, conflict, fieldError } from "../../lib/httpError";
 import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { MB } from "../../lib/pdf";
+import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { deleteObject, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
@@ -38,7 +40,10 @@ export async function gather(db: Db, enquiryId: string) {
       bookletsBackOld: true,
       shortfallClearedAt: true,
       handover: { select: { enquiryId: true } },
-      travellers: { orderBy: { position: "asc" }, select: { id: true, position: true, isChild: true, name: true } },
+      travellers: {
+        orderBy: { position: "asc" },
+        select: { id: true, position: true, isChild: true, name: true, member: { select: { dateOfBirth: true } } },
+      },
     },
   });
 }
@@ -135,6 +140,23 @@ export function checkHandover(g: Gathered, stock: { current: number; old: number
   return t.name ?? travellerLabel(t, countTravellers(g.travellers).adults);
 }
 
+/**
+ * A child picked as who collected the passports (a soft warning, decided 19 Oct 2026, M46): they're usually handed to
+ * an adult. Younger than ⚠️ visa.childAge (seeded 18) today, or, with no birth date on file, in a child's place on the
+ * case. Someone else by name isn't checked. Also the delivery boy's at the door (0015 phase 5).
+ */
+export async function receiverWarnings(db: Db, g: Gathered, receiver: { travellerId?: string | null | undefined }): Promise<Warning[]> {
+  const t = receiver.travellerId ? g.travellers.find((x) => x.id === receiver.travellerId) : undefined;
+  if (!t) return [];
+  const born = t.member?.dateOfBirth ? fromDbDate(t.member.dateOfBirth) : null;
+  const age = born ? wholeYearsBetween(born, istToday()) : null;
+  const child = age === null ? t.isChild : age < (await getVisaSettings(db)).childAge.adultFrom;
+  if (!child) return [];
+  const name = t.name ?? travellerLabel(t, countTravellers(g.travellers).adults);
+  const who = age === null ? `${name} is on the case as a child` : `${name} is ${age}`;
+  return [{ code: "CHILD_COLLECTS", message: `${who}: passports are usually handed to an adult.` }];
+}
+
 /** The photo, uploaded for this case's handover (Decision 3). */
 async function checkPhoto(db: Db, enquiryId: string, photoId: string) {
   const photo = await db.caseFile.findUnique({ where: { id: photoId }, select: { enquiryId: true, kind: true } });
@@ -181,6 +203,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
   const pre = await gather(prisma, enquiry.id);
   checkHandover(pre, assertInStock(pre, enquiry), input);
   await checkPhoto(prisma, enquiry.id, input.photoId);
+  checkWarnings(await receiverWarnings(prisma, pre, input.receiver), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, HANDING_OVER);
@@ -188,6 +211,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     const g = await gather(tx, enquiry.id);
     const receiver = checkHandover(g, assertInStock(g, locked), input);
     await checkPhoto(tx, enquiry.id, input.photoId);
+    const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
 
     const beforeDispatch = locked.stage.code !== "PASSPORT_BACK";
     // Handed over here: a delivery booked for the boy is called off (0015).
@@ -223,6 +247,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
           receiverIsTraveller: !!input.receiver.travellerId,
           photoId: input.photoId,
           ...(fieldJobsCancelled.length > 0 ? { fieldJobsCancelled } : {}),
+          ...confirmedWarningsNote(confirmed),
         },
         ip: actor.ip,
       },

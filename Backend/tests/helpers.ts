@@ -24,6 +24,7 @@ export async function resetDb() {
       '"CaseCounter", "FollowUpOutcomeDepartment", "FollowUpNextStepDepartment", "EnquiryReasonDepartment", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientDocument", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
+      '"CoveringLetterVersion", "CoveringLetterCountry", "CoveringLetterFormat", ' +
       '"DocumentProblemReason", "DocumentMaster", "Embassy", "VisaType", "Country", "User", "Setting", "Department" RESTART IDENTITY CASCADE',
   );
   await prisma.department.createMany({

@@ -5,6 +5,7 @@ import { FormField } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDate, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useUpdateTrip } from '../queries'
 import type { CaseTrip, EntryType, VisaCase } from '../types'
 
@@ -76,6 +77,8 @@ const FIELDS = ['departOn', 'returnOn', 'entryType', 'hotelStay'] as const
 function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
   const toast = useToast()
   const update = useUpdateTrip(c.caseNo)
+  // A new return that a linked passport doesn't run long enough after: check, then save anyway.
+  const guard = useWarningGuard()
   const [departOn, setDepartOn] = useState(c.trip.departOn ?? '')
   const [returnOn, setReturnOn] = useState(c.trip.returnOn ?? '')
   const [entryType, setEntryType] = useState<EntryType | null>(c.trip.entryType)
@@ -93,11 +96,12 @@ function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
   const valid = !errors.departOn && !errors.returnOn
   const missing = !c.trip.departOn || !c.trip.returnOn || !c.trip.entryType
 
-  const save = () => {
+  const save = (confirmWarnings = false): void => {
     setServerErrors({})
-    update.mutate(changed, {
+    update.mutate(confirmWarnings ? { ...changed, confirmWarnings } : changed, {
       onSuccess: () => toast({ tone: 'ok', message: 'Trip details saved.' }),
       onError: (err) => {
+        if (guard.intercept(err, () => save(true))) return
         const issues = errorBody(err)?.issues ?? {}
         const shown = FIELDS.filter((field) => issues[field]?.[0])
         if (shown.length > 0) setServerErrors(Object.fromEntries(shown.map((field) => [field, issues[field]![0]])))
@@ -175,11 +179,12 @@ function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
         </FormField>
       </div>
       <div className="trip-actions">
-        <button type="button" className="btn btn-sm btn-primary" disabled={!dirty || !valid || update.isPending} onClick={save}>
+        <button type="button" className="btn btn-sm btn-primary" disabled={!dirty || !valid || update.isPending} onClick={() => save()}>
           {update.isPending ? 'Saving…' : 'Save'}
         </button>
         {missing && <span className="muted small">Travelling out, coming back and the entry type are needed before the file is ready.</span>}
       </div>
+      {guard.modal}
     </div>
   )
 }
