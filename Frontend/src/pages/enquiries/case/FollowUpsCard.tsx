@@ -27,6 +27,7 @@ export function FollowUpsCard({ visaCase: c }: { visaCase: VisaCase }) {
       {logging && (
         <LogCallForm
           caseNo={c.caseNo}
+          departmentCode={c.department.code}
           updatedAt={c.updatedAt}
           postponed={c.status === 'POSTPONED'}
           onDone={() => setLogging(false)}

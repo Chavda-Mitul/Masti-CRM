@@ -21,6 +21,7 @@ import type {
   EnquiryReason,
   EnquirySource,
   FollowUpOption,
+  TaggedOption,
   Embassy,
   Holiday,
   HolidayBody,
@@ -260,8 +261,8 @@ interface MasterRow {
   embassies: Embassy
   documents: DocumentMaster
   'enquiry-sources': EnquirySource
-  'follow-up-outcomes': FollowUpOption
-  'follow-up-next-steps': FollowUpOption
+  'follow-up-outcomes': TaggedOption
+  'follow-up-next-steps': TaggedOption
   'enquiry-reasons': EnquiryReason
   vendors: Vendor
   'document-problem-reasons': DocumentProblemReason

@@ -60,9 +60,9 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
   { value: 'recall-reasons', label: 'Recall reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'missing-passport-reasons', label: 'Missing passport reasons', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'extra-charges', label: 'Extra charges', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
-  { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
-  { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
-  { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
+  { value: 'follow-up-outcomes', label: 'What happened', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and the HODs of its departments' },
+  { value: 'follow-up-next-steps', label: 'Next steps', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and the HODs of its departments' },
+  { value: 'enquiry-reasons', label: 'Postpone & cancel reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and the HODs of its departments' },
   { value: 'field-slots', label: 'Time slots', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
   { value: 'field-fail-reasons', label: 'Visit fail reasons', visa: false, canEdit: canEditEnquiryMasters, editors: 'the Head and HODs' },
 ]
@@ -70,8 +70,8 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
 /**
  * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources,
  * vendors, couriers, credit-note and recall reasons and extra charges are the Visa department's;
- * embassies, the follow-up and reason dropdowns, and the field staff's time slots and visit fail reasons are shared by
- * every department (changed by any HOD).
+ * embassies and the field staff's time slots and visit fail reasons are shared by every department (changed by any HOD);
+ * each follow-up and reason value is tagged with its departments, and changed by their HODs or the Head (0018).
  */
 export function MasterListsPage() {
   const { data: me } = useMe()

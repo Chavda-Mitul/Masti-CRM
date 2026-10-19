@@ -5,10 +5,12 @@ import {
   createOptionSchema,
   createReasonSchema,
   createSlotSchema,
+  createTaggedOptionSchema,
   listQuerySchema,
   updateOptionSchema,
   updateReasonSchema,
   updateSlotSchema,
+  updateTaggedOptionSchema,
 } from "./enquiryMasters.schemas";
 import { updateFieldSettingsSchema } from "../fieldJobs/field.schemas";
 import { getFieldSettings } from "../fieldJobs/fieldJobs.settings";
@@ -18,7 +20,8 @@ import * as service from "./enquiryMasters.service";
  * Follow-up outcomes, next steps and postpone/cancel reasons (docs/decisions/0006-visa-documents.md Decision 7), and the
  * collection and delivery boy's time slots and the reasons a visit fails (docs/decisions/0015-field-staff-app.md
  * Decisions 2 and 5).
- * The Head and office staff read them (the dropdowns on every case); the service lets the Head or any HOD write.
+ * The Head and office staff read them (the dropdowns on every case). The service lets the Head or an HOD write: for the
+ * follow-up and reason values, the HOD of every department the value is for (docs/decisions/0018-dropdowns-by-department.md).
  */
 const router = Router();
 router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"));
@@ -31,11 +34,11 @@ router.get("/follow-up-outcomes", async (req, res) => {
   res.json({ outcomes: await service.listOutcomes(active) });
 });
 router.post("/follow-up-outcomes", async (req, res) => {
-  const body = createOptionSchema.parse(req.body);
+  const body = createTaggedOptionSchema.parse(req.body);
   res.status(201).json({ outcome: await service.createOutcome(body, actorOf(req)) });
 });
 router.patch("/follow-up-outcomes/:id", async (req, res) => {
-  const body = updateOptionSchema.parse(req.body);
+  const body = updateTaggedOptionSchema.parse(req.body);
   res.json({ outcome: await service.updateOutcome(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
@@ -45,11 +48,11 @@ router.get("/follow-up-next-steps", async (req, res) => {
   res.json({ nextSteps: await service.listNextSteps(active) });
 });
 router.post("/follow-up-next-steps", async (req, res) => {
-  const body = createOptionSchema.parse(req.body);
+  const body = createTaggedOptionSchema.parse(req.body);
   res.status(201).json({ nextStep: await service.createNextStep(body, actorOf(req)) });
 });
 router.patch("/follow-up-next-steps/:id", async (req, res) => {
-  const body = updateOptionSchema.parse(req.body);
+  const body = updateTaggedOptionSchema.parse(req.body);
   res.json({ nextStep: await service.updateNextStep(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 

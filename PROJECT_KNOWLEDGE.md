@@ -1046,6 +1046,7 @@ This is part of Stage 1 ✅.
 - **Log call** opens inline: What happened / Next step / When → Save.
 - It holds the day's calls across departments. The team split is ❓ (Q2).
 - **Built (10 Oct 2026, project lead):** "When" starts empty. Logging a call on a postponed case resumes it. The Postponed tab lists every postponed case. Today and This week include late cases. A matured visa case leaves the desk. Details: `docs/decisions/0006-visa-documents.md`, *Amendment* items 5–9.
+- **By department (19 Oct 2026, project lead):** What happened, Next step and the postpone/cancel reasons each list only the values tagged with the case's department. Details: `docs/decisions/0018-dropdowns-by-department.md`. A free-text note on a follow-up is not built (M44).
 
 ### 12.13 Cross-sell leads ✅
 
@@ -1670,6 +1671,12 @@ Masti CRM/
 - **Q29:** old clients come as an Excel file; an import job is built later.
 - **§17 #8, #21, #22:** travel month at intake; case numbers `VISA-2026-0001`; no automatic email capture.
 - **AI fill-in from a message:** deferred; the manual form comes first.
+
+**Decided 19 Oct 2026 (project lead), the follow-up and reason dropdowns by department.** The design is `docs/decisions/0018-dropdowns-by-department.md` (decided and built). It changes 0006 Decision 7.
+- **Each value is tagged with the departments it shows in** (one or more); a case lists and accepts only its department's values.
+- **The Head, or an HOD of every department the value is for, changes it.** A value shared by several departments is in practice the Head's.
+- **Seeded ⚠️:** general values in all five selling departments, the visa ones (documents coming, collection boy, visa not needed…) in Visa only.
+- **No free-text note on a follow-up** until Vimal answers (M44, change request 9); staff use more precise "Next step" values meanwhile.
 
 **Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
 - **Build it now:** Vimal wants clients' scans kept **permanently**. Settled the same day: permanent, with no removal on request and no government check waited for (M40 closed).
