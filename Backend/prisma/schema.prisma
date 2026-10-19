@@ -27,6 +27,7 @@ model Department {
   stages       DepartmentStage[]
   caseCounters CaseCounter[]
   enquiries    Enquiry[]
+  notices      Notice[]
 }
 
 /// What kind of account this is. It decides which app the user can open.
@@ -99,6 +100,7 @@ model User {
   companyImagesAdded    CompanyImage[]     @relation("CompanyImageUploadedBy")
   invoicesIssued        Invoice[]          @relation("InvoiceIssuedBy")
   creditNotesIssued     CreditNote[]       @relation("CreditNoteIssuedBy")
+  noticesPosted         Notice[]           @relation("NoticePostedBy")
 
   @@index([type, isActive])
 }
@@ -697,6 +699,57 @@ model HolidayTarget {
   @@index([holidayId])
   @@index([kind, countryId])
   @@index([kind, embassyId])
+}
+
+// ---------------------------------------------------------------------------
+// Notice board (docs/decisions/0017-today-dashboard.md Decision 11)
+// ---------------------------------------------------------------------------
+
+/// What a notice is about: the board's filter pills (Airline / Embassy / Hotel), and General for the rest (a process, office
+/// news). The filters branch on it, so an enum.
+enum NoticeCategory {
+  AIRLINE
+  EMBASSY
+  HOTEL
+  GENERAL
+}
+
+/// Where a notice came from: someone in the team, or copied from the IVS visa-news feed (demo: "Vimal · from IVS").
+enum NoticeSource {
+  TEAM
+  IVS
+}
+
+enum NoticeStatus {
+  /// On the board.
+  ACTIVE
+  /// Taken off the board. Kept for the record.
+  REMOVED
+}
+
+/// A post on the notice board: what a department needs to know (demo screen 27). Its department's staff post it; its
+/// author, the department's HOD and the Head change or remove it.
+/// Checks in the migration: title not blank; about and body null or not blank.
+model Notice {
+  id           String         @id @default(uuid())
+  departmentId Int
+  category     NoticeCategory
+  /// Which airline, embassy or hotel ("China", "IndiGo", "Marriott Dubai"); for a general one a word such as "Process".
+  about        String?
+  title        String
+  /// The details. Optional: a title can say it all.
+  body         String?
+  source       NoticeSource   @default(TEAM)
+  status       NoticeStatus   @default(ACTIVE)
+  postedById   String
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  /// Also the optimistic-lock token for PATCH.
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  postedBy     User           @relation("NoticePostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([departmentId, status, createdAt])
 }
 
 // ---------------------------------------------------------------------------

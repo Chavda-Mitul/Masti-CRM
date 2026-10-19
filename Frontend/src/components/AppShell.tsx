@@ -23,6 +23,7 @@ export function AppShell() {
   const overdue = badge.data?.overdue ?? 0
   const followUpsTo = overdue > 0 ? `/follow-ups?tab=overdue${badge.data?.scope === 'ALL' ? '&scope=all' : ''}` : '/follow-ups'
 
+  const onToday = location.pathname === '/' || location.pathname === '/notices'
   // The department sub-items are the list filtered by ?department=; the New enquiry form and visa case pages count as Visa.
   const onEnquiries = location.pathname === '/enquiries' || location.pathname.startsWith('/enquiries/')
   const onVisaPage = location.pathname === '/enquiries/new' || location.pathname.toUpperCase().startsWith('/ENQUIRIES/VISA-')
@@ -45,10 +46,11 @@ export function AppShell() {
           </div>
         </div>
 
-        <NavLink to="/" end className="nav">
+        {/* Today also hosts the notice board (§9): it stays highlighted there, as in the demo. */}
+        <Link to="/" className={`nav${onToday ? ' active' : ''}`} aria-current={onToday ? 'page' : undefined}>
           <NavIcon name="today" />
           Today
-        </NavLink>
+        </Link>
 
         <Link to="/enquiries" className={`nav${onEnquiries && !department && !onToAssign ? ' active' : ''}`}>
           <NavIcon name="enquiries" />
