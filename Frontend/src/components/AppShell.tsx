@@ -121,9 +121,14 @@ export function AppShell() {
             <div className="scope">{roleSummary(user)}</div>
           </div>
         </div>
-        <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={onLogout} disabled={logout.isPending}>
-          Log out
-        </button>
+        <div className="user-actions">
+          <Link to="/change-password" className="btn btn-sm">
+            Change password
+          </Link>
+          <button className="btn btn-sm" onClick={onLogout} disabled={logout.isPending}>
+            Log out
+          </button>
+        </div>
       </aside>
 
       <main className="main">

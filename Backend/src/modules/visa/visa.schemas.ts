@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
-import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
+import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -8,12 +8,10 @@ import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schem
 export const MAX_ADULTS = 30;
 export const MAX_CHILDREN = 30;
 
-const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm, e.g. 11:00.");
-
 /** When the first follow-up of a new visa enquiry is due: afterDays days later, at `at` (IST). */
 export const firstFollowUpSchema = z.object({
   afterDays: z.number().int().min(0).max(30),
-  at: hhmm,
+  at: timeOfDay,
 });
 
 /** The largest final file (one PDF) a case can keep (docs/decisions/0007-visa-file-prep.md Decision 8). */
@@ -115,7 +113,7 @@ export const handoverPhotoSchema = z.object({
  */
 export const collectionCheckSchema = z.object({
   daysBefore: z.number().int().min(0).max(30),
-  at: hhmm,
+  at: timeOfDay,
 });
 
 /** The courier's slip (AWB) number (0008 Decision 6): capitals and digits, between these lengths. */

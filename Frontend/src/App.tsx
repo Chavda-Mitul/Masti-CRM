@@ -18,7 +18,7 @@ import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
-import { TodayPage } from './pages/TodayPage'
+import { TodayPage } from './pages/today/TodayPage'
 import { UsersPage } from './pages/UsersPage'
 
 function NotFound() {

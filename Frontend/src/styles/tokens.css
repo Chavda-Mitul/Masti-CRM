@@ -35,6 +35,11 @@
   --primary-tint: #e7effa;
   --primary-tint-2: #e2eaf6;
 
+  /* Today's banner: sea blue into a lighter blue and a sunset orange, with a sun (demo screen 01) */
+  --hero-blue-2: #2f7fd8;
+  --hero-orange: #f2994a;
+  --hero-sun: #ffd29a;
+
   /* Status chips: background / text */
   --ok-bg: #e5f5ec;
   --ok: #1f7a4b;
