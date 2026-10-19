@@ -211,6 +211,53 @@ describe("Up next", () => {
   });
 });
 
+describe("the notice card", () => {
+  it("shows the latest 3 of the person's departments' notices and the holiday entries still new", async () => {
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    await createUser({ name: "Aarti Patel", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const vimal = await userOf("vimal@masti.test");
+    const aarti = await userOf("aarti@masti.test");
+    const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
+    const tickets = await prisma.department.findUniqueOrThrow({ where: { code: "TICKETS" } });
+    const now = new Date();
+    const ago = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
+    const notice = (title: string, departmentId: number, minutesAgo: number, status: "ACTIVE" | "REMOVED" = "ACTIVE") =>
+      prisma.notice.create({ data: { departmentId, category: "GENERAL", title, postedById: vimal.id, createdAt: ago(minutesAgo), status } });
+    await notice("Visa, an hour ago", visa.id, 60);
+    await notice("Tickets, just now", tickets.id, 1);
+    await notice("Visa, removed", visa.id, 2, "REMOVED");
+    await notice("Visa, two days ago", visa.id, 2 * 24 * 60);
+
+    // New: added by staff within the calendar's 7 days and not over yet. The seeded Sunday off has nobody's name on it.
+    const day = istToday();
+    const holiday = (name: string, addedById: string | null, minutesAgo: number, start: string, end: string | null) =>
+      prisma.holiday.create({
+        data: {
+          name,
+          repeat: end ? "NONE" : "WEEKLY",
+          startDate: toDbDate(start),
+          endDate: end ? toDbDate(end) : null,
+          weekday: end ? null : 7,
+          addedById,
+          createdAt: ago(minutesAgo),
+          targets: { create: [{ kind: "ALL_EMBASSIES" }] },
+        },
+      });
+    await holiday("Dussehra", vimal.id, 30, addDays(day, 3), addDays(day, 3));
+    await holiday("Added ten days ago", vimal.id, 10 * 24 * 60, addDays(day, 5), addDays(day, 5));
+    await holiday("Weekly off", null, 5, day, null);
+    await holiday("Over already", vimal.id, 10, addDays(day, -3), addDays(day, -2));
+
+    const titles = (card: { kind: string; title?: string; name?: string }[]) => card.map((n) => n.title ?? n.name);
+    const staff = (await todaySummary(aarti, now)).notices;
+    expect(titles(staff)).toEqual(["Dussehra", "Visa, an hour ago", "Visa, two days ago"]);
+    expect(staff[0]).toMatchObject({ kind: "HOLIDAY", targets: ["All embassies in India"], addedBy: { name: "Vimal" } });
+    expect(staff[1]).toMatchObject({ kind: "NOTICE", department: { code: "VISA", name: "Visa" }, postedBy: { name: "Vimal" }, source: "TEAM" });
+    // The Head's departments are all of them.
+    expect(titles((await todaySummary(vimal, now)).notices)).toEqual(["Tickets, just now", "Dussehra", "Visa, an hour ago"]);
+  });
+});
+
 describe("Today settings", () => {
   it("are everyone's to read; only the Head changes the cut-off, and the change is audited", async () => {
     const aarti = await visaStaff();

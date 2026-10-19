@@ -5,13 +5,13 @@ import '../../styles/today.css'
 import { BusinessLostCard, MoneyToCollectCard } from './ComesWithCards'
 import { DepartmentBarsCard } from './DepartmentBarsCard'
 import { greetingNow, heroLine, longToday, newSinceLabel, oldestLabel, scopeLabel } from './labels'
+import { NoticeBoardCard } from './NoticeBoardCard'
 import { useToday } from './queries'
 import { UpNextCard } from './UpNextCard'
 
 /**
  * Today, everyone's home page (docs/decisions/0017-today-dashboard.md, demo screen 01): the day's sentence, four tiles,
- * then two columns: Up next and Business lost; open enquiries by department and Money to collect. The notice board
- * (component 4) joins the right-hand column.
+ * then two columns: Up next and Business lost; open enquiries by department, the notice board and Money to collect.
  */
 export function TodayPage() {
   const { data: me } = useMe()
@@ -57,6 +57,7 @@ export function TodayPage() {
           </div>
           <div className="today-col">
             <DepartmentBarsCard day={day} />
+            <NoticeBoardCard day={day} />
             <MoneyToCollectCard />
           </div>
         </div>
