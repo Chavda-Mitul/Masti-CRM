@@ -872,6 +872,9 @@ model DocumentMaster {
   detail          String?
   sortOrder       Int                 @default(0)
   isActive        Boolean             @default(true)
+  /// "Scan not saved" on a case when this paper is ticked Original or Xerox and no scan was kept during the case
+  /// (docs/decisions/0016-client-documents.md Decision 7). A warning only.
+  warnIfNoScan    Boolean             @default(false)
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
   checklistItems  VisaChecklistItem[]

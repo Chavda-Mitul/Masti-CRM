@@ -73,12 +73,15 @@ export const createDocumentSchema = z.object({
   detail: clearable(text(300)),
   sortOrder: sortOrder.default(0),
   isActive: z.boolean().default(true),
+  /** "Scan not saved" on a case's paper (docs/decisions/0016-client-documents.md Decision 7). */
+  warnIfNoScan: z.boolean().default(false),
 });
 export const updateDocumentSchema = z.object({
   name: text(150).optional(),
   detail: clearable(text(300)),
   sortOrder: sortOrder.optional(),
   isActive: z.boolean().optional(),
+  warnIfNoScan: z.boolean().optional(),
 });
 
 /** Why a paper needs replacing in Step 3 ("Not signed"), docs/decisions/0007-visa-file-prep.md Decision 3. */

@@ -35,16 +35,19 @@ async function pdf(pages: number) {
 interface CaseDoc {
   id: string;
   name: string;
+  requirement: string;
   status: string;
   receivedAs: string | null;
   onFile: { id: string; uploadedAt: string; contentType: string; pageCount: number | null; sizeBytes: number } | null;
   fromScan: { id: string; uploadedAt: string } | null;
+  noScan: boolean;
 }
 interface CaseDto {
   id: string;
   caseNo: string;
   client: { id: string };
   scanMaxMb: number;
+  updatedAt: string;
   travellers: { id: string; name: string | null; done: number; documents: CaseDoc[] }[];
 }
 
@@ -251,6 +254,69 @@ describe("opening a copy from the case", () => {
     expect((await openScan(staff, c, bank)).status).toBe(200);
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "client.document.open" } });
     expect(entry.entityId).toBe(used);
+  });
+});
+
+describe("Scan not saved (Decision 7)", () => {
+  const PASSPORT = "Passport";
+  const original = { status: "RECEIVED", receivedAs: "ORIGINAL" };
+  const xerox = { status: "RECEIVED", receivedAs: "XEROX" };
+  const warnOn = (code: string) => prisma.documentMaster.update({ where: { code }, data: { warnIfNoScan: true } });
+
+  it("warns on a paper ticked as an original or a xerox when the master asks for it, until a scan is saved", async () => {
+    const { staff, c } = await linkedCase();
+    expect(docOf(c, PASSPORT).noScan).toBe(false); // pending
+
+    const ticked = (await tick(staff, c, docOf(c, PASSPORT).id, original)).body.case as CaseDto;
+    expect(docOf(ticked, PASSPORT).noScan).toBe(true);
+    expect(docOf((await tick(staff, c, docOf(c, BANK).id, xerox)).body.case, BANK).noScan).toBe(false); // the switch is off
+    // The child isn't named yet, so nothing can be saved for them: no warning.
+    expect(docOf((await tick(staff, c, docOf(c, PASSPORT, 1).id, original)).body.case, PASSPORT, 1).noScan).toBe(false);
+
+    expect(docOf((await saveScan(staff, c, docOf(c, PASSPORT).id, await pdf(1))).body.case, PASSPORT).noScan).toBe(false);
+
+    // Switched on for the bank statement later: cases already open warn too.
+    await warnOn("BANK_STATEMENT_6M");
+    expect(docOf(await load(staff, c.caseNo), BANK).noScan).toBe(true);
+  });
+
+  it("doesn't count a copy from before the case, and never warns for a paper ticked On file", async () => {
+    const { staff, c } = await linkedCase();
+    await warnOn("BANK_STATEMENT_6M");
+    await saveScan(staff, c, docOf(c, PASSPORT).id, await pdf(1));
+    await saveScan(staff, c, docOf(c, BANK).id, await pdf(1));
+    const opened = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } });
+    await prisma.clientDocument.updateMany({ data: { uploadedAt: new Date(opened.createdAt.getTime() - 60_000) } });
+
+    await tick(staff, c, docOf(c, PASSPORT).id, original);
+    await tick(staff, c, docOf(c, BANK).id, onFile);
+    const after = await load(staff, c.caseNo);
+    expect(docOf(after, PASSPORT)).toMatchObject({ noScan: true, onFile: { id: expect.any(String) } });
+    expect(docOf(after, BANK)).toMatchObject({ receivedAs: "ON_FILE", noScan: false });
+  });
+
+  it("is a warning only: the documents can still be marked complete", async () => {
+    const { staff, c } = await linkedCase();
+    const aarav = await staff.post(`/api/clients/${c.client.id}/members`).send({ name: "Aarav Mehta", relationId: await relationId("SON") });
+    await staff.put(`/api/visa/cases/${c.caseNo}/travellers/${c.travellers[1]!.id}/member`).send({ memberId: aarav.body.member.id });
+    for (const t of (await load(staff, c.caseNo)).travellers) {
+      for (const d of t.documents) {
+        const body =
+          d.requirement === "ARRANGED_BY_US"
+            ? { status: "MADE" }
+            : d.name.startsWith("Salary slips")
+              ? { status: "NOT_NEEDED" }
+              : d.requirement === "ORIGINAL"
+                ? original
+                : xerox;
+        expect((await tick(staff, c, d.id, body)).status).toBe(200);
+      }
+    }
+    const ready = await load(staff, c.caseNo);
+    expect([0, 1].map((i) => docOf(ready, PASSPORT, i).noScan)).toEqual([true, true]);
+
+    const res = await staff.post(`/api/visa/cases/${c.caseNo}/mature`).send({ updatedAt: ready.updatedAt });
+    expect(res.status).toBe(200);
   });
 });
 

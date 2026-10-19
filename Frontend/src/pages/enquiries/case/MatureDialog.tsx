@@ -19,6 +19,12 @@ function missingOf(c: VisaCase): MaturityMissing {
 
 const isEmpty = (m: MaturityMissing) => m.unnamed.length === 0 && m.pending.length === 0
 
+/** Papers that came in with no scan kept for the next trip (0016 Decision 7): a warning only, never in the way. */
+const noScanOf = (c: VisaCase) =>
+  c.travellers
+    .map((t) => ({ traveller: t.member?.name ?? t.label, documents: t.documents.filter((d) => d.noScan).map((d) => d.name) }))
+    .filter((p) => p.documents.length > 0)
+
 /**
  * "Mark documents complete" (0006 Decision 8). Lists what is still missing before anything is sent; once everything is in,
  * the case goes to the HOD to pick a processor. Staff lose sight of it then, so they are taken back to the list.
@@ -33,6 +39,7 @@ export function MatureDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
   const serverMissing = errorCode(mature.error) === 'NOT_READY' ? (errorBody(mature.error)?.details?.missing as MaturityMissing | undefined) : undefined
   const missing = serverMissing ?? missingOf(c)
   const ready = isEmpty(missing)
+  const noScan = noScanOf(c)
   const staysWithMe = !!me && isHodOf(me, c.department.code)
   const message = serverMissing ? null : errorText(mature.error)
   // Allowed, but worth a look before the file goes out (decided 19 Oct 2026).
@@ -75,6 +82,19 @@ export function MatureDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
               ))}
               {missing.pending.map((p) => (
                 <li key={`docs-${p.traveller}`}>
+                  <strong>{p.traveller}:</strong> {p.documents.join(', ')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {noScan.length > 0 && (
+          <div className="alert alert-warn">
+            <strong>No scan saved yet</strong> (you can still mark complete):
+            <ul className="missing-list">
+              {noScan.map((p) => (
+                <li key={`scan-${p.traveller}`}>
                   <strong>{p.traveller}:</strong> {p.documents.join(', ')}
                 </li>
               ))}

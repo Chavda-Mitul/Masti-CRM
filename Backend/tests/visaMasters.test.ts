@@ -144,6 +144,25 @@ describe("countries, visa types, documents and offerings", () => {
     expect((await hod.patch(`/api/masters/documents/${await documentId("PASSPORT")}`).send({ isActive: false })).status).toBe(200);
   });
 
+  it("switches the scan warning on each document: seeded for passport, Aadhaar and PAN; Visa HOD only, audited (0016 Decision 7)", async () => {
+    const hod = await visaHod();
+    const staff = await visaStaff();
+    const listed = (await staff.get("/api/masters/documents")).body.documents as { code: string; warnIfNoScan: boolean }[];
+    expect(listed.filter((d) => d.warnIfNoScan).map((d) => d.code)).toEqual(["PASSPORT", "AADHAAR_CARD", "PAN_CARD"]);
+
+    const created = await hod.post("/api/masters/documents").send({ code: "VOTER_ID", name: "Voter ID" });
+    expect(created.body.document).toMatchObject({ warnIfNoScan: false });
+
+    const bank = await documentId("BANK_STATEMENT_6M");
+    expect((await staff.patch(`/api/masters/documents/${bank}`).send({ warnIfNoScan: true })).status).toBe(403);
+    const patched = await hod.patch(`/api/masters/documents/${bank}`).send({ warnIfNoScan: true });
+    expect(patched.status).toBe(200);
+    expect(patched.body.document).toMatchObject({ warnIfNoScan: true });
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "document.update", entityId: String(bank) } });
+    expect(audit.before).toEqual({ warnIfNoScan: false });
+    expect(audit.after).toEqual({ warnIfNoScan: true });
+  });
+
   it("switches what File ready asks for (appointment, vendor) on each visa: Visa HOD or Head only (0007 Decision 6)", async () => {
     const offering = await franceTourist();
     const hod = await visaHod();

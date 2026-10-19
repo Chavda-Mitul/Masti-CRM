@@ -302,6 +302,7 @@ const receivedAsChoices = (doc: CaseDocument): ReceivedAs[] =>
 /**
  * The paper's copy in the client's document vault (0016 Decision 5): "On file · saved 12 Mar · Open", or for a paper
  * ticked On file the copy it came from. "Save scan" keeps this paper there for the next trip (named travellers only).
+ * "Scan not saved" warns while one is still wanted (Decision 7); it never stops anything.
  */
 function VaultLine({
   caseNo,
@@ -355,6 +356,11 @@ function VaultLine({
       {canSave && (
         <>
           {copy && ' · '}
+          {d.noScan && (
+            <>
+              <span className="doc-no-scan">Scan not saved</span> ·{' '}
+            </>
+          )}
           <button type="button" className="btn-link" disabled={save.isPending} onClick={() => picker.current?.click()}>
             {save.isPending ? 'Saving…' : copy ? 'Save a newer scan' : 'Save scan'}
           </button>

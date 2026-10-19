@@ -399,6 +399,7 @@ export const documentFormSchema = z.object({
   name: required(150, 'Enter the document.'),
   detail: text(300),
   sortOrder,
+  warnIfNoScan: z.boolean(),
 })
 export type DocumentFormValues = z.infer<typeof documentFormSchema>
 

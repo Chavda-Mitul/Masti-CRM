@@ -115,7 +115,7 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
 
   // Documents for the dropdowns: the active ones, plus any on this list that were switched off since.
   const byId = new Map(documents.map((d) => [d.id, d]))
-  for (const item of checklist.items) if (!byId.has(item.document.id)) byId.set(item.document.id, { ...item.document, sortOrder: 0 })
+  for (const item of checklist.items) if (!byId.has(item.document.id)) byId.set(item.document.id, { ...item.document, sortOrder: 0, warnIfNoScan: false })
   const onList = new Set(lines.map((l) => l.documentId))
   const choosable = (current: number) => [...byId.values()].filter((d) => d.isActive || d.id === current)
   const addable = documents.filter((d) => d.isActive && !onList.has(d.id))
