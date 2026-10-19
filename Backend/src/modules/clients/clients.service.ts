@@ -8,7 +8,13 @@ import { rethrowUnique } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { listOpenEnquiriesOfClient } from "../enquiries/enquiries.service";
-import { ACCOUNTS_FIELDS, assertCanChangeAccountsFields, assertCanEditClients } from "./access";
+import {
+  ACCOUNTS_FIELDS,
+  assertCanBrowseClients,
+  assertCanChangeAccountsFields,
+  assertCanEditClients,
+  assertCanSeeClient,
+} from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
 import { GST_STATES, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN } from "../../lib/shared.schemas";
@@ -245,7 +251,8 @@ function searchWhere(q: string): Prisma.ClientWhereInput {
   return { OR: or };
 }
 
-export async function listClients(query: ListClientsQuery) {
+export async function listClients(query: ListClientsQuery, user: UserWithDepartments) {
+  assertCanBrowseClients(user);
   const settings = await getClientSettings();
   const and: Prisma.ClientWhereInput[] = [];
   if (query.kind) and.push({ kind: query.kind });
@@ -272,6 +279,7 @@ export async function listClients(query: ListClientsQuery) {
 
 /** The client's profile, with their open cases in the departments this user can see. */
 export async function getClient(id: string, user: UserWithDepartments) {
+  await assertCanSeeClient(user, id);
   const client = await prisma.client.findUnique({ where: { id }, include: clientProfileInclude });
   if (!client) throw notFound("Client not found.");
   const [notes, settings, openEnquiries] = await Promise.all([
@@ -282,7 +290,8 @@ export async function getClient(id: string, user: UserWithDepartments) {
   return { ...toClientProfile(client, notes, istToday(), settings), openEnquiries };
 }
 
-export async function getReadiness(id: string) {
+export async function getReadiness(id: string, user: UserWithDepartments) {
+  await assertCanSeeClient(user, id);
   const client = await getClientRowOr404(id);
   return readinessOf(client, (await getClientSettings()).invoiceReadiness);
 }
@@ -310,6 +319,8 @@ export async function getClientOptions() {
 /** Only the mobile is needed; the rest is completed before invoicing. */
 export async function createClient(input: CreateClientInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  // Staff add clients through New enquiry (findOrCreateClientByMobile); the Clients tab is for those who browse.
+  assertCanBrowseClients(actor.user);
   const mobile = requireMobile(input.mobile);
   const existing = await prisma.client.findUnique({ where: { mobile }, select: { id: true } });
   if (existing) {
@@ -379,6 +390,7 @@ export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: 
 /** Partial update. `updatedAt` must be the value the browser read (optimistic locking). */
 export async function updateClient(id: string, input: UpdateClientInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, id);
   const before = await getClientRowOr404(id);
   assertFresh(before.updatedAt, input.updatedAt, "client");
 
@@ -417,6 +429,7 @@ export async function updateClient(id: string, input: UpdateClientInput, actor: 
 /** Makes another number the main one (lookup key and WhatsApp number). The old one can stay as an extra number. */
 export async function changeMobile(id: string, input: ChangeMobileInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, id);
   const before = await getClientRowOr404(id);
   const mobile = requireMobile(input.mobile);
   if (mobile === before.mobile) return getClient(id, actor.user);
@@ -464,6 +477,7 @@ export async function changeMobile(id: string, input: ChangeMobileInput, actor: 
 
 export async function addPhone(clientId: string, input: AddPhoneInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   const client = await getClientRowOr404(clientId);
   const mobile = requireMobile(input.mobile);
   if (mobile === client.mobile) throw badRequest("This is already the client's main number.");
@@ -498,6 +512,7 @@ export async function addPhone(clientId: string, input: AddPhoneInput, actor: Ac
 
 export async function removePhone(clientId: string, phoneId: string, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   const phone = await prisma.clientPhone.findFirst({ where: { id: phoneId, clientId } });
   if (!phone) throw notFound("Number not found on this client.");
 
@@ -514,7 +529,8 @@ export async function removePhone(clientId: string, phoneId: string, actor: Acto
 // Notes: free text, never reported on, append-only
 // ---------------------------------------------------------------------------
 
-export async function listNotes(clientId: string) {
+export async function listNotes(clientId: string, user: UserWithDepartments) {
+  await assertCanSeeClient(user, clientId);
   await getClientRowOr404(clientId);
   const notes = await prisma.clientNote.findMany({ where: { clientId }, include: noteInclude, orderBy: { createdAt: "desc" } });
   return notes.map(toNoteDto);
@@ -522,6 +538,7 @@ export async function listNotes(clientId: string) {
 
 export async function addNote(clientId: string, input: AddNoteInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   await getClientRowOr404(clientId);
 
   const note = await prisma.$transaction(async (tx) => {

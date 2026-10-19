@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addMonths, istToday } from "../src/lib/dates";
 import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { assertInvoiceReady } from "../src/modules/clients/readiness";
+import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
+import { saveCase, visaStaff } from "./visaHelpers";
 
 beforeEach(resetDb);
 
@@ -13,10 +16,18 @@ async function headAgent() {
   return loginAs("vimal@masti.test");
 }
 
-/** Visa staff with EDIT: may change clients, but not the Accounts fields. */
+/** The Visa HOD: browses and changes every client, but not the Accounts fields. */
 async function visaAgent() {
-  await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+  await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
   return loginAs("aarti@masti.test");
+}
+
+/** Aarti Patel, Visa staff with EDIT (not an HOD), and the visa case she saved for Rakesh Mehta (9825041234). */
+async function staffCase() {
+  await seedVisaMasters(prisma);
+  await seedEnquiryMasters(prisma);
+  const staff = await visaStaff();
+  return { staff, c: await saveCase(staff) };
 }
 
 async function accountsAgent() {
@@ -51,14 +62,93 @@ describe("clients API access", () => {
   });
 
   it("lets view-only staff look but not change", async () => {
-    const head = await headAgent();
-    const client = await createClient(head, { mobile: "9825041234", name: "Rakesh Mehta" });
-    await createUser({ email: "viewer@masti.test", departments: [{ code: "HOTELS", access: "VIEW" }] });
+    const { staff, c } = await staffCase();
+    await createUser({ email: "viewer@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
     const viewer = await loginAs("viewer@masti.test");
 
-    expect((await viewer.get(`/api/clients/${client.id}`)).status).toBe(200);
-    expect((await viewer.post("/api/clients").send({ name: "Test Client", mobile: "9825041235" })).status).toBe(403);
-    expect((await viewer.post(`/api/clients/${client.id}/notes`).send({ body: "Hi" })).status).toBe(403);
+    // View-only staff see the department's cases (visibility.ts), so they can open those cases' clients.
+    expect((await viewer.get(`/api/clients/${c.client.id}`)).status).toBe(200);
+    expect((await viewer.post(`/api/clients/${c.client.id}/notes`).send({ body: "Hi" })).status).toBe(403);
+    expect((await viewer.get("/api/clients")).status).toBe(403);
+  });
+});
+
+describe("who sees which client (0004 amendment, 19 Oct 2026)", () => {
+  it("keeps the whole list and adding clients there for the Head, HODs and Accounts", async () => {
+    const head = await headAgent();
+    await createClient(head, { mobile: "9825041234", name: "Rakesh Mehta" });
+    await createUser({ email: "hotels-hod@masti.test", departments: [{ code: "HOTELS", role: "HOD" }] });
+    await createUser({ email: "accounts@masti.test", departments: [{ code: "ACCOUNTS", access: "VIEW" }] });
+    for (const agent of [head, await loginAs("hotels-hod@masti.test"), await loginAs("accounts@masti.test")]) {
+      const list = await agent.get("/api/clients?q=Rakesh");
+      expect(list.status).toBe(200);
+      expect(list.body.clients).toHaveLength(1);
+    }
+    expect((await (await loginAs("hotels-hod@masti.test")).post("/api/clients").send({ name: "New One", mobile: "9825041235" })).status).toBe(201);
+  });
+
+  it("refuses staff the list, adding a client there, and every client who isn't on their cases", async () => {
+    const head = await headAgent();
+    const stranger = await createClient(head, { mobile: "9825049999", name: "Sunita Patel" });
+    const staff = await visaStaff();
+
+    const list = await staff.get("/api/clients");
+    expect(list.status).toBe(403);
+    expect(list.body.message).toBe("The client list is for HODs and Accounts. Open a client from your case.");
+    expect((await staff.get("/api/clients?q=Sunita")).status).toBe(403);
+    expect((await staff.post("/api/clients").send({ name: "Test Client", mobile: "9825041235" })).status).toBe(403);
+    expect(await prisma.client.count()).toBe(1);
+
+    const id = stranger.id as string;
+    const refused = [
+      await staff.get(`/api/clients/${id}`),
+      await staff.patch(`/api/clients/${id}`).send({ area: "Vesu", updatedAt: stranger.updatedAt }),
+      await staff.put(`/api/clients/${id}/mobile`).send({ mobile: "9825041236", keepOldAsSecondary: true }),
+      await staff.get(`/api/clients/${id}/readiness`),
+      await staff.post(`/api/clients/${id}/phones`).send({ mobile: "9825041237", label: null }),
+      await staff.post(`/api/clients/${id}/members`).send({ name: "Priya Patel", relationId: await relationId("SPOUSE") }),
+      await staff.get(`/api/clients/${id}/notes`),
+      await staff.post(`/api/clients/${id}/notes`).send({ body: "Hi" }),
+    ];
+    for (const res of refused) {
+      expect(res.status).toBe(403);
+      expect(res.body.message).toBe("This client isn't on any of your cases. Ask your HOD.");
+    }
+    // An id that doesn't exist answers the same, so ids reveal nothing.
+    expect((await staff.get("/api/clients/no-such-client")).status).toBe(403);
+    expect(await prisma.clientNote.count()).toBe(0);
+    expect(await prisma.clientMember.count()).toBe(0);
+  });
+
+  it("lets staff see and complete everything about the client of their own case, finished cases too", async () => {
+    const { staff, c } = await staffCase();
+    const id = c.client.id;
+
+    const profile = await staff.get(`/api/clients/${id}`);
+    expect(profile.status).toBe(200);
+    expect((await staff.patch(`/api/clients/${id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt })).status).toBe(200);
+    expect((await staff.post(`/api/clients/${id}/phones`).send({ mobile: "9825041237", label: "Wife" })).status).toBe(201);
+    expect((await staff.post(`/api/clients/${id}/members`).send({ name: "Priya Mehta", relationId: await relationId("SPOUSE") })).status).toBe(201);
+    expect((await staff.post(`/api/clients/${id}/notes`).send({ body: "Calls after 6 pm" })).status).toBe(201);
+    expect((await staff.get(`/api/clients/${id}/notes`)).body.notes).toHaveLength(1);
+    expect((await staff.get(`/api/clients/${id}/readiness`)).status).toBe(200);
+    // The New enquiry lookup stays open: it is how intake finds the client.
+    expect((await staff.get("/api/clients/lookup?mobile=9825041234")).body.client.id).toBe(id);
+
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CLOSED", dueAt: null, resumeOn: null } });
+    expect((await staff.get(`/api/clients/${id}`)).status).toBe(200);
+  });
+
+  it("follows the case: a colleague who doesn't own it is refused, and so is the owner once it's given away", async () => {
+    const { staff, c } = await staffCase();
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    expect((await neha.get(`/api/clients/${c.client.id}`)).status).toBe(403);
+
+    const nehaId = (await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } })).id;
+    await prisma.enquiry.update({ where: { id: c.id }, data: { ownerId: nehaId } });
+    expect((await neha.get(`/api/clients/${c.client.id}`)).status).toBe(200);
+    expect((await staff.get(`/api/clients/${c.client.id}`)).status).toBe(403);
   });
 });
 

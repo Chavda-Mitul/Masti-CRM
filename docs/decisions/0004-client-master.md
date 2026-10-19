@@ -1,6 +1,6 @@
 # 0004 · Client master: clients, numbers, family members, notes
 
-- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*).
+- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*); **amended 19 Oct 2026**: staff don't browse the client list (see *Amendment 2*).
 - **Date:** 8 Oct 2026
 - **Changes:** replaces the `Client` model proposed in [0003](0003-visa-intake.md). It is a superset: `mobile @unique` and `createdById` are unchanged, so 0003's `GET /api/clients/lookup` contract still holds (extended below). 0003 adds the `enquiries` and `messages` relations when Visa Step 1 is built.
 - **Order of work:** the client master is built before the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
@@ -16,6 +16,33 @@ Staff must give a **mobile number and a name** to save a client. For a company, 
 - **Database (later on 9 Oct 2026):** `Client.name` is `NOT NULL` with a not-blank check (migration `20261009130000_client_name_required`). Clients saved with only the mobile before this were given the placeholder "Client +91…" (none in production). Integrations and the Excel import must supply a name too: the WhatsApp profile name, or the spreadsheet's. It also keeps the directory's paging cheap: it sorts by name, and with a nullable sort key Prisma 7's cursor reads every remaining row and pages in memory.
 
 This differs from Vimal's "only the mobile number" (6:5x PM, quoted below), so **confirm it with him**. It is logged as open question #41.
+
+## Amendment 2 (19 Oct 2026, project lead): staff don't browse the client list
+
+Masti doesn't want every employee to be able to go through the whole client list. The concern isn't in the meeting
+transcript or the requirements note; it came to the project lead afterwards, so **confirm it with Vimal** (open
+question #45, M43). It is close to Vimal's worry about staff who leave keeping access (transcript, 6:54 PM).
+
+**The rule:** an employee sees everything about the client of their own enquiry, and nothing of the full list.
+
+| Who | The Clients tab (list, search, adding a client there) | One client's page, and changing it |
+| --- | --- | --- |
+| The Head, the HOD of any department, Accounts (VIEW or EDIT: they bill every client) | Yes | Any client |
+| Other office staff | No (`403`; the menu hides the tab) | Only a client with at least one case they can see (`visibility.ts`: their own cases; view-only staff, their department's), finished cases too |
+| Field staff | No | No (unchanged) |
+
+- **Intake is unchanged:** `GET /api/clients/lookup` (the New enquiry check by mobile) and `GET /api/clients/options`
+  stay open to office staff, and intake still creates the client (`findOrCreateClientByMobile`). Staff can't add a
+  client from the Clients tab (`POST /api/clients` follows the list).
+- **Everything the case links to keeps working** for its owner: the client's name on the case, "Open the client" from
+  Raise invoice and from booking the collection boy, and Step 2's family list and "Add person".
+- **A refusal doesn't depend on whether the client exists**, so ids reveal nothing: "This client isn't on any of your
+  cases. Ask your HOD."
+- **Not changed:** the Enquiries list still shows each visible case's client name and mobile, and the "Already on file"
+  warning still names the other client (with a link that a staff member can't open). Masking details was discussed and
+  left out for now.
+- **Code:** `canBrowseClients`, `assertCanBrowseClients` and `assertCanSeeClient` in `src/modules/clients/access.ts`;
+  the frontend mirror is `canBrowseClients` in `Frontend/src/auth/permissions.ts`.
 
 ## Context
 
@@ -89,8 +116,10 @@ Clients are shared by every department, so the routes use `requireAuth → requi
 
 | Action | Who |
 | --- | --- |
-| View, search, look up | The Head and every office user. Field staff get 403. |
-| Create and change clients, numbers, members, notes | The Head, or an office user with EDIT (or HOD) in **any** department |
+| Look up by mobile (New enquiry) | The Head and every office user. Field staff get 403. |
+| List, search, create from the Clients tab | The Head, any HOD, Accounts (*Amendment 2*) |
+| View one client | Those, or office staff who can see one of the client's cases (*Amendment 2*) |
+| Change clients, numbers, members, notes | A user who may view the client and has EDIT (or HOD) in **any** department |
 | Set, change or clear `accountingCode`, `billingCycleId`, `paymentHabitId` | `can(user, "ACCOUNTS", "EDIT")`: Accounts or the Head (Q34). Sending an unchanged value is fine. |
 | Change the settings | Head only |
 

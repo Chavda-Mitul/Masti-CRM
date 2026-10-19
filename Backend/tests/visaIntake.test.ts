@@ -396,16 +396,18 @@ describe("GET /api/clients/lookup: open enquiries", () => {
       },
     ]);
 
-    // A colleague's case isn't on her profile view (the lookup still shows it).
+    // A colleague can't open the client of a case that isn't theirs (0004 amendment, 19 Oct 2026); the lookup still
+    // shows the case.
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     const neha = await loginAs("neha@masti.test");
-    expect((await neha.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
+    expect((await neha.get(`/api/clients/${saved.client.id}`)).status).toBe(403);
 
     // A save returns the profile with them as well.
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
     expect(edited.body.client.openEnquiries).toHaveLength(1);
 
-    await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", access: "EDIT" }] });
+    // The Holidays HOD may open every client, but sees only the cases of the departments she can view.
+    await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", role: "HOD" }] });
     const holidays = await loginAs("hetal@masti.test");
     expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.openEnquiries).toEqual([]);
   });

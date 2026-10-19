@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { canEditClients } from '../../auth/permissions'
+import { canBrowseClients, canEditClients } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { formatMobile, initials } from '../../lib/format'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
@@ -14,8 +14,25 @@ import type { ClientListFilters } from './types'
 const KINDS: Record<string, ClientListFilters['kind']> = { INDIVIDUAL: 'INDIVIDUAL', CORPORATE: 'CORPORATE' }
 const READINESS: Record<string, ClientListFilters['incomplete']> = { true: 'true', false: 'false' }
 
-/** Search and filters live in the URL (?q=&kind=&incomplete=), so Back from a client returns to the same list. */
+/** The whole list is for the Head, HODs and Accounts; other staff open a client from their case (0004, 19 Oct 2026). */
 export function ClientDirectoryPage() {
+  const { data: me } = useMe()
+  if (!me) return <div className="muted">Loading…</div>
+  if (!canBrowseClients(me)) {
+    return (
+      <div className="card pad" style={{ maxWidth: 520 }}>
+        <h1 className="h2">The client list is for HODs and Accounts</h1>
+        <p className="muted">
+          Open a client from your case: their name under &ldquo;Who it is for&rdquo;. <Link to="/enquiries">Go to Enquiries</Link>
+        </p>
+      </div>
+    )
+  }
+  return <ClientDirectory />
+}
+
+/** Search and filters live in the URL (?q=&kind=&incomplete=), so Back from a client returns to the same list. */
+function ClientDirectory() {
   const { data: me } = useMe()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
