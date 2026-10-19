@@ -1,5 +1,5 @@
 import type { EnquiryStatus, PersonRef } from '../enquiries/types'
-import type { NoticeCategory, NoticeSource } from '../notices/types'
+import type { NoticeFeedItem } from '../notices/types'
 
 // The Today page (docs/decisions/0017-today-dashboard.md): GET /api/today and the "today" setting.
 
@@ -40,33 +40,8 @@ export interface TodaySummary {
   /** Each department the person can see: its cases on the list's Open tab (Decision 10). mine: only their own. */
   openByDepartment: { code: string; name: string; count: number; mine: boolean }[]
   /** The notice card (Decision 11): the latest 3 of their departments' notices and the holiday entries still new. */
-  notices: TodayNotice[]
+  notices: NoticeFeedItem[]
 }
-
-export type TodayNotice =
-  | {
-      kind: 'NOTICE'
-      id: string
-      department: { code: string; name: string }
-      category: NoticeCategory
-      about: string | null
-      title: string
-      body: string | null
-      source: NoticeSource
-      postedBy: { id: string; name: string }
-      createdAt: string
-    }
-  | {
-      kind: 'HOLIDAY'
-      id: string
-      name: string
-      /** "Tue 20 Oct 2026", "1 – 7 Oct 2026", "Every Sunday" */
-      label: string
-      /** "French embassy, Mumbai", "All embassies in India" */
-      targets: string[]
-      addedBy: { id: string; name: string } | null
-      createdAt: string
-    }
 
 export interface TodaySettings {
   /** "HH:mm": New enquiries count from this time on the previous office day. */

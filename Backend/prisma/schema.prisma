@@ -63,6 +63,9 @@ model User {
   isActive              Boolean            @default(true)
   mustChangePassword    Boolean            @default(true)
   lastLoginAt           DateTime?          @db.Timestamptz(3)
+  /// The visa team's login popup (docs/decisions/0017-today-dashboard.md Decision 12): dismissed up to this time; anything
+  /// picked or added to the calendar after it is new to them. Null: everything is new.
+  loginPopupSeenAt      DateTime?          @db.Timestamptz(3)
   createdAt             DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime           @updatedAt @db.Timestamptz(3)
   departments           UserDepartment[]
@@ -101,6 +104,7 @@ model User {
   invoicesIssued        Invoice[]          @relation("InvoiceIssuedBy")
   creditNotesIssued     CreditNote[]       @relation("CreditNoteIssuedBy")
   noticesPosted         Notice[]           @relation("NoticePostedBy")
+  noticesPicked         Notice[]           @relation("NoticePickedBy")
 
   @@index([type, isActive])
 }
@@ -741,12 +745,17 @@ model Notice {
   body         String?
   source       NoticeSource   @default(TEAM)
   status       NoticeStatus   @default(ACTIVE)
-  postedById   String
-  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  /// When the Head or the Visa HOD put it in the visa team's login popup (Decision 12); null: not in it. Visa notices only.
+  loginPopupAt   DateTime?      @db.Timestamptz(3)
+  /// Who put it there: it isn't news to them (set exactly with loginPopupAt: a CHECK in the migration).
+  loginPopupById String?
+  postedById     String
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token for PATCH.
-  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
-  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  postedBy     User           @relation("NoticePostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  department     Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  postedBy       User           @relation("NoticePostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  loginPopupBy   User?          @relation("NoticePickedBy", fields: [loginPopupById], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
   @@index([departmentId, status, createdAt])

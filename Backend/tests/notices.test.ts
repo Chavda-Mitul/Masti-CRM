@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Access, DepartmentRole } from "../generated/prisma/client";
+import { addDays, istToday, toDbDate } from "../src/lib/dates";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 
-// The notice board (docs/decisions/0017-today-dashboard.md Decision 11).
+// The notice board (docs/decisions/0017-today-dashboard.md Decision 11) and the visa team's login popup (Decision 12).
 
 beforeEach(async () => {
   await resetDb();
@@ -171,5 +172,105 @@ describe("the notice board", () => {
     const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
     await expect(prisma.notice.create({ data: { departmentId: visa.id, category: "GENERAL", title: "  ", postedById: vimal.id } })).rejects.toThrow();
     await expect(prisma.notice.create({ data: { departmentId: visa.id, category: "GENERAL", title: "Fine", about: " ", postedById: vimal.id } })).rejects.toThrow();
+    // In the visa team's popup means picked by someone.
+    await expect(
+      prisma.notice.create({ data: { departmentId: visa.id, category: "GENERAL", title: "Picked by nobody", loginPopupAt: new Date(), postedById: vimal.id } }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("the visa team's login popup", () => {
+  it("takes Visa notices the Head or the Visa HOD picks", async () => {
+    const aarti = await person("Aarti Patel", "aarti@masti.test", [{ code: "VISA", access: "EDIT" }]);
+    const riya = await person("Riya", "riya@masti.test", [{ code: "VISA", role: "HOD" }]);
+    const vimal = await head();
+
+    const picked = await post(riya, { ...china, loginPopup: true });
+    expect(picked.inLoginPopup).toBe(true);
+    const created = await prisma.auditLog.findFirstOrThrow({ where: { action: "notice.create", entityId: picked.id } });
+    expect(created.after).toMatchObject({ loginPopup: true });
+
+    // Staff don't pick; and only a Visa notice goes in the visa team's popup.
+    expect((await aarti.post("/api/notices").send({ ...china, loginPopup: true })).status).toBe(403);
+    expect((await vimal.post("/api/notices").send({ ...china, departmentCode: "TICKETS", loginPopup: true })).status).toBe(400);
+
+    // The Head picks one later. Its author still edits it (the pick unchanged), but can't take it out.
+    const mine = await post(aarti, { ...china, title: "Schengen covering letter" });
+    expect(mine.inLoginPopup).toBe(false);
+    const byHead = await vimal.patch(`/api/notices/${mine.id}`).send({ loginPopup: true, updatedAt: mine.updatedAt });
+    expect(byHead.body.notice.inLoginPopup).toBe(true);
+    const edited = await aarti
+      .patch(`/api/notices/${mine.id}`)
+      .send({ title: "Schengen covering letter, new format", loginPopup: true, updatedAt: byHead.body.notice.updatedAt });
+    expect(edited.body.notice).toMatchObject({ title: "Schengen covering letter, new format", inLoginPopup: true });
+    expect((await aarti.patch(`/api/notices/${mine.id}`).send({ loginPopup: false, updatedAt: edited.body.notice.updatedAt })).status).toBe(403);
+  });
+
+  it("shows the visa team what's new to them, until they've seen it", async () => {
+    const aarti = await person("Aarti Patel", "aarti@masti.test", [{ code: "VISA", access: "EDIT" }]);
+    const tara = await person("Tara", "tara@masti.test", [{ code: "TICKETS", access: "EDIT" }]);
+    const mona = await person("Mona", "mona@masti.test", [{ code: "VISA", access: "VIEW" }]);
+    const vimal = await head();
+    const vimalId = (await prisma.user.findUniqueOrThrow({ where: { email: "vimal@masti.test" } })).id;
+
+    // A holiday Vimal added half an hour ago is new; one added ten days ago, and the seeded Sunday off, aren't.
+    const holiday = (name: string, addedById: string | null, minutesAgo: number, start: string, end: string | null) =>
+      prisma.holiday.create({
+        data: {
+          name,
+          repeat: end ? "NONE" : "WEEKLY",
+          startDate: toDbDate(start),
+          endDate: end ? toDbDate(end) : null,
+          weekday: end ? null : 7,
+          addedById,
+          createdAt: new Date(Date.now() - minutesAgo * 60_000),
+          targets: { create: [{ kind: "ALL_EMBASSIES" }] },
+        },
+      });
+    const day = istToday();
+    const dussehra = await holiday("Dussehra", vimalId, 30, addDays(day, 1), addDays(day, 1));
+    await holiday("Added ten days ago", vimalId, 10 * 24 * 60, addDays(day, 5), addDays(day, 5));
+    await holiday("Weekly off", null, 5, day, null);
+
+    const picked = await post(vimal, { ...china, loginPopup: true });
+    await post(vimal, { ...china, title: "Not picked" });
+    const gone = await post(vimal, { ...china, title: "Picked, then removed", loginPopup: true });
+    await vimal.post(`/api/notices/${gone.id}/remove`).send({});
+    // A notice Aarti wrote herself isn't news to her, even once picked.
+    const own = await post(aarti, { ...china, title: "Aarti's own" });
+    await vimal.patch(`/api/notices/${own.id}`).send({ loginPopup: true, updatedAt: own.updatedAt });
+
+    const popup = async (agent: Agent) => (await agent.get("/api/notices/login-popup")).body.items as { kind: string; title?: string; name?: string; at: string }[];
+    const items = await popup(aarti);
+    expect(items.map((i) => i.title ?? i.name)).toEqual([china.title, "Dussehra"]);
+    expect(items[0]).toMatchObject({ kind: "NOTICE", department: { code: "VISA" }, postedBy: { name: "Vimal" } });
+    expect(items[1]).toMatchObject({ kind: "HOLIDAY", label: expect.any(String), targets: ["All embassies in India"] });
+
+    // The Head picks; Tickets staff and view-only Visa staff aren't the visa team.
+    expect(await popup(vimal)).toEqual([]);
+    expect(await popup(tara)).toEqual([]);
+    expect(await popup(mona)).toEqual([]);
+
+    // Got it: seen up to the newest of them, and who acknowledged what is audited. Nothing new: no popup.
+    const seen = await aarti.post("/api/notices/login-popup/seen").send({ upTo: items[0]?.at, noticeIds: [picked.id], holidayIds: [dussehra.id] });
+    expect(seen.status).toBe(200);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "notice.popup.seen" } });
+    expect(entry.after).toMatchObject({ noticeIds: [picked.id], holidayIds: [dussehra.id] });
+    expect(await popup(aarti)).toEqual([]);
+
+    // What the Visa HOD picks herself isn't news to her.
+    const riya = await person("Riya", "riya@masti.test", [{ code: "VISA", role: "HOD" }]);
+    const hers = await post(vimal, { ...china, title: "Riya's pick" });
+    await riya.patch(`/api/notices/${hers.id}`).send({ loginPopup: true, updatedAt: hers.updatedAt });
+    expect((await popup(riya)).map((i) => i.title ?? i.name)).not.toContain("Riya's pick");
+    const riyasPick = await popup(aarti);
+    expect(riyasPick.map((i) => i.title)).toEqual(["Riya's pick"]);
+    await aarti.post("/api/notices/login-popup/seen").send({ upTo: riyasPick[0]?.at });
+
+    // Something picked later shows on its own; taking it out of the popup takes it off.
+    const later = await post(vimal, { ...china, title: "Picked later", loginPopup: true });
+    expect((await popup(aarti)).map((i) => i.title)).toEqual(["Picked later"]);
+    await vimal.patch(`/api/notices/${later.id}`).send({ loginPopup: false, updatedAt: later.updatedAt });
+    expect(await popup(aarti)).toEqual([]);
   });
 });

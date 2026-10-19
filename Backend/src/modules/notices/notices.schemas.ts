@@ -30,6 +30,8 @@ export const createNoticeSchema = z.object({
   title,
   body: optionalText(MAX_NOTICE_BODY),
   source: z.enum(NoticeSource).default("TEAM"),
+  /** In the visa team's login popup (Decision 12): Visa notices, picked by the Head or the Visa HOD. */
+  loginPopup: z.boolean().default(false),
 });
 
 /** A notice stays in its department; the rest can change. updatedAt: the version the form opened on. */
@@ -39,9 +41,19 @@ export const updateNoticeSchema = z.object({
   title: title.optional(),
   body: optionalText(MAX_NOTICE_BODY),
   source: z.enum(NoticeSource).optional(),
+  /** Sent unchanged by the form, so its author can edit a picked notice's text. */
+  loginPopup: z.boolean().optional(),
   updatedAt: z.iso.datetime("Reload and try again."),
+});
+
+/** "Got it" on the visa team's login popup: seen up to the newest item shown, and which items (for the audit). */
+export const loginPopupSeenSchema = z.object({
+  upTo: z.iso.datetime(),
+  noticeIds: z.array(z.string().min(1).max(64)).max(50).default([]),
+  holidayIds: z.array(z.string().min(1).max(64)).max(50).default([]),
 });
 
 export type ListNoticesQuery = z.infer<typeof listNoticesQuerySchema>;
 export type CreateNoticeInput = z.infer<typeof createNoticeSchema>;
 export type UpdateNoticeInput = z.infer<typeof updateNoticeSchema>;
+export type LoginPopupSeenInput = z.infer<typeof loginPopupSeenSchema>;

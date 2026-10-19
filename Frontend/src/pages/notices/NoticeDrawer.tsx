@@ -21,7 +21,7 @@ const ABOUT_HINT: Record<NoticeCategory, string> = {
 }
 
 function formDefaults(notice: Notice | null, departmentCode: string): NoticeFormValues {
-  if (!notice) return { departmentCode, category: 'GENERAL', about: '', title: '', body: '', fromIvs: false }
+  if (!notice) return { departmentCode, category: 'GENERAL', about: '', title: '', body: '', fromIvs: false, loginPopup: false }
   return {
     departmentCode: notice.department.code,
     category: notice.category,
@@ -29,11 +29,20 @@ function formDefaults(notice: Notice | null, departmentCode: string): NoticeForm
     title: notice.title,
     body: notice.body ?? '',
     fromIvs: notice.source === 'IVS',
+    loginPopup: notice.inLoginPopup,
   }
 }
 
 function toBody(v: NoticeFormValues): NoticeBody {
-  return { category: v.category, about: v.about.trim() || null, title: v.title.trim(), body: v.body.trim() || null, source: v.fromIvs ? 'IVS' : 'TEAM' }
+  return {
+    category: v.category,
+    about: v.about.trim() || null,
+    title: v.title.trim(),
+    body: v.body.trim() || null,
+    source: v.fromIvs ? 'IVS' : 'TEAM',
+    // Only a Visa notice goes in the visa team's popup (Decision 12).
+    loginPopup: v.departmentCode === 'VISA' && v.loginPopup,
+  }
 }
 
 /**
@@ -44,12 +53,15 @@ export function NoticeDrawer({
   notice,
   departments,
   departmentCode,
+  canPick,
   onClose,
 }: {
   notice: Notice | null
   /** The departments this person can post to. */
   departments: { code: string; name: string }[]
   departmentCode: string
+  /** The Head or the Visa HOD: may put a Visa notice in the visa team's login popup (Decision 12). */
+  canPick: boolean
   onClose: () => void
 }) {
   const toast = useToast()
@@ -61,6 +73,7 @@ export function NoticeDrawer({
   const { register, handleSubmit, control, setError, formState } = form
   const { errors } = formState
   const category = useWatch({ control, name: 'category' })
+  const chosenDepartment = useWatch({ control, name: 'departmentCode' })
 
   const save = useSaveNotice()
   const drawer = useDrawerGuard(formState.isDirty, onClose)
@@ -129,6 +142,12 @@ export function NoticeDrawer({
               <input type="checkbox" {...register('fromIvs')} />
               From the IVS visa-news feed
             </label>
+            {canPick && chosenDepartment === 'VISA' && (
+              <label className="check">
+                <input type="checkbox" {...register('loginPopup')} />
+                Show in the visa team's login popup
+              </label>
+            )}
 
             {message && (
               <div className="alert alert-bad" role="alert">

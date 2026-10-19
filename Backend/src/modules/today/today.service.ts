@@ -1,14 +1,15 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
-import { addDays, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
+import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf, type DepartmentCode } from "../auth/permissions";
 import { OPEN_TAB, summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
 import { whatFor, withPapers } from "../enquiries/followUpDesk.service";
 import { TO_HAND_BACK, toHandBack } from "../enquiries/visibility";
 import { previousOpenDay } from "../holidays/blockedDays";
-import { dateLabel, holidayInclude, targetLabel } from "../holidays/holiday";
+import { holidayInclude } from "../holidays/holiday";
 import { getHolidaySettings } from "../holidays/holidays.settings";
+import { holidayItem, newHolidaysWhere, noticeItem } from "../notices/feed";
 import { noticeInclude } from "../notices/notice";
 import type { Actor, UserWithDepartments } from "../users/user";
 import type { UpdateTodaySettingsInput } from "./today.schemas";
@@ -76,40 +77,13 @@ async function noticeCard(departmentIds: number[], now: Date) {
       take: NOTICE_CARD,
     }),
     prisma.holiday.findMany({
-      where: {
-        status: "ACTIVE",
-        addedById: { not: null },
-        createdAt: { gt: new Date(now.getTime() - newForDays * 86_400_000) },
-        OR: [{ endDate: null }, { endDate: { gte: toDbDate(istToday(now)) } }],
-      },
+      where: newHolidaysWhere(now, newForDays),
       include: holidayInclude,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: NOTICE_CARD,
     }),
   ]);
-  return [
-    ...notices.map((n) => ({
-      kind: "NOTICE" as const,
-      id: n.id,
-      department: n.department,
-      category: n.category,
-      about: n.about,
-      title: n.title,
-      body: n.body,
-      source: n.source,
-      postedBy: n.postedBy,
-      createdAt: n.createdAt,
-    })),
-    ...holidays.map((h) => ({
-      kind: "HOLIDAY" as const,
-      id: h.id,
-      name: h.name,
-      label: dateLabel(h),
-      targets: h.targets.map(targetLabel),
-      addedBy: h.addedBy,
-      createdAt: h.createdAt,
-    })),
-  ]
+  return [...notices.map(noticeItem), ...holidays.map(holidayItem)]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, NOTICE_CARD);
 }

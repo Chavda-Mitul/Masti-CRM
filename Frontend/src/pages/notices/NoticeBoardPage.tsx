@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { can } from '../../auth/permissions'
+import { can, isHodOf } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { errorText } from '../../lib/apiErrors'
@@ -136,6 +136,7 @@ export function NoticeBoardPage() {
           notice={editing === 'new' ? null : editing}
           departments={postable}
           departmentCode={postable.some((d) => d.code === department) ? department : (postable[0]?.code ?? '')}
+          canPick={isHodOf(me, 'VISA')}
           onClose={() => setEditing(null)}
         />
       )}
@@ -174,6 +175,7 @@ function NoticeItem({ notice, onEdit, onRemove }: { notice: Notice; onEdit: () =
           {notice.department.name}
         </span>
         <span className="chip chip-muted chip-sm">{tagLabel(notice)}</span>
+        {notice.inLoginPopup && <span className="chip chip-info chip-sm">In the login popup</span>}
         <span className="muted small">{postedLine(notice)}</span>
         {notice.canChange && (
           <span className="notice-actions">

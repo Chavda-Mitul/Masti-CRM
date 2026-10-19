@@ -8,6 +8,8 @@ export const noticeFormSchema = z.object({
   title: z.string().trim().min(1, 'Give the notice a title.').max(120, 'Keep the title to 120 characters.'),
   body: z.string().trim().max(1000, 'Keep the details to 1,000 characters.'),
   fromIvs: z.boolean(),
+  /** Visa notices only; the Head and the Visa HOD see the tick. */
+  loginPopup: z.boolean(),
 })
 
 export type NoticeFormValues = z.infer<typeof noticeFormSchema>

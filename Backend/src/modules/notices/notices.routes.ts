@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { actorOf, currentUser, requireAuth, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { createNoticeSchema, listNoticesQuerySchema, updateNoticeSchema } from "./notices.schemas";
+import { createNoticeSchema, listNoticesQuerySchema, loginPopupSeenSchema, updateNoticeSchema } from "./notices.schemas";
 import * as noticesService from "./notices.service";
 
 /**
@@ -10,6 +10,18 @@ import * as noticesService from "./notices.service";
  */
 const router = Router();
 router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"));
+
+// Fixed paths first, so they aren't taken for a notice id.
+
+/** The visa team's login popup (Decision 12): what's new to this person; nothing for anyone else. */
+router.get("/login-popup", async (req, res) => {
+  res.json({ items: await noticesService.loginPopup(currentUser(req)) });
+});
+
+router.post("/login-popup/seen", async (req, res) => {
+  const body = loginPopupSeenSchema.parse(req.body);
+  res.json(await noticesService.dismissLoginPopup(body, actorOf(req)));
+});
 
 router.get("/", async (req, res) => {
   res.json(await noticesService.listNotices(listNoticesQuerySchema.parse(req.query), currentUser(req)));

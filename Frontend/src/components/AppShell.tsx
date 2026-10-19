@@ -1,9 +1,10 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { can, isHodOfAny } from '../auth/permissions'
+import { can, isHodOfAny, isVisaTeam } from '../auth/permissions'
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
 import { useFollowUpBadge, useToAssignCount } from '../pages/enquiries/queries'
+import { LoginPopup } from '../pages/notices/LoginPopup'
 import { ErrorBoundary } from './ErrorBoundary'
 import { NavIcon } from './NavIcon'
 
@@ -141,6 +142,8 @@ export function AppShell() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      {/* What's new for the visa team, over whatever page they land on (0017 Decision 12). */}
+      {isVisaTeam(user) && <LoginPopup />}
     </div>
   )
 }

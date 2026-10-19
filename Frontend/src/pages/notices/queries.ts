@@ -1,13 +1,41 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
 import { todayKeys } from '../today/queries'
-import type { Notice, NoticeBody, NoticeFilters, NoticePage } from './types'
+import type { LoginPopupItem, Notice, NoticeBody, NoticeFilters, NoticePage } from './types'
 
 export const noticeKeys = {
   all: ['notices'] as const,
   list: (filters: NoticeFilters) => ['notices', 'list', filters] as const,
+  /** Under all, so a notice picked or unpicked shows in (or leaves) the visa team's popup. */
+  loginPopup: ['notices', 'login-popup'] as const,
+}
+
+/** The visa team's login popup (0017 Decision 12): what's new to this person since they last dismissed it. */
+export function useLoginPopup(enabled: boolean) {
+  return useQuery({
+    queryKey: noticeKeys.loginPopup,
+    queryFn: async () => (await api<{ items: LoginPopupItem[] }>('/notices/login-popup')).items,
+    enabled,
+  })
+}
+
+/** "Got it" or "All updates": these items are seen, up to the newest of them (so anything newer still shows). */
+export function useDismissLoginPopup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (items: LoginPopupItem[]) =>
+      api('/notices/login-popup/seen', {
+        method: 'POST',
+        body: {
+          upTo: items.reduce((newest, i) => (i.at > newest ? i.at : newest), items[0]?.at ?? new Date().toISOString()),
+          noticeIds: items.filter((i) => i.kind === 'NOTICE').map((i) => i.id),
+          holidayIds: items.filter((i) => i.kind === 'HOLIDAY').map((i) => i.id),
+        },
+      }),
+    onSuccess: () => queryClient.setQueryData(noticeKeys.loginPopup, []),
+  })
 }
 
 /** The board, newest first, 30 at a time. */

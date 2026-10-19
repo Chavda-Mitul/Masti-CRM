@@ -35,6 +35,7 @@ export function toNoticeDto(row: NoticeRow, user: UserWithDepartments) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canChange: canChangeNotice(user, row),
+    inLoginPopup: row.loginPopupAt !== null,
   };
 }
 
@@ -47,6 +48,16 @@ export function noticeSnapshot(n: {
   body: string | null;
   source: string;
   status: string;
+  loginPopupAt: Date | null;
 }) {
-  return { departmentId: n.departmentId, category: n.category, about: n.about, title: n.title, body: n.body, source: n.source, status: n.status };
+  return {
+    departmentId: n.departmentId,
+    category: n.category,
+    about: n.about,
+    title: n.title,
+    body: n.body,
+    source: n.source,
+    status: n.status,
+    loginPopup: n.loginPopupAt !== null,
+  };
 }
