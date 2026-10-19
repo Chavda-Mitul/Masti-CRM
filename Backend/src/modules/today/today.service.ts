@@ -1,10 +1,11 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
-import { addDays, istDateTimeToUtc, istToday } from "../../lib/dates";
+import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf, type DepartmentCode } from "../auth/permissions";
-import { viewableDepartments } from "../enquiries/enquiries.service";
-import { TO_HAND_BACK } from "../enquiries/visibility";
+import { summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
+import { whatFor, withPapers } from "../enquiries/followUpDesk.service";
+import { TO_HAND_BACK, toHandBack } from "../enquiries/visibility";
 import { previousOpenDay } from "../holidays/blockedDays";
 import type { Actor, UserWithDepartments } from "../users/user";
 import type { UpdateTodaySettingsInput } from "./today.schemas";
@@ -19,6 +20,9 @@ import { getTodaySettings, TODAY_SETTINGS_KEY } from "./today.settings";
 // Follow-ups badge.
 
 export type TodayScopeKind = "ALL" | "DEPARTMENTS" | "MINE";
+
+/** Up next's longest list (Decision 9), like the follow-up desk's. More says there are others. */
+const UP_NEXT_LIMIT = 200;
 
 /**
  * A case someone has to act on (Decision 2): open or postponed (due again on its resume day), or cancelled with its
@@ -50,20 +54,53 @@ async function newSince(now: Date) {
   return istDateTimeToUtc(day, newSinceAt);
 }
 
-/** The banner's sentence and the tiles: what's due today, what's late (and the oldest), what came in. */
+/**
+ * The banner's sentence, the tiles, and Up next (Decision 9): the cases behind Due today and Running late, in the
+ * enquiries list's order (late first, then by time due), each with what it needs.
+ */
 export async function todaySummary(user: UserWithDepartments, now: Date = new Date()) {
   const [{ where, scope }, since] = await Promise.all([todayScope(user), newSince(now)]);
   const midnight = istDateTimeToUtc(addDays(istToday(now), 1), "00:00");
   const due = (dueAt: { gte?: Date; lt: Date }): Prisma.EnquiryWhereInput => ({ AND: [where, needsSomeone, { dueAt }] });
 
-  const [dueToday, late, oldest, newEnquiries] = await Promise.all([
+  const [dueToday, late, oldest, newEnquiries, upNext] = await Promise.all([
     prisma.enquiry.count({ where: due({ gte: now, lt: midnight }) }),
     prisma.enquiry.count({ where: due({ lt: now }) }),
     prisma.enquiry.aggregate({ where: due({ lt: now }), _min: { dueAt: true } }),
     // Whatever happened to them since: "new" is what came in.
     prisma.enquiry.count({ where: { AND: [where, { createdAt: { gte: since } }] } }),
+    prisma.enquiry.findMany({
+      where: due({ lt: midnight }),
+      include: withPapers,
+      orderBy: [{ dueAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      take: UP_NEXT_LIMIT + 1,
+    }),
   ]);
-  return { scope, dueToday, late, oldestLateAt: oldest._min.dueAt, newEnquiries, newSince: since };
+  return {
+    scope,
+    dueToday,
+    late,
+    oldestLateAt: oldest._min.dueAt,
+    newEnquiries,
+    newSince: since,
+    upNext: {
+      rows: upNext.slice(0, UP_NEXT_LIMIT).map((row) => ({
+        id: row.id,
+        caseNo: row.caseNo,
+        department: { code: row.department.code, name: row.department.name },
+        client: { id: row.client.id, name: row.client.name },
+        summary: summaryOf(row),
+        status: row.status,
+        reason: row.reason,
+        resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
+        toHandBack: toHandBack(row),
+        whatFor: whatFor(row),
+        owner: row.owner,
+        dueAt: row.dueAt,
+      })),
+      more: upNext.length > UP_NEXT_LIMIT,
+    },
+  };
 }
 
 export async function getSettings() {

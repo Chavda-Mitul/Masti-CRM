@@ -49,6 +49,16 @@ export function oldestLabel(oldestLateAt: string | null): string {
   return `oldest: today, ${istTime(new Date(oldestLateAt))}`
 }
 
+/** Up next's "when" (Decision 9): late in red ("2 days late", "Yesterday", "10:00 am"), later today in blue ("3:00 pm"). */
+export function upNextWhen(dueAt: string, now = new Date()): { text: string; tone: 'late' | 'today' } {
+  const at = new Date(dueAt)
+  const late = at.getTime() < now.getTime()
+  const days = daysFromToday(dueAt)
+  if (late && days <= -2) return { text: `${-days} days late`, tone: 'late' }
+  if (late && days === -1) return { text: 'Yesterday', tone: 'late' }
+  return { text: istTime(at), tone: late ? 'late' : 'today' }
+}
+
 /** New enquiries' small line: "since yesterday, 6:00 pm", or the day's name after a Sunday or a holiday. */
 export function newSinceLabel(newSince: string): string {
   const at = new Date(newSince)

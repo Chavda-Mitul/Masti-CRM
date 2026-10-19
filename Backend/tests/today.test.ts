@@ -73,16 +73,21 @@ describe("GET /api/today", () => {
     await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
     const of = async (email: string) => today(await loginAs(email));
 
-    // Every case here is late and came in just now, so "late" and "new" both count the person's cases.
-    expect(await today(aarti)).toMatchObject({ scope: { kind: "MINE", departments: [] }, late: 2, dueToday: 0, newEnquiries: 2 });
+    // Every case here is late and came in just now, so "late", "new" and Up next all count the person's cases.
+    const mine = await today(aarti);
+    expect(mine).toMatchObject({ scope: { kind: "MINE", departments: [] }, late: 2, dueToday: 0, newEnquiries: 2, upNext: { more: false } });
+    expect(mine.upNext.rows).toHaveLength(2);
     expect(await today(neha)).toMatchObject({ scope: { kind: "MINE" }, late: 1, newEnquiries: 1 });
-    expect(await of("riya@masti.test")).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
+    const hods = await of("riya@masti.test");
+    expect(hods).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
+    expect(hods.upNext.rows).toHaveLength(4);
     // A department they only view isn't theirs to work: the HOD's Hotels view adds nothing.
     expect(await of("kiran@masti.test")).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
     // View-only staff own no cases, so their day is empty, like their Follow-ups badge.
-    expect(await of("mona@masti.test")).toMatchObject({ scope: { kind: "MINE" }, late: 0, newEnquiries: 0, oldestLateAt: null });
+    expect(await of("mona@masti.test")).toMatchObject({ scope: { kind: "MINE" }, late: 0, newEnquiries: 0, oldestLateAt: null, upNext: { rows: [] } });
     const head = await of("vimal@masti.test");
     expect(head).toMatchObject({ scope: { kind: "ALL" }, late: 5, newEnquiries: 5, oldestLateAt: yesterday.toISOString() });
+    expect(head.upNext.rows).toHaveLength(5);
     expect(head.scope.departments).toEqual(expect.arrayContaining(["Visa", "Hotels"]));
 
     // Field staff have their run on /tasks; nobody signed out gets anything.
@@ -136,6 +141,54 @@ describe("todaySummary", () => {
     // Masti moves the cut-off: from 09:00, Saturday's 17:59 enquiry counts too.
     await prisma.setting.create({ data: { key: "today", value: { newSinceAt: "09:00" } } });
     expect((await todaySummary(vimal, mondayMorning)).newEnquiries).toBe(4);
+  });
+});
+
+describe("Up next", () => {
+  it("lists the late and due-today cases in the list's order, each with what it needs", async () => {
+    const aarti = await visaStaff();
+    const day = istToday();
+    const now = istDateTimeToUtc(day, "12:00");
+    const late = await caseWith(aarti, "9825000001", { dueAt: istDateTimeToUtc(addDays(day, -1), "11:00") });
+    const laterToday = await caseWith(aarti, "9825000002", { dueAt: istDateTimeToUtc(day, "17:00") });
+    await caseWith(aarti, "9825000003", { dueAt: istDateTimeToUtc(addDays(day, 1), "11:00") }); // tomorrow: not yet
+    // Collecting papers: how many are still pending, as on the follow-up desk.
+    const collecting = await saveCase(aarti, { mobile: "9825000004" });
+    expect((await aarti.post(`/api/visa/cases/${collecting.caseNo}/start`).set("Content-Type", "application/json")).status).toBe(200);
+    await prisma.enquiry.update({ where: { id: collecting.id }, data: { dueAt: istDateTimeToUtc(day, "11:30") } });
+    const papers = await prisma.visaCaseDocument.findMany({ where: { traveller: { caseId: collecting.id } }, select: { status: true } });
+    const pending = papers.filter((p) => p.status === "PENDING").length;
+    const needed = papers.filter((p) => p.status !== "NOT_NEEDED").length;
+    expect(pending).toBeGreaterThan(0);
+    // Postponed and back today; cancelled with its passports still at our office. A plain cancelled one needs nobody.
+    const travelDatesMoved = await reason("TRAVEL_DATES_MOVED");
+    const postponed = await caseWith(aarti, "9825000005", {
+      dueAt: istDateTimeToUtc(day, "15:00"),
+      status: "POSTPONED",
+      reasonId: travelDatesMoved,
+      resumeOn: toDbDate(day),
+    });
+    const tripCancelled = await reason("TRIP_CANCELLED");
+    const handBack = await caseWith(aarti, "9825000006", { dueAt: istDateTimeToUtc(day, "16:00"), status: "CANCELLED", reasonId: tripCancelled });
+    await prisma.visaCase.update({ where: { enquiryId: handBack.id }, data: { bookletsCurrent: 1 } });
+    await caseWith(aarti, "9825000007", { dueAt: istDateTimeToUtc(addDays(day, -1), "10:00"), status: "CANCELLED", reasonId: tripCancelled });
+
+    const { upNext } = await todaySummary(await userOf("aarti@masti.test"), now);
+    expect(upNext.more).toBe(false);
+    expect(upNext.rows.map((r) => r.caseNo)).toEqual([late.caseNo, collecting.caseNo, postponed.caseNo, handBack.caseNo, laterToday.caseNo]);
+    const row = (caseNo: string) => upNext.rows.find((r) => r.caseNo === caseNo);
+    expect(row(late.caseNo)).toMatchObject({
+      whatFor: "Start collecting documents",
+      status: "OPEN",
+      toHandBack: false,
+      department: { code: "VISA", name: "Visa" },
+      client: { name: "Rakesh Mehta" },
+      owner: { name: "Aarti Patel" },
+      summary: expect.stringContaining("1 adult"),
+    });
+    expect(row(collecting.caseNo)).toMatchObject({ whatFor: `${pending} of ${needed} documents pending` });
+    expect(row(postponed.caseNo)).toMatchObject({ status: "POSTPONED", reason: { name: expect.any(String) }, resumeOn: day });
+    expect(row(handBack.caseNo)).toMatchObject({ status: "CANCELLED", toHandBack: true });
   });
 });
 
