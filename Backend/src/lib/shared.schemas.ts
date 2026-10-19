@@ -1,8 +1,11 @@
 import { z } from "zod";
 
 // Fields several modules' schemas validate the same way: the client's and Masti's own PAN, GSTIN and state, a person's
-// name (clients, vendors) and a time of day (settings, time slots). Zod only, like every *.schemas.ts, so any module's
-// schemas may import it and it can later be shared with the frontend.
+// name (clients, vendors), a time of day (settings, time slots) and the soft-warning confirmation. Zod only, like every
+// *.schemas.ts, so any module's schemas may import it and it can later be shared with the frontend.
+
+/** Saving again past a soft warning (Backend/src/lib/warnings.ts): false on the first try. */
+export const confirmWarnings = z.boolean().default(false);
 
 /** GST state codes (statutory, not business config). Decides the place of supply on invoices. */
 export const GST_STATES = [
