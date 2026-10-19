@@ -63,6 +63,13 @@ export function dayLabel(value: string): string {
   return `${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
+const DATE_LABEL = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** "2027-01-01" → "1 Jan 2027", for messages about a date that may be years away (a passport's expiry). */
+export function dateLabel(value: string): string {
+  return DATE_LABEL.format(toDbDate(value));
+}
+
 /** ISO weekday of a date: 1 = Monday … 7 = Sunday. */
 export function isoWeekday(value: string): number {
   return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;

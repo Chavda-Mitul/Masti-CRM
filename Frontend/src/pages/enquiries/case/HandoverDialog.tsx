@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useHandOver } from '../queries'
 import type { VisaCase } from '../types'
 import { FieldJobDialog } from './FieldJobDialog'
@@ -23,6 +24,8 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
   const { data: me } = useMe()
   const toast = useToast()
   const hand = useHandOver(c.caseNo)
+  // A child picked as who collected: check, then hand over anyway.
+  const guard = useWarningGuard()
   const stock = stockOf(c)
   // Held at our office before dispatch: handed back at the desk (the delivery boy takes only received passports).
   const backBeforeDispatch = heldAtOffice(c)
@@ -48,26 +51,30 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
     if (!photo) missing.photoId = 'Take a photo of the person collecting.'
     setErrors(missing)
     if (!counted || !who || !photo || Object.keys(missing).length) return
-    hand.mutate(
-      {
-        mode: 'OFFICE',
-        booklets: counted,
-        receiver: who === SOMEONE_ELSE ? { name } : { travellerId: who },
-        photoId: photo.id,
-        updatedAt: c.updatedAt,
-      },
-      {
-        onSuccess: () => {
-          URL.revokeObjectURL(photo.preview)
-          toast({ tone: 'ok', message: c.status === 'CANCELLED' ? `${c.caseNo}: passports handed over.` : `${c.caseNo}: passports handed over. The case is closed.` })
-          onClose()
+    const send = (confirmWarnings: boolean): void =>
+      hand.mutate(
+        {
+          mode: 'OFFICE',
+          booklets: counted,
+          receiver: who === SOMEONE_ELSE ? { name } : { travellerId: who },
+          photoId: photo.id,
+          updatedAt: c.updatedAt,
+          ...(confirmWarnings ? { confirmWarnings } : {}),
         },
-        onError: (err) => {
-          const issues = errorBody(err)?.issues ?? {}
-          setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
+        {
+          onSuccess: () => {
+            URL.revokeObjectURL(photo.preview)
+            toast({ tone: 'ok', message: c.status === 'CANCELLED' ? `${c.caseNo}: passports handed over.` : `${c.caseNo}: passports handed over. The case is closed.` })
+            onClose()
+          },
+          onError: (err) => {
+            if (guard.intercept(err, () => send(true))) return
+            const issues = errorBody(err)?.issues ?? {}
+            setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
+          },
         },
-      },
-    )
+      )
+    send(false)
   }
   const message = errorBody(hand.error)?.issues ? null : errorText(hand.error)
   const count = (value: string, set: (v: string) => void, label: string) => (
@@ -99,6 +106,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog submission-dialog" role="dialog" aria-modal="true" aria-labelledby="handover-title" onClick={(e) => e.stopPropagation()}>
+        {guard.modal}
         <h2 className="h2" id="handover-title">
           {backBeforeDispatch ? 'Hand back to the client' : 'Hand over to the client'}
         </h2>

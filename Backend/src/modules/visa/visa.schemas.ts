@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
-import { PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
+import { confirmWarnings, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -91,6 +91,18 @@ export const passportsBackCheckSchema = firstFollowUpSchema;
 export const arrivalCheckSchema = firstFollowUpSchema;
 
 /**
+ * How long a passport must still run after the trip comes back (decided 19 Oct 2026; many embassies want 3 to 6
+ * months): less is a warning when a traveller is linked, when the return changes, and at File ready.
+ */
+export const passportValiditySchema = z.object({ monthsAfterReturn: z.number().int().min(0).max(24) });
+
+/**
+ * The age from which a traveller counts as an adult for the warnings (decided 19 Oct 2026; embassies differ): an adult
+ * linked into a child's place or a child into an adult's, and a child picked as who collected the passports.
+ */
+export const childAgeSchema = z.object({ adultFrom: z.number().int().min(1).max(25) });
+
+/**
  * When a matured case is due with the Visa HOD to be given to a processor (docs/decisions/0006-visa-documents.md,
  * amended 16 Oct 2026): the next open office day, afterDays after maturity, at `at` (IST).
  */
@@ -165,6 +177,8 @@ export const visaSettingsSchema = z.object({
   collectionCheck: collectionCheckSchema,
   awb: awbSettingSchema,
   docketEmail: docketEmailSettingSchema,
+  passportValidity: passportValiditySchema,
+  childAge: childAgeSchema,
 });
 export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 
@@ -207,6 +221,8 @@ export type HandoverPhotoSetting = z.infer<typeof handoverPhotoSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;
 export type AwbSetting = z.infer<typeof awbSettingSchema>;
 export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
+export type PassportValiditySetting = z.infer<typeof passportValiditySchema>;
+export type ChildAgeSetting = z.infer<typeof childAgeSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -225,6 +241,8 @@ export const updateCaseDocumentSchema = z.object({
 /** Naming a traveller: linking the client's family member (Decision 3). */
 export const linkTravellerSchema = z.object({
   memberId: z.uuid("Pick the family member."),
+  /** Saving again past a warning (a passport that runs out too soon after the trip, an age that doesn't fit the place). */
+  confirmWarnings,
 });
 
 export type UpdateCaseDocumentInput = z.infer<typeof updateCaseDocumentSchema>;
@@ -249,7 +267,8 @@ export const matureCaseSchema = z.object({
 export type MatureCaseInput = z.infer<typeof matureCaseSchema>;
 
 /** "File ready — add to docket" (0007 Decision 9) sends the case's updatedAt, like maturity. */
-export const fileReadySchema = matureCaseSchema;
+/** "File ready" (0007 Decision 9): the case's updatedAt, and saving again past a warning (a passport that runs out too soon). */
+export const fileReadySchema = matureCaseSchema.extend({ confirmWarnings });
 
 export type FileReadyInput = z.infer<typeof fileReadySchema>;
 
@@ -275,7 +294,8 @@ export const checkCaseDocumentSchema = z
 export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;
 
 const blankToNull = (value: unknown) => (typeof value === "string" && value.trim() === "" ? null : value);
-const somethingToChange = (v: object) => Object.values(v).some((value) => value !== undefined);
+/** A partial update names at least one field (saving again past a warning, confirmWarnings, isn't a change). */
+const somethingToChange = (v: object) => Object.entries(v).some(([key, value]) => key !== "confirmWarnings" && value !== undefined);
 
 /**
  * Trip details (Decision 4). Each field is optional (only what changed is sent) and null clears it. The service checks
@@ -288,6 +308,8 @@ export const updateTripSchema = z
     entryType: z.enum(EntryType).nullable().optional(),
     /** The hotel's name and city: data for the forms, so short text is allowed here (not a reason or a status). */
     hotelStay: z.preprocess(blankToNull, z.string().trim().max(200, "200 characters at most.").nullable()).optional(),
+    /** Saving again past a warning (a passport that runs out too soon after the new return). */
+    confirmWarnings,
   })
   .refine(somethingToChange, { message: "Nothing to change." });
 
@@ -313,6 +335,8 @@ export const updateApplicationSchema = z
       })
       .nullable()
       .optional(),
+    /** Saving again past a warning (an appointment on or after the departure day). */
+    confirmWarnings,
   })
   .refine(somethingToChange, { message: "Nothing to change." });
 
@@ -443,6 +467,8 @@ export const recordDecisionSchema = z.object({
     .min(1, "Record a decision for everyone.")
     .max(60),
   updatedAt: z.iso.datetime("Reload and try again."),
+  /** Saving again past a warning (a number already on another case, visa dates that don't cover the trip). */
+  confirmWarnings,
 });
 
 /**
@@ -455,6 +481,7 @@ export const changeDecisionSchema = z.object({
   /** Once the passports are received, an approved traveller's sticker checked again (0013 Decision 5, amended 19 Oct). */
   stickerCheck: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullish(),
   updatedAt: z.iso.datetime("Reload and try again."),
+  confirmWarnings,
 });
 
 /**
@@ -533,6 +560,8 @@ export const handOverSchema = z.object({
   receiver: receiverSchema,
   photoId: z.string("Take a photo of the person collecting.").trim().min(1, "Take a photo of the person collecting.").max(64),
   updatedAt: z.iso.datetime("Reload and try again."),
+  /** Saving again past a warning (a child picked as who collected). */
+  confirmWarnings,
 });
 export type HandOverInput = z.infer<typeof handOverSchema>;
 

@@ -1358,6 +1358,8 @@ model VisaCaseTraveller {
   @@unique([caseId, position])
   @@unique([caseId, memberId])
   @@index([memberId])
+  /// A sticker or e-visa number already on another case is a warning (0012, amended 19 Oct 2026).
+  @@index([visaNo])
 }
 
 /// How the passports went back to the client (docs/decisions/0014-visa-delivered.md): collected at our office, or

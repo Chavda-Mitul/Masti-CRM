@@ -5,6 +5,7 @@ import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useMatureCase } from '../queries'
 import type { MaturityMissing, VisaCase } from '../types'
+import { xeroxForOriginal } from './labels'
 
 /** What the loaded case still lacks: the same rule the backend checks (0006 Decision 8). Booklets are optional. */
 function missingOf(c: VisaCase): MaturityMissing {
@@ -34,6 +35,8 @@ export function MatureDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
   const ready = isEmpty(missing)
   const staysWithMe = !!me && isHodOf(me, c.department.code)
   const message = serverMissing ? null : errorText(mature.error)
+  // Allowed, but worth a look before the file goes out (decided 19 Oct 2026).
+  const xerox = c.travellers.flatMap((t) => t.documents.filter(xeroxForOriginal).map((d) => `${t.member?.name ?? t.label}'s ${d.name}`))
 
   const submit = () =>
     mature.mutate(
@@ -79,6 +82,12 @@ export function MatureDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
           </div>
         )}
 
+        {xerox.length > 0 && (
+          <p className="hint" style={{ margin: 0 }}>
+            <strong>Came as a xerox, though the checklist needs the original:</strong> {xerox.join('; ')}. You can still mark
+            complete; get the original before the file goes out.
+          </p>
+        )}
         {message && <div className="alert alert-bad">{message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>

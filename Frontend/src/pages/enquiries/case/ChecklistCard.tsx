@@ -4,12 +4,13 @@ import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDateTime, formatMonthYear } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { MemberFormDrawer } from '../../clients/MemberFormDrawer'
 import { useClient, useClientOptions } from '../../clients/queries'
 import { SCAN_ACCEPT, scanProblem, scanType } from '../../clients/scanFiles'
 import { useCheckCaseDocument, useLinkTraveller, useOpenCaseScan, useSaveCaseScan, useUpdateCaseDocument } from '../queries'
 import type { CaseDocument, CaseTraveller, ReceivedAs, VisaCase } from '../types'
-import { dayMonth, RECEIVED_AS_LABEL, REQUIREMENT_LABEL, travellerTab } from './labels'
+import { dayMonth, RECEIVED_AS_LABEL, REQUIREMENT_LABEL, travellerTab, xeroxForOriginal } from './labels'
 import { NeedsReplacingDialog } from './NeedsReplacingDialog'
 
 /** The steps where the checklist can still change; after maturity it is the processor's (0006 Decision 8). */
@@ -229,18 +230,23 @@ function TravellerPicker({
   const client = useClient(c.client.id)
   const options = useClientOptions()
   const link = useLinkTraveller(c.caseNo)
+  // A passport that runs out too soon after the trip: check, then name them anyway.
+  const guard = useWarningGuard()
   const [adding, setAdding] = useState(false)
 
   // Someone already on this case can't be a second traveller.
   const taken = new Set(c.travellers.filter((t) => t.id !== traveller.id && t.member).map((t) => t.member!.id))
   const members = (client.data?.members ?? []).filter((m) => !taken.has(m.id))
 
-  const pick = (memberId: string) =>
+  const pick = (memberId: string, confirmWarnings = false): void =>
     link.mutate(
-      { travellerId: traveller.id, memberId },
+      { travellerId: traveller.id, memberId, ...(confirmWarnings ? { confirmWarnings } : {}) },
       {
         onSuccess: onDone,
-        onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t name this traveller. Please try again.' }),
+        onError: (err) => {
+          if (guard.intercept(err, () => pick(memberId, true))) return
+          toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t name this traveller. Please try again.' })
+        },
       },
     )
 
@@ -281,6 +287,7 @@ function TravellerPicker({
           onSaved={(saved) => pick(saved.id)}
         />
       )}
+      {guard.modal}
     </div>
   )
 }
@@ -428,6 +435,11 @@ function DocumentRow({
           {d.quantity > 1 && ` (${d.quantity})`}
         </span>
         {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+        {xeroxForOriginal(d) && (
+          <div style={{ marginTop: 4 }}>
+            <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
+          </div>
+        )}
         <VaultLine caseNo={caseNo} doc={d} canSave={canSave} travellerName={travellerName} maxMb={scanMaxMb} />
       </span>
       <span role="cell" className="small">
@@ -523,6 +535,11 @@ function CheckRow({
             {d.quantity > 1 && ` (${d.quantity})`}
           </span>
           {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
+          {xeroxForOriginal(d) && (
+            <div style={{ marginTop: 4 }}>
+              <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
+            </div>
+          )}
           {/* The processor prints an On file paper from its copy (0016 Decision 5). */}
           {d.receivedAs === 'ON_FILE' && <VaultLine caseNo={caseNo} doc={d} canSave={false} travellerName={travellerName} maxMb={0} />}
         </span>

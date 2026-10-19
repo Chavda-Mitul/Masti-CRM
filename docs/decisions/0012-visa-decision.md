@@ -66,6 +66,14 @@ required. Step 7 checks each sticker against the passport's name and dates when 
 - Valid-to is on or after valid-from (a CHECK).
 - A refused traveller has no number or dates (a CHECK).
 
+**Amended 19 Oct 2026 (project lead, item 2 fixes after the 17 Oct review; M46 to confirm):**
+- **The same number twice on one case is refused:** each visa has its own, so it's a typo ("Rakesh Mehta and Aarav
+  Mehta have the same sticker number"), when recording and when a change gives one traveller another's number.
+- **A number already on another case is a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`).** It names that case and traveller. An index on
+  `VisaCaseTraveller.visaNo` finds it. A change warns only when the number changed.
+- **Visa dates that don't cover the trip are a warning:** valid from after the departure day, or valid to before the
+  return. An embassy sometimes grants less, so it can be right. A change warns only when the dates changed.
+
 ### 4. A refused traveller: the refusal letter
 
 **Decided 15 Oct 2026 (project lead):** the letter is a **scanned PDF** kept with the case in our storage (rule 4),

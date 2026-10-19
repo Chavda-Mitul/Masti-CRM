@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
-import { istDateTimeToUtc } from "../../lib/dates";
+import { dayLabel, fromDbDate, istDateTimeToUtc } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
+import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
@@ -13,6 +14,7 @@ import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateAppl
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
+import { passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -85,7 +87,7 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
   const enquiry = await loadCase(caseNo, actor, PREPARING);
   const found = await prisma.visaCaseTraveller.findFirst({ where: { id: travellerId, caseId: enquiry.id } });
   if (!found) throw notFound("Traveller not found on this case.");
-  const { appointment, ...rest } = input;
+  const { appointment, confirmWarnings, ...rest } = input;
   const sent = definedOnly({
     ...rest,
     appointmentAt: appointment === undefined ? undefined : appointment && istDateTimeToUtc(appointment.on, appointment.at),
@@ -100,6 +102,19 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
     if (changes.appointmentAt && changes.appointmentAt.getTime() <= Date.now()) {
       throw fieldError("appointment", "Pick a time later than now.");
     }
+    // An appointment on or after the departure day can't bring the visa in time; it can still be right if the trip
+    // moves (a soft warning, decided 19 Oct 2026).
+    let confirmed: Warning[] = [];
+    if (changes.appointmentAt && appointment) {
+      const { departOn } = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { departOn: true } });
+      const depart = departOn && fromDbDate(departOn);
+      const name = before.name ?? "The traveller";
+      const warnings: Warning[] =
+        depart && appointment.on >= depart
+          ? [{ code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `${name}'s appointment (${dayLabel(appointment.on)}) is on or after the day the trip begins (${dayLabel(depart)}).` }]
+          : [];
+      confirmed = checkWarnings(warnings, confirmWarnings);
+    }
     const after = await tx.visaCaseTraveller.update({ where: { id: found.id }, data: changes });
     await audit(
       {
@@ -109,7 +124,7 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
         entityId: found.id,
         clientId: enquiry.clientId,
         before: { name: before.name, ...pick(before, keys) },
-        after: { name: after.name, ...pick(after, keys) },
+        after: { name: after.name, ...pick(after, keys), ...confirmedWarningsNote(confirmed) },
         ip: actor.ip,
       },
       tx,
@@ -349,6 +364,12 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
     const { missing, country } = await missingForFileReady(tx, enquiry.id);
     const parts = describeMissing(missing, country);
     if (parts.length > 0) throw new HttpError(409, `Not ready yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
+    // The last look before the file goes out: a passport that runs out too soon after the trip (a warning, 19 Oct 2026).
+    const trip = await tx.visaCase.findUniqueOrThrow({
+      where: { enquiryId: enquiry.id },
+      select: { returnOn: true, travellers: { orderBy: { position: "asc" }, select: travellerPapersSelect } },
+    });
+    const confirmed = checkWarnings(await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), trip.travellers), input.confirmWarnings);
 
     const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt: now } });
@@ -367,7 +388,15 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: { stage: locked.stage.code, dueAt: locked.dueAt },
-        after: { stage: "DISPATCH", dueAt: now, fileReadyAt: now, fileReadyById: actor.user.id, vendorId: visa.vendorId, finalFileId: file.id },
+        after: {
+          stage: "DISPATCH",
+          dueAt: now,
+          fileReadyAt: now,
+          fileReadyById: actor.user.id,
+          vendorId: visa.vendorId,
+          finalFileId: file.id,
+          ...confirmedWarningsNote(confirmed),
+        },
         ip: actor.ip,
       },
       tx,

@@ -113,6 +113,7 @@ export function useHandOverAtDoor(jobId: string) {
       photoId: string
       selfieId: string
       place: Place
+      confirmWarnings?: boolean
     }) => api<MyStop>(stopPath(jobId, '/handover'), { method: 'POST', body }),
   )
 }
