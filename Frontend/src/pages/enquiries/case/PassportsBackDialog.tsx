@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useChangePassportsBack, useSendPassportsBack } from '../queries'
@@ -49,6 +49,8 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
           onClose()
         },
         onError: (err) => {
+          // Someone else changed the case (the case is reloaded, with a warning): reopening fills the form in afresh.
+          if (isStale(err)) return onClose()
           const issues = errorBody(err)?.issues ?? {}
           setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
         },

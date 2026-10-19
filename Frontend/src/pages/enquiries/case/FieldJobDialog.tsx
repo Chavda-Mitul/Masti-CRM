@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -72,6 +72,8 @@ export function FieldJobDialog({
         onClose()
       },
       onError: (err: unknown) => {
+        // Someone else changed the case (the case is reloaded, with a warning): reopening fills the form in afresh.
+        if (isStale(err)) return onClose()
         const issues = errorBody(err)?.issues ?? {}
         setErrors(Object.fromEntries(Object.entries(issues).map(([field, messages]) => [field, messages?.[0] ?? ''])))
       },

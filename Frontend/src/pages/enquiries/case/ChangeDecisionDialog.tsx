@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useChangeDecision } from '../queries'
 import type { CaseTraveller, VisaCase } from '../types'
@@ -43,6 +43,10 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
         onSuccess: () => {
           toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.` })
           onClose()
+        },
+        onError: (err) => {
+          // Someone else changed the case (the case is reloaded, with a warning): reopening fills the form in afresh.
+          if (isStale(err)) return onClose()
         },
       },
     )
