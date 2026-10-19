@@ -273,4 +273,35 @@ describe("the visa team's login popup", () => {
     await vimal.patch(`/api/notices/${later.id}`).send({ loginPopup: false, updatedAt: later.updatedAt });
     expect(await popup(aarti)).toEqual([]);
   });
+
+  it("brings the oldest unseen first, 20 at a time, so Got it never marks one seen that wasn't shown", async () => {
+    const aarti = await person("Aarti Patel", "aarti@masti.test", [{ code: "VISA", access: "EDIT" }]);
+    await head();
+    const vimalId = (await prisma.user.findUniqueOrThrow({ where: { email: "vimal@masti.test" } })).id;
+    const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
+    // 25 picked notices a minute apart; the 21st was picked at the same instant as the 20th.
+    const start = Date.now() - 60 * 60_000;
+    for (let i = 1; i <= 25; i++) {
+      const minute = i === 21 ? 20 : i;
+      const at = new Date(start + minute * 60_000);
+      await prisma.notice.create({
+        data: { departmentId: visa.id, category: "GENERAL", title: `Update ${i}`, postedById: vimalId, loginPopupAt: at, loginPopupById: vimalId },
+      });
+    }
+
+    const popup = async () => (await aarti.get("/api/notices/login-popup")).body as { items: { title: string; at: string }[]; more: boolean };
+    const gotIt = (items: { at: string }[]) => aarti.post("/api/notices/login-popup/seen").send({ upTo: items[0]?.at });
+
+    // The oldest first, shown newest first. The 20th waits with the 21st, so Got it can't mark it seen unshown.
+    const first = await popup();
+    expect(first.items.map((i) => i.title)).toEqual(Array.from({ length: 19 }, (_, k) => `Update ${19 - k}`));
+    expect(first.more).toBe(true);
+    expect((await gotIt(first.items)).status).toBe(200);
+
+    const second = await popup();
+    expect(second.items.map((i) => i.title).sort()).toEqual(["Update 20", "Update 21", "Update 22", "Update 23", "Update 24", "Update 25"].sort());
+    expect(second.more).toBe(false);
+    await gotIt(second.items);
+    expect(await popup()).toEqual({ items: [], more: false });
+  });
 });

@@ -2,7 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
 import { saveSetting } from "../../lib/settings";
-import { isHodOf, type DepartmentCode } from "../auth/permissions";
+import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { OPEN_TAB, summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
 import { whatFor, withPapers } from "../enquiries/followUpDesk.service";
 import { TO_HAND_BACK, toHandBack } from "../enquiries/visibility";
@@ -48,9 +48,11 @@ async function todayScope(user: UserWithDepartments) {
   if (led.length > 0) or.push({ departmentId: { in: led.map((d) => d.id) } });
   if (others.length > 0) or.push({ departmentId: { in: others.map((d) => d.id) }, ownerId: user.id });
   const kind: TodayScopeKind = user.type === "HEAD" ? "ALL" : led.length > 0 ? "DEPARTMENTS" : "MINE";
+  // An HOD who also works cases in a department they don't lead counts those too, so the line must say so.
+  const alsoOwn = kind === "DEPARTMENTS" && others.some((d) => can(user, d.code as DepartmentCode, "EDIT"));
   return {
     where: or.length > 0 ? { OR: or } : { id: { in: [] } },
-    scope: { kind, departments: led.map((d) => d.name) },
+    scope: { kind, departments: led.map((d) => d.name), alsoOwn },
     departments,
   };
 }
