@@ -126,7 +126,10 @@ function departmentsOf(cases: ClientCase[]) {
   return [...new Set(cases.map((e) => departmentStyle(e.department).label))].join(', ')
 }
 
-/** Every case of the family the user may open: open ones first, then finished ones (demo screen 23). */
+/**
+ * The family's cases: every one the user may open, finished ones too, and their other open cases in the user's
+ * departments without a link (0006 amendment 17). Open ones first, then finished ones (demo screen 23).
+ */
 function CasesCard({ client }: { client: ClientProfile }) {
   return (
     <div className="card pad">
@@ -145,9 +148,15 @@ function CasesCard({ client }: { client: ClientProfile }) {
                   {style.label}
                 </span>
                 <div className="case-list-main">
-                  <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} className="mono">
-                    {e.caseNo}
-                  </Link>
+                  {e.canOpen ? (
+                    <Link to={`/enquiries/${encodeURIComponent(e.caseNo)}`} className="mono">
+                      {e.caseNo}
+                    </Link>
+                  ) : (
+                    // Listed so the family's open work shows, as on the New enquiry lookup; only its owner, the HOD or
+                    // the Head opens it.
+                    <span className="mono case-no-link">{e.caseNo}</span>
+                  )}
                   <div className="muted small">{e.summary}</div>
                 </div>
                 <div className="small" style={{ textAlign: 'right' }}>
