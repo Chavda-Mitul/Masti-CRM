@@ -527,6 +527,21 @@ a.btn-primary:hover {
   gap: 6px;
   justify-content: flex-end;
 }
+/* A dropdown value's departments (0018): chips in the list, a row of tick boxes in the drawer. */
+.dept-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dept-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 4px 0;
+}
+.dept-picks .check:has(input:disabled) {
+  color: var(--text-muted);
+}
 
 /* Toasts (useToast) */
 .toasts {

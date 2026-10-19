@@ -222,16 +222,25 @@ const optionCode = z
   .toUpperCase()
   .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. NO_ANSWER.')
 
-/** A follow-up "What happened" or "Next step". Mirrors Backend/src/modules/enquiryMasters/enquiryMasters.schemas.ts. */
+/**
+ * A plain dropdown value (processing speed, why a visit fails), or a follow-up "What happened" / "Next step" with its
+ * departments. Mirrors Backend/src/modules/enquiryMasters/enquiryMasters.schemas.ts.
+ */
 export const followUpOptionFormSchema = z.object({
   code: optionCode,
   name: required(80, 'Enter the wording staff will pick.'),
   sortOrder,
+  departments: z.array(z.string()),
 })
 export type FollowUpOptionFormValues = z.infer<typeof followUpOptionFormSchema>
 
-/** A postpone or cancel reason. The kind is set once. */
-export const enquiryReasonFormSchema = followUpOptionFormSchema.extend({
+/** A follow-up or reason value shows only in the departments it is tagged with: at least one (0018). */
+export const taggedOptionFormSchema = followUpOptionFormSchema.extend({
+  departments: z.array(z.string()).min(1, 'Pick at least one department.'),
+})
+
+/** A postpone or cancel reason, with its departments. The kind is set once. */
+export const enquiryReasonFormSchema = taggedOptionFormSchema.extend({
   kind: z.enum(['POSTPONE', 'CANCEL']),
 })
 export type EnquiryReasonFormValues = z.infer<typeof enquiryReasonFormSchema>

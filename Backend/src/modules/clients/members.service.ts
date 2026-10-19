@@ -5,7 +5,7 @@ import { cleanMobile } from "../../lib/contact";
 import { istToday, toDbDate } from "../../lib/dates";
 import { badRequest, notFound } from "../../lib/httpError";
 import type { Actor } from "../users/user";
-import { assertCanEditClients } from "./access";
+import { assertCanEditClients, assertCanSeeClient } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { toMemberDto } from "./client";
 import type { CreateMemberInput, UpdateMemberInput } from "./clients.schemas";
@@ -43,6 +43,7 @@ async function toDto(member: Parameters<typeof toMemberDto>[0]) {
 
 export async function createMember(clientId: string, input: CreateMemberInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   await assertClientExists(clientId);
   await assertRelation(input.relationId);
   assertBirthDate(input.dateOfBirth, istToday());
@@ -87,6 +88,7 @@ export async function createMember(clientId: string, input: CreateMemberInput, a
 /** Partial update. `updatedAt` must be the value the browser read (optimistic locking). */
 export async function updateMember(clientId: string, memberId: string, input: UpdateMemberInput, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   const before = await getMemberOr404(clientId, memberId);
   if (before.archivedAt) throw badRequest("This person was taken off the family list.");
   assertFresh(before.updatedAt, input.updatedAt, "person");
@@ -138,6 +140,7 @@ export async function updateMember(clientId: string, memberId: string, input: Up
 /** Takes a person off the family list. Safe to repeat. */
 export async function archiveMember(clientId: string, memberId: string, actor: Actor) {
   assertCanEditClients(actor.user);
+  await assertCanSeeClient(actor.user, clientId);
   const before = await getMemberOr404(clientId, memberId);
   if (before.archivedAt) return toDto(before);
 

@@ -22,8 +22,9 @@ import * as membersService from "./members.service";
 
 /**
  * The client master (docs/decisions/0004-client-master.md).
- * Clients are shared by every department, so there is no department check: the Head and office staff can view;
- * the service decides who may change what (any department EDIT; Accounts fields need Accounts EDIT).
+ * Clients are shared by every department, so there is no department check here; the service decides (access.ts):
+ * the whole list is for the Head, HODs and Accounts, other staff open only the clients of their cases, changes need
+ * EDIT in any department, and the Accounts fields need Accounts EDIT.
  * Field staff get nothing here.
  */
 const router = Router();
@@ -51,7 +52,7 @@ router.put("/settings", requireHead, async (req, res) => {
 });
 
 router.get("/", async (req, res) => {
-  res.json(await clientsService.listClients(listClientsQuerySchema.parse(req.query)));
+  res.json(await clientsService.listClients(listClientsQuerySchema.parse(req.query), currentUser(req)));
 });
 
 router.post("/", async (req, res) => {
@@ -74,7 +75,7 @@ router.put("/:id/mobile", async (req, res) => {
 });
 
 router.get("/:id/readiness", async (req, res) => {
-  res.json({ readiness: await clientsService.getReadiness(req.params.id) });
+  res.json({ readiness: await clientsService.getReadiness(req.params.id, currentUser(req)) });
 });
 
 router.post("/:id/phones", async (req, res) => {
@@ -102,7 +103,7 @@ router.post("/:id/members/:memberId/archive", async (req, res) => {
 });
 
 router.get("/:id/notes", async (req, res) => {
-  res.json({ notes: await clientsService.listNotes(req.params.id) });
+  res.json({ notes: await clientsService.listNotes(req.params.id, currentUser(req)) });
 });
 
 router.post("/:id/notes", async (req, res) => {

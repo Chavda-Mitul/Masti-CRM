@@ -473,6 +473,7 @@ These are used by every module.
   - **"Complete before invoicing" is a setting** (`clients.invoiceReadiness`, the required fields per kind, ⚠️ Q33). The invoice module must call `assertInvoiceReady()`.
   - **Duplicate passport numbers, PANs, GSTINs and extra numbers are warnings** (409, then save again with `confirmDuplicates: true`; audited). A second client with the same **main** number is refused.
   - **Accounting code, billing cycle and payment habit:** only Accounts (or the Head) can set them (Q34).
+  - **Who sees the client list (decided 19 Oct 2026, project lead, from Masti's concern; Q39):** the Clients tab (list, search, adding there) is for the Head, HODs and Accounts. Other staff open only the clients of cases they can see, and there see and complete everything. The New enquiry lookup stays open. ⚠️ Confirm with Vimal (M43). See `docs/decisions/0004-client-master.md` *Amendment 2*.
   - **Saves use optimistic locking** on `updatedAt`.
 - **Document vault: being built** (decided 17 Oct 2026, project lead; Vimal wants the scans kept permanently). The design is `docs/decisions/0016-client-documents.md`. It replaces the 8 Oct "not built" and the 12 Oct "passport photo page only".
   - **What:** a scan of any paper in the document master (Aadhaar card and PAN card are added to it), as one PDF, JPEG or PNG, kept on the client and naming the family member it's for. In the private bucket (rule 4).
@@ -1047,6 +1048,7 @@ This is part of Stage 1 ✅.
 - **Log call** opens inline: What happened / Next step / When → Save.
 - It holds the day's calls across departments. The team split is ❓ (Q2).
 - **Built (10 Oct 2026, project lead):** "When" starts empty. Logging a call on a postponed case resumes it. The Postponed tab lists every postponed case. Today and This week include late cases. A matured visa case leaves the desk. Details: `docs/decisions/0006-visa-documents.md`, *Amendment* items 5–9.
+- **By department (19 Oct 2026, project lead):** What happened, Next step and the postpone/cancel reasons each list only the values tagged with the case's department. Details: `docs/decisions/0018-dropdowns-by-department.md`. A free-text note on a follow-up is not built (M44).
 
 ### 12.13 Cross-sell leads ✅
 
@@ -1513,7 +1515,7 @@ Masti CRM/
 | `GET /api/departments` | Head, office staff | Active departments |
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
 | `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
-| `/api/clients/*` | Head, office staff (edit: any department EDIT; billing fields: Accounts) | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
+| `/api/clients/*` | Head, office staff. List/search/create: Head, HODs, Accounts; one client: those, or staff with a visible case of that client (0004 *Amendment 2*); edit: any department EDIT; billing fields: Accounts | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
 | `/api/masters/*` | Visa VIEW to read; Visa HOD (or Head) to write. Embassies: office staff read, any HOD writes | Countries, visa types, embassies, documents, country × type offerings, and their checklists (`PUT …/visa-offerings/:id/checklist` replaces the whole list). Full list in `docs/decisions/0005-system-masters.md`. |
 | `GET /api/enquiries` · `GET /api/enquiries/sources` | Head + office staff; rows only from departments they can VIEW | All enquiries (late first, then by due time; department, Only mine, search, cursor) and the staff "Came in through" sources. `/api/masters/enquiry-sources` edits the sources (Visa HOD or Head). |
 | `/api/visa/*` | Visa VIEW to read; Visa EDIT to save; Visa HOD (or Head) for settings | Intake dropdowns (`GET /offerings`), **Save enquiry** (`POST /cases`, Idempotency-Key), `GET /cases/:caseNo`, `GET/PUT /settings` (`visa.firstFollowUp`). See `docs/decisions/0003-visa-intake.md` *Refresh*. |
@@ -1683,6 +1685,12 @@ Masti CRM/
 - **The notice board (Q24/Q25 still open):** a department's staff post to it, the author, HOD or Head change a notice; everyone reads every department's; Today shows the latest 3 of the person's departments plus new holiday entries; a notice stays until removed; the weather and IVS cards say what they wait for (0017 Decision 11).
 - **The visa team's login popup:** the Head and the Visa HOD pick Visa notices for it; Visa staff and the Visa HOD see it when something is new to them (picked notices and new holiday entries); "Got it" marks them seen, audited (0017 Decision 12).
 - **Built:** component 1, the banner and the four tiles; component 2, Up next; component 3, open enquiries by department with the "Comes with …" cards; component 4, the notice board and its Today card; component 5, the visa team's login popup (all 19 Oct 2026). **Today is complete.**
+
+**Decided 19 Oct 2026 (project lead), the follow-up and reason dropdowns by department.** The design is `docs/decisions/0018-dropdowns-by-department.md` (decided and built). It changes 0006 Decision 7.
+- **Each value is tagged with the departments it shows in** (one or more); a case lists and accepts only its department's values.
+- **The Head, or an HOD of every department the value is for, changes it.** A value shared by several departments is in practice the Head's.
+- **Seeded ⚠️:** general values in all five selling departments, the visa ones (documents coming, collection boy, visa not needed…) in Visa only.
+- **No free-text note on a follow-up** until Vimal answers (M44, change request 9); staff use more precise "Next step" values meanwhile.
 
 **Decided 17 Oct 2026 (project lead), for the client document vault (Q37).** The design is `docs/decisions/0016-client-documents.md` (decided; being built). It replaces the 8 Oct and 12 Oct vault lines below.
 - **Build it now:** Vimal wants clients' scans kept **permanently**. Settled the same day: permanent, with no removal on request and no government check waited for (M40 closed).
@@ -1861,6 +1869,7 @@ Masti CRM/
 | 36 | **New:** The payment-habit options. Only "Part advance, rest on delivery" comes from the demo; seeded with Full advance / Part advance, rest on delivery / On delivery / On credit. | C | 1 |
 | 37 | **New:** A client document vault (passport, PAN and photo scans kept per person and reused on later cases): in scope, or a change request? It isn't in the demo and wasn't asked for. Not built. If built: the S3-compatible storage (rule 4, 10 Oct 2026). **12 Oct:** the saved file stays one PDF per case, with no per-paper uploads; a vault keeps the passport photo page per person, after a DPDP retention and access decision (0007). **17 Oct 2026, answered (project lead; Vimal wants it): build it,** all papers, Aadhaar too, kept permanently, HODs see the list, one WhatsApp notice (0016). Same day: permanent with no removal, the full Aadhaar card kept; S12 and M40 closed, nothing left to ask | S | 2 |
 | 38 | **New:** Should Sundays and Masti's office holidays block collection dates and deliveries, and who keeps the embassy holiday calendar updated (M15, inputs B2)? Built as data (0005): Sunday seeded ⚠️ for embassies and our office; the Head or any HOD edits. | C | 1 |
+| 39 | **New:** Staff and the client list: is it right that only the Head, HODs and Accounts see the whole client list, and other staff only the clients of their own cases (built 19 Oct 2026, 0004 *Amendment 2*; M43)? Should anything else be hidden from staff, such as mobile numbers on the Enquiries list? | C | 1 |
 
 Q31 and Q32 come from the transcript review. They aren't in `05_Open_Questions.md` yet; add them there when you next update the decision log. Q33–Q37 (client master, 8 Oct) and Q38 (blocked dates, 8 Oct) are in `05_Open_Questions.md`.
 

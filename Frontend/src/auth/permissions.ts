@@ -30,6 +30,14 @@ export function canDispatchDocket(user: User, ownerIds: (string | null)[]): bool
   return can(user, 'VISA', 'EDIT') && (isHodOf(user, 'VISA') || ownerIds.includes(user.id))
 }
 
+/**
+ * The whole client list (the Clients tab): the Head, any HOD, or Accounts, who bill every client. Other staff open a
+ * client from their case. Mirrors canBrowseClients in Backend/src/modules/clients/access.ts.
+ */
+export function canBrowseClients(user: User): boolean {
+  return isHodOfAny(user) || can(user, 'ACCOUNTS', 'VIEW')
+}
+
 /** Clients are shared by every department: EDIT in any of them (or being Head) lets you change them. */
 export function canEditClients(user: User): boolean {
   if (user.type === 'HEAD') return user.isActive
@@ -91,7 +99,16 @@ export const canEditVisaMasters = (user: User) => isHodOf(user, 'VISA')
 export const canEditHolidays = (user: User) => isHodOfAny(user)
 /** Embassies are holiday targets for every department: the Head or any HOD. */
 export const canEditEmbassies = (user: User) => isHodOfAny(user)
-/** Follow-up outcomes, next steps and postpone/cancel reasons are shared by every department: the Head or any HOD (0006). */
+/**
+ * The follow-up, reason and field lists: the Head or any HOD may add to them. A follow-up or reason value is then
+ * changed only by the Head or an HOD of every department it is for (canEditTagged).
+ */
 export const canEditEnquiryMasters = (user: User) => isHodOfAny(user)
+/**
+ * May this user tag a follow-up or reason value with these departments, or change one tagged with them? The Head, or
+ * an HOD of every one (docs/decisions/0018-dropdowns-by-department.md). Mirrors assertCanTag in the backend.
+ */
+export const canEditTagged = (user: User, departmentCodes: string[]) =>
+  isHodOfAny(user) && departmentCodes.every((code) => isHodOf(user, code))
 /** The visa masters are readable with Visa VIEW (the Head always). */
 export const canViewVisaMasters = (user: User) => can(user, 'VISA', 'VIEW')

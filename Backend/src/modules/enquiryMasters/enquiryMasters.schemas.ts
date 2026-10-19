@@ -2,7 +2,7 @@ import { z } from "zod";
 import { EnquiryReasonKind } from "../../../generated/prisma/enums";
 import { timeOfDay } from "../../lib/shared.schemas";
 
-// Follow-up and reason dropdowns (docs/decisions/0006-visa-documents.md Decision 7).
+// Follow-up and reason dropdowns (docs/decisions/0006-visa-documents.md Decision 7, tagged by department in 0018).
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 // Codes are stable keys (the seed uses them), so they are set on create and never change.
 
@@ -18,7 +18,7 @@ export const listQuerySchema = z.object({
   active: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
 });
 
-/** Follow-up outcomes ("What happened") and next steps share a shape. */
+/** A plain list value, e.g. why a field visit fails. */
 export const createOptionSchema = z.object({
   code: keyCode,
   name: text(80),
@@ -31,9 +31,23 @@ export const updateOptionSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/**
+ * The departments a follow-up or reason value shows in (docs/decisions/0018-dropdowns-by-department.md), by code. At
+ * least one. Sent on an edit, it replaces the whole set.
+ */
+const departments = z
+  .array(z.string().trim().toUpperCase().min(1).max(40))
+  .min(1, "Pick at least one department.")
+  .max(20)
+  .transform((codes) => [...new Set(codes)]);
+
+/** Follow-up outcomes ("What happened") and next steps share a shape: a plain value tagged with departments. */
+export const createTaggedOptionSchema = createOptionSchema.extend({ departments });
+export const updateTaggedOptionSchema = updateOptionSchema.extend({ departments: departments.optional() });
+
 /** A reason belongs to one action. The kind is set on create and never changes, like the code. */
-export const createReasonSchema = createOptionSchema.extend({ kind: z.enum(EnquiryReasonKind) });
-export const updateReasonSchema = updateOptionSchema;
+export const createReasonSchema = createTaggedOptionSchema.extend({ kind: z.enum(EnquiryReasonKind) });
+export const updateReasonSchema = updateTaggedOptionSchema;
 
 /** A time slot the collection and delivery boy is booked for (docs/decisions/0015-field-staff-app.md Decision 2). */
 export const createSlotSchema = z
@@ -50,6 +64,8 @@ export const updateSlotSchema = z.object({
 
 export type CreateOptionInput = z.infer<typeof createOptionSchema>;
 export type UpdateOptionInput = z.infer<typeof updateOptionSchema>;
+export type CreateTaggedOptionInput = z.infer<typeof createTaggedOptionSchema>;
+export type UpdateTaggedOptionInput = z.infer<typeof updateTaggedOptionSchema>;
 export type CreateReasonInput = z.infer<typeof createReasonSchema>;
 export type UpdateReasonInput = z.infer<typeof updateReasonSchema>;
 export type CreateSlotInput = z.infer<typeof createSlotSchema>;

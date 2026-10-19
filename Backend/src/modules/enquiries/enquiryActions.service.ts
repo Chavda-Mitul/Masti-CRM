@@ -89,9 +89,12 @@ async function save(
   return { enquiry: { id: after.id, caseNo: after.caseNo, status: after.status, updatedAt: after.updatedAt } };
 }
 
-async function activeReason(reasonId: number, kind: "POSTPONE" | "CANCEL") {
-  const reason = await prisma.enquiryReason.findUnique({ where: { id: reasonId } });
-  if (!reason?.isActive || reason.kind !== kind) {
+/** Only values tagged with the case's department can be picked on it (docs/decisions/0018-dropdowns-by-department.md). */
+const shownIn = (departmentId: number) => ({ isActive: true, departments: { some: { departmentId } } });
+
+async function activeReason(reasonId: number, kind: "POSTPONE" | "CANCEL", departmentId: number) {
+  const reason = await prisma.enquiryReason.findFirst({ where: { id: reasonId, kind, ...shownIn(departmentId) } });
+  if (!reason) {
     throw fieldError("reasonId", kind === "POSTPONE" ? "Pick a reason for postponing." : "Pick a reason for cancelling.");
   }
   return reason;
@@ -108,11 +111,11 @@ export async function logFollowUp(caseNo: string, input: LogFollowUpInput, actor
   if (enquiry.status !== "OPEN" && enquiry.status !== "POSTPONED") throw conflict("This case is closed.");
 
   const [outcome, nextStep] = await Promise.all([
-    prisma.followUpOutcome.findUnique({ where: { id: input.outcomeId } }),
-    prisma.followUpNextStep.findUnique({ where: { id: input.nextStepId } }),
+    prisma.followUpOutcome.findFirst({ where: { id: input.outcomeId, ...shownIn(enquiry.departmentId) } }),
+    prisma.followUpNextStep.findFirst({ where: { id: input.nextStepId, ...shownIn(enquiry.departmentId) } }),
   ]);
-  if (!outcome?.isActive) throw fieldError("outcomeId", "Pick what happened.");
-  if (!nextStep?.isActive) throw fieldError("nextStepId", "Pick the next step.");
+  if (!outcome) throw fieldError("outcomeId", "Pick what happened.");
+  if (!nextStep) throw fieldError("nextStepId", "Pick the next step.");
 
   const today = istToday();
   if (input.nextOn < today) throw fieldError("nextOn", "Pick today or a later day.");
@@ -160,7 +163,7 @@ export async function postpone(caseNo: string, input: PostponeInput, actor: Acto
   const enquiry = await load(caseNo, actor.user);
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status !== "OPEN") throw conflict("Only an open case can be postponed.");
-  await activeReason(input.reasonId, "POSTPONE");
+  await activeReason(input.reasonId, "POSTPONE", enquiry.departmentId);
   const today = istToday();
   if (input.resumeOn <= today) throw fieldError("resumeOn", "Pick a date after today.");
   if (input.resumeOn > addMonths(today, 12)) throw fieldError("resumeOn", "Pick a date within a year.");
@@ -190,7 +193,7 @@ export async function cancel(caseNo: string, input: CancelInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status !== "OPEN" && enquiry.status !== "POSTPONED") throw conflict("This case is already closed.");
-  await activeReason(input.reasonId, "CANCEL");
+  await activeReason(input.reasonId, "CANCEL", enquiry.departmentId);
   const handBack = toHandBack(enquiry);
   const dueNow = enquiry.stage.code === "AT_VENDOR" || enquiry.status === "POSTPONED" || !enquiry.dueAt;
   const dueAt = !handBack

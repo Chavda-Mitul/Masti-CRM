@@ -14,20 +14,24 @@ datasource db {
 
 /// Rows, not an enum, so Phase-2 departments (Transport, Cruise) can be added without a migration.
 model Department {
-  id           Int               @id @default(autoincrement())
-  code         String            @unique
-  name         String
+  id                Int                          @id @default(autoincrement())
+  code              String                       @unique
+  name              String
   /// Case numbers are {casePrefix}-{YYYY}-{NNNN} (VISA-2026-0001). Data, not code (§17 #21).
-  casePrefix   String            @unique
-  sortOrder    Int               @default(0)
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
-  members      UserDepartment[]
-  fieldJobs    FieldJob[]
-  stages       DepartmentStage[]
-  caseCounters CaseCounter[]
-  enquiries    Enquiry[]
-  notices      Notice[]
+  casePrefix        String                       @unique
+  sortOrder         Int                          @default(0)
+  isActive          Boolean                      @default(true)
+  createdAt         DateTime                     @default(now()) @db.Timestamptz(3)
+  members           UserDepartment[]
+  fieldJobs         FieldJob[]
+  stages            DepartmentStage[]
+  caseCounters      CaseCounter[]
+  enquiries         Enquiry[]
+  notices           Notice[]
+  /// The follow-up and reason dropdown values shown in this department (0018).
+  followUpOutcomes  FollowUpOutcomeDepartment[]
+  followUpNextSteps FollowUpNextStepDepartment[]
+  enquiryReasons    EnquiryReasonDepartment[]
 }
 
 /// What kind of account this is. It decides which app the user can open.
@@ -910,27 +914,52 @@ model EnquirySource {
   enquiries       Enquiry[]
 }
 
-// Follow-up and reason dropdowns (0006 Decision 7). Shared by every department, edited by the Head or any HOD.
-// The seeded values are demo samples ⚠️. Switched off, never deleted. Codes never change (format checked in the migration).
+// Follow-up and reason dropdowns (0006 Decision 7). Each value is tagged with the departments it shows in (0018); the
+// Head, or the HOD of every one of those departments, edits it. The seeded values are demo samples ⚠️. Switched off,
+// never deleted. Codes never change (format checked in the migration).
 
 /// "What happened" on a follow-up. Only a label: no outcome triggers anything (staff postpone or cancel themselves).
 model FollowUpOutcome {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
-  name      String
-  sortOrder Int        @default(0)
-  isActive  Boolean    @default(true)
-  followUps FollowUp[]
+  id          Int                         @id @default(autoincrement())
+  code        String                      @unique
+  name        String
+  sortOrder   Int                         @default(0)
+  isActive    Boolean                     @default(true)
+  followUps   FollowUp[]
+  /// At least one, checked by the service. Replaced as a set when the value is edited.
+  departments FollowUpOutcomeDepartment[]
+}
+
+model FollowUpOutcomeDepartment {
+  outcomeId    Int
+  departmentId Int
+  outcome      FollowUpOutcome @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  department   Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@id([outcomeId, departmentId])
+  @@index([departmentId])
 }
 
 /// "Next step" on a follow-up.
 model FollowUpNextStep {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
-  name      String
-  sortOrder Int        @default(0)
-  isActive  Boolean    @default(true)
-  followUps FollowUp[]
+  id          Int                          @id @default(autoincrement())
+  code        String                       @unique
+  name        String
+  sortOrder   Int                          @default(0)
+  isActive    Boolean                      @default(true)
+  followUps   FollowUp[]
+  /// At least one, checked by the service. Replaced as a set when the value is edited.
+  departments FollowUpNextStepDepartment[]
+}
+
+model FollowUpNextStepDepartment {
+  nextStepId   Int
+  departmentId Int
+  nextStep     FollowUpNextStep @relation(fields: [nextStepId], references: [id], onDelete: Restrict)
+  department   Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@id([nextStepId, departmentId])
+  @@index([departmentId])
 }
 
 /// Which action a reason belongs to. LOST comes when closing and losing are built.
@@ -941,15 +970,27 @@ enum EnquiryReasonKind {
 
 /// Why an enquiry was postponed or cancelled. No free text (§7 rule 2).
 model EnquiryReason {
-  id        Int               @id @default(autoincrement())
-  kind      EnquiryReasonKind
-  code      String            @unique
-  name      String
-  sortOrder Int               @default(0)
-  isActive  Boolean           @default(true)
-  enquiries Enquiry[]
+  id          Int                       @id @default(autoincrement())
+  kind        EnquiryReasonKind
+  code        String                    @unique
+  name        String
+  sortOrder   Int                       @default(0)
+  isActive    Boolean                   @default(true)
+  enquiries   Enquiry[]
+  /// At least one, checked by the service. Replaced as a set when the reason is edited.
+  departments EnquiryReasonDepartment[]
 
   @@index([kind, isActive])
+}
+
+model EnquiryReasonDepartment {
+  reasonId     Int
+  departmentId Int
+  reason       EnquiryReason @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@id([reasonId, departmentId])
+  @@index([departmentId])
 }
 
 model Enquiry {

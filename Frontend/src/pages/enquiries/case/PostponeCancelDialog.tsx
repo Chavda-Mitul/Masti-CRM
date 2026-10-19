@@ -66,7 +66,8 @@ export function PostponeCancelDialog({ visaCase: c, onClose }: { visaCase: VisaC
   const [resumeOn, setResumeOn] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const options = (reasons.data ?? []).filter((r) => r.isActive && r.kind === kind)
+  // Only the reasons tagged with the case's department (0018).
+  const options = (reasons.data ?? []).filter((r) => r.isActive && r.kind === kind && r.departments.includes(c.department.code))
   const action = kind === 'POSTPONE' ? postpone : cancel
   const minDate = nextDay(istToday())
   const money = invoiceNotes(c)

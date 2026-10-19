@@ -336,3 +336,63 @@ describe("the follow-up desk", () => {
     expect(await badge(neha)).toEqual({ overdue: 0, scope: "MINE" });
   });
 });
+
+describe("values of another department (docs/decisions/0018-dropdowns-by-department.md)", () => {
+  /** Tags a seeded value with Hotels only, so it no longer shows in Visa. */
+  async function hotelsOnly(table: "outcome" | "nextStep" | "reason", code: string) {
+    const hotels = await prisma.department.findUniqueOrThrow({ where: { code: "HOTELS" } });
+    if (table === "outcome") {
+      const { id } = await prisma.followUpOutcome.findUniqueOrThrow({ where: { code } });
+      await prisma.followUpOutcomeDepartment.deleteMany({ where: { outcomeId: id } });
+      await prisma.followUpOutcomeDepartment.create({ data: { outcomeId: id, departmentId: hotels.id } });
+      return id;
+    }
+    if (table === "nextStep") {
+      const { id } = await prisma.followUpNextStep.findUniqueOrThrow({ where: { code } });
+      await prisma.followUpNextStepDepartment.deleteMany({ where: { nextStepId: id } });
+      await prisma.followUpNextStepDepartment.create({ data: { nextStepId: id, departmentId: hotels.id } });
+      return id;
+    }
+    const { id } = await prisma.enquiryReason.findUniqueOrThrow({ where: { code } });
+    await prisma.enquiryReasonDepartment.deleteMany({ where: { reasonId: id } });
+    await prisma.enquiryReasonDepartment.create({ data: { reasonId: id, departmentId: hotels.id } });
+    return id;
+  }
+
+  it("can't be picked on a visa case: what happened, the next step, or a postpone or cancel reason", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const call = async (extra: Record<string, unknown>) =>
+      staff.post(`/api/enquiries/${c.caseNo}/follow-ups`).send({
+        outcomeId: (await prisma.followUpOutcome.findUniqueOrThrow({ where: { code: "CALL_LATER" } })).id,
+        nextStepId: (await prisma.followUpNextStep.findUniqueOrThrow({ where: { code: "CALL_AGAIN" } })).id,
+        nextOn: addDays(istToday(), 1),
+        at: "16:00",
+        updatedAt: await updatedAtOf(c.id),
+        ...extra,
+      });
+
+    const outcome = await call({ outcomeId: await hotelsOnly("outcome", "NO_ANSWER") });
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.issues.outcomeId).toBeDefined();
+    const step = await call({ nextStepId: await hotelsOnly("nextStep", "CLIENT_VISITS_OFFICE") });
+    expect(step.status).toBe(400);
+    expect(step.body.issues.nextStepId).toBeDefined();
+    expect(await prisma.followUp.count()).toBe(0);
+
+    const postponed = await staff.post(`/api/enquiries/${c.caseNo}/postpone`).send({
+      reasonId: await hotelsOnly("reason", "TRAVEL_DATES_MOVED"),
+      resumeOn: addDays(istToday(), 10),
+      updatedAt: await updatedAtOf(c.id),
+    });
+    expect(postponed.status).toBe(400);
+    expect(postponed.body.issues.reasonId).toBeDefined();
+    const cancelled = await staff.post(`/api/enquiries/${c.caseNo}/cancel`).send({ reasonId: await hotelsOnly("reason", "PRICE_HIGHER"), updatedAt: await updatedAtOf(c.id) });
+    expect(cancelled.status).toBe(400);
+    expect(cancelled.body.issues.reasonId).toBeDefined();
+    expect(await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ status: "OPEN" });
+
+    // A value Visa still has works.
+    expect((await call({})).status).toBe(200);
+  });
+});

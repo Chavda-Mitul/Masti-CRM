@@ -273,13 +273,19 @@ export interface EnquirySource {
   staffSelectable: boolean
 }
 
-/** A follow-up "What happened" or "Next step" (shared by every department). */
+/** A plain dropdown value: a code and a name, switched off rather than deleted. */
 export interface FollowUpOption {
   id: number
   code: string
   name: string
   sortOrder: number
   isActive: boolean
+}
+
+/** A follow-up "What happened" or "Next step", shown only in the departments it is tagged with (0018). */
+export interface TaggedOption extends FollowUpOption {
+  /** Department codes, in menu order. At least one. */
+  departments: string[]
 }
 
 /** How fast the embassy processes the application: "Normal", "Express"… (0009). Picked on the quote. */
@@ -314,8 +320,8 @@ export interface DocumentProblemReason {
 
 export type EnquiryReasonKind = 'POSTPONE' | 'CANCEL'
 
-/** Why a case was postponed or cancelled. The kind never changes. */
-export interface EnquiryReason extends FollowUpOption {
+/** Why a case was postponed or cancelled, in the departments it is tagged with. The kind never changes. */
+export interface EnquiryReason extends TaggedOption {
   kind: EnquiryReasonKind
 }
 

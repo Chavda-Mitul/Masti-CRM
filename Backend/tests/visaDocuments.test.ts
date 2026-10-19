@@ -229,8 +229,10 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
     expect((await link(adult.id, aarav)).body.case.travellers[0]).toMatchObject({ name: "Aarav Mehta", member: { id: aarav } });
 
     // Another client's family member, and an archived one.
-    const otherClient = await staff.post("/api/clients").send({ name: "Other Family", mobile: "9825000077" });
-    const stranger = await addMember(staff, otherClient.body.client.id, "Stranger Person");
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const otherClient = await head.post("/api/clients").send({ name: "Other Family", mobile: "9825000077" });
+    const stranger = await addMember(head, otherClient.body.client.id, "Stranger Person");
     const refused = await link(child.id, stranger);
     expect(refused.status).toBe(400);
     expect(refused.body.issues.memberId).toBeDefined();
