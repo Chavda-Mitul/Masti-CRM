@@ -16,12 +16,15 @@ export const noticeKeys = {
 export function useLoginPopup(enabled: boolean) {
   return useQuery({
     queryKey: noticeKeys.loginPopup,
-    queryFn: async () => (await api<{ items: LoginPopupItem[] }>('/notices/login-popup')).items,
+    queryFn: () => api<{ items: LoginPopupItem[]; more: boolean }>('/notices/login-popup'),
     enabled,
   })
 }
 
-/** "Got it" or "All updates": these items are seen, up to the newest of them (so anything newer still shows). */
+/**
+ * "Got it" or "All updates": these items are seen, up to the newest of them (so anything newer still shows). The popup
+ * brings the oldest unseen first, so when there are more it asks again and shows the next batch.
+ */
 export function useDismissLoginPopup() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -34,7 +37,7 @@ export function useDismissLoginPopup() {
           holidayIds: items.filter((i) => i.kind === 'HOLIDAY').map((i) => i.id),
         },
       }),
-    onSuccess: () => queryClient.setQueryData(noticeKeys.loginPopup, []),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: noticeKeys.loginPopup }),
   })
 }
 

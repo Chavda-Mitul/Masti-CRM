@@ -12,7 +12,8 @@ export function LoginPopup() {
   const navigate = useNavigate()
   const popup = useLoginPopup(true)
   const dismiss = useDismissLoginPopup()
-  const items = popup.data ?? []
+  const items = popup.data?.items ?? []
+  const more = popup.data?.more ?? false
   if (items.length === 0) return null
 
   const done = (then?: () => void) => dismiss.mutate(items, { onSuccess: () => then?.() })
@@ -31,7 +32,10 @@ export function LoginPopup() {
             <h2 className="h2" id="login-popup-title">
               Important for the visa team
             </h2>
-            <p>{items.length === 1 ? '1 new update' : `${items.length} new updates`}</p>
+            <p>
+              {items.length === 1 ? '1 new update' : `${items.length} new updates`}
+              {more && ' · more after these'}
+            </p>
           </div>
         </div>
         <ul className="notice-feed">

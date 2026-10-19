@@ -28,7 +28,8 @@ export interface UpNextRow {
 /** One person's day: the banner's sentence and the tiles. */
 export interface TodaySummary {
   /** Whose cases: everyone's (the Head), whole departments (an HOD, with their names), or the person's own. */
-  scope: { kind: TodayScopeKind; departments: string[] }
+  /** alsoOwn: an HOD who also counts their own cases in departments they don't lead. */
+  scope: { kind: TodayScopeKind; departments: string[]; alsoOwn: boolean }
   dueToday: number
   late: number
   oldestLateAt: string | null

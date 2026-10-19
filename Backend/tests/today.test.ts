@@ -89,9 +89,25 @@ describe("GET /api/today", () => {
     expect(bar(hods, "VISA")).toMatchObject({ count: 4, mine: false });
     // A department they only view isn't theirs to work: the HOD's Hotels view adds nothing.
     const kiran = await of("kiran@masti.test");
-    expect(kiran).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"] }, late: 4, newEnquiries: 4 });
+    expect(kiran).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"], alsoOwn: false }, late: 4, newEnquiries: 4 });
     expect(bar(kiran, "VISA")).toMatchObject({ count: 4, mine: false });
     expect(bar(kiran, "HOTELS")).toMatchObject({ count: 0, mine: true });
+    // An HOD who also works Hotels cases counts their own one there too, and the line says so (alsoOwn).
+    await createUser({
+      name: "Sanjay",
+      email: "sanjay@masti.test",
+      departments: [
+        { code: "VISA", role: "HOD" },
+        { code: "HOTELS", access: "EDIT" },
+      ],
+    });
+    const sanjayId = (await prisma.user.findUniqueOrThrow({ where: { email: "sanjay@masti.test" } })).id;
+    expect(await of("sanjay@masti.test")).toMatchObject({ scope: { kind: "DEPARTMENTS", departments: ["Visa"], alsoOwn: true }, late: 4 });
+    await prisma.enquiry.update({ where: { caseNo: "HOT-2026-0001" }, data: { ownerId: sanjayId } });
+    const sanjay = await of("sanjay@masti.test");
+    expect(sanjay).toMatchObject({ scope: { alsoOwn: true }, late: 5 });
+    expect(bar(sanjay, "HOTELS")).toMatchObject({ count: 1, mine: true });
+    await prisma.enquiry.update({ where: { caseNo: "HOT-2026-0001" }, data: { ownerId: null } });
     // View-only staff own no cases, so their day is empty, like their Follow-ups badge.
     const mona = await of("mona@masti.test");
     expect(mona).toMatchObject({ scope: { kind: "MINE" }, late: 0, newEnquiries: 0, oldestLateAt: null, upNext: { rows: [] } });

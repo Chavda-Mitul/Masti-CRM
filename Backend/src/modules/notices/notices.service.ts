@@ -170,12 +170,16 @@ export async function removeNotice(id: string, actor: Actor) {
 }
 
 /**
- * The visa team's login popup (Decision 12): what's new to this person, newest first. The picked Visa notices and the
- * holiday entries still new, arrived (picked, or added to the calendar) after they last dismissed it; what they posted,
- * picked or added themselves isn't news to them. Nothing for anyone outside the visa team.
+ * The visa team's login popup (Decision 12): what's new to this person. The picked Visa notices and the holiday entries
+ * still new, arrived (picked, or added to the calendar) after they last dismissed it; what they posted, picked or added
+ * themselves isn't news to them. Nothing for anyone outside the visa team.
+ *
+ * The OLDEST unseen come first, at most POPUP_LIMIT, shown newest first. "Got it" marks seen up to the newest shown, so
+ * anything left out is newer than that and comes in the next batch (`more`); taking the newest instead would mark the
+ * older ones seen without ever showing them.
  */
 export async function loginPopup(user: UserWithDepartments, now: Date = new Date()) {
-  if (!onVisaTeam(user)) return [];
+  if (!onVisaTeam(user)) return { items: [], more: false };
   const seen = user.loginPopupSeenAt;
   const { newForDays } = await getHolidaySettings();
   const [notices, holidays] = await Promise.all([
@@ -188,22 +192,29 @@ export async function loginPopup(user: UserWithDepartments, now: Date = new Date
         loginPopupAt: seen ? { gt: seen } : { not: null },
       },
       include: noticeInclude,
-      orderBy: [{ loginPopupAt: "desc" }, { id: "desc" }],
-      take: POPUP_LIMIT,
+      orderBy: [{ loginPopupAt: "asc" }, { id: "asc" }],
+      take: POPUP_LIMIT + 1,
     }),
     prisma.holiday.findMany({
       where: { AND: [newHolidaysWhere(now, newForDays), { addedById: { not: user.id } }, ...(seen ? [{ createdAt: { gt: seen } }] : [])] },
       include: holidayInclude,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: POPUP_LIMIT,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: POPUP_LIMIT + 1,
     }),
   ]);
-  return [
+  const unseen = [
     ...notices.map((n) => ({ ...noticeItem(n), at: n.loginPopupAt ?? n.createdAt })),
     ...holidays.map((h) => ({ ...holidayItem(h), at: h.createdAt })),
-  ]
-    .sort((a, b) => b.at.getTime() - a.at.getTime())
-    .slice(0, POPUP_LIMIT);
+  ].sort((a, b) => a.at.getTime() - b.at.getTime());
+  let batch = unseen.slice(0, POPUP_LIMIT);
+  const next = unseen[POPUP_LIMIT];
+  // One left out at the same instant as the newest shown would be marked seen with it: hold those back for the next
+  // batch too (unless that empties this one, which would never move on).
+  if (next) {
+    const trimmed = batch.filter((i) => i.at.getTime() < next.at.getTime());
+    if (trimmed.length > 0) batch = trimmed;
+  }
+  return { items: batch.reverse(), more: unseen.length > batch.length };
 }
 
 /**

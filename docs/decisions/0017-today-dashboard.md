@@ -39,6 +39,8 @@ department:
 
 So view-only staff, who own no cases, see an empty day, as their badge does, and a department an HOD can only view
 doesn't count. The Due today tile says whose: "across all departments" (the Head), "in Visa" (an HOD), "your cases".
+An HOD who is also edit staff in a department they don't lead counts their own cases there too, and the tile says
+"in Visa, plus your own cases" (`scope.alsoOwn`; fixed 19 Oct 2026 after a review of PR #35).
 
 Per-role dashboards (Q28 / M32) stay open with Vimal; this is our answer until he gives his.
 
@@ -182,6 +184,10 @@ team"):
   calendar) after it. Dismissing moves it to the newest item shown, so anything arriving while the popup is open still
   shows next time. Every dismissal is audited (`notice.popup.seen`, with the items), so it's on record who acknowledged
   which news.
+- **At most 20 at a time, oldest first** (fixed 19 Oct 2026 after a review of PR #35): with more than 20 new, the
+  popup takes the 20 oldest (shown newest first) and says "more after these"; Got it marks those seen and the next 20
+  show at once. Taking the 20 newest, as first built, let Got it mark the older ones seen without ever showing them.
+  One picked at the same instant as the newest shown waits for the next batch too.
 
 ## Not in this record
 

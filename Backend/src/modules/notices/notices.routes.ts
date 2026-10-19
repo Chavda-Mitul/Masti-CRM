@@ -15,7 +15,7 @@ router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"
 
 /** The visa team's login popup (Decision 12): what's new to this person; nothing for anyone else. */
 router.get("/login-popup", async (req, res) => {
-  res.json({ items: await noticesService.loginPopup(currentUser(req)) });
+  res.json(await noticesService.loginPopup(currentUser(req)));
 });
 
 router.post("/login-popup/seen", async (req, res) => {

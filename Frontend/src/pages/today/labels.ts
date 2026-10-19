@@ -36,7 +36,7 @@ export function heroLine(dueToday: number, late: number): string {
 /** Due today's small line: whose cases these are (0017 Decision 1). */
 export function scopeLabel(scope: TodaySummary['scope']): string {
   if (scope.kind === 'ALL') return 'across all departments'
-  if (scope.kind === 'DEPARTMENTS') return `in ${AND_LIST.format(scope.departments)}`
+  if (scope.kind === 'DEPARTMENTS') return `in ${AND_LIST.format(scope.departments)}${scope.alsoOwn ? ', plus your own cases' : ''}`
   return 'your cases'
 }
 
