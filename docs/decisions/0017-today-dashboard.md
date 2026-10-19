@@ -1,8 +1,9 @@
 # 0017 · The Today dashboard
 
-- **Status:** decided (19 Oct 2026, project lead). Being built one component at a time (Decision 7). Built: the banner
-  and the four tiles (19 Oct 2026, component 1); Up next (19 Oct 2026, component 2); open enquiries by department and
-  the "Comes with …" cards (19 Oct 2026, component 3); the notice board and its card on Today (19 Oct 2026, component 4).
+- **Status:** decided (19 Oct 2026, project lead). Built one component at a time (Decision 7), all five on 19 Oct 2026:
+  the banner and the four tiles (component 1); Up next (component 2); open enquiries by department and the "Comes with
+  …" cards (component 3); the notice board and its card on Today (component 4); the visa team's login popup
+  (component 5).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -98,7 +99,7 @@ Each component is planned, built, tested, checked in the browser and committed b
 3. **Open enquiries by department,** with the "Comes with …" cards (business lost, money to collect) (19 Oct 2026,
    built; Decision 10)
 4. **The notice board** (19 Oct 2026, built; Decision 11): the board itself (4a), then its card on Today (4b)
-5. **The visa team's login popup**
+5. **The visa team's login popup** (19 Oct 2026, built; Decision 12)
 
 ### 8. "Change password" moves to the sidebar
 
@@ -161,6 +162,26 @@ Edit, where other rows have Reset password (project lead, 19 Oct 2026).
   - notices from the person's departments (the Head: all);
   - holiday-calendar entries still marked new: added by staff within `holidays.newForDays` (7 days ⚠️, the calendar's
     own "new" chip), and not over yet. The seeded Sunday off has nobody's name on it and never shows.
+
+### 12. The visa team's login popup
+
+**Decided 19 Oct 2026 (project lead), with component 5** (§12.18: "Vimal picks what goes into the visa team's login
+popup"; "New entries show on the dashboard and in the visa team's login popup"; the demo's "Important for the visa
+team"):
+- **Who picks:** the Head and the Visa HOD, with a "Show in the visa team's login popup" tick on a Visa notice (only Visa
+  notices go in). The pick is part of the notice's audited changes; the author can still edit the text of a picked
+  notice, but not take it out. Picked notices carry an "In the login popup" chip on the board.
+- **Who sees it:** the visa team: office staff with edit access in Visa, and the Visa HOD. Not the Head, who picks
+  what goes in.
+- **What's in it:** the picked notices, and the holiday-calendar entries still new (as Today's card counts them).
+- **Only when something is new:** it shows (over whatever page they're on) when an item is new to that person, and
+  lists only the new ones. "Got it" or "All updates" (the Visa board) marks them seen. What the person posted or picked
+  themselves, or added to the holiday calendar, isn't news to them, so each pick records who made it (the database
+  refuses a pick with no picker).
+- **How "seen" works:** each person has a "seen up to" time; an item is new when it was picked (or added to the
+  calendar) after it. Dismissing moves it to the newest item shown, so anything arriving while the popup is open still
+  shows next time. Every dismissal is audited (`notice.popup.seen`, with the items), so it's on record who acknowledged
+  which news.
 
 ## Not in this record
 
