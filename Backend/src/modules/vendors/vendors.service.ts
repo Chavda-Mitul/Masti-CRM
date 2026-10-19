@@ -5,7 +5,7 @@ import { audit } from "../../lib/audit";
 import { definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { cleanEmail, cleanMobile } from "../../lib/contact";
 import { fieldError, notFound } from "../../lib/httpError";
-import { activeFilter } from "../../lib/masters";
+import { activeFilter, assertCountriesUsable } from "../../lib/masters";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
 import { assertCanEditVisaMasters } from "../visaMasters/access";
@@ -63,14 +63,6 @@ export async function listVendors(query: VendorListQuery) {
     orderBy: [{ name: "asc" }, { city: "asc" }],
   });
   return rows.map(toVendorDto);
-}
-
-/** Countries being added must exist and be active. One the vendor already covers may stay, even if switched off since. */
-async function assertCountriesUsable(ids: number[], alreadyCovered: number[] = []) {
-  const added = ids.filter((id) => !alreadyCovered.includes(id));
-  if (added.length === 0) return;
-  const active = await prisma.country.count({ where: { id: { in: added }, isActive: true } });
-  if (active !== added.length) throw fieldError("countryIds", "Pick from the active countries.");
 }
 
 /**

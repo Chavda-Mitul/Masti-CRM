@@ -2,15 +2,27 @@ import { prisma, type Db } from "../config/prisma";
 import type { Actor } from "../modules/users/user";
 import { audit } from "./audit";
 import { pick } from "./changes";
+import { fieldError } from "./httpError";
 import { rethrowUnique } from "./prismaErrors";
 
-// Shared by the admin-editable masters (visa masters, enquiry masters): switched off, never deleted; codes never
-// change; every change audited with before/after of the changed fields.
+// Shared by the admin-editable masters (visa masters, enquiry masters, vendors, covering letters): switched off, never
+// deleted; codes never change; every change audited with before/after of the changed fields.
 
 const rethrowCode = rethrowUnique("This code is already used.");
 
 /** `?active=true|false`, or every row. */
 export const activeFilter = (active: boolean | undefined) => (active === undefined ? {} : { isActive: active });
+
+/**
+ * Countries being added to a record's set (a vendor's, a covering letter's) must exist and be active. One it already
+ * has may stay, even if switched off since.
+ */
+export async function assertCountriesUsable(ids: number[], alreadyCovered: number[] = []) {
+  const added = ids.filter((id) => !alreadyCovered.includes(id));
+  if (added.length === 0) return;
+  const active = await prisma.country.count({ where: { id: { in: added }, isActive: true } });
+  if (active !== added.length) throw fieldError("countryIds", "Pick from the active countries.");
+}
 
 interface SaveOptions<Row> {
   before: Row;

@@ -3,7 +3,7 @@ import { isHodOf, isHodOfAny } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 
 // Who may change the system masters (docs/decisions/0005-system-masters.md §8). "Only Vimal and HODs" ⚠️.
-// - countries, visa types, offerings, documents, checklists: the Head or the Visa HOD
+// - countries, visa types, offerings, documents, checklists, vendors, covering letters: the Head or the Visa HOD
 // - embassies (holiday targets, used by every department): the Head or any HOD
 
 export function assertCanEditVisaMasters(user: UserWithDepartments) {
