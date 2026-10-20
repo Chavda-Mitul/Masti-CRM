@@ -125,7 +125,6 @@ function LetterMaker({
           </option>
         ))}
       </select>
-      {selected.sample && <span className="chip chip-warn chip-sm covering-letter-sample">Sample wording: Masti’s own format isn’t in yet</span>}
       <div className="covering-letter-preview" aria-label="Preview">
         <LetterPaper body={selected.body} values={selected.values} travellers={selected.travellers} />
       </div>
