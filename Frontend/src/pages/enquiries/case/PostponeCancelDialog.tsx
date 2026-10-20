@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { istToday } from '../../../lib/format'
 import { formatRupees } from '../../../lib/money'
@@ -136,7 +137,7 @@ export function PostponeCancelDialog({
         </div>
 
         <label className="field">
-          <span className="lbl">Reason</span>
+          <span className="lbl">Reason<RequiredMark /></span>
           <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} disabled={reasons.isPending}>
             <option value="">{reasons.isPending ? 'Loading…' : 'Pick a reason…'}</option>
             {options.map((r) => (
@@ -151,7 +152,7 @@ export function PostponeCancelDialog({
 
         {kind === 'POSTPONE' ? (
           <label className="field">
-            <span className="lbl">Comes back on</span>
+            <span className="lbl">Comes back on<RequiredMark /></span>
             <input className="input" type="date" min={minDate} value={resumeOn} onChange={(e) => setResumeOn(e.target.value)} />
             {errors.resumeOn && <span className="field-error">{errors.resumeOn}</span>}
             <span className="hint">It returns to the follow-up list that day (the next open day if the office is closed).</span>

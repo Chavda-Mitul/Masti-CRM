@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -114,7 +115,7 @@ export function DispatchDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
             ) : (
               <>
                 <label className="field">
-                  <span className="lbl">Courier</span>
+                  <span className="lbl">Courier<RequiredMark /></span>
                   <select
                     className="select"
                     value={courierId}
@@ -133,7 +134,7 @@ export function DispatchDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
                 </label>
                 {courier?.awbNeeded && (
                   <label className="field">
-                    <span className="lbl">Slip (AWB) number</span>
+                    <span className="lbl">Slip (AWB) number<RequiredMark /></span>
                     <input
                       className="input mono upper"
                       value={awbNo}

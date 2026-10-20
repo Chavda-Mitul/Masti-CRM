@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../components/FormField'
 import { errorBody, errorText } from '../../lib/apiErrors'
 import { istToday } from '../../lib/format'
 import { useToast } from '../../lib/toast'
@@ -67,7 +68,7 @@ export function LogCallForm({
     <div className="log-call">
       <div className="log-call-grid">
         <label className="field">
-          <span className="lbl">What happened</span>
+          <span className="lbl">What happened<RequiredMark /></span>
           <select className="select" value={outcomeId} onChange={(e) => setOutcomeId(e.target.value)} disabled={busy} autoFocus>
             <option value="">{busy ? 'Loading…' : 'Pick…'}</option>
             {(outcomes.data ?? [])
@@ -82,7 +83,7 @@ export function LogCallForm({
         </label>
 
         <label className="field">
-          <span className="lbl">Next step</span>
+          <span className="lbl">Next step<RequiredMark /></span>
           <select className="select" value={nextStepId} onChange={(e) => setNextStepId(e.target.value)} disabled={busy}>
             <option value="">{busy ? 'Loading…' : 'Pick…'}</option>
             {(nextSteps.data ?? [])
@@ -97,7 +98,7 @@ export function LogCallForm({
         </label>
 
         <div className="field">
-          <span className="lbl">When</span>
+          <span className="lbl">When<RequiredMark /></span>
           <div className="log-call-when">
             <input
               className="input"

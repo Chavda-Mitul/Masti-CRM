@@ -1,4 +1,5 @@
 import { numberLabel, type DecisionRowValue } from './decisionValues'
+import { RequiredMark } from '../../../components/FormField'
 
 /**
  * One traveller in "Record the decision" and "Change the decision" (Decisions 3 and 6): the demo's Approved / Refused
@@ -48,7 +49,7 @@ export function DecisionRow({
       {r.outcome === 'APPROVED' && (
         <div className="decision-details">
           <label className="field">
-            <span className="lbl">{numberLabel(online)}</span>
+            <span className="lbl">{numberLabel(online)}<RequiredMark /></span>
             <input
               className="input mono upper"
               value={r.visaNo}
@@ -59,7 +60,7 @@ export function DecisionRow({
             />
           </label>
           <label className="field">
-            <span className="lbl">Valid from</span>
+            <span className="lbl">Valid from<RequiredMark /></span>
             <input
               className="input"
               type="date"
@@ -69,7 +70,7 @@ export function DecisionRow({
             />
           </label>
           <label className="field">
-            <span className="lbl">Valid to</span>
+            <span className="lbl">Valid to<RequiredMark /></span>
             <input
               className="input"
               type="date"

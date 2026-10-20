@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { isHodOf } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatMobile, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -95,7 +96,7 @@ function ReassignDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose:
           {c.owner ? `It is with ${c.owner.name} now. ` : ''}They will see it in their list and do its follow-ups.
         </p>
         <label className="field">
-          <span className="lbl">Give it to</span>
+          <span className="lbl">Give it to<RequiredMark /></span>
           <select className="select" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} disabled={assignees.isPending}>
             <option value="">{assignees.isPending ? 'Loading…' : 'Pick a person…'}</option>
             {choices.map((a) => (

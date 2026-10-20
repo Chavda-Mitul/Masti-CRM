@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -107,7 +108,7 @@ export function FieldJobDialog({
         )}
 
         <label className="field">
-          <span className="lbl">Who goes</span>
+          <span className="lbl">Who goes<RequiredMark /></span>
           <select
             className="select"
             value={assigneeId}
@@ -129,7 +130,7 @@ export function FieldJobDialog({
         </label>
 
         <div className="field">
-          <span className="lbl">Day</span>
+          <span className="lbl">Day<RequiredMark /></span>
           <span className="hint" style={{ marginTop: 0 }}>
             Sundays and our office’s holidays can’t be picked.
           </span>
@@ -148,7 +149,7 @@ export function FieldJobDialog({
         </div>
 
         <label className="field">
-          <span className="lbl">Time slot</span>
+          <span className="lbl">Time slot<RequiredMark /></span>
           <select
             className="select"
             value={slotId ?? ''}
@@ -170,7 +171,7 @@ export function FieldJobDialog({
         </label>
 
         <label className="field">
-          <span className="lbl">{words.where}</span>
+          <span className="lbl">{words.where}<RequiredMark /></span>
           <textarea
             className="input textarea"
             rows={2}

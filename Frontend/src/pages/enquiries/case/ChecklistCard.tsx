@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDateTime, formatMonthYear } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -253,7 +254,7 @@ function TravellerPicker({
   return (
     <div className="traveller-picker">
       <label className="field" style={{ flex: 1, minWidth: 220 }}>
-        <span className="lbl">Who is “{traveller.label}”?</span>
+        <span className="lbl">Who is “{traveller.label}”?<RequiredMark /></span>
         <select
           className="select"
           value=""

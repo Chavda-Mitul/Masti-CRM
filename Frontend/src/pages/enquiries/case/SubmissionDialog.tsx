@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { canEditEmbassies } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -71,7 +72,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
           {s ? 'Change the submission' : 'Submitted at the embassy'}
         </h2>
         <label className="field">
-          <span className="lbl">File number from vendor</span>
+          <span className="lbl">File number from vendor<RequiredMark /></span>
           <input
             className="input mono upper"
             value={fileNo}
@@ -86,7 +87,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
         </label>
 
         <div className="field">
-          <span className="lbl">Embassy</span>
+          <span className="lbl">Embassy<RequiredMark /></span>
           {embassies.isPending ? (
             <span className="muted small">Loading…</span>
           ) : options.length === 0 ? (
@@ -123,7 +124,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
         </div>
 
         <div className="field">
-          <span className="lbl">Expected collection date</span>
+          <span className="lbl">Expected collection date<RequiredMark /></span>
           <span className="hint" style={{ marginTop: 0 }}>
             Holidays and Sundays at this embassy can’t be picked{latestDay ? ', nor days up to the appointment' : ''}.
           </span>

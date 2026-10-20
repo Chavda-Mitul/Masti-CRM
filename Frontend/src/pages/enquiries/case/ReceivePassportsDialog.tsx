@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDate } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -79,7 +80,7 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
         </p>
 
         <div className="field">
-          <span className="lbl">Booklets counted</span>
+          <span className="lbl">Booklets counted<RequiredMark /></span>
           <div className="receive-booklets">
             {count(current, setCurrent, 'Current')}
             {count(old, setOld, 'Old')}
@@ -95,7 +96,7 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
         </div>
 
         <div className="field">
-          <span className="lbl">Visa stickers checked</span>
+          <span className="lbl">Visa stickers checked{!c.recall && approved.length > 0 && <RequiredMark />}</span>
           {c.recall ? (
             <span className="muted small">Taken back unsubmitted · no stickers to check.</span>
           ) : (
