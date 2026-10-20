@@ -728,6 +728,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 
 - **Header:** title "All enquiries" or "{Dept} enquiries", with a subtitle such as "14 shown · 2 running late · late first, then by time due · click a row to see its steps".
 - **Filters:** department chips (All departments + one per department, with counts) ✅; "Only mine"; search.
+  - **"Only mine"** shows only where it changes the list: for the Head, HODs, view-only users and Visa staff (who also see colleagues' cases to hand over). Other staff's list is already their own, so they don't get the box (decided 20 Oct 2026, project lead).
 - **Columns:**
   - **Client:** initials, name, "case no. · summary"
   - **Department** chip

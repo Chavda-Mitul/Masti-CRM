@@ -68,6 +68,17 @@ export function canSeeEnquiry(user: User, enquiry: { department: string; owner: 
 }
 
 /**
+ * Does "Only mine" change this user's enquiries list? Only where they see more than their own: the Head or an HOD, a
+ * view-only department, or Visa, whose staff also see colleagues' cases to hand over (0014 Decision 5). Other staff's
+ * list is already their own, so the box isn't offered. Mirrors visibleEnquiryWhere in
+ * Backend/src/modules/enquiries/visibility.ts.
+ */
+export function seesOthersEnquiries(user: User): boolean {
+  if (isHodOfAny(user)) return true
+  return user.departments.some((d) => !can(user, d.code, 'EDIT') || d.code === 'VISA')
+}
+
+/**
  * May this user change this enquiry (name travellers, tick documents…)? EDIT, and its owner, its HOD or the Head.
  * Mirrors assertCanActOnEnquiry in Backend/src/modules/enquiries/visibility.ts.
  */
