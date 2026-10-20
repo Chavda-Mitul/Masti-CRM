@@ -109,17 +109,32 @@ export interface OpenEnquiry {
   owner: { id: string; name: string } | null
 }
 
+/**
+ * A client with a family member whose own number this is (0004 amendment of 20 Oct 2026). Only sent when no client
+ * has the number as a main or extra one.
+ */
+export interface FamilyMatch {
+  client: Omit<LookupClient, 'matchedOn'>
+  members: { id: string; name: string; relation: string }[]
+  /** No room for another extra number: the form offers the client's main number instead. */
+  extraNumbersFull: boolean
+  openEnquiries: OpenEnquiry[]
+}
+
 export interface ClientLookup {
   mobile: string
   client: LookupClient | null
   alsoMatches: LookupClient[]
   openEnquiries: OpenEnquiry[]
+  familyMatches: FamilyMatch[]
 }
 
 export interface CreateVisaCaseBody {
   mobile: string
   /** Needed for a new number; never overwrites an existing client's name. */
   clientName: string | null
+  /** "Use Rakesh Mehta": the number is this client's family member's; it is saved there as an extra number. */
+  familyClientId: string | null
   sourceCode: string
   offeringId: number
   adults: number

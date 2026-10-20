@@ -207,7 +207,35 @@ async function defaultBillingCycleId(db: Db = prisma): Promise<number> {
 // ---------------------------------------------------------------------------
 
 /**
- * The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers.
+ * Family members whose own number this is, grouped by client (0004 amendment of 20 Oct 2026). Only asked when no client
+ * has it as a main or extra number: "Use Rakesh Mehta" then files the enquiry there and saves the number on that client.
+ */
+async function findFamilyMatches(mobile: string, user: UserWithDepartments) {
+  const clientSelect = { id: true, name: true, kind: true, mobile: true, _count: { select: { phones: true } } } as const;
+  const members = await prisma.clientMember.findMany({
+    where: { mobile, archivedAt: null },
+    select: { id: true, name: true, relation: { select: { name: true } }, client: { select: clientSelect } },
+    orderBy: { createdAt: "asc" },
+  });
+  const byClient = new Map<string, (typeof members)[number][]>();
+  for (const m of members) byClient.set(m.client.id, [...(byClient.get(m.client.id) ?? []), m]);
+  return Promise.all(
+    [...byClient.values()].map(async (group) => {
+      const { _count, ...client } = group[0]!.client;
+      return {
+        client,
+        members: group.map((m) => ({ id: m.id, name: m.name, relation: m.relation.name })),
+        // A full client can't take another extra number: the form offers the client's main number instead.
+        extraNumbersFull: _count.phones >= MAX_EXTRA_PHONES,
+        openEnquiries: await listOpenEnquiriesOfClient(client.id, user),
+      };
+    }),
+  );
+}
+
+/**
+ * The "Existing client" check while typing a mobile on the New enquiry form. Matches main and extra numbers, and
+ * failing those, family members' own numbers (`familyMatches`).
  * `openEnquiries` are the unfinished cases of `client`, the one intake attaches to, that the user can view.
  */
 export async function lookupByMobile(raw: string, user: UserWithDepartments) {
@@ -227,10 +255,11 @@ export async function lookupByMobile(raw: string, user: UserWithDepartments) {
   ];
   const client = matches[0] ?? null;
   const openEnquiries = client ? await listOpenEnquiriesOfClient(client.id, user) : [];
-  return { mobile, client, alsoMatches: matches.slice(1), openEnquiries };
+  const familyMatches = client ? [] : await findFamilyMatches(mobile, user);
+  return { mobile, client, alsoMatches: matches.slice(1), openEnquiries, familyMatches };
 }
 
-/** Search by name, mobile (main or extra), passport number, PAN, GSTIN or accounting code. */
+/** Search by name, mobile (main, extra or a family member's own), passport number, PAN, GSTIN or accounting code. */
 function searchWhere(q: string): Prisma.ClientWhereInput {
   const or: Prisma.ClientWhereInput[] = [
     { name: { contains: q, mode: "insensitive" } },
@@ -246,7 +275,11 @@ function searchWhere(q: string): Prisma.ClientWhereInput {
   const digits = q.replace(/\D/g, "");
   if (digits.length >= 4 && /^[\d\s+\-()]+$/.test(q)) {
     const tail = digits.length > 10 ? digits.slice(-10) : digits;
-    or.push({ mobile: { contains: tail } }, { phones: { some: { mobile: { contains: tail } } } });
+    or.push(
+      { mobile: { contains: tail } },
+      { phones: { some: { mobile: { contains: tail } } } },
+      { members: { some: { archivedAt: null, mobile: { contains: tail } } } },
+    );
   }
   return { OR: or };
 }
@@ -358,19 +391,58 @@ export async function createClient(input: CreateClientInput, actor: Actor) {
   return getClient(created.id, actor.user);
 }
 
+/** A family member's own number, saved on their client as an extra number labelled with their name. Audited. */
+async function addFamilyNumber(tx: Db, clientId: string, mobile: string, actor: Actor) {
+  const member = await tx.clientMember.findFirst({
+    where: { clientId, mobile, archivedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, client: { select: { id: true, name: true, mobile: true } } },
+  });
+  if (!member) throw fieldError("mobile", "This number isn't on that client's family list any more. Type the number again.");
+  if ((await tx.clientPhone.count({ where: { clientId } })) >= MAX_EXTRA_PHONES) {
+    throw fieldError("mobile", `${member.client.name} already has ${MAX_EXTRA_PHONES} extra numbers. Use their main number instead.`);
+  }
+  assertCanEditClients(actor.user);
+  const phone = await tx.clientPhone.create({ data: { clientId, mobile, label: member.name.slice(0, 50), createdById: actor.user.id } });
+  await audit(
+    {
+      actorId: actor.user.id,
+      action: "client.phone.add",
+      entityType: "ClientPhone",
+      entityId: phone.id,
+      clientId,
+      after: { ...phone, fromMemberId: member.id },
+      ip: actor.ip,
+    },
+    tx,
+  );
+  return member.client;
+}
+
 /**
  * "Saved against the mobile number" for intake (0003): the client whose main number this is, else the earliest client
  * with it as an extra number (the lookup's first match), else a new client. A new client needs a name (9 Oct 2026);
  * a matched client's name is never overwritten from here.
+ * `familyClientId` is "Use Rakesh Mehta" on the form (0004 amendment of 20 Oct 2026): the number is a family member's
+ * own, so the enquiry goes to that client and the number is saved there as an extra number, found directly next time.
  * Runs in the caller's transaction, so a failed enquiry leaves no half-made client behind. `mobile` must be normalised.
- * Two intakes racing on the same new number: the second insert fails on Client.mobile and the caller retries.
+ * Two intakes racing on the same new number: the second insert fails on Client.mobile (or ClientPhone) and the caller
+ * retries.
  */
-export async function findOrCreateClientByMobile(tx: Db, mobile: string, actor: Actor, name?: string | null, nameField = "name") {
+export async function findOrCreateClientByMobile(
+  tx: Db,
+  mobile: string,
+  actor: Actor,
+  name?: string | null,
+  nameField = "name",
+  familyClientId?: string | null,
+) {
   const select = { id: true, name: true, mobile: true } as const;
   const found =
     (await tx.client.findUnique({ where: { mobile }, select })) ??
     (await tx.clientPhone.findFirst({ where: { mobile }, orderBy: { createdAt: "asc" }, select: { client: { select } } }))?.client;
   if (found) return { client: found, created: false };
+  if (familyClientId) return { client: await addFamilyNumber(tx, familyClientId, mobile, actor), created: false };
 
   const given = name?.trim();
   if (!given) throw fieldError(nameField, "Enter the client's name: this is a new number.");

@@ -15,6 +15,7 @@ import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/enquiries.css'
 import { normaliseMobile } from '../clients/schemas'
 import { useClientLookup, useCreateVisaCase, useEnquirySources, useVisaIntakeOfferings } from './queries'
+import type { FamilyMatch } from './types'
 import { emptyVisaEnquiry, MAX_ADULTS, MAX_CHILDREN, toCreateVisaCaseBody, visaEnquiryFormSchema, type VisaEnquiryFormValues } from './schemas'
 
 const FIELDS = ['mobile', 'clientName', 'sourceCode', 'offeringId', 'adults', 'children', 'travelMonth', 'travelDate'] as const
@@ -67,8 +68,18 @@ export function NewEnquiryPage() {
   useEffect(() => {
     if (!nameAfterTab.current || !lookupAnswered) return
     nameAfterTab.current = false
-    if (!lookup.data?.client) form.setFocus('clientName')
+    if (!lookup.data?.client && lookup.data?.familyMatches.length === 0) form.setFocus('clientName')
   }, [lookupAnswered, lookup.data, form])
+
+  // A family member's own number (0004 amendment of 20 Oct 2026): the answer to "Use Rakesh Mehta / No, a new client"
+  // holds for the number it was given for; editing the number asks again. clientId null is "No, it's a new client".
+  const [familyChoice, setFamilyChoice] = useState<{ mobile: string; clientId: string | null } | null>(null)
+  const nameAfterNo = useRef(false)
+  useEffect(() => {
+    if (!nameAfterNo.current || !familyChoice) return
+    nameAfterNo.current = false
+    form.setFocus('clientName')
+  }, [familyChoice, form])
 
   const country = offerings.data?.find((c) => String(c.id) === countryId)
   // One visa type for the country: pick it.
@@ -105,16 +116,26 @@ export function NewEnquiryPage() {
   }
 
   const found = lookup.data?.client
-  const openEnquiries = lookup.data?.openEnquiries ?? []
-  // A new number: the name is required (9 Oct 2026).
-  const needsName = lookup.data !== undefined && !found
+  const familyMatches = (!found && lookup.data?.familyMatches) || []
+  const choice = familyChoice?.mobile === lookup.data?.mobile ? familyChoice : null
+  const family = familyMatches.find((f) => f.client.id === choice?.clientId)
+  const askFamily = familyMatches.length > 0 && !choice
+  // The client the enquiry goes to: by the number, or the family picked with "Use …".
+  const target = found ?? family?.client
+  const openEnquiries = (found ? lookup.data?.openEnquiries : family?.openEnquiries) ?? []
+  // A new number: the name is required (9 Oct 2026). Not while the family question waits for an answer.
+  const needsName = lookup.data !== undefined && !target && !askFamily
 
   const onSubmit = handleSubmit((values) => {
+    if (askFamily) {
+      setError('mobile', { type: 'family', message: "This is a family member's number. Pick below whose file it goes on." }, { shouldFocus: true })
+      return
+    }
     if (needsName && !values.clientName.trim()) {
       setError('clientName', { type: 'required', message: "Enter the client's name." }, { shouldFocus: true })
       return
     }
-    save.mutate(toCreateVisaCaseBody(values), {
+    save.mutate(toCreateVisaCaseBody(values, family?.client.id ?? null), {
       onSuccess: ({ case: c }) => {
         toast({ tone: 'ok', message: `Enquiry ${c.caseNo} saved for ${c.client.name}.` })
       },
@@ -146,7 +167,9 @@ export function NewEnquiryPage() {
               Existing client · {found.name}
               {found.matchedOn === 'SECONDARY' && ' (extra number)'}
             </span>
-          ) : lookup.data ? (
+          ) : family ? (
+            <span className="chip chip-ok">Existing client · {family.client.name} (family member's number)</span>
+          ) : askFamily ? null : lookup.data ? (
             <span className="chip chip-info">New client · saved against this number</span>
           ) : null}
         </div>
@@ -160,7 +183,8 @@ export function NewEnquiryPage() {
               placeholder="98250 41234"
               autoFocus
               aria-required
-              {...filtered(register('mobile'), mobileChars)}
+              // Editing the number asks the family question again.
+              {...filtered(register('mobile', { onChange: () => setFamilyChoice(null) }), mobileChars)}
               onKeyDown={(e) => {
                 if (e.key === 'Tab' && !e.shiftKey && !lookupAnswered && normaliseMobile(e.currentTarget.value)) nameAfterTab.current = true
               }}
@@ -178,11 +202,32 @@ export function NewEnquiryPage() {
           )}
         </div>
 
+        {askFamily && (
+          <FamilyNumberQuestion
+            matches={familyMatches}
+            onUse={(clientId) => setFamilyChoice({ mobile: lookup.data!.mobile, clientId })}
+            onUseMainNumber={(clientMobile) => setValue('mobile', formatMobile(clientMobile), { shouldDirty: true })}
+            onNew={() => {
+              nameAfterNo.current = true
+              setFamilyChoice({ mobile: lookup.data!.mobile, clientId: null })
+            }}
+          />
+        )}
+        {family && (
+          <p className="muted small family-saved">
+            The case goes on {family.client.name}'s file, and this number is saved there as {family.members[0]!.name}'s, so
+            it's found straight away next time.{' '}
+            <button type="button" className="btn-link" onClick={() => setFamilyChoice(null)}>
+              Change
+            </button>
+          </p>
+        )}
+
         {/* Warns, doesn't block: a family can plan two trips (0003). */}
-        {found && openEnquiries.length > 0 && (
+        {target && openEnquiries.length > 0 && (
           <div className="alert alert-warn open-cases" role="status">
             <strong>
-              {found.name} already has {openEnquiries.length === 1 ? 'an open case' : `${openEnquiries.length} open cases`}.
+              {target.name} already has {openEnquiries.length === 1 ? 'an open case' : `${openEnquiries.length} open cases`}.
             </strong>{' '}
             Check it isn't the same trip before saving a new one.
             <ul>
@@ -370,6 +415,54 @@ export function NewEnquiryPage() {
         />
       )}
     </form>
+  )
+}
+
+/** "Aarav Mehta (Son)", or "Aarav Mehta (Son) and Diya Mehta (Daughter)". */
+function memberNames(members: FamilyMatch['members']): string {
+  const names = members.map((m) => `${m.name} (${m.relation})`)
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]!
+}
+
+/**
+ * The number is no client's own but a family member's (0004 amendment of 20 Oct 2026). "Use Rakesh Mehta" files the
+ * enquiry on that client and saves the number there; a client with no room for another number offers its main number.
+ */
+function FamilyNumberQuestion({
+  matches,
+  onUse,
+  onUseMainNumber,
+  onNew,
+}: {
+  matches: FamilyMatch[]
+  onUse: (clientId: string) => void
+  onUseMainNumber: (clientMobile: string) => void
+  onNew: () => void
+}) {
+  return (
+    <div className="alert alert-warn family-number" role="status">
+      {matches.map((m) => (
+        <div key={m.client.id} className="family-number-row">
+          <p>
+            This number belongs to <strong>{memberNames(m.members)}</strong>, family of <strong>{m.client.name}</strong> ·{' '}
+            {formatMobile(m.client.mobile)}.
+            {m.extraNumbersFull && ` ${m.client.name} already has 5 extra numbers, so this one can't be saved there.`}
+          </p>
+          {m.extraNumbersFull ? (
+            <button type="button" className="btn btn-sm" onClick={() => onUseMainNumber(m.client.mobile)}>
+              Use {m.client.name}'s main number
+            </button>
+          ) : (
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => onUse(m.client.id)}>
+              Use {m.client.name}
+            </button>
+          )}
+        </div>
+      ))}
+      <button type="button" className="btn btn-sm" onClick={onNew}>
+        No, it's a new client
+      </button>
+    </div>
   )
 }
 
