@@ -442,7 +442,7 @@ function DocumentRow({
         </span>
         {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
         {xeroxForOriginal(d) && (
-          <div style={{ marginTop: 4 }}>
+          <div className="doc-flag">
             <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
           </div>
         )}
@@ -542,7 +542,7 @@ function CheckRow({
           </span>
           {(d.detail || d.note) && <div className="doc-note">{[d.detail, d.note].filter(Boolean).join(' · ')}</div>}
           {xeroxForOriginal(d) && (
-            <div style={{ marginTop: 4 }}>
+            <div className="doc-flag">
               <span className="chip chip-sm chip-warn">Original needed · came as a xerox</span>
             </div>
           )}

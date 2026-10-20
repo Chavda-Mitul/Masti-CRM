@@ -221,17 +221,17 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
             <div className="money-earlier">
               <span className="muted small">Earlier additional invoices</span>
               {c.earlierAdditionalInvoices.map((e) => (
-                <div key={e.invoiceNo} className="kv">
-                  <span className="small">
+                <div key={e.invoiceNo} className="money-earlier-row">
+                  <span className="muted small">
                     <span className="mono">{e.invoiceNo}</span> · cancelled by <span className="mono">{e.cancelled?.creditNoteNo}</span>
                   </span>
                   <span className="money-earlier-actions">
                     <button type="button" className="btn-link small" onClick={() => openFile(e.file.id)}>
-                      Invoice
+                      Open invoice
                     </button>
                     {e.cancelled && (
                       <button type="button" className="btn-link small" onClick={() => openFile(e.cancelled!.file.id)}>
-                        Credit note
+                        Open credit note
                       </button>
                     )}
                   </span>
@@ -245,17 +245,17 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
         <div className="money-earlier">
           <span className="muted small">Earlier invoices</span>
           {c.earlierInvoices.map((e) => (
-            <div key={e.invoiceNo} className="kv">
-              <span className="small">
+            <div key={e.invoiceNo} className="money-earlier-row">
+              <span className="muted small">
                 <span className="mono">{e.invoiceNo}</span> · cancelled by <span className="mono">{e.cancelled?.creditNoteNo}</span>
               </span>
               <span className="money-earlier-actions">
                 <button type="button" className="btn-link small" onClick={() => openFile(e.file.id)}>
-                  Invoice
+                  Open invoice
                 </button>
                 {e.cancelled && (
                   <button type="button" className="btn-link small" onClick={() => openFile(e.cancelled!.file.id)}>
-                    Credit note
+                    Open credit note
                   </button>
                 )}
               </span>

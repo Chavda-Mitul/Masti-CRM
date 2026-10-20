@@ -412,9 +412,22 @@
   padding-top: 8px;
   border-top: 1px solid var(--divider);
 }
+/* Each earlier invoice: its numbers, then the links on their own line, so neither wraps in the narrow rail. */
+.money-earlier-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.money-earlier-row:last-child {
+  border-bottom: 0;
+}
 .money-earlier-actions {
   display: flex;
-  gap: 10px;
+  gap: 14px;
+  white-space: nowrap;
 }
 .money-actions {
   display: flex;
@@ -799,6 +812,19 @@
 .checklist-row .doc-note {
   font-size: 12.5px;
   color: var(--text-muted);
+}
+/* "Original needed · came as a xerox": wraps inside the name column instead of running into the next one. */
+.checklist-row .doc-flag {
+  margin: 4px 0 2px;
+}
+.checklist-row .doc-flag .chip {
+  max-width: 100%;
+  height: auto;
+  min-height: 22px;
+  padding: 3px 9px;
+  line-height: 1.3;
+  white-space: normal;
+  border-radius: 11px;
 }
 /* The paper's copy in the client's vault (0016 Decision 5): "On file · saved 12 Mar · Open · Save a newer scan". */
 .doc-vault .btn-link {
