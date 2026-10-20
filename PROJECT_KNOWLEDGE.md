@@ -860,7 +860,9 @@ This worked example follows the demo's Mehta family case (France Schengen touris
     - One letter per case, listing every traveller. It prints as the format says; staff can't type into it.
     - A format is for one visa type, a set of countries, and one traveller or two or more (the "family type").
     - Changing the wording adds a version with a "Use from" day. A wording in use is never changed.
-    - The formats in Settings are built (component 1). The card on the case and its print page come next.
+    - The formats in Settings are built (component 1), and so is the card on the case with its print page
+      (component 2). Missing details block Make the letter; it's made at File preparation and printed again later as
+      the same letter; the letterhead space is a setting (45 mm ⚠️); "File ready" doesn't need it.
 - **Saved file, kept as proof** ✅: the final file (application form, ITR, bank statement, passport scan…) is saved as **one PDF, linked under the case number** in Drive. "Every page as it went to the vendor, stored in your Drive; the CRM keeps the link." Masti already keeps a single scanned PDF like this today; the CRM links it to the case *(transcript, 7:18 PM)*.
 - The vendor comes from the approved list ✅.
 
@@ -1797,7 +1799,7 @@ Masti CRM/
 
 **Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
 - **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.
-- **Pending (not built in Step 3):** the covering letter, now its own record, `docs/decisions/0019-covering-letters.md`: the formats in Settings are built with samples (19 Oct 2026), the case card is next, and Masti's formats are still awaited (M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
+- **Pending (not built in Step 3):** the covering letter, now its own record, `docs/decisions/0019-covering-letters.md`: the formats in Settings and the case card with its print page are built (19 Oct 2026, with samples), and Masti's formats are still awaited (M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
 - **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
 - **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
 - **Built so far (12–13 Oct 2026):**

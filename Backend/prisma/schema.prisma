@@ -110,6 +110,7 @@ model User {
   noticesPosted         Notice[]                @relation("NoticePostedBy")
   noticesPicked         Notice[]                @relation("NoticePickedBy")
   coveringLettersAdded  CoveringLetterVersion[] @relation("CoveringLetterVersionAddedBy")
+  coveringLettersMade   VisaCase[]              @relation("VisaCaseCoveringLetterMadeBy")
 
   @@index([type, isActive])
 }
@@ -639,6 +640,8 @@ model CoveringLetterVersion {
   createdAt     DateTime             @default(now()) @db.Timestamptz(3)
   format        CoveringLetterFormat @relation(fields: [formatId], references: [id], onDelete: Restrict)
   addedBy       User?                @relation("CoveringLetterVersionAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  /// The cases whose letter was made with it (0019 Decision 10).
+  cases         VisaCase[]
 
   @@index([formatId, effectiveFrom])
   @@index([addedById])
@@ -1201,115 +1204,125 @@ enum EntryType {
 /// Checks in the migration: travelMonth is the 1st of a month; travelDate, if set, falls in that month;
 /// booklet counts are 0–50; returnOn is not before departOn; hotelStay is 1–200 characters.
 model VisaCase {
-  enquiryId              String                 @id
-  offeringId             Int
+  enquiryId               String                 @id
+  offeringId              Int
   /// The month they plan to travel, stored as the 1st (M9).
-  travelMonth            DateTime               @db.Date
+  travelMonth             DateTime               @db.Date
   /// The exact date, if the client knows it at intake.
-  travelDate             DateTime?              @db.Date
+  travelDate              DateTime?              @db.Date
   /// Step 2: "Client brings them" or "Send collection boy".
-  arrival                DocumentArrival?
+  arrival                 DocumentArrival?
   /// Step 2: passports received (current + old). Checked again at handover.
-  bookletsCurrent        Int?                   @db.SmallInt
-  bookletsOld            Int?                   @db.SmallInt
+  bookletsCurrent         Int?                   @db.SmallInt
+  bookletsOld             Int?                   @db.SmallInt
   /// Step 2's Reminders switch (0006 amendment 19): off stops this case's pending-document reminders. When the next one
   /// goes out is worked out from the intake day and the setting visa.documentReminders, not stored.
-  remindersOn            Boolean                @default(true)
+  remindersOn             Boolean                @default(true)
   /// Trip details (0007 Decision 4), entered in Documents or File preparation. departOn starts as the intake's
   /// travelDate. "File ready" needs departOn, returnOn and entryType.
-  departOn               DateTime?              @db.Date
-  returnOn               DateTime?              @db.Date
-  entryType              EntryType?
+  departOn                DateTime?              @db.Date
+  returnOn                DateTime?              @db.Date
+  entryType               EntryType?
   /// The hotel's name and city, for the forms: data, not a reason or a status.
-  hotelStay              String?
+  hotelStay               String?
   /// The submission agent, picked during File preparation from the active vendors covering the case's country
   /// (0007 Decision 7). Switched off later, it stays here; "File ready" then asks for an active one.
-  vendorId               Int?
+  vendorId                Int?
   /// "Mark documents complete" (0006 Decision 8). Whoever matured it can't be its processor.
-  maturedAt              DateTime?              @db.Timestamptz(3)
-  maturedById            String?
+  maturedAt               DateTime?              @db.Timestamptz(3)
+  maturedById             String?
   /// "File ready — add to docket" (0007 Decision 9): Step 3 is done and the case moved to Docket & dispatch. Both set
   /// together (checked in the migration).
-  fileReadyAt            DateTime?              @db.Timestamptz(3)
-  fileReadyById          String?
+  fileReadyAt             DateTime?              @db.Timestamptz(3)
+  fileReadyById           String?
   /// The docket it goes to the vendor in (0008 Decision 2). Set by "Add to docket", cleared by "Take out" while the
   /// docket is open.
-  docketId               String?
+  docketId                String?
   /// "Submitted online" (0008 Decision 11): an e-visa (Vendor needed off) went in on the portal, with no docket, and the
   /// case moved to At vendor. Both set together, and never with a docket (checked in the migration).
-  submittedOnlineAt      DateTime?              @db.Timestamptz(3)
-  submittedOnlineById    String?
+  submittedOnlineAt       DateTime?              @db.Timestamptz(3)
+  submittedOnlineById     String?
   /// "Vendor got it, papers checked" (0011 Decision 2): the vendor has this file, at Step 5. Both set together, and only
   /// for a file sent in a docket (checked in the migration).
-  vendorReceivedAt       DateTime?              @db.Timestamptz(3)
-  vendorReceivedById     String?
+  vendorReceivedAt        DateTime?              @db.Timestamptz(3)
+  vendorReceivedById      String?
   /// "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy it went to and the
   /// expected collection date, all saved together, with who first saved them and when. All set or none, only after the
   /// vendor got the file, and the file number's format (checked in the migration).
-  vendorFileNo           String?
-  embassyId              Int?
-  collectionOn           DateTime?              @db.Date
-  submittedAt            DateTime?              @db.Timestamptz(3)
-  submittedById          String?
+  vendorFileNo            String?
+  embassyId               Int?
+  collectionOn            DateTime?              @db.Date
+  submittedAt             DateTime?              @db.Timestamptz(3)
+  submittedById           String?
   /// "Take the file back" (0011 Decision 6): recalled from the vendor, why and by whom; the case then goes to Passport
   /// back. All three set together, and only for a file sent in a docket (checked in the migration).
-  recalledAt             DateTime?              @db.Timestamptz(3)
-  recalledById           String?
-  recallReasonId         Int?
+  recalledAt              DateTime?              @db.Timestamptz(3)
+  recalledById            String?
+  recallReasonId          Int?
   /// "Record the decision" (docs/decisions/0012-visa-decision.md Decision 6): every traveller's outcome was saved and
   /// the case moved to Decision, by whom and when. Set together, only after the embassy submission or "Submitted
   /// online", and never on a recalled file (checked in the migration).
-  decidedAt              DateTime?              @db.Timestamptz(3)
-  decidedById            String?
+  decidedAt               DateTime?              @db.Timestamptz(3)
+  decidedById             String?
   /// "Passports on the way back" (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor collected
   /// the passports, the day they're expected at our office, and who recorded it when. They're in transit from then
   /// until they're marked received. All four set together, only after the decision or a recall, never for an e-visa,
   /// expected on or after collected, and collected no later than the day it was recorded (checked in the migration).
-  passportsCollectedOn   DateTime?              @db.Date
-  passportsExpectedOn    DateTime?              @db.Date
-  passportsInTransitAt   DateTime?              @db.Timestamptz(3)
-  passportsInTransitById String?
+  passportsCollectedOn    DateTime?              @db.Date
+  passportsExpectedOn     DateTime?              @db.Date
+  passportsInTransitAt    DateTime?              @db.Timestamptz(3)
+  passportsInTransitById  String?
   /// "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet was opened at our office and
   /// the passports are in our stock, by whom and when, with the booklets counted (current and old). All four set
   /// together, only after they were on their way back, each count 0–50 and at least one booklet (checked in the
   /// migration). Never changed once saved (decided 17 Oct 2026), except that "Received the rest" adds the late booklets
   /// of a short return, up to what went out (0013 Decision 5, amended 17 Oct 2026).
-  passportsReceivedAt    DateTime?              @db.Timestamptz(3)
-  passportsReceivedById  String?
-  bookletsBackCurrent    Int?                   @db.SmallInt
-  bookletsBackOld        Int?                   @db.SmallInt
+  passportsReceivedAt     DateTime?              @db.Timestamptz(3)
+  passportsReceivedById   String?
+  bookletsBackCurrent     Int?                   @db.SmallInt
+  bookletsBackOld         Int?                   @db.SmallInt
   /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
   /// missing-passport-reasons list. All three set together, only once received (checked in the migration).
-  shortfallClearedAt     DateTime?              @db.Timestamptz(3)
-  shortfallClearedById   String?
-  shortfallReasonId      Int?
-  enquiry                Enquiry                @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  offering               VisaOffering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  maturedBy              User?                  @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
-  fileReadyBy            User?                  @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
-  submittedOnlineBy      User?                  @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
-  vendorReceivedBy       User?                  @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
-  submittedBy            User?                  @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
-  recalledBy             User?                  @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
-  decidedBy              User?                  @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
-  passportsInTransitBy   User?                  @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
-  passportsReceivedBy    User?                  @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
-  recallReason           RecallReason?          @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
-  shortfallClearedBy     User?                  @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
-  shortfallReason        MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)
-  embassy                Embassy?               @relation(fields: [embassyId], references: [id], onDelete: Restrict)
-  vendor                 Vendor?                @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  docket                 Docket?                @relation(fields: [docketId], references: [id], onDelete: Restrict)
-  travellers             VisaCaseTraveller[]
-  quote                  VisaQuote?
+  shortfallClearedAt      DateTime?              @db.Timestamptz(3)
+  shortfallClearedById    String?
+  shortfallReasonId       Int?
+  /// "Make the letter" (docs/decisions/0019-covering-letters.md Decision 10): the covering-letter wording used, who made
+  /// it and when, and what it was filled in with ({ values, travellers }), so a reprint is the same letter. Made at File
+  /// preparation, again as often as needed; all four set together (checked in the migration).
+  coveringLetterVersionId Int?
+  coveringLetterMadeAt    DateTime?              @db.Timestamptz(3)
+  coveringLetterMadeById  String?
+  coveringLetterFill      Json?
+  enquiry                 Enquiry                @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  offering                VisaOffering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  maturedBy               User?                  @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
+  fileReadyBy             User?                  @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
+  submittedOnlineBy       User?                  @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
+  vendorReceivedBy        User?                  @relation("VisaCaseVendorReceivedBy", fields: [vendorReceivedById], references: [id], onDelete: Restrict)
+  submittedBy             User?                  @relation("VisaCaseSubmittedBy", fields: [submittedById], references: [id], onDelete: Restrict)
+  recalledBy              User?                  @relation("VisaCaseRecalledBy", fields: [recalledById], references: [id], onDelete: Restrict)
+  decidedBy               User?                  @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  passportsInTransitBy    User?                  @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
+  passportsReceivedBy     User?                  @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
+  recallReason            RecallReason?          @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
+  shortfallClearedBy      User?                  @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
+  shortfallReason         MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)
+  embassy                 Embassy?               @relation(fields: [embassyId], references: [id], onDelete: Restrict)
+  vendor                  Vendor?                @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  docket                  Docket?                @relation(fields: [docketId], references: [id], onDelete: Restrict)
+  coveringLetterVersion   CoveringLetterVersion? @relation(fields: [coveringLetterVersionId], references: [id], onDelete: Restrict)
+  coveringLetterMadeBy    User?                  @relation("VisaCaseCoveringLetterMadeBy", fields: [coveringLetterMadeById], references: [id], onDelete: Restrict)
+  travellers              VisaCaseTraveller[]
+  quote                   VisaQuote?
   /// Step 8 (0014): the passports handed back to the client; null until then.
-  handover               VisaHandover?
+  handover                VisaHandover?
 
   @@index([offeringId])
   @@index([embassyId])
   @@index([vendorId])
   @@index([fileReadyById])
   @@index([docketId])
+  @@index([coveringLetterVersionId])
 }
 
 /// The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2): two outcomes.

@@ -1,8 +1,9 @@
 # 0019 · Covering letters: fixed formats, filled in from the case
 
 - **Status:** decided 19 Oct 2026 (project lead). The lead chose to build it now with sample formats, and answered the
-  three open points with "use your best guess"; the guesses are Decisions 2–3 and the defaults below. Component 1 (the
-  formats in Settings) is built; component 2 (the case card and the print page) is next.
+  three open points with "use your best guess"; the guesses are Decisions 2–3 and the defaults below. The lead answered
+  component 2's four questions the same day (Decisions 9–12). Both components are built: the formats in Settings, and
+  the case card with its print page.
 - **Date:** 19 Oct 2026
 - **Scope:** the covering letter of demo screen 08 and the "Covering letters" master of screen 29. It replaces the
   pending item "the covering letter" in [0007](0007-visa-file-prep.md) Decision 2. Builds on
@@ -70,11 +71,29 @@
    person (France), and China · tourist · family. They are named "(sample)", their wording has no author ("Set up with
    the system"), and the screens say so. The seed adds them only to a database with no formats. **They must be replaced
    with Masti's formats before go-live (M13).**
-8. **Component 2 (next):**
-   - a card on the case at File preparation, with the formats that fit;
-   - the server fills in the blanks, lists what's missing, and refuses until it's fixed;
-   - **Make the letter** records which wording was used (audited) and opens an A4 print page with blank space at the
-     top for the client's letterhead.
+8. **Component 2: the card on the case**, beside "Saved file — kept as proof" as in the demo, once the case has matured.
+   - **The letters that fit:** active, the case's visa type, one of its countries, and one traveller or two or more, with
+     a wording in use today. A visa type or country switched off since still fits. The first in "Order in lists" is
+     picked; staff can pick another.
+   - **The preview:** the server fills the wording in from the case: dates written in full ("10 December 2026"), names as
+     a sentence ("A, B and C"), the number of days counting both ends, "single", "double" or "multiple", the hotel stay,
+     the client's address, and the travellers' table from the family list. "See the whole letter" shows it all.
+   - A sample wording says so on the card.
+9. **Missing details block** (project lead, 19 Oct 2026). A blank the wording uses that the case can't fill is listed in
+   plain words ("Still needed: the hotel stay; AARAV MEHTA's passport number"), and Make the letter waits; the server
+   refuses with 409 `LETTER_INCOMPLETE` too. Only the blanks a wording uses count.
+10. **Made at File preparation, printed again later** (project lead, 19 Oct 2026).
+    - The owner, the Visa HOD or the Head make it at File preparation, again as often as needed there; each time is
+      audited (`visa.coveringLetter.make`).
+    - The case keeps the wording used, who made it, when, and **what it was filled in with** (a snapshot). Every print is
+      that same letter, even after the wording or a passport number changes; the letter's date is the day it was made.
+    - After File preparation the card is read-only: anyone who can open the case prints the letter again, but no one
+      changes it. Printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
+11. **The letterhead space is a setting** (project lead, 19 Oct 2026): `visa.coveringLetter.letterheadMm`, 45 mm ⚠️, 0–120,
+    changed by Vimal or the Visa HOD in Settings → Masters → Covering letters → Printing. The print page is A4 with
+    18 mm margins; the first page's top is the letterhead space, and "Plain paper" uses the usual 18 mm instead.
+12. **"File ready" doesn't need the letter** (project lead, 19 Oct 2026): some countries may have no format yet. The card
+    shows whether it was made.
 
 ### Defaults (not asked; say if any is wrong)
 
@@ -135,13 +154,32 @@
   - the samples.
 - **`tests/frontendRules.test.ts`:** the browser's blanks, limits and messages match the server's.
 
+## Component 2: schema, API and screens
+
+- **Schema:** on `VisaCase`, `coveringLetterVersionId` (the wording used), `coveringLetterMadeAt`,
+  `coveringLetterMadeById` and `coveringLetterFill` (`{ values, travellers }`), all four set or none (a CHECK). Migration
+  `20261019235000_covering_letter_made`: new nullable columns only.
+- **API:**
+
+  | Endpoint | Who | What |
+  | --- | --- | --- |
+  | `GET /api/visa/cases/:caseNo/covering-letter?formatId=` | anyone who can open the case | `{ letter }`: the letters that fit, the one asked for (or the one made, or the first) filled in with what's missing, the letter made, and the case's visa type, country and travellers |
+  | `POST /api/visa/cases/:caseNo/covering-letter` | owner, Visa HOD, Head, at File preparation | `{ formatId }`. 400 if it doesn't fit; 409 `LETTER_INCOMPLETE` with `details.missing` |
+  | `GET /api/visa/cases/:caseNo/covering-letter/print` | anyone who can open the case | the letter made: its wording, what it was filled in with, and the letterhead space. 409 before one is made |
+  | `PUT /api/visa/settings` | Head, Visa HOD | `{ coveringLetter: { letterheadMm } }` |
+
+- **Screens:** `CoveringLetterCard` on the case (paired with the saved file), `/print/covering-letter/:caseNo`, and the
+  Printing card on the covering letters page. `fillLetter` (`coveringLetters/fill.ts`) holds the filling rules.
+- **Tests:** `tests/visaCoveringLetter.test.ts` (15): which letters fit, filling in, what's missing, who may make it and
+  when, the 409 list, making it again, printing the same letter after changes, the letterhead setting, and the CHECK.
+
 ## Built
 
-- **Component 1:** built 19 Oct 2026 on `feat/covering-letter`.
+- **Component 1:** built 19 Oct 2026 on `feat/covering-letter` (PR #40).
+- **Component 2:** built 19 Oct 2026 on `feat/covering-letter-case`.
 
 ## Not in this record
 
-- Component 2: the case card, filling in the blanks, and the print page.
 - Whether "Covering letter" becomes a next step on the visa board.
 - Masti's own formats (M13), and the details in M47: titles, who signs, the letterhead's margin, the consulate address
   per country.

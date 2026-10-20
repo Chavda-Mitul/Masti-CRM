@@ -198,6 +198,53 @@
 .matured-banner strong {
   font-weight: 800;
 }
+/* Step 3's covering letter (demo screen 08, 0019): the letter picked, the start of it filled in, and Make the letter. */
+.covering-letter {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.covering-letter-sample {
+  align-self: flex-start;
+}
+/* The demo's serif preview: the first lines, fading out. "See the whole letter" shows the rest. */
+.covering-letter-preview {
+  max-height: 150px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+.covering-letter-preview .letter-paper {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.covering-letter-preview .letter-paper p {
+  margin-bottom: 6px;
+}
+.covering-letter-whole {
+  align-self: flex-start;
+}
+.covering-letter-missing {
+  margin: 0;
+}
+.covering-letter-made {
+  margin: 0;
+}
+.covering-letter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.covering-letter-dialog {
+  width: min(760px, calc(100% - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
 /* Step 3's saved file, kept as proof (demo screen 08). */
 .saved-file {
   display: flex;

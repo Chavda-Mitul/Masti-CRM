@@ -70,6 +70,13 @@ export function dateLabel(value: string): string {
   return DATE_LABEL.format(toDbDate(value));
 }
 
+const FULL_DATE = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+/** "2026-10-20" → "20 October 2026", as a letter writes it (the covering letter, 0019). */
+export function fullDate(value: string): string {
+  return FULL_DATE.format(toDbDate(value));
+}
+
 /** ISO weekday of a date: 1 = Monday … 7 = Sunday. */
 export function isoWeekday(value: string): number {
   return ((toDbDate(value).getUTCDay() + 6) % 7) + 1;

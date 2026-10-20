@@ -6,6 +6,8 @@ import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
 import type {
   ClientLookup,
+  CoveringLetterPrint,
+  CoveringLetterView,
   CreateVisaCaseBody,
   DocketKind,
   DocketStickerData,
@@ -71,6 +73,12 @@ export const enquiryKeys = {
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
+  /** The covering letter's card, per letter shown; all of a case's under one key, so a case action refreshes them. */
+  coveringLetters: (caseNo: string) => ['enquiries', 'covering-letter', caseNo.toUpperCase()] as const,
+  coveringLetter: (caseNo: string, formatId: number | undefined) => ['enquiries', 'covering-letter', caseNo.toUpperCase(), formatId ?? 'default'] as const,
+  /** Every case's print of its letter: a new letterhead space changes them all. */
+  coveringLetterPrints: ['enquiries', 'covering-letter-print'] as const,
+  coveringLetterPrint: (caseNo: string) => ['enquiries', 'covering-letter-print', caseNo.toUpperCase()] as const,
 }
 
 /** One visa case: the case page (Step 2 onwards). */
@@ -121,6 +129,8 @@ function useCaseAction<Vars>(
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.desks() })
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
+      // The covering letter's preview is filled in from the case (its trip details, its step).
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetters(caseNo) })
     },
     onError: (error) => {
       if (!isStale(error)) return
@@ -693,5 +703,54 @@ export function useCreateVisaCase(idempotencyKey: string) {
     },
     // E.g. "We don't process this country and visa type any more": show the current list.
     onError: () => void queryClient.invalidateQueries({ queryKey: enquiryKeys.visaOfferings }),
+  })
+}
+
+/**
+ * The covering letter's card (docs/decisions/0019-covering-letters.md): the letters that fit the case, one filled in
+ * (formatId, else the one made, else the first) and the one made. Always fetched fresh: the case or the client's family
+ * list may have changed since.
+ */
+export function useCoveringLetter(caseNo: string, formatId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: enquiryKeys.coveringLetter(caseNo, formatId),
+    queryFn: async () =>
+      (await api<{ letter: CoveringLetterView }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter${formatId ? `?formatId=${formatId}` : ''}`))
+        .letter,
+    enabled,
+    staleTime: 0,
+    // Picking another letter keeps the card's preview until the new one arrives.
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** "Make the letter": answers with the card's view. The other letters' views and the print show the letter made. */
+export function useMakeCoveringLetter(caseNo: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (formatId: number) =>
+      (
+        await api<{ letter: CoveringLetterView }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter`, {
+          method: 'POST',
+          body: { formatId },
+        })
+      ).letter,
+    onSuccess: (letter, formatId) => {
+      const shown = enquiryKeys.coveringLetter(caseNo, formatId)
+      queryClient.setQueryData(shown, letter)
+      void queryClient.invalidateQueries({
+        queryKey: enquiryKeys.coveringLetters(caseNo),
+        predicate: (q) => JSON.stringify(q.queryKey) !== JSON.stringify(shown),
+      })
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetterPrint(caseNo) })
+    },
+  })
+}
+
+/** The letter made, to print: the same letter every time (0019 Decision 10). */
+export function useCoveringLetterPrint(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.coveringLetterPrint(caseNo),
+    queryFn: async () => (await api<{ print: CoveringLetterPrint }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/print`)).print,
   })
 }

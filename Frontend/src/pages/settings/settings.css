@@ -480,6 +480,19 @@ fieldset:disabled .seg-sm label {
 .letters-sample {
   margin-left: 6px;
 }
+.letters-printing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  max-width: 560px;
+}
+.letters-printing-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
 .letter-page {
   display: flex;
   flex-direction: column;

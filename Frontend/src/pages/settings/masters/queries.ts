@@ -254,6 +254,34 @@ export function useSaveDocumentRemindersSetting() {
   })
 }
 
+/** The covering letter's print setting (0019 Decision 11), under its own key: the invoice card reads another part. */
+const letterheadKey = ['visa', 'settings', 'covering-letter'] as const
+
+type CoveringLetterSetting = { letterheadMm: number }
+
+/** How much to leave blank at the top of a covering letter for the client's letterhead. */
+export function useLetterheadSetting() {
+  return useQuery({
+    queryKey: letterheadKey,
+    queryFn: async () => (await api<{ settings: { coveringLetter: CoveringLetterSetting } }>('/visa/settings')).settings.coveringLetter,
+    staleTime: MASTER_STALE,
+  })
+}
+
+/** The Visa HOD or the Head. The next print uses it. */
+export function useSaveLetterheadSetting() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (coveringLetter: CoveringLetterSetting) =>
+      (await api<{ settings: { coveringLetter: CoveringLetterSetting } }>('/visa/settings', { method: 'PUT', body: { coveringLetter } })).settings
+        .coveringLetter,
+    onSuccess: (setting) => {
+      queryClient.setQueryData(letterheadKey, setting)
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetterPrints })
+    },
+  })
+}
+
 export function useUpdateHolidaySettings() {
   const queryClient = useQueryClient()
   return useMutation({
