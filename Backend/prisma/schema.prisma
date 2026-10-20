@@ -436,7 +436,10 @@ model ClientMember {
 
   @@index([clientId])
   @@index([passportNumber])
+  /// The New enquiry lookup (equality) and the Clients search (any part).
+  @@index([mobile])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "ClientMember_name_trgm_idx")
+  @@index([mobile(ops: raw("gin_trgm_ops"))], type: Gin, map: "ClientMember_mobile_trgm_idx")
 }
 
 /// Free text with author and date (demo). Never read by reports or rules (§7 rule 2). Append-only.

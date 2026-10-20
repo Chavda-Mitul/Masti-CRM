@@ -219,6 +219,8 @@ export const createVisaCaseSchema = z
     mobile: z.string().trim().min(1, "Enter the client's mobile number.").max(20),
     /** Needed when the number is new; never overwrites an existing client's name. */
     clientName: z.string().trim().max(150).nullish(),
+    /** "Use Rakesh Mehta": the number is this client's family member's own; it is saved there as an extra number. */
+    familyClientId: z.uuid().nullish(),
     sourceCode: z.string().trim().min(1, "Pick where the enquiry came in.").max(40),
     offeringId: z.number().int().positive("Pick a country and visa type."),
     adults: z.number().int().min(1, "At least one adult travels.").max(MAX_ADULTS),

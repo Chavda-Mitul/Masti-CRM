@@ -45,10 +45,11 @@ export function emptyVisaEnquiry(mobile = ''): VisaEnquiryFormValues {
   return { mobile, clientName: '', sourceCode: '', countryId: '', offeringId: '', adults: 1, children: 0, travelMonth: '', travelDate: '' }
 }
 
-export function toCreateVisaCaseBody(v: VisaEnquiryFormValues): CreateVisaCaseBody {
+export function toCreateVisaCaseBody(v: VisaEnquiryFormValues, familyClientId: string | null = null): CreateVisaCaseBody {
   return {
     mobile: normaliseMobile(v.mobile) ?? v.mobile,
     clientName: v.clientName.trim() || null,
+    familyClientId,
     sourceCode: v.sourceCode,
     offeringId: Number(v.offeringId),
     adults: v.adults,

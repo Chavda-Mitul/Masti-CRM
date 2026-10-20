@@ -98,6 +98,58 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(await prisma.client.count()).toBe(1);
   });
 
+  it("files a family member's number with their client and saves it there as an extra number (0004 amendment)", async () => {
+    const staff = await visaStaff();
+    const user = await prisma.user.findFirstOrThrow();
+    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+    const son = await prisma.relation.findUniqueOrThrow({ where: { code: "SON" } });
+    const rakesh = await prisma.client.create({ data: { mobile: "+919825041234", name: "Rakesh Mehta", billingCycleId: cycle.id } });
+    const aarav = await prisma.clientMember.create({
+      data: { clientId: rakesh.id, name: "AARAV MEHTA", relationId: son.id, mobile: "+919876543210", createdById: user.id },
+    });
+
+    const res = await staff.post("/api/visa/cases").send(await body({ mobile: "98765 43210", clientName: null, familyClientId: rakesh.id }));
+    expect(res.status).toBe(201);
+    expect(res.body.clientCreated).toBe(false);
+    expect(res.body.case.client).toMatchObject({ id: rakesh.id, mobile: "+919825041234" });
+    expect(await prisma.client.count()).toBe(1);
+    const phone = await prisma.clientPhone.findFirstOrThrow({ where: { clientId: rakesh.id } });
+    expect(phone).toMatchObject({ mobile: "+919876543210", label: "AARAV MEHTA" });
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "client.phone.add", clientId: rakesh.id } });
+    expect(audit.after).toMatchObject({ mobile: "+919876543210", fromMemberId: aarav.id });
+
+    // Next time the number is found directly, as an extra number.
+    expect((await staff.get("/api/clients/lookup?mobile=9876543210")).body.client).toMatchObject({ id: rakesh.id, matchedOn: "SECONDARY" });
+    const again = await staff.post("/api/visa/cases").send(await body({ mobile: "98765 43210", clientName: null, familyClientId: rakesh.id }));
+    expect(again.body.case.client.id).toBe(rakesh.id);
+    expect(await prisma.clientPhone.count()).toBe(1);
+  });
+
+  it("refuses a family client the number doesn't belong to, or one with no room for another number", async () => {
+    const staff = await visaStaff();
+    const user = await prisma.user.findFirstOrThrow();
+    const cycle = await prisma.billingCycle.findFirstOrThrow({ where: { isDefault: true } });
+    const son = await prisma.relation.findUniqueOrThrow({ where: { code: "SON" } });
+    const rakesh = await prisma.client.create({ data: { mobile: "+919825041234", name: "Rakesh Mehta", billingCycleId: cycle.id } });
+    await prisma.clientMember.create({
+      data: { clientId: rakesh.id, name: "AARAV MEHTA", relationId: son.id, mobile: "+919876543210", createdById: user.id, archivedAt: new Date() },
+    });
+
+    const archived = await staff.post("/api/visa/cases").send(await body({ mobile: "9876543210", clientName: null, familyClientId: rakesh.id }));
+    expect(archived.status).toBe(400);
+    expect(archived.body.issues.mobile).toEqual(["This number isn't on that client's family list any more. Type the number again."]);
+
+    await prisma.clientMember.updateMany({ data: { archivedAt: null } });
+    await prisma.clientPhone.createMany({
+      data: [1, 2, 3, 4, 5].map((i) => ({ clientId: rakesh.id, mobile: `+91900000000${i}`, createdById: user.id })),
+    });
+    const full = await staff.post("/api/visa/cases").send(await body({ mobile: "9876543210", clientName: null, familyClientId: rakesh.id }));
+    expect(full.status).toBe(400);
+    expect(full.body.issues.mobile).toEqual(["Rakesh Mehta already has 5 extra numbers. Use their main number instead."]);
+    expect(await prisma.enquiry.count()).toBe(0);
+    expect(await prisma.caseCounter.count()).toBe(0);
+  });
+
   it("needs the client's name for a new number, and never overwrites a name", async () => {
     const staff = await visaStaff();
     for (const clientName of [undefined, "", "  "]) {

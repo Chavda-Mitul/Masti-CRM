@@ -553,6 +553,39 @@ describe("mobile numbers", () => {
     expect((await visa.get("/api/clients/lookup?mobile=123")).status).toBe(400);
   });
 
+  it("finds family members' own numbers when no client has the number (0004 amendment, 20 Oct 2026)", async () => {
+    const visa = await visaAgent();
+    const rakesh = await createClient(visa, { mobile: "9825041234", name: "Rakesh Mehta" });
+    const member = (n: string, rel: number, mobile: string) =>
+      visa.post(`/api/clients/${rakesh.id}/members`).send({ name: n, relationId: rel, mobile });
+    await member("AARAV MEHTA", await relationId("SON"), "98765 43210");
+    await member("DIYA MEHTA", await relationId("DAUGHTER"), "9876543210");
+    const gone = (await member("OLD MEHTA", await relationId("FATHER"), "9876500000")).body.member;
+    await visa.post(`/api/clients/${rakesh.id}/members/${gone.id}/archive`).send({});
+
+    const found = (await visa.get("/api/clients/lookup?mobile=9876543210")).body;
+    expect(found.client).toBeNull();
+    expect(found.familyMatches).toEqual([
+      {
+        client: { id: rakesh.id, name: "Rakesh Mehta", kind: "INDIVIDUAL", mobile: "+919825041234" },
+        members: [
+          { id: expect.any(String), name: "AARAV MEHTA", relation: "Son" },
+          { id: expect.any(String), name: "DIYA MEHTA", relation: "Daughter" },
+        ],
+        extraNumbersFull: false,
+        openEnquiries: [],
+      },
+    ]);
+    // Someone taken off the family list isn't found.
+    expect((await visa.get("/api/clients/lookup?mobile=9876500000")).body.familyMatches).toEqual([]);
+
+    // A client's own number wins: no family matches are asked for.
+    const sunita = await createClient(visa, { mobile: "9876543210", name: "Sunita Shah", confirmDuplicates: true });
+    const direct = (await visa.get("/api/clients/lookup?mobile=9876543210")).body;
+    expect(direct.client.id).toBe(sunita.id);
+    expect(direct.familyMatches).toEqual([]);
+  });
+
   it("adds and removes extra numbers", async () => {
     const visa = await visaAgent();
     const client = await createClient(visa, { mobile: "9825041234" });
@@ -599,12 +632,13 @@ describe("mobile numbers", () => {
 });
 
 describe("searching clients", () => {
-  it("finds by name, partial mobile, extra number and passport number", async () => {
+  it("finds by name, partial mobile, extra number, a family member's number and passport number", async () => {
     const visa = await visaAgent();
     const rakesh = await createClient(visa, { mobile: "9825041234", name: "Rakesh Mehta" });
     const sunrise = await createClient(visa, { mobile: "9825041235", kind: "CORPORATE", name: "Sunrise Textiles" });
     await visa.post(`/api/clients/${sunrise.id}/phones`).send({ mobile: "9898989898" });
     await visa.post(`/api/clients/${rakesh.id}/members`).send({ name: "ANITA MEHTA", relationId: await relationId("SPOUSE"), passportNumber: "Z1234567" });
+    await visa.post(`/api/clients/${rakesh.id}/members`).send({ name: "AARAV MEHTA", relationId: await relationId("SON"), mobile: "9876543210" });
 
     const ids = async (q: string) =>
       (await visa.get(`/api/clients?q=${encodeURIComponent(q)}`)).body.clients.map((c: { id: string }) => c.id);
@@ -612,6 +646,8 @@ describe("searching clients", () => {
     expect(await ids("98250 4123")).toEqual([rakesh.id, sunrise.id]);
     expect(await ids("98989")).toEqual([sunrise.id]);
     expect(await ids("z123 4567")).toEqual([rakesh.id]);
+    // A family member's own number (0004 amendment, 20 Oct 2026).
+    expect(await ids("98765 432")).toEqual([rakesh.id]);
   });
 
   it("pages with a cursor", async () => {

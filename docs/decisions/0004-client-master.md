@@ -1,6 +1,6 @@
 # 0004 · Client master: clients, numbers, family members, notes
 
-- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*); **amended 19 Oct 2026**: staff don't browse the client list (see *Amendment 2*).
+- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*); **amended 19 Oct 2026**: staff don't browse the client list (see *Amendment 2*); **amended 20 Oct 2026**: a family member's number finds the family (see *Amendment 3*).
 - **Date:** 8 Oct 2026
 - **Changes:** replaces the `Client` model proposed in [0003](0003-visa-intake.md). It is a superset: `mobile @unique` and `createdById` are unchanged, so 0003's `GET /api/clients/lookup` contract still holds (extended below). 0003 adds the `enquiries` and `messages` relations when Visa Step 1 is built.
 - **Order of work:** the client master is built before the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
@@ -46,6 +46,40 @@ question #45, M43). It is close to Vimal's worry about staff who leave keeping a
   left out for now.
 - **Code:** `canBrowseClients`, `assertCanBrowseClients` and `assertCanSeeClient` in `src/modules/clients/access.ts`;
   the frontend mirror is `canBrowseClients` in `Frontend/src/auth/permissions.ts`.
+
+## Amendment 3 (20 Oct 2026, project lead): a family member's number finds the family
+
+**The gap:** the New enquiry lookup matched only a client's main and extra numbers. When Rakesh's son Aarav called
+from his own number (saved on his family-member row), the form said "New client", and saving made a second client
+for the same family. Nothing in this record chose that; members' numbers were simply never checked. The demo's rule is
+that an existing client is recognised by the mobile ✅, so this is a fix, not a change request.
+
+**The decision (project lead, in their words):** keep it simple. Pool the family's phone numbers on the main client's
+profile as extra numbers; don't build a family tree or relationship model, which would only mean more typing for staff.
+Finding the right file at once is what matters.
+
+**How it works:**
+- **Lookup:** when no client has the number as a main or extra one, `GET /api/clients/lookup` also returns
+  `familyMatches`: each client with an active (not archived) family member whose own number it is, with those members
+  (name, relation), whether the client already has the maximum 5 extra numbers, and the client's open enquiries. A
+  client's own number always wins; family numbers are then not asked for.
+- **The form** warns (it never blocks): "This number belongs to AARAV MEHTA (Son), family of Rakesh Mehta · +91 98250
+  41234", with **Use Rakesh Mehta** and **No, it's a new client**.
+  - *Use* files the enquiry on Rakesh's client and, in the same transaction, saves the number there as an extra number
+    labelled with the member's name (audited as `client.phone.add` with `fromMemberId`). Next time the number is found
+    directly ("Existing client · Rakesh Mehta (extra number)"). The form keeps the number staff typed.
+  - *No* hides the warning and asks for the new client's name, as for any new number. Editing the number asks again.
+  - A client with 5 extra numbers can't take another: the form offers **Use Rakesh Mehta's main number** instead,
+    which puts his main number in the field.
+  - Saving while the question is unanswered is stopped on the form ("Pick below whose file it goes on").
+- **Intake:** `POST /api/visa/cases` takes an optional `familyClientId`. It is used only when the number isn't a
+  client's main or extra one. It is refused (400 under `mobile`) when that client has no active member with the number,
+  or no room for another extra number.
+- **Clients search:** a family member's own number (any part of it) finds the client too.
+- **Database:** `ClientMember.mobile` gets a plain index (the lookup) and a trigram index (the search), migration
+  `20261020120000_member_mobile_lookup` (indexes only: `npm run db:deploy`).
+- **Not done:** saving a member's number on the client page doesn't add it as an extra number by itself; the pooling
+  happens the first time the number is used at intake.
 
 ## Context
 

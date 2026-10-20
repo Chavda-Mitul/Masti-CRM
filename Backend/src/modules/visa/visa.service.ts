@@ -154,7 +154,7 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
 
   const save = () =>
     prisma.$transaction(async (tx) => {
-      const { client, created: clientCreated } = await findOrCreateClientByMobile(tx, mobile, actor, input.clientName, "clientName");
+      const { client, created: clientCreated } = await findOrCreateClientByMobile(tx, mobile, actor, input.clientName, "clientName", input.familyClientId);
 
       const [counter] = await tx.$queryRaw<{ lastValue: number }[]>`
         INSERT INTO "CaseCounter" ("departmentId", "year", "lastValue") VALUES (${department.id}, ${year}, 1)

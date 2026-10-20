@@ -357,6 +357,22 @@
   font-weight: 700;
 }
 
+/* "This number belongs to Aarav Mehta (Son), family of Rakesh Mehta" (0004 amendment of 20 Oct 2026). */
+.family-number {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.family-number-row {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.family-number-row p,
+.family-saved {
+  margin: 0;
+}
+
 /* Mobile and, for a new number, the client's name side by side. */
 .who-fields {
   display: grid;
