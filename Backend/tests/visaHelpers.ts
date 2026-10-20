@@ -236,7 +236,9 @@ async function raiseInvoice(agent: Agent, caseNo: string) {
 
 /**
  * Mehta's file, Neha's, submitted at the embassy (unless `decided` is false, the decision recorded too: Rakesh approved,
- * valid 20–60 days from today, Aarav refused). `extra` and `vendorId` make another family's file.
+ * valid 20–60 days from today, Aarav refused). `extra` and `vendorId` make another family's file. The first case's
+ * sticker is 0182 4471; each later one gets its own (0182 4481, 0182 4491…), as a number already on another case is a
+ * warning (0012, amended 19 Oct 2026).
  */
 export async function decidedCase({ decided = true, extra, vendorId }: { decided?: boolean; extra?: Record<string, unknown>; vendorId?: number } = {}) {
   if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
@@ -262,8 +264,9 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
   await prisma.visaCaseTraveller.update({ where: { id: a!.id }, data: { name: "Rakesh Mehta" } });
   await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
   if (decided) {
+    const earlier = await prisma.visaCaseTraveller.count({ where: { visaNo: { not: null } } });
     const outcomes = [
-      { travellerId: a!.id, outcome: "APPROVED", visaNo: "0182 4471", validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) },
+      { travellerId: a!.id, outcome: "APPROVED", visaNo: `0182 ${4471 + earlier * 10}`, validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) },
       { travellerId: k!.id, outcome: "REFUSED" },
     ];
     const updatedAt = await updatedAtOf(processor, c.caseNo);
