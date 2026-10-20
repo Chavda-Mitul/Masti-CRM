@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { can, isHodOfAny } from '../../auth/permissions'
+import { can, isHodOfAny, seesOthersEnquiries } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { errorText } from '../../lib/apiErrors'
 import { departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
@@ -63,12 +63,14 @@ export function EnquiriesPage() {
   }
 
   const assigns = !!me && isHodOfAny(me)
+  // Most staff see only their own cases already, so "Only mine" is offered only where it changes the list.
+  const offersMine = !!me && seesOthersEnquiries(me)
   const status = statusOf(params.get('status'), assigns)
   const filters: EnquiryListFilters = {
     status,
     department: params.get('department')?.toUpperCase() ?? '',
     // Cases to assign are nobody's, so "Only mine" doesn't apply there.
-    mine: status !== 'TO_ASSIGN' && params.get('mine') === 'true',
+    mine: offersMine && status !== 'TO_ASSIGN' && params.get('mine') === 'true',
     q,
   }
   const list = useEnquiryList(filters)
@@ -133,7 +135,7 @@ export function EnquiriesPage() {
           <p>{summaryLine(filters.status, total, firstPage?.lateCount)}</p>
         </div>
         <div className="head-actions">
-          {filters.status !== 'TO_ASSIGN' && (
+          {offersMine && filters.status !== 'TO_ASSIGN' && (
             <label className="check">
               <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
               Only mine
