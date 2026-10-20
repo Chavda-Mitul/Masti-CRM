@@ -138,6 +138,32 @@ export interface DocumentRemindersSetting {
   channel: 'WHATSAPP' | 'SMS'
 }
 
+/** When a case comes back due: the next open office day `afterDays` after the event, at `at` (IST, "HH:mm"). */
+export interface OfficeDayTiming {
+  afterDays: number
+  at: string
+}
+
+/** GET /api/visa/settings (Backend visa.schemas.ts visaSettingsSchema): the parts the Settings screens show. */
+export interface VisaSettings {
+  invoice: InvoiceSetting
+  firstFollowUp: OfficeDayTiming
+  vendorConfirm: OfficeDayTiming
+  onlineCheck: OfficeDayTiming
+  submissionCheck: OfficeDayTiming
+  recallReturn: OfficeDayTiming
+  passportsBackCheck: OfficeDayTiming
+  arrivalCheck: OfficeDayTiming
+  assignCheck: OfficeDayTiming
+  handoverCheck: OfficeDayTiming
+  /** The collection reminder: the open office day `daysBefore` the expected collection date, at `at`. */
+  collectionCheck: { daysBefore: number; at: string }
+  /** How long a passport must still run after the trip comes back; less is a warning (decided 19 Oct 2026). */
+  passportValidity: { monthsAfterReturn: number }
+  /** From this age a traveller counts as an adult, for the warnings (decided 19 Oct 2026). */
+  childAge: { adultFrom: number }
+}
+
 /** 409 DUPLICATE from the holidays API. */
 export interface HolidayDuplicate {
   id: string

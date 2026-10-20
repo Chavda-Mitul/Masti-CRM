@@ -8,6 +8,7 @@ import { LETTER_BLANKS, MAX_LETTER_CHARS, MAX_LETTER_COUNTRIES, normaliseWording
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
+import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
 // (Frontend/src/pages/clients/schemas.ts). This keeps the two copies from drifting apart.
@@ -83,6 +84,35 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const body of WORDINGS) {
       expect(frontend.wordingProblem(body), body).toBe(wordingProblem(body));
       expect(frontend.normaliseWording(body), body).toBe(normaliseWording(body));
+    }
+  });
+  it("checks the visa timings and the warnings' values the same way (Settings → Visa)", async () => {
+    type Check = { safeParse(value: unknown): { success: boolean } };
+    const frontend = (await import(frontendMasterSchemas)) as { visaTimingsFormSchema: { shape: Record<string, Check> } };
+    const shape = frontend.visaTimingsFormSchema.shape;
+    const timings = [
+      { afterDays: 0, at: "11:00" },
+      { afterDays: 30, at: "23:59" },
+      { afterDays: 31, at: "11:00" },
+      { afterDays: -1, at: "11:00" },
+      { afterDays: 1.5, at: "11:00" },
+      { afterDays: 1, at: "24:00" },
+      { afterDays: 1, at: "9:00" },
+    ];
+    for (const t of timings) {
+      for (const key of ["firstFollowUp", "vendorConfirm", "arrivalCheck", "handoverCheck"]) {
+        expect(shape[key]!.safeParse(t).success, `${key} ${JSON.stringify(t)}`).toBe(firstFollowUpSchema.safeParse(t).success);
+      }
+      const before = { daysBefore: t.afterDays, at: t.at };
+      expect(shape.collectionCheck!.safeParse(before).success, JSON.stringify(before)).toBe(collectionCheckSchema.safeParse(before).success);
+    }
+    for (const months of [0, 6, 24, 25, -1, 2.5]) {
+      const v = { monthsAfterReturn: months };
+      expect(shape.passportValidity!.safeParse(v).success, `months ${months}`).toBe(passportValiditySchema.safeParse(v).success);
+    }
+    for (const age of [0, 1, 18, 25, 26, 17.5]) {
+      const v = { adultFrom: age };
+      expect(shape.childAge!.safeParse(v).success, `age ${age}`).toBe(childAgeSchema.safeParse(v).success);
     }
   });
 });

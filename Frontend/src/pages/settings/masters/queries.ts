@@ -34,7 +34,7 @@ import type {
   CompanyDetails,
   CompanyImageKind,
   CompanyView,
-  InvoiceSetting,
+  VisaSettings,
   InvoiceTerms,
   HolidayTargetOptions,
   MasterResource,
@@ -202,24 +202,31 @@ export function useCompanyImageLink(kind: CompanyImageKind, enabled: boolean) {
 
 const visaSettingsKey = ['visa', 'settings'] as const
 
-/** The visa settings; the Masters page shows the invoice series and GST rate (0009 Decisions 3 and 4). */
-export function useVisaInvoiceSetting() {
+/** The visa settings, kept whole in the cache; each card picks its part with `select`. */
+export function useVisaSettings<T = VisaSettings>(select?: (settings: VisaSettings) => T) {
   return useQuery({
     queryKey: visaSettingsKey,
-    queryFn: async () => (await api<{ settings: { invoice: InvoiceSetting } }>('/visa/settings')).settings.invoice,
+    queryFn: async () => (await api<{ settings: VisaSettings }>('/visa/settings')).settings,
     staleTime: MASTER_STALE,
+    select,
   })
 }
 
-/** The Visa HOD or the Head. The quotes' GST preview follows the rate, so open cases reload. */
-export function useSaveVisaInvoiceSetting() {
+const invoiceOf = (settings: VisaSettings) => settings.invoice
+
+/** The invoice series and GST rate (0009 Decisions 3 and 4), on Company & invoice. */
+export function useVisaInvoiceSetting() {
+  return useVisaSettings(invoiceOf)
+}
+
+/** Saves some of the visa settings (the Visa HOD or the Head); the answer is all of them. */
+function useSaveVisaSettingsWith(onSaved?: () => void) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (invoice: InvoiceSetting) =>
-      (await api<{ settings: { invoice: InvoiceSetting } }>('/visa/settings', { method: 'PUT', body: { invoice } })).settings.invoice,
-    onSuccess: (invoice) => {
-      queryClient.setQueryData(visaSettingsKey, invoice)
-      void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
+    mutationFn: async (body: Partial<VisaSettings>) => (await api<{ settings: VisaSettings }>('/visa/settings', { method: 'PUT', body })).settings,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(visaSettingsKey, settings)
+      onSaved?.()
     },
   })
 }
@@ -280,6 +287,17 @@ export function useSaveLetterheadSetting() {
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetterPrints })
     },
   })
+}
+
+/** The invoice series and GST rate. The quotes' GST preview follows the rate, so open cases reload. */
+export function useSaveVisaInvoiceSetting() {
+  const queryClient = useQueryClient()
+  return useSaveVisaSettingsWith(() => void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases }))
+}
+
+/** The timings and the warnings' values (Settings → Visa). They apply to the next save that uses them. */
+export function useSaveVisaSettings() {
+  return useSaveVisaSettingsWith()
 }
 
 export function useUpdateHolidaySettings() {

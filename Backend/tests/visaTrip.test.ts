@@ -294,3 +294,16 @@ describe("the database", () => {
     }
   });
 });
+
+describe("the appointment warning for a traveller not named yet", () => {
+  it("names them as the case does, \"Adult 1\"", async () => {
+    const c = await maturedCase();
+    const processor = await neha();
+    await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { departOn: new Date(`${inDays(10)}T00:00:00Z`) } });
+    const [adult] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+    await prisma.visaCaseTraveller.update({ where: { id: adult!.id }, data: { name: null } });
+    const res = await saveApplication(processor, c.caseNo, adult!.id, { appointment: { on: inDays(12), at: "10:30" } });
+    expect(res.status).toBe(409);
+    expect(res.body.details.warnings[0].message).toMatch(/^Adult 1's appointment/);
+  });
+});

@@ -23,6 +23,7 @@ import { CoveringLetterPrintPage } from './pages/print/CoveringLetterPrintPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
+import { VisaSettingsPage } from './pages/settings/visa/VisaSettingsPage'
 import { TodayPage } from './pages/today/TodayPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -119,6 +120,7 @@ export default function App() {
           <Route path="masters/covering-letters/:formatId" element={<CoveringLetterPage />} />
           <Route path="masters/lists" element={<MasterListsPage />} />
           <Route path="company" element={<CompanyPage />} />
+          <Route path="visa" element={<VisaSettingsPage />} />
           <Route
             path="users"
             element={
