@@ -106,9 +106,13 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
     // moves (a soft warning, decided 19 Oct 2026).
     let confirmed: Warning[] = [];
     if (changes.appointmentAt && appointment) {
-      const { departOn } = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { departOn: true } });
+      const { departOn, travellers } = await tx.visaCase.findUniqueOrThrow({
+        where: { enquiryId: enquiry.id },
+        select: { departOn: true, travellers: { select: { isChild: true } } },
+      });
       const depart = departOn && fromDbDate(departOn);
-      const name = before.name ?? "The traveller";
+      // Named as the case names them: the passport name, else "Adult 1".
+      const name = before.name ?? travellerLabel(before, countTravellers(travellers).adults);
       const warnings: Warning[] =
         depart && appointment.on >= depart
           ? [{ code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `${name}'s appointment (${dayLabel(appointment.on)}) is on or after the day the trip begins (${dayLabel(depart)}).` }]
