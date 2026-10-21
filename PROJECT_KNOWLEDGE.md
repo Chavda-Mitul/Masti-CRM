@@ -1182,7 +1182,10 @@ This is the biggest technical unknown (§16.2).
   - **How it works:** a small Chrome extension (`Helper/`). On a press, the CRM hands it a one-time ticket; it collects the ID and password from the one session-less route, opens the portal and types them in. There's no per-portal code: it finds the login boxes by itself. Staff press one button, read plain words, and never install or fix anything.
   - **Who manages and uses it:** the Head and the department's HOD manage; they and the staff on a portal's list use it.
   - **Office network:** it works only from the office IP list once Masti gives it (M19), the Head included; until then, from anywhere with a warning.
-  - **Built (component 1, branch `feat/portal-logins`):** Settings → Portal logins, the helper, and "Who used what". Next, one at a time: 2 scheduled password changes and "Locked"; 3 the button on visa Step 3, with the case in the log; 4 the office-PC setup kit.
+  - **Built:**
+    - **Component 1** (PR #67): Settings → Portal logins, the helper, and "Who used what".
+    - **Component 3** (21 Oct, `feat/visa-case-portal`): the visa case's dark portal box with Log in for me. It works from step 3 until the case closes, for the case's person (even if not on the portal's list), the HOD and the Head. The press is logged with the case number. Each visa's portal is picked on its settings page ("Portal for this visa"). A visa with none shows "No portal saved for this visa. Ask your HOD to add it."
+  - **Next, one at a time:** 2 scheduled password changes and "Locked"; 4 the office-PC setup kit.
   - **What it can't do (S13):** captchas and one-time codes need the person; logins with three boxes; single sign-on elsewhere; someone technical with the browser's tools until component 4.
   - **Research for 0024:** Masti's 61 bookmarks are mostly e-visa sites with no Masti account, so they aren't the list of company logins (M49). In the Internet Archive's copies since 2020, no login box was renamed and 2 logins moved address.
 
@@ -1826,7 +1829,7 @@ Masti CRM/
 
 **Decided 11–12 Oct 2026 (project lead), for Visa Step 3 (File preparation).** The design is `docs/decisions/0007-visa-file-prep.md` (accepted 12 Oct 2026; review outcome: the trip details are required before "File ready", the other five proposals accepted).
 - **Vendor master, basic fields:** name, city, countries covered, contact person, mobile, email. **Only the HOD or the Head adds a vendor**, and it is approved as it is added: no "Waiting HOD" state (§10.8). Visa submission agents only for now; hotel vendors come with Hotels.
-- **Pending (not built in Step 3):** the covering letter, now its own record, `docs/decisions/0019-covering-letters.md`: the formats in Settings and the case card with its print page are built (19 Oct 2026, with samples), and Masti's formats are still awaited (M13/Q10); "Log in for me" (later, §16.2); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
+- **Pending (not built in Step 3):** the covering letter, now its own record, `docs/decisions/0019-covering-letters.md`: the formats in Settings and the case card with its print page are built (19 Oct 2026, with samples), and Masti's formats are still awaited (M13/Q10); ~~"Log in for me" (later, §16.2)~~ built 21 Oct 2026 (0024 component 3); Read passport scan, Fill from consent & trip details and Print application form (S6/Q13).
 - **"File ready — add to docket" needs:** an acknowledgement number and an appointment for every traveller, the final PDF uploaded, a vendor picked, and the trip details (travelling out, coming back, entry type; hotel stay is optional). Processors would otherwise forget the trip details, and the covering letter will need them.
 - **Each visa (country · type) has two switches, "Appointment needed" and "Vendor needed",** on by default and off for e-visas, so e-visas never wait for an appointment or a vendor they don't have.
 - **Built so far (12–13 Oct 2026):**

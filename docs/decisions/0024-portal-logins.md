@@ -1,8 +1,8 @@
 # 0024 · Portal logins: "Log in for me"
 
-- **Status:** a trial, decided 21 Oct 2026 by the project lead. Component 1 is built on the branch `feat/portal-logins`.
-  The approach goes to Shivanshu for approval once the trial passes (04 §C item 6, Q4). Components 2–4 follow, one at a
-  time.
+- **Status:** a trial, decided 21 Oct 2026 by the project lead. Component 1 is built (PR #67); component 3, the button on
+  the visa case, is built on `feat/visa-case-portal`. The approach goes to Shivanshu for approval once the trial passes
+  (04 §C item 6, Q4). Components 2 and 4 follow, one at a time.
 - **Date:** 21 Oct 2026
 - **Scope:** Settings → Portal logins (demo screen 28, PROJECT_KNOWLEDGE §12.19): the company's accounts on visa, airline
   and supplier portals, which staff log in to without seeing the ID or password. Answers R3 and Q4.
@@ -184,7 +184,7 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 
   Each one's words showed on its card and in "Who used what", and the audit log held neither the ID nor the password.
 
-## Component 3: the button on the visa case (next, after component 1 is merged)
+## Component 3: the button on the visa case (built 21 Oct 2026, branch `feat/visa-case-portal`)
 
 Demo screen 08: in "Apply on the government portal", a dark card ("France visa portal — Masti master account. Opens
 logged in for this case. Staff never see the ID or password.") with **Log in for me**; the press logs the case
@@ -192,12 +192,33 @@ logged in for this case. Staff never see the ID or password.") with **Log in for
 
 Decided 21 Oct 2026 (project lead):
 1. **Who presses it on a case:** besides the people on the portal's list, whoever the case is assigned to. The HOD
-   already decides who works on each case.
+   already decides who works on each case. Staff open only their own cases (0006 Decision 1), so on a case it comes to
+   the case's person, the HOD and the Head; the list is for Settings → Portal logins.
 2. **A visa with no portal saved** shows a short note: "No portal saved for this visa. Ask your HOD to add it."
+3. **When:** from step 3 (the case has matured) until the case closes, also later (e.g. to check an e-visa's decision);
+   never while it's postponed.
+4. **Where a visa's portal is picked:** on the visa's own settings page (Settings → Masters → a visa's checklist), a "Log
+   in for me" card with "Portal for this visa", by the Head or the Visa HOD.
 
-Still to plan: how a visa (e.g. France · Tourist) is linked to its portal, set by the HOD in Settings. The buttons under
-the card (Read passport scan, Fill from consent & trip details, Print application form) are not part of this: they wait
-on Q13/S6.
+Built:
+- **Data** (migration `20261021230000_visa_case_portal`): `VisaOffering.portalLoginId` (one of the Visa department's
+  active portals; removing the portal clears it, audited) and `PortalLoginUse.enquiryId` (the case a press was made on).
+- **Endpoints:** `PATCH /api/masters/visa-offerings/:id` takes `portalLoginId` (400 unless an active Visa portal;
+  audited as `visaOffering.update`); the visa list and checklist show `portal`. `POST /api/visa/cases/:caseNo/portal/open`
+  makes the ticket for the case's visa's portal: 409 when postponed, closed or before step 3; 400 with no portal; 403
+  unless `canUsePortalOnCase` (the portal's list, the HOD, the Head, or the case's person with Visa EDIT). Collecting a
+  case's press checks the case again (still open, still that person's, its visa still naming the portal), else REFUSED.
+  The case's data carries `portal { id, name, userIds, helperIds }`; "Who used what" and `portalLogin.open` carry the case
+  number.
+- **Screens:** the case's dark box (`CasePortalBox.tsx`) with Log in for me ("Opened … for case VISA-…"), or the note
+  (the Head and the Visa HOD get "Add it in Settings"); the visa's "Log in for me" card (`VisaPortalCard.tsx`).
+- **Tests:** `tests/visaPortal.test.ts` (10: linking, removing, who may press, when, no portal, collecting re-checks).
+- **Checked in the browser** with the helper: the HOD saw the note, linked France · Tourist to a pretend portal; Neha (on
+  the case, not on the portal's list) pressed Log in for me and was logged in; "Who used what" showed "Neha · Agency test
+  portal · VISA-2026-0002"; unlinked, Neha saw "No portal saved for this visa. Ask your HOD to add it."
+
+The buttons under the card (Read passport scan, Fill from consent & trip details, Print application form) are not part
+of this: they wait on Q13/S6.
 
 ## The trial: how we know it's good
 
