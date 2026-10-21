@@ -111,6 +111,7 @@ model User {
   noticesPicked         Notice[]                @relation("NoticePickedBy")
   coveringLettersAdded  CoveringLetterVersion[] @relation("CoveringLetterVersionAddedBy")
   coveringLettersMade   VisaCase[]              @relation("VisaCaseCoveringLetterMadeBy")
+  aiCalls               AiCall[]                @relation("AiCallBy")
 
   @@index([type, isActive])
 }
@@ -1115,6 +1116,8 @@ model Enquiry {
   creditNotes    CreditNote[]
   /// The client's messages about it (docs/decisions/0021-whatsapp-outbox.md).
   messages       OutboundMessage[]
+  /// The AI calls made for it (docs/decisions/0023-ai.md).
+  aiCalls        AiCall[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -1926,5 +1929,51 @@ model OutboundMessage {
   enquiry           Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
 
   @@index([clientId, createdAt])
+  @@index([enquiryId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// AI (docs/decisions/0023-ai.md): every call goes through src/lib/ai's askAi(), which writes it down here with its
+// tokens and cost, whatever the outcome.
+// ---------------------------------------------------------------------------
+
+/// How one AI call ended.
+enum AiCallStatus {
+  /// It answered.
+  OK
+  /// No usable answer: `error` says why. A cut-off answer was still billed, so it keeps its tokens.
+  FAILED
+  /// The AI declined to answer. Billed, so it keeps its tokens.
+  REFUSED
+}
+
+/// One call to the AI and what it cost. The prompt and the reply aren't kept: they hold client details.
+/// Checks in the migration: no blank use case, provider, model or error; no negative number; tokens in and out
+/// together, and a cost only with them; OK and REFUSED have tokens; OK has no error, FAILED and REFUSED have one.
+model AiCall {
+  id           String       @id @default(uuid())
+  /// What it was for: a code from src/lib/ai/useCases.ts, e.g. "ai.test".
+  useCase      String
+  /// Who answered ("anthropic", "fake"), or the AI_PROVIDER setting when no one could.
+  provider     String
+  /// The model that answered, or the AI_MODEL setting when none did.
+  model        String
+  status       AiCallStatus
+  inputTokens  Int?
+  outputTokens Int?
+  /// In micro-dollars ($0.000001), from src/lib/ai/prices.ts. Empty without tokens, or for a model with no price there.
+  costMicroUsd Int?
+  durationMs   Int
+  /// Why it failed or was refused, in plain words.
+  error        String?
+  /// Who asked, when a person did.
+  userId       String?
+  /// The case it was for, when there is one.
+  enquiryId    String?
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  user         User?        @relation("AiCallBy", fields: [userId], references: [id], onDelete: Restrict)
+  enquiry      Enquiry?     @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
   @@index([enquiryId, createdAt])
 }
