@@ -13,3 +13,18 @@ export const consentAgreeSchema = z.object({
   wordingId: z.number("Please read the form again.").int().positive(),
   detailsHash: z.string("Please read the form again.").regex(/^[0-9a-f]{64}$/, "Please read the form again."),
 });
+
+/** The longest wording, as the database allows (ConsentWording_body_text). The frontend keeps the same limit. */
+export const MAX_CONSENT_WORDING_CHARS = 8000;
+
+/** A new version of the wording (part 2b), made from the version in use when the editor opened (basedOnId). */
+export const addConsentWordingSchema = z.object({
+  body: z
+    .string("Write the wording.")
+    .trim()
+    .min(1, "Write the wording.")
+    .max(MAX_CONSENT_WORDING_CHARS, `At most ${MAX_CONSENT_WORDING_CHARS.toLocaleString("en-IN")} characters.`),
+  basedOnId: z.number("Reload the page and try again.").int().positive(),
+});
+
+export type AddConsentWordingInput = z.infer<typeof addConsentWordingSchema>;
