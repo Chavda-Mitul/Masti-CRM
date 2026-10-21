@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
-import { FormField } from '../../components/FormField'
+import { FormAlert, FormField } from '../../components/FormField'
 import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { applyServerIssues, errorText, isStale } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
@@ -149,11 +149,7 @@ export function NoticeDrawer({
               </label>
             )}
 
-            {message && (
-              <div className="alert alert-bad" role="alert">
-                {message}
-              </div>
-            )}
+            {message && <FormAlert>{message}</FormAlert>}
           </div>
 
           <div className="pad drawer-foot">

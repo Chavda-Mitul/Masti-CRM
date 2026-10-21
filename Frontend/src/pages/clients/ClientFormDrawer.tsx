@@ -4,7 +4,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { Link } from 'react-router'
 import { canEditAccountsFields } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
-import { FormField } from '../../components/FormField'
+import { FormAlert, FormField } from '../../components/FormField'
 import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { codeChars, digitsOnly, filtered, mobileChars } from '../../lib/inputFilters'
 import { applyServerIssues, errorText, existingClientId, isStale } from './apiErrors'
@@ -218,15 +218,11 @@ export function ClientFormDrawer({
             </div>
 
             {existingId && (
-              <div className="alert alert-bad" role="alert">
+              <FormAlert>
                 A client with this mobile number already exists. <Link to={`/clients/${existingId}`}>Open that client</Link>
-              </div>
+              </FormAlert>
             )}
-            {message && (
-              <div className="alert alert-bad" role="alert">
-                {message}
-              </div>
-            )}
+            {message && <FormAlert>{message}</FormAlert>}
           </div>
 
           <div className="pad drawer-foot">

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 /** A labelled input with its validation message (or a hint when there's no error). */
 export function FormField({
@@ -36,6 +36,23 @@ export function FormField({
         hint && <span className="hint">{hint}</span>
       )}
     </label>
+  )
+}
+
+/**
+ * The form's own error, under its fields, scrolled into view when it appears. In a drawer it sits at the end of the
+ * scrolling body, so a refused save used to look as if the button did nothing (the 21 Oct 2026 role test). A save
+ * clears the error while it runs, so each refused save shows it again.
+ */
+export function FormAlert({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [])
+  return (
+    <div ref={ref} className="alert alert-bad" role="alert">
+      {children}
+    </div>
   )
 }
 

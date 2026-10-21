@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { FormField } from '../../../../components/FormField'
+import { FormAlert, FormField } from '../../../../components/FormField'
 import { useDrawerGuard } from '../../../../components/useDrawerGuard'
 import { ApiError } from '../../../../lib/api'
 import { applyServerIssues, errorBody, errorText, isDuplicateWarning, isStale } from '../../../../lib/apiErrors'
@@ -197,11 +197,7 @@ export function HolidayDrawer({
               <input className="input" {...register('reference')} placeholder="IVS" />
             </FormField>
 
-            {message && (
-              <div className="alert alert-bad" role="alert">
-                {message}
-              </div>
-            )}
+            {message && <FormAlert>{message}</FormAlert>}
           </div>
 
           <div className="pad drawer-foot">
