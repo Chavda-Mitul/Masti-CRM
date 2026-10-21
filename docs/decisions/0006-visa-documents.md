@@ -340,6 +340,9 @@ The error lists what's missing.
 
 - The HOD assigns a processor with Reassign.
 - **The processor can't be the person who matured the case**, because whoever scanned can't be the main processor.
+  *Fixed 21 Oct 2026 (from the visa test):* nor anyone who ticked a paper in. When the HOD or the Head pressed "Mark
+  documents complete" for the follow-up person, that person could be picked as processor. The picker leaves out, and
+  Reassign refuses, everyone who collected the documents (`collectorsOf` in `enquiryActions.service.ts`).
 
 **The checklist is read-only after maturity.** Step 3 ("the processor checks") is its own record.
 

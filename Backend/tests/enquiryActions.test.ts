@@ -197,6 +197,26 @@ describe("reassigning", () => {
     expect(refused.body.issues.ownerId[0]).toMatch(/collected the documents/);
     expect(((await hod.get(`/api/enquiries/${c.caseNo}/assignees`)).body.assignees as { name: string }[]).map((a) => a.name)).toEqual(["Riya"]);
   });
+
+  it("won't give it to whoever ticked its papers in either, when the HOD pressed Mark documents complete (fixed 21 Oct 2026)", async () => {
+    const aarti = await visaStaff();
+    const c = await saveCase(aarti);
+    const aartiId = (await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } })).id;
+    const riya = await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    // Aarti scanned and ticked a paper in; Riya, the HOD, matured the case.
+    const paper = await prisma.visaCaseDocument.findFirstOrThrow({ where: { traveller: { caseId: c.id } } });
+    await prisma.visaCaseDocument.update({ where: { id: paper.id }, data: { status: "RECEIVED", receivedAs: "ORIGINAL", receivedAt: new Date(), receivedById: aartiId } });
+    const filePrep = await prisma.departmentStage.findFirstOrThrow({ where: { code: "FILE_PREPARATION" } });
+    await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { maturedAt: new Date(), maturedById: riya.id } });
+    await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: filePrep.id, ownerId: null } });
+
+    const hod = await loginAs("riya@masti.test");
+    const refused = await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: aartiId, updatedAt: await updatedAtOf(c.id) });
+    expect(refused.status).toBe(400);
+    expect(refused.body.issues.ownerId[0]).toMatch(/collected the documents/);
+    expect(((await hod.get(`/api/enquiries/${c.caseNo}/assignees`)).body.assignees as { name: string }[]).map((a) => a.name)).toEqual(["Neha"]);
+  });
 });
 
 describe("logging a call", () => {

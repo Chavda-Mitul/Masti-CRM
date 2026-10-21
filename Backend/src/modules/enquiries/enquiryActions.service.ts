@@ -243,23 +243,37 @@ export async function reassign(caseNo: string, input: ReassignInput, actor: Acto
     throw fieldError("ownerId", "This person can't take cases of this department.");
   }
   // Whoever collected the documents can't be the one who processes the file (0006 Decision 8).
-  if (enquiry.visa?.maturedById && target.id === enquiry.visa.maturedById) {
+  if ((await collectorsOf(enquiry)).has(target.id)) {
     throw fieldError("ownerId", "The person who collected the documents can't process the file. Pick someone else.");
   }
   if (target.id === enquiry.ownerId) return { enquiry: { id: enquiry.id, caseNo: enquiry.caseNo, status: enquiry.status, updatedAt: enquiry.updatedAt } };
   return save(enquiry, input.updatedAt, { ownerId: target.id }, "enquiry.reassign", actor);
 }
 
-/** Who the HOD can give this case to, by name. Not the person who matured it (they can't process it). */
+/**
+ * Who collected a matured visa case's documents, so can't process its file (0006 Decision 8: whoever scanned can't be
+ * the main processor): whoever pressed "Mark documents complete", and whoever ticked a paper in (fixed 21 Oct 2026: an
+ * HOD maturing it for them let the scanner through). Nobody before maturity.
+ */
+async function collectorsOf(enquiry: LoadedEnquiry): Promise<Set<string>> {
+  if (!enquiry.visa?.maturedById) return new Set();
+  const ticked = await prisma.visaCaseDocument.findMany({
+    where: { traveller: { caseId: enquiry.id }, receivedById: { not: null } },
+    select: { receivedById: true },
+    distinct: ["receivedById"],
+  });
+  return new Set([enquiry.visa.maturedById, ...ticked.flatMap((d) => (d.receivedById ? [d.receivedById] : []))]);
+}
+
+/** Who the HOD can give this case to, by name. Not those who collected its documents (they can't process it). */
 export async function listAssignees(caseNo: string, user: UserWithDepartments) {
   const enquiry = await load(caseNo, user);
   assertCanReassign(user, enquiry);
-  const users = await prisma.user.findMany({
-    where: { isActive: true, type: { in: ["HEAD", "OFFICE"] } },
-    include: withDepartments,
-    orderBy: { name: "asc" },
-  });
+  const [users, collectors] = await Promise.all([
+    prisma.user.findMany({ where: { isActive: true, type: { in: ["HEAD", "OFFICE"] } }, include: withDepartments, orderBy: { name: "asc" } }),
+    collectorsOf(enquiry),
+  ]);
   return users
-    .filter((u) => canOwnCases(u, enquiry.department.code as DepartmentCode) && u.id !== enquiry.visa?.maturedById)
+    .filter((u) => canOwnCases(u, enquiry.department.code as DepartmentCode) && !collectors.has(u.id))
     .map((u) => ({ id: u.id, name: u.name, isOwner: u.id === enquiry.ownerId }));
 }
