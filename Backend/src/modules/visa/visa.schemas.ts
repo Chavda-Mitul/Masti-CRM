@@ -118,6 +118,12 @@ export const coveringLetterSettingSchema = z.object({
 export const assignCheckSchema = firstFollowUpSchema;
 
 /**
+ * When a file marked File ready is due with its processor for the docket and dispatch (0007 Decision 9, amended
+ * 21 Oct 2026): the next open office day, afterDays after File ready, at `at` (IST).
+ */
+export const dispatchCheckSchema = firstFollowUpSchema;
+
+/**
  * When received passports come back to their processor to arrange the handover (0013 Decision 5): the next open
  * office day, afterDays after they were received, at `at` (IST).
  */
@@ -196,6 +202,7 @@ export const visaSettingsSchema = z.object({
   passportsBackCheck: passportsBackCheckSchema,
   arrivalCheck: arrivalCheckSchema,
   assignCheck: assignCheckSchema,
+  dispatchCheck: dispatchCheckSchema,
   handoverCheck: handoverCheckSchema,
   handoverPhoto: handoverPhotoSchema,
   collectionCheck: collectionCheckSchema,
@@ -257,6 +264,7 @@ export type RecallReturnSetting = z.infer<typeof recallReturnSchema>;
 export type PassportsBackCheckSetting = z.infer<typeof passportsBackCheckSchema>;
 export type ArrivalCheckSetting = z.infer<typeof arrivalCheckSchema>;
 export type AssignCheckSetting = z.infer<typeof assignCheckSchema>;
+export type DispatchCheckSetting = z.infer<typeof dispatchCheckSchema>;
 export type HandoverCheckSetting = z.infer<typeof handoverCheckSchema>;
 export type HandoverPhotoSetting = z.infer<typeof handoverPhotoSchema>;
 export type CollectionCheckSetting = z.infer<typeof collectionCheckSchema>;

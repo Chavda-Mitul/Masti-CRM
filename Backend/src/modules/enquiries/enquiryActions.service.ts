@@ -219,7 +219,10 @@ export async function resume(caseNo: string, input: ResumeInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
   assertCanActOnEnquiry(actor.user, enquiry);
   if (enquiry.status !== "POSTPONED") throw conflict("Only a postponed case can be resumed.");
-  return save(enquiry, input.updatedAt, { status: "OPEN", reasonId: null, resumeOn: null, dueAt: new Date() }, "enquiry.resume", actor);
+  // Due today at the department's follow-up time, or the next open office day at it once that has passed (amended 21
+  // Oct 2026: "now" showed it late at once).
+  const dueAt = await dueOnOfficeDay({ afterDays: 0, at: await followUpTime(enquiry.department.code) });
+  return save(enquiry, input.updatedAt, { status: "OPEN", reasonId: null, resumeOn: null, dueAt }, "enquiry.resume", actor);
 }
 
 function assertCanReassign(user: UserWithDepartments, enquiry: LoadedEnquiry) {

@@ -350,7 +350,8 @@ return changes (0006 amendment 18).
 
 - the stage moves to **Docket & dispatch**
 - the processor stays the owner (Step 4 is still processing)
-- the case is due now
+- the case is due the next open office day at 11:00 ⚠️, the setting `visa.dispatchCheck` (Settings → Visa). *Amended
+  21 Oct 2026 (project lead, from the visa test):* it was due "now", so it showed late the moment it was ready.
 - `fileReadyAt` and `fileReadyById` are stamped and audited
 - Step 3 becomes read-only: the checks, the travellers' numbers and appointments, the vendor and the file
 

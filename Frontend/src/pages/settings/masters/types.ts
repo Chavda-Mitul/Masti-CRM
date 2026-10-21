@@ -155,6 +155,7 @@ export interface VisaSettings {
   passportsBackCheck: OfficeDayTiming
   arrivalCheck: OfficeDayTiming
   assignCheck: OfficeDayTiming
+  dispatchCheck: OfficeDayTiming
   handoverCheck: OfficeDayTiming
   /** The collection reminder: the open office day `daysBefore` the expected collection date, at `at`. */
   collectionCheck: { daysBefore: number; at: string }
