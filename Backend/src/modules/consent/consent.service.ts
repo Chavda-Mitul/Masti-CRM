@@ -9,7 +9,7 @@ import { memberInclude, toMemberDto } from "../clients/client";
 import { getClientSettings } from "../clients/clients.settings";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { assertCanEditVisaMasters } from "../visaMasters/access";
-import { wordingInUse } from "./consent.public.service";
+import { companyForPage, wordingInUse } from "./consent.public.service";
 import type { AddConsentWordingInput, PaperConsentInput } from "./consent.schemas";
 
 // The office's side of the consent form (docs/decisions/0022-consent-form.md). Part 2b: the wording in Settings; the
@@ -104,6 +104,59 @@ export async function markPaperConsent(clientId: string, memberId: string, input
     );
   });
   return memberDto(memberId);
+}
+
+/**
+ * The printable record of one person's consent (part 3b), for anyone who can see the client. Through the link: the
+ * details and the wording exactly as agreed (the saved copies, not today's), how and when the link was sent and agreed
+ * through, and the phone's address and browser. On paper: the year, and who marked it on file when. Printing changes
+ * nothing, so it isn't audited.
+ */
+export async function consentRecord(clientId: string, memberId: string, user: UserWithDepartments) {
+  await assertCanSeeClient(user, clientId);
+  const member = await prisma.clientMember.findFirst({
+    where: { id: memberId, clientId },
+    select: {
+      name: true,
+      consent: {
+        include: {
+          wording: { select: { id: true, body: true, createdAt: true } },
+          link: { select: { createdAt: true, toMobile: true, createdBy: { select: { name: true } }, enquiry: { select: { caseNo: true } } } },
+          markedBy: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (!member) throw notFound("Person not found on this client.");
+  const { consent } = member;
+  if (!consent) throw notFound("No consent is on file for this person.");
+  const company = await companyForPage();
+  if (consent.source === "PAPER") {
+    return {
+      source: "PAPER" as const,
+      name: member.name,
+      paperYear: consent.paperYear,
+      markedAt: consent.agreedAt,
+      markedBy: consent.markedBy?.name ?? null,
+      company,
+    };
+  }
+  return {
+    source: "LINK" as const,
+    name: member.name,
+    agreedAt: consent.agreedAt,
+    person: consent.details,
+    wording: consent.wording,
+    link: consent.link && {
+      sentAt: consent.link.createdAt,
+      toMobile: consent.link.toMobile,
+      sentBy: consent.link.createdBy.name,
+      caseNo: consent.link.enquiry.caseNo,
+    },
+    ip: consent.ip,
+    userAgent: consent.userAgent,
+    company,
+  };
 }
 
 /** Takes a paper mark off, for a mistake: the person can then get the link. A consent given through the link stays. */

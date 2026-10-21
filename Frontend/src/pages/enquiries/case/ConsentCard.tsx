@@ -16,7 +16,19 @@ const CONSENT_STAGES = ['DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH', 'AT_VENDOR'
  * One traveller: "Agreed · 28 Sep" (or "On file · 2025 (on paper)"), or "None on file — flagged" with where their
  * details and their "I agree" link stand; or "Name this traveller first".
  */
-function Tile({ caseNo, traveller, onFill, canAct }: { caseNo: string; traveller: CaseTraveller; onFill: () => void; canAct: boolean }) {
+function Tile({
+  caseNo,
+  clientId,
+  traveller,
+  onFill,
+  canAct,
+}: {
+  caseNo: string
+  clientId: string
+  traveller: CaseTraveller
+  onFill: () => void
+  canAct: boolean
+}) {
   const toast = useToast()
   const send = useSendConsentLink(caseNo)
   const { name } = travellerTab(traveller)
@@ -34,11 +46,23 @@ function Tile({ caseNo, traveller, onFill, canAct }: { caseNo: string; traveller
       <div className="consent-tile ok">
         <strong>{name}</strong>
         {consent.paperYear !== null ? `On file · ${consent.paperYear} (on paper)` : `Agreed · ${dayMonth(consent.agreedAt)}`}
-        {canAct && (
-          <button type="button" className="btn btn-sm consent-fill" onClick={onFill}>
-            Edit details
-          </button>
-        )}
+        <div className="consent-actions">
+          {/* The record opens in a tab of its own, to print or save as PDF (0022 part 3b). Anyone who can open the case. */}
+          {traveller.member && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => window.open(`/print/consent/${clientId}/${traveller.member!.id}`, '_blank')}
+            >
+              View record
+            </button>
+          )}
+          {canAct && (
+            <button type="button" className="btn btn-sm" onClick={onFill}>
+              Edit details
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -98,7 +122,7 @@ export function ConsentCard({ visaCase: c }: { visaCase: VisaCase }) {
       </p>
       <div className="consent-tiles">
         {c.travellers.map((t) => (
-          <Tile key={t.id} caseNo={c.caseNo} traveller={t} canAct={canAct} onFill={() => setFilling(t)} />
+          <Tile key={t.id} caseNo={c.caseNo} clientId={c.client.id} traveller={t} canAct={canAct} onFill={() => setFilling(t)} />
         ))}
       </div>
       {filling && filling.consent.state !== 'UNLINKED' && (

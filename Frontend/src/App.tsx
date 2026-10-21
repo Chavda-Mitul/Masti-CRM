@@ -21,6 +21,7 @@ import { CoveringLettersPage } from './pages/settings/masters/coveringLetters/Co
 import { NewCoveringLetterPage } from './pages/settings/masters/coveringLetters/NewCoveringLetterPage'
 import { CompanyPage } from './pages/settings/company/CompanyPage'
 import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
+import { ConsentRecordPrintPage } from './pages/print/ConsentRecordPrintPage'
 import { CoveringLetterPrintPage } from './pages/print/CoveringLetterPrintPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
@@ -92,6 +93,16 @@ export default function App() {
           <RequireAuth>
             <RequireDesktop>
               <CoveringLetterPrintPage />
+            </RequireDesktop>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/print/consent/:clientId/:memberId"
+        element={
+          <RequireAuth>
+            <RequireDesktop>
+              <ConsentRecordPrintPage />
             </RequireDesktop>
           </RequireAuth>
         }
