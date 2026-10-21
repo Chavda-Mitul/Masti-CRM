@@ -201,6 +201,26 @@ export function useArchiveMember(clientId: string) {
   })
 }
 
+/** A consent signed on paper before the CRM, marked on file with the year (the Head or the Visa HOD; 0022 part 3). */
+export function useMarkPaperConsent(clientId: string) {
+  const invalidate = useInvalidateClient(clientId)
+  return useMutation({
+    mutationFn: async ({ memberId, year }: { memberId: string; year: number }) =>
+      (await api<{ member: ClientMember }>(`/clients/${clientId}/members/${memberId}/paper-consent`, { method: 'POST', body: { year } })).member,
+    onSuccess: invalidate,
+  })
+}
+
+/** Takes a mistaken paper mark off: the person can then be sent the "I agree" link. */
+export function useRemovePaperConsent(clientId: string) {
+  const invalidate = useInvalidateClient(clientId)
+  return useMutation({
+    mutationFn: async (memberId: string) =>
+      (await api<{ member: ClientMember }>(`/clients/${clientId}/members/${memberId}/paper-consent`, { method: 'DELETE' })).member,
+    onSuccess: invalidate,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Notes
 // ---------------------------------------------------------------------------

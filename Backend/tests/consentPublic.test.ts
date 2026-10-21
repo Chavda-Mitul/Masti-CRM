@@ -114,9 +114,9 @@ describe("I agree", () => {
     expect(res.body.consent).toMatchObject({ state: "AGREED", name: "Rakesh Mehta", agreedAt: expect.any(String) });
 
     const consent = await prisma.consent.findUniqueOrThrow({ where: { memberId } });
-    expect(consent).toMatchObject({ wordingId: opened.wording.id, userAgent: "Test phone", details: opened.person });
+    expect(consent).toMatchObject({ source: "LINK", wordingId: opened.wording.id, userAgent: "Test phone", details: opened.person });
     expect(consent.ip).toBeTruthy();
-    const link = await prisma.consentLink.findUniqueOrThrow({ where: { id: consent.linkId } });
+    const link = await prisma.consentLink.findUniqueOrThrow({ where: { id: consent.linkId! } });
     expect(link.usedAt?.toISOString()).toBe(consent.agreedAt.toISOString());
     const entries = await prisma.auditLog.findMany({ where: { action: "consent.agree" } });
     expect(entries).toHaveLength(1);
@@ -124,10 +124,10 @@ describe("I agree", () => {
 
     // The case shows it on file, and there's no link to send any more.
     const c = (await staff.get(`/api/visa/cases/${caseNo}`)).body.case;
-    expect(c.travellers[0].consent).toMatchObject({ state: "ON_FILE", agreedAt: consent.agreedAt.toISOString() });
+    expect(c.travellers[0].consent).toMatchObject({ state: "ON_FILE", id: consent.id, agreedAt: consent.agreedAt.toISOString(), paperYear: null });
     const again = await sendAgain(staff, caseNo, c.travellers[0].id);
     expect(again.status).toBe(409);
-    expect(again.body.message).toMatch(/already agreed/);
+    expect(again.body.message).toMatch(/already on file/);
   });
 
   it("is said once: agreeing again or opening the link later just shows it, with no details", async () => {

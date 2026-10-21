@@ -13,8 +13,8 @@ import { dayMonth, travellerTab } from './labels'
 const CONSENT_STAGES = ['DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH', 'AT_VENDOR', 'DECISION', 'PASSPORT_BACK']
 
 /**
- * One traveller: "Agreed · 28 Sep", or "None on file — flagged" with where their details and their "I agree" link
- * stand; or "Name this traveller first".
+ * One traveller: "Agreed · 28 Sep" (or "On file · 2025 (on paper)"), or "None on file — flagged" with where their
+ * details and their "I agree" link stand; or "Name this traveller first".
  */
 function Tile({ caseNo, traveller, onFill, canAct }: { caseNo: string; traveller: CaseTraveller; onFill: () => void; canAct: boolean }) {
   const toast = useToast()
@@ -33,7 +33,7 @@ function Tile({ caseNo, traveller, onFill, canAct }: { caseNo: string; traveller
     return (
       <div className="consent-tile ok">
         <strong>{name}</strong>
-        Agreed · {dayMonth(consent.agreedAt)}
+        {consent.paperYear !== null ? `On file · ${consent.paperYear} (on paper)` : `Agreed · ${dayMonth(consent.agreedAt)}`}
         {canAct && (
           <button type="button" className="btn btn-sm consent-fill" onClick={onFill}>
             Edit details

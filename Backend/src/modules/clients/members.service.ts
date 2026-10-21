@@ -7,14 +7,12 @@ import { badRequest, notFound } from "../../lib/httpError";
 import type { Actor } from "../users/user";
 import { assertCanEditClients, assertCanSeeClient } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
-import { toMemberDto } from "./client";
+import { memberInclude, toMemberDto } from "./client";
 import type { CreateMemberInput, UpdateMemberInput } from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";
 import { checkDuplicates, confirmedDuplicatesNote, findPassportDuplicates } from "./duplicates";
 
 // Family & travellers ✅ (or a corporate's employees). Members are archived, never deleted: past cases will point at them.
-
-const memberInclude = { relation: true } satisfies Prisma.ClientMemberInclude;
 
 async function assertClientExists(clientId: string) {
   if (!(await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } }))) throw notFound("Client not found.");

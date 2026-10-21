@@ -61,8 +61,17 @@ export interface ClientMember {
   passportNumber: string | null
   passportExpiry: string | null
   passportStatus: PassportStatus | null
+  /** Their consent form (docs/decisions/0022-consent-form.md): null while it isn't on file. */
+  consent: MemberConsent | null
   archivedAt: string | null
   updatedAt: string
+}
+
+/** A consent on file: through the "I agree" link, or signed on paper before the CRM (paperYear, part 3). */
+export interface MemberConsent {
+  id: string
+  agreedAt: string
+  paperYear: number | null
 }
 
 export interface ClientNote {
