@@ -697,6 +697,28 @@ export interface VisaCase {
   createdAt: string
 }
 
+/** Where a message to the client has got to (0021). SKIPPED: its wording is switched off. */
+export type MessageStatus = 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'SKIPPED'
+
+/** One message on the case's "Sent to the client" card (0021), oldest first. Times are ISO. */
+export interface CaseMessage {
+  id: string
+  /** The message's name: "All documents received". */
+  title: string
+  /** Its words, exactly as sent. */
+  body: string
+  status: MessageStatus
+  /** Why it didn't go or wasn't delivered, in plain words. */
+  error: string | null
+  createdAt: string
+  sentAt: string | null
+  deliveredAt: string | null
+  readAt: string | null
+  failedAt: string | null
+  /** Outside production it went to the test number instead of the client. */
+  toTestNumber: boolean
+}
+
 /** The follow-up desk's tabs and its Mine / Whole department switch (0006 Decision 9). */
 export type FollowUpBucket = 'OVERDUE' | 'TODAY' | 'WEEK' | 'POSTPONED'
 export type FollowUpScope = 'MINE' | 'ALL'

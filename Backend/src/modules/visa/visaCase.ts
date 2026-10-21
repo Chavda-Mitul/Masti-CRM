@@ -9,8 +9,8 @@ import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.servic
 import type { DocumentRemindersSetting } from "./visa.schemas";
 import { missingBooklets } from "./shortfall";
 
-// The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006), without the message log,
-// which comes with the WhatsApp work.
+// The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006). Its messages to the client
+// come separately (GET /cases/:caseNo/messages, 0021), so their card can refresh by itself.
 
 /** The steps documents are collected in: the Reminders card shows there (0006 amendment 19). */
 export const COLLECTING_STAGES = ["ENQUIRY", "DOCUMENTS"];

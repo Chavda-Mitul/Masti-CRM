@@ -5,6 +5,7 @@ import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
 import type {
+  CaseMessage,
   ClientLookup,
   CoveringLetterPrint,
   CoveringLetterView,
@@ -63,6 +64,8 @@ export const enquiryKeys = {
   lookup: (mobile: string) => ['enquiries', 'client-lookup', mobile] as const,
   cases: ['enquiries', 'case'] as const,
   case: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase()] as const,
+  /** Under case(), so reloading a case reloads its messages too. */
+  caseMessages: (caseNo: string) => ['enquiries', 'case', caseNo.toUpperCase(), 'messages'] as const,
   /** Every docket's label: a docket change on any case, or new company details, can change them. */
   stickers: ['enquiries', 'sticker'] as const,
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
@@ -86,6 +89,27 @@ export function useVisaCase(caseNo: string) {
   return useQuery({
     queryKey: enquiryKeys.case(caseNo),
     queryFn: async () => (await api<{ case: VisaCase }>(`/visa/cases/${encodeURIComponent(caseNo)}`)).case,
+  })
+}
+
+/** How long a message still counts as on its way: queued, or sent but not yet delivered. */
+const QUEUED_FOR_MS = 60 * 60_000
+const SENT_FOR_MS = 15 * 60_000
+
+function onItsWay(m: CaseMessage) {
+  const since = (iso: string | null) => (iso ? Date.now() - Date.parse(iso) : Infinity)
+  return (m.status === 'QUEUED' && since(m.createdAt) < QUEUED_FOR_MS) || (m.status === 'SENT' && since(m.sentAt) < SENT_FOR_MS)
+}
+
+/**
+ * The case's "Sent to the client" card (0021). While a message is on its way it checks again every 10 seconds (only
+ * while the page is in view), so Waiting turns into Sent and then Delivered by itself; then it stops.
+ */
+export function useCaseMessages(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.caseMessages(caseNo),
+    queryFn: async () => (await api<{ messages: CaseMessage[] }>(`/visa/cases/${encodeURIComponent(caseNo)}/messages`)).messages,
+    refetchInterval: (query) => (query.state.data?.some(onItsWay) ? 10_000 : false),
   })
 }
 
@@ -131,6 +155,8 @@ function useCaseAction<Vars>(
       void queryClient.invalidateQueries({ queryKey: ['clients'] })
       // The covering letter's preview is filled in from the case (its trip details, its step).
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetters(caseNo) })
+      // A step may have queued a message to the client ("All documents received"): the card shows it at once.
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.caseMessages(caseNo) })
     },
     onError: (error) => {
       if (!isStale(error)) return

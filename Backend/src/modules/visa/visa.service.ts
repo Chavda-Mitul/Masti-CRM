@@ -46,7 +46,7 @@ import {
 import { remindersDue, toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
-// Nothing is sent to the client yet: the WhatsApp outbox comes with the provider integration.
+// Saving sends the client nothing yet: the document list (message 1) comes with the visa messages (0021).
 
 const VISA = "VISA";
 const FIRST_STAGE = "ENQUIRY";
