@@ -43,7 +43,7 @@ Supporting all of this are three things the HOD manages: a **vendor master** (th
 | Vendor master (Settings → Masters → Lists → Vendors) | Built |
 | Picking a vendor on a case (`PUT …/vendor`, `VisaCase.vendorId`) | Built (13 Oct): the last row of the "Saved file" card, as in the demo. |
 | "File ready — add to docket" (`POST …/file-ready`, `fileReadyAt`/`fileReadyById`) | Built (13 Oct): checks everything below, then moves the case to Docket & dispatch with its processor. |
-| Covering letter | Its own record, [0019](../decisions/0019-covering-letters.md): the formats in Settings → Masters and the card on the case (Make the letter, Print) are built (19 Oct, with samples). Not needed for "File ready". |
+| Covering letter | Its own record, [0019](../decisions/0019-covering-letters.md): the formats in Settings → Masters and the card on the case (Make the letter, Print) are built (19 Oct, with samples). Since 21 Oct (amendment 1) staff may change all of its text, the table too, and type over the ⟦marks⟧ where the case lacks a value. Not needed for "File ready". |
 | "Log in for me", passport-scan reading, print form | Not in scope here (decision record, Decision 2) |
 
 After "File ready" the case is at Docket & dispatch (Step 4), which isn't built yet: its button shows "Soon".
