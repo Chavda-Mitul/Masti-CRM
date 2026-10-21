@@ -175,7 +175,29 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
   - a staff member sees only their portal;
   - with no helper, the press says so.
 
-  The press through the helper waits for the helper to be loaded once (below).
+- **Checked end to end, 21 Oct 2026, 5:15 pm,** with the helper loaded in the project lead's Chrome, on the pretend
+  portals:
+  - the plain login, the "Agency code" box and the form drawn late logged in;
+  - the captcha page was filled and left for the person (WAITING_FOR_STAFF);
+  - the moved portal typed nothing (ADDRESS_CHANGED);
+  - the page with no login typed nothing (NO_LOGIN_BOXES).
+
+  Each one's words showed on its card and in "Who used what", and the audit log held neither the ID nor the password.
+
+## Component 3: the button on the visa case (next, after component 1 is merged)
+
+Demo screen 08: in "Apply on the government portal", a dark card ("France visa portal — Masti master account. Opens
+logged in for this case. Staff never see the ID or password.") with **Log in for me**; the press logs the case
+("Neha · France portal · 12:04 · V-2041").
+
+Decided 21 Oct 2026 (project lead):
+1. **Who presses it on a case:** besides the people on the portal's list, whoever the case is assigned to. The HOD
+   already decides who works on each case.
+2. **A visa with no portal saved** shows a short note: "No portal saved for this visa. Ask your HOD to add it."
+
+Still to plan: how a visa (e.g. France · Tourist) is linked to its portal, set by the HOD in Settings. The buttons under
+the card (Read passport scan, Fill from consent & trip details, Print application form) are not part of this: they wait
+on Q13/S6.
 
 ## The trial: how we know it's good
 
