@@ -360,6 +360,74 @@ a.btn-primary:hover {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
+/* The ⓘ button and its explanation box (components/InfoButton.tsx). */
+.info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  vertical-align: middle;
+  cursor: pointer;
+}
+.info-btn:hover,
+.info-btn[aria-expanded="true"] {
+  background: var(--primary-tint);
+  color: var(--primary);
+}
+.info-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.info-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 35; /* as .time-pop */
+  width: min(360px, calc(100vw - 16px));
+  padding: 14px 16px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.info-pop:focus {
+  outline: none;
+}
+.info-pop-title {
+  display: block;
+  margin-bottom: 10px;
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+.info-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.info-list dt {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.info-list dd {
+  margin: 2px 0 0;
+}
+/* A number box with its unit after it: "6 months". */
+.unit-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .hint {
   font-size: 12.5px;
   font-weight: 600;
