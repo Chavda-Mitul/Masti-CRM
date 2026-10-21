@@ -120,6 +120,12 @@ describe("Twilio", () => {
       message: "Couldn't reach Twilio: getaddrinfo ENOTFOUND api.twilio.com",
       retryable: true,
     });
+    // The office internet down: no route to Twilio, so the request never left.
+    twilioMock.create.mockRejectedValueOnce(networkError("connect ENETUNREACH 3.0.0.1:443", "ENETUNREACH"));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Couldn't reach Twilio: connect ENETUNREACH 3.0.0.1:443",
+      retryable: true,
+    });
 
     twilioMock.create.mockRejectedValueOnce(networkError("timeout of 30000ms exceeded", "ECONNABORTED"));
     expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({

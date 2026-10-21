@@ -39,11 +39,26 @@ export interface NewMessage {
 /**
  * Writes one message to the client's main number, worded now, and queues its sending, in the caller's transaction: if
  * the change rolls back, so does the message. Does nothing when the same key was queued before.
+ *
+ * A message problem never stops the change it reports. A wording the CRM can't fill is written down as failed, with
+ * the reason, and isn't sent; a missing wording (the server adds them when it starts) is only logged.
  */
 export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
-  const template = await tx.messageTemplate.findUniqueOrThrow({ where: { code: input.template } });
+  const template = await tx.messageTemplate.findUnique({ where: { code: input.template } });
+  if (!template) {
+    logger.error({ template: input.template, key: input.key }, "No wording for this WhatsApp message, so it wasn't written.");
+    return;
+  }
   const client = await tx.client.findUniqueOrThrow({ where: { id: input.clientId }, select: { mobile: true } });
-  const { body, variables } = fill(template.body, input.variables);
+  let filled: { body: string; variables: Record<string, string> } | null = null;
+  let problem: string | null = null;
+  try {
+    filled = fill(template.body, input.variables);
+  } catch (err) {
+    problem = err instanceof Error ? err.message : String(err);
+    logger.error({ template: input.template, key: input.key, problem }, "A WhatsApp wording couldn't be filled; the message is marked failed.");
+  }
+
   const id = randomUUID();
   const { count } = await tx.outboundMessage.createMany({
     data: [
@@ -53,22 +68,25 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
         clientId: input.clientId,
         enquiryId: input.enquiryId ?? null,
         toMobile: client.mobile,
-        variables,
-        body,
+        variables: filled?.variables ?? input.variables,
+        body: filled?.body ?? template.body,
         idempotencyKey: input.key,
+        ...(problem ? { status: "FAILED" as const, error: problem, failedAt: new Date() } : {}),
       },
     ],
     skipDuplicates: true,
   });
-  if (count === 1) await queueJob(tx, QUEUES.whatsappSend, { messageId: id }, { id });
+  if (count === 0) return;
+  if (problem) await auditOutcome(tx, { id, clientId: input.clientId, template }, { status: "FAILED", error: problem });
+  else await queueJob(tx, QUEUES.whatsappSend, { messageId: id }, { id });
 }
 
-/** The template's words with every {{placeholder}} filled, and the values it used. A placeholder with no value is a bug. */
+/** The template's words with every {{placeholder}} filled, and the values it used. Throws for a placeholder with no value. */
 export function fill(template: string, values: Record<string, string>) {
   const used: Record<string, string> = {};
   const body = template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
     const value = values[name];
-    if (value === undefined) throw new Error(`No value for {{${name}}} in the message template.`);
+    if (value === undefined) throw new Error(`The wording has {{${name}}}, which the CRM can't fill, so it wasn't sent.`);
     used[name] = value;
     return value;
   });
@@ -183,6 +201,22 @@ async function settle(
     if (firstCheckAt) {
       await queueJob(tx, QUEUES.whatsappStatus, { messageId: message.id, check: 0 }, { startAfter: firstCheckAt });
     }
+  });
+}
+
+/**
+ * The "whatsapp-send-failed" job: pg-boss gave up on a message's sending because its last try failed before it could
+ * record how it went (the database was out of reach, or the try got stuck). A message still waiting is marked failed
+ * then, so none stays queued for ever; one caught mid-try may have gone.
+ */
+export async function giveUpMessage(messageId: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "OutboundMessage" WHERE "id" = ${messageId} FOR UPDATE`;
+    const message = await tx.outboundMessage.findUnique({ where: { id: messageId }, include: { template: { select: { code: true } } } });
+    if (!message || message.status !== "QUEUED") return;
+    const error = message.sendingAt ? STUCK : `It couldn't be sent${message.error ? `: ${message.error}` : "."}`;
+    await tx.outboundMessage.update({ where: { id: messageId }, data: { status: "FAILED", error, failedAt: new Date(), sendingAt: null } });
+    await auditOutcome(tx, message, { status: "FAILED", error });
   });
 }
 

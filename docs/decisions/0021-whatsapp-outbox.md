@@ -24,8 +24,9 @@ On 21 Oct 2026 the project lead chose three things:
 1. **pg-boss runs the background jobs** (`src/lib/jobs.ts`):
    - Its jobs live in this same Postgres, in its own `pgboss` schema. pg-boss creates and upgrades that schema
      itself when it starts, and Prisma doesn't see it.
-   - The server starts pg-boss before it takes requests, because a save may queue a job. It stops pg-boss on
-     shutdown, letting a send in progress finish.
+   - The server starts pg-boss before it takes requests, because a save may queue a job. On shutdown the job workers
+     stop at the same time as the web server, so a send in progress gets the whole grace period to finish. pg-boss
+     itself closes last, because a request still running may queue a message.
    - It is the scheduler §10.9 asked for, so later timed work (reminders, rotations, check-in lists) uses it too.
    - Version 12.36.0 is pinned. It needs Node 22.12 or later, and our CommonJS build loads it through `require(esm)`.
    - It is MIT-licensed and self-hosted, with nothing outside Masti's own database.
@@ -33,6 +34,10 @@ On 21 Oct 2026 the project lead chose three things:
    message from its template, addresses it to the client's main number, and queues its job, all in the caller's
    transaction (pg-boss's Prisma adapter). A save that rolls back leaves neither the message nor the job.
    `idempotencyKey` (`visa.documents_received:<case>`) means the same event never queues a second message.
+   - **A message problem never stops the change it reports** (review of #51, 21 Oct 2026). A wording the CRM can't
+     fill (a placeholder it has no value for) is written down as failed, with the reason, and isn't sent. A missing
+     wording is only logged; the server adds any missing wording when it starts (never changing one that's there),
+     so that shouldn't happen.
 3. **Two tables:**
    - **`MessageTemplate`** holds the wording with `{{placeholders}}`, the provider's id for the Meta-approved version
      (Twilio's Content SID), and an on/off switch.
@@ -47,14 +52,19 @@ On 21 Oct 2026 the project lead chose three things:
    outside any transaction and records how it went.
    - **A try that never came back** (the server stopped mid-send) is marked failed and never repeated: it may have
      gone. "The server stopped while sending this, so it may or may not have gone. Check the chat."
-   - **A failure that may pass** (Twilio down or busy, or a request that never reached it) is tried again after about
-     1, 2, 4, 8 and 15 minutes, then marked failed.
+   - **A failure that may pass** (Twilio down or busy, or a request that never reached it: the name not found, no
+     route to it as when the office internet is down, or the connection turned away) is tried again after about 1, 2,
+     4, 8 and 15 minutes, then marked failed.
+   - **When pg-boss gives up** on a message whose last try failed before it could say how it went (the database out
+     of reach, or the try stuck), the `whatsapp-send-failed` job (pg-boss's dead letter queue) marks it failed. It
+     keeps trying for hours if the database is still down, so no message stays queued for ever.
    - **A failure that won't pass** fails at once: a wrong number, wrong keys, a phone that hasn't joined the sandbox,
      or a timeout after which the message may have gone.
    - **Other outcomes:**
      - A message more than 24 hours old isn't sent, because its news would be stale.
      - A switched-off template gives SKIPPED.
-     - With WhatsApp off, the message fails at once: "WhatsApp isn't set up yet."
+     - With WhatsApp off, the message fails at once: "WhatsApp isn't set up yet." In production the server warns at
+       start when WhatsApp is off or `log`.
    - Twilio gives up on a request after 30 seconds. The job counts as stuck after 2 minutes, so pg-boss never starts
      a second try while the first is still waiting.
 5. **Followed to delivered and read.** After a message goes, the `whatsapp-status` job asks the provider (Twilio's

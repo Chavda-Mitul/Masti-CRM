@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "../src/config/env";
-import { boss, QUEUES } from "../src/lib/jobs";
+import { boss, QUEUES, stopWorkers } from "../src/lib/jobs";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppStatus } from "../src/lib/whatsapp";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
-import { checkMessageStatus, deliverMessage, fill, queueMessage } from "../src/modules/messages/messages.service";
+import { seedMessageTemplates, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
+import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage } from "../src/modules/messages/messages.service";
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -118,7 +118,44 @@ describe("queueing", () => {
       body: "Dear Rakesh, VISA-1.",
       variables: { client_name: "Rakesh", case_no: "VISA-1" },
     });
-    expect(() => fill("Dear {{client_name}}", {})).toThrow("No value for {{client_name}}");
+    expect(() => fill("Dear {{client_name}}", {})).toThrow("The wording has {{client_name}}, which the CRM can't fill");
+  });
+
+  it("writes down a wording it can't fill as failed, and the save still goes through", async () => {
+    await prisma.messageTemplate.update({
+      where: { code: VISA_DOCUMENTS_RECEIVED },
+      data: { body: "Dear {{client_name}}, your {{unknown}} is ready." },
+    });
+    const m = await queued();
+    expect(m).toMatchObject({
+      status: "FAILED",
+      error: "The wording has {{unknown}}, which the CRM can't fill, so it wasn't sent.",
+      body: "Dear {{client_name}}, your {{unknown}} is ready.",
+    });
+    expect(m.failedAt).not.toBeNull();
+    expect(await sendJobs(m.id)).toHaveLength(0);
+    expect(await prisma.auditLog.count({ where: { action: "message.failed", entityId: m.id } })).toBe(1);
+  });
+
+  it("skips a message whose wording is missing, without stopping the save", async () => {
+    await prisma.messageTemplate.delete({ where: { code: VISA_DOCUMENTS_RECEIVED } });
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    await prisma.$transaction(async (tx) =>
+      queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key: "k", ...(await visaMessageBasics(tx, c.id)) }),
+    );
+    expect(await prisma.outboundMessage.count()).toBe(0);
+  });
+
+  it("gets a missing wording back when the server starts, and never changes one that's there", async () => {
+    await prisma.messageTemplate.delete({ where: { code: VISA_DOCUMENTS_RECEIVED } });
+    await seedMessageTemplates(prisma);
+    const restored = await prisma.messageTemplate.findUniqueOrThrow({ where: { code: VISA_DOCUMENTS_RECEIVED } });
+    expect(restored.body).toBe(BODY.replace("Rakesh Mehta", "{{client_name}}").replace("France tourist visa", "{{visa}}").replace("VISA-2026-0001", "{{case_no}}"));
+
+    await prisma.messageTemplate.update({ where: { id: restored.id }, data: { body: "Dear {{client_name}}, all received." } });
+    await seedMessageTemplates(prisma);
+    expect((await prisma.messageTemplate.findUniqueOrThrow({ where: { id: restored.id } })).body).toBe("Dear {{client_name}}, all received.");
   });
 });
 
@@ -227,6 +264,30 @@ describe("sending", () => {
     expect(await prisma.auditLog.count({ where: { action: "message.skipped", entityId: m.id } })).toBe(1);
   });
 
+  it("marks a message failed when pg-boss gives up on it, so none stays queued for ever", async () => {
+    expect((await boss.getQueue(QUEUES.whatsappSend))?.deadLetter).toBe(QUEUES.whatsappSendFailed);
+
+    const waiting = await queued("a");
+    await prisma.outboundMessage.update({ where: { id: waiting.id }, data: { error: "Twilio error 20500: busy", attempts: 6 } });
+    await giveUpMessage(waiting.id);
+    expect(await reload(waiting.id)).toMatchObject({ status: "FAILED", error: "It couldn't be sent: Twilio error 20500: busy" });
+    expect(await prisma.auditLog.count({ where: { action: "message.failed", entityId: waiting.id } })).toBe(1);
+
+    const midTry = await queued("b");
+    await prisma.outboundMessage.update({ where: { id: midTry.id }, data: { sendingAt: new Date(), attempts: 1 } });
+    await giveUpMessage(midTry.id);
+    expect(await reload(midTry.id)).toMatchObject({
+      status: "FAILED",
+      error: "The server stopped while sending this, so it may or may not have gone. Check the chat.",
+      sendingAt: null,
+    });
+
+    const sent = await queued("c");
+    await deliverMessage(sent.id, { lastTry: false });
+    await giveUpMessage(sent.id);
+    expect((await reload(sent.id)).status).toBe("SENT");
+  });
+
   it("doesn't send news more than 24 hours old", async () => {
     const m = await queued();
     await prisma.outboundMessage.update({ where: { id: m.id }, data: { createdAt: new Date(Date.now() - 25 * 3600_000) } });
@@ -329,8 +390,7 @@ describe("the workers, through pg-boss", () => {
   });
 
   afterEach(async () => {
-    await boss.offWork(QUEUES.whatsappSend);
-    await boss.offWork(QUEUES.whatsappStatus);
+    await stopWorkers();
   });
 
   it("send a message once its save commits, and queue the first delivery check", async () => {

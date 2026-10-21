@@ -1,10 +1,10 @@
 import app from "./app";
 import { env } from "./config/env";
 import { prisma } from "./config/prisma";
-import { startJobs, stopJobs } from "./lib/jobs";
+import { startJobs, stopJobs, stopWorkers } from "./lib/jobs";
 import { logger } from "./lib/logger";
 import { deleteExpiredSessions } from "./modules/auth/session";
-import { registerMessageWorkers } from "./modules/messages/messages.worker";
+import { startMessages } from "./modules/messages/messages.worker";
 
 /** How often expired sessions are swept out of the database. */
 const SESSION_SWEEP_MS = 60 * 60 * 1000;
@@ -24,7 +24,7 @@ process.on("unhandledRejection", (reason) => {
 async function main() {
   // The job queue first (docs/decisions/0021-whatsapp-outbox.md): a save may queue a job, so requests wait for it.
   await startJobs();
-  await registerMessageWorkers();
+  await startMessages();
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server running on http://localhost:${env.PORT}`);
@@ -44,14 +44,22 @@ async function main() {
       logger.error("Open requests didn't finish in time; exiting.");
       process.exit(1);
     }, SHUTDOWN_TIMEOUT_MS).unref();
-    server.close(async () => {
-      // Lets a message that is being sent finish, so it isn't left marked as sending.
-      await stopJobs();
-      await prisma.$disconnect();
-      process.exit(0);
-    });
+    // Requests and job workers wind down side by side, so a message being sent gets the whole grace period to finish
+    // (and isn't left marked as sending) however long a request takes. pg-boss itself stops last: a request still
+    // running may queue a message.
+    const requestsDone = new Promise<void>((resolve) => server.close(() => resolve()));
     // Browsers keep idle connections open; close them so server.close() can finish.
     server.closeIdleConnections();
+    Promise.all([requestsDone, stopWorkers()])
+      .then(() => stopJobs())
+      .then(() => prisma.$disconnect())
+      .then(
+        () => process.exit(0),
+        (err: unknown) => {
+          logger.error({ err }, "Couldn't shut down cleanly.");
+          process.exit(1);
+        },
+      );
   };
 
   process.on("SIGINT", () => shutdown("SIGINT"));

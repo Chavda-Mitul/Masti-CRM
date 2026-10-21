@@ -130,6 +130,9 @@ if (isProduction && env.TRUST_PROXY === false) {
 if (isProduction && env.WHATSAPP_PROVIDER === "log") {
   console.warn("WHATSAPP_PROVIDER is log: WhatsApp messages go into the server log, and clients get nothing.");
 }
+if (isProduction && env.WHATSAPP_PROVIDER === "off") {
+  console.warn("WHATSAPP_PROVIDER is off: clients get no WhatsApp messages, and each one is marked failed.");
+}
 
 /** Value for Express's "trust proxy" setting. */
 export function trustProxySetting() {
