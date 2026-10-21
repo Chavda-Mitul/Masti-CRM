@@ -24,7 +24,7 @@ const DEPARTMENTS = [
  */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "AiCall", "OutboundMessage", "MessageTemplate", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
+    'TRUNCATE "AuditLog", "Session", "AiCall", "PortalLoginUse", "PortalLoginUser", "PortalLogin","OutboundMessage", "MessageTemplate", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
       '"CaseCounter", "FollowUpOutcomeDepartment", "FollowUpNextStepDepartment", "EnquiryReasonDepartment", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientDocument", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
