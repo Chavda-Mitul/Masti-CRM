@@ -50,6 +50,21 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   // The sender, e.g. "MASTI TOUR AND TRAVEL <crm@example.com>".
   SMTP_FROM: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // WhatsApp to clients (CLAUDE.md rule 7, docs/decisions/0020-whatsapp-sending.md), through src/lib/whatsapp only.
+  // "twilio" sends through Twilio (its sandbox while we build); "log" writes each message to the server log instead, for
+  // a laptop with no WhatsApp account; "off" sends nothing ("WhatsApp isn't set up yet").
+  WHATSAPP_PROVIDER: z.enum(["off", "log", "twilio"]).default("off"),
+  // From the Twilio Console's Account Info; needed when WHATSAPP_PROVIDER is twilio.
+  TWILIO_ACCOUNT_SID: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^AC[0-9a-f]{32}$/i, "Starts with AC: copy it from the Twilio Console's Account Info.").optional(),
+  ),
+  TWILIO_AUTH_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // The WhatsApp number messages come from, with + and the country code: +14155238886 is Twilio's sandbox.
+  TWILIO_WHATSAPP_FROM: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^\+[1-9]\d{6,14}$/, "The number with + and the country code, e.g. +14155238886.").optional(),
+  ),
   // The server log (src/lib/logger.ts, docs/decisions/0010-server-logs.md): one file a day in LOG_DIR (relative to the
   // folder the server starts in, Backend/), keeping the last LOG_RETENTION_DAYS days plus today's file (90: the project
   // lead, 15 Oct 2026).
@@ -77,6 +92,10 @@ if (isProduction && env.TRUST_PROXY === false) {
       "can't tell users apart, one IP's failed logins lock out everyone, and the audit log records the proxy. " +
       'Set TRUST_PROXY to the hop count (e.g. "1") or the proxy IPs.',
   );
+}
+
+if (isProduction && env.WHATSAPP_PROVIDER === "log") {
+  console.warn("WHATSAPP_PROVIDER is log: WhatsApp messages go into the server log, and clients get nothing.");
 }
 
 /** Value for Express's "trust proxy" setting. */

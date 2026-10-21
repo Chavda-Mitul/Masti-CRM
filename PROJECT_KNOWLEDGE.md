@@ -1189,6 +1189,8 @@ This is the biggest technical unknown (§16.2).
 
 ### 12.21 WhatsApp automation and the message catalogue
 
+**Sending is built (20 Oct 2026, `docs/decisions/0020-whatsapp-sending.md`):** `src/lib/whatsapp/`, Twilio for now, with the provider picked in `.env`. Next, one at a time: the outbox, the visa messages at every step (from the drafted texts in `docs/whatsapp-visa-messages.md`), then the consent "I agree" link.
+
 **Required for visa** ✅:
 1. pending-document reminders
 2. file submitted
@@ -1288,7 +1290,7 @@ This is the biggest technical unknown (§16.2).
 
 | Service | Used for | Status / notes |
 |---|---|---|
-| **WhatsApp Business API** (through a BSP) | All client messages, reminders, consent links, collection-boy jobs | ✅ Required. Needs Masti's Meta Business Manager, number and business verification, plus Meta-approved templates. About 35 paise/msg; ₹30–40k/month is acceptable. **Long lead time: start in week 1.** |
+| **WhatsApp Business API** (through a BSP) | All client messages, reminders, consent links, collection-boy jobs | ✅ Required. Needs Masti's Meta Business Manager, number and business verification, plus Meta-approved templates. About 35 paise/msg; ₹30–40k/month is acceptable. **Long lead time: start in week 1.** **20 Oct 2026 (project lead):** Twilio for now (its sandbox while we build), behind a swappable sender, `src/lib/whatsapp/` (`docs/decisions/0020-whatsapp-sending.md`); the provider for go-live is still M2. |
 | **SMS / OTP** provider | Fallback reminders, the consent link, OTPs (handover, terms acceptance) | ✅ Required. Indian SMS needs DLT registration (sender ID, templates). |
 | **Email** (SMTP / Google Workspace) | Vendor dispatch emails, invoices | ✅ |
 | **Google Drive / OneDrive** | Store documents; the CRM keeps links | ✅ The folder structure and owner are ❓ |
@@ -1439,7 +1441,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
    - how masters drive behaviour
    - the permissions model
 3. Hosting recommendation for Masti's account, with a monthly cost, plus our dev and staging setup until handover.
-4. WhatsApp BSP and template strategy.
+4. WhatsApp BSP and template strategy. **Started 20 Oct 2026:** Twilio for now, behind a sender that can change provider (0020).
 5. SMS/OTP provider.
 6. Click-to-login approach, after the spike.
 7. Field-staff device: phone or tablet, PWA or WhatsApp-only.
@@ -1587,6 +1589,7 @@ Masti CRM/
 | `Backend/.env` | `TEMP_PASSWORD_SESSION_MINUTES` (15) | How long a temporary-password login has to set a new password before it must log in again |
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
 | `Backend/.env` | `LOG_LEVEL` (`info`), `LOG_DIR` (`logs`), `LOG_RETENTION_DAYS` (90) | The server log: one file a day, the last 90 days kept plus today's. An unexpected error shows the user a request code to grep for (`docs/decisions/0010-server-logs.md`) |
+| `Backend/.env` | `WHATSAPP_PROVIDER` (`off`), `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_WHATSAPP_FROM` | WhatsApp: `off`, `log` (into the server log instead) or `twilio`. Check with `npm run whatsapp:test -- <mobile>`. Tests force `off` (`docs/decisions/0020-whatsapp-sending.md`) |
 | `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 

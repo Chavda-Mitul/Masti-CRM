@@ -19,6 +19,11 @@ const testEnv = {
   SMTP_PASSWORD: "",
   SMTP_FROM: fromFile.SMTP_FROM ?? "Masti CRM test <crm@masti.test>",
   MAILPIT_URL: fromFile.MAILPIT_URL ?? "http://localhost:8025",
+  // WhatsApp never leaves a test run, whatever .env says: tests check the providers on their own.
+  WHATSAPP_PROVIDER: "off",
+  TWILIO_ACCOUNT_SID: "",
+  TWILIO_AUTH_TOKEN: "",
+  TWILIO_WHATSAPP_FROM: "",
   NODE_ENV: "test",
   DOTENV_CONFIG_QUIET: "true",
 };
