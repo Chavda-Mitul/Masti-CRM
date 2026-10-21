@@ -6,6 +6,7 @@ import { ME_KEY, useMe } from '../auth/useAuth'
 import { api, ApiError } from '../lib/api'
 import { departmentStyle } from '../lib/departments'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { FormAlert } from '../components/FormField'
 import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
@@ -474,11 +475,7 @@ function UserDrawer({
 
             {user && <HandBackNotice name={user.name} work={handedBack(work.data, type, access)} />}
 
-            {save.error && (
-              <div className="alert alert-bad" role="alert">
-                {errorText(save.error)}
-              </div>
-            )}
+            {save.error && <FormAlert>{errorText(save.error)}</FormAlert>}
           </div>
 
           <div className="pad" style={{ borderTop: '1px solid var(--border-card)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

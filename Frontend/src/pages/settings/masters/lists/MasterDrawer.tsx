@@ -1,4 +1,5 @@
 import type { FormEventHandler, ReactNode } from 'react'
+import { FormAlert } from '../../../../components/FormField'
 import { useDrawerGuard } from '../../../../components/useDrawerGuard'
 import { errorText } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
@@ -42,11 +43,7 @@ export function MasterDrawer({
           </div>
           <div className="pad drawer-body">
             <div className="form-grid">{children}</div>
-            {message && (
-              <div className="alert alert-bad" role="alert">
-                {message}
-              </div>
-            )}
+            {message && <FormAlert>{message}</FormAlert>}
           </div>
           <div className="pad drawer-foot">
             <button type="button" className="btn" onClick={onClose}>
