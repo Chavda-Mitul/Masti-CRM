@@ -888,10 +888,15 @@ model VisaOffering {
   updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
   country           Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
   visaType          VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  /// The government portal staff open from this visa's cases with "Log in for me" (0024 component 3): one of the Visa
+  /// department's portals, picked on the visa's settings page. Null: none saved. Cleared when that portal is removed.
+  portalLoginId     String?
   checklist         VisaChecklistItem[]
   cases             VisaCase[]
+  portalLogin       PortalLogin?        @relation(fields: [portalLoginId], references: [id], onDelete: Restrict)
 
   @@unique([countryId, visaTypeId])
+  @@index([portalLoginId])
 }
 
 /// Every document a checklist can ask for. No department: insurance claim checklists reuse it later, and the client
@@ -1101,50 +1106,52 @@ model EnquiryReasonDepartment {
 }
 
 model Enquiry {
-  id             String            @id @default(uuid())
+  id              String            @id @default(uuid())
   /// VISA-2026-0001. Never changes once issued.
-  caseNo         String            @unique
-  departmentId   Int
-  clientId       String
-  sourceId       Int
-  origin         EnquiryOrigin     @default(STAFF)
+  caseNo          String            @unique
+  departmentId    Int
+  clientId        String
+  sourceId        Int
+  origin          EnquiryOrigin     @default(STAFF)
   /// A repeat request with the same key returns this enquiry instead of creating another.
-  idempotencyKey String?           @unique
-  stageId        Int
-  status         EnquiryStatus     @default(OPEN)
+  idempotencyKey  String?           @unique
+  stageId         Int
+  status          EnquiryStatus     @default(OPEN)
   /// "Whose job it is now". Null = not assigned yet (e.g. a future bot enquiry).
-  ownerId        String?
+  ownerId         String?
   /// When someone must next act on it: the list order, Today, the follow-up desk and "running late".
-  dueAt          DateTime?         @db.Timestamptz(3)
+  dueAt           DateTime?         @db.Timestamptz(3)
   /// Why it was postponed or cancelled. Checked in the migration: POSTPONED and CANCELLED need one.
-  reasonId       Int?
+  reasonId        Int?
   /// When a postponed enquiry comes back (POSTPONED needs one). dueAt is set to that day.
-  resumeOn       DateTime?         @db.Date
+  resumeOn        DateTime?         @db.Date
   /// Null when an integration created it.
-  createdById    String?
-  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  createdById     String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token for the case actions (follow-up, postpone, reassign, mature…).
-  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
-  department     Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  client         Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  source         EnquirySource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  stage          DepartmentStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  owner          User?             @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  createdBy      User?             @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  reason         EnquiryReason?    @relation(fields: [reasonId], references: [id], onDelete: Restrict)
-  visa           VisaCase?
-  followUps      FollowUp[]
-  files          CaseFile[]
-  invoices       Invoice[]
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+  department      Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  client          Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  source          EnquirySource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  stage           DepartmentStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner           User?             @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy       User?             @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reason          EnquiryReason?    @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  visa            VisaCase?
+  followUps       FollowUp[]
+  files           CaseFile[]
+  invoices        Invoice[]
   /// The collection and delivery boy's jobs for it (0015).
-  fieldJobs      FieldJob[]
-  creditNotes    CreditNote[]
+  fieldJobs       FieldJob[]
+  creditNotes     CreditNote[]
   /// The client's messages about it (docs/decisions/0021-whatsapp-outbox.md).
-  messages       OutboundMessage[]
+  messages        OutboundMessage[]
   /// The AI calls made for it (docs/decisions/0023-ai.md).
-  aiCalls        AiCall[]
+  aiCalls         AiCall[]
   /// Consent links sent from it (docs/decisions/0022-consent-form.md).
-  consentLinks   ConsentLink[]
+  consentLinks    ConsentLink[]
+  /// "Log in for me" pressed on this case (docs/decisions/0024-portal-logins.md component 3).
+  portalLoginUses PortalLoginUse[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -2114,6 +2121,8 @@ model PortalLogin {
   createdBy         User              @relation("PortalLoginCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   users             PortalLoginUser[]
   uses              PortalLoginUse[]
+  /// The visas whose cases open this portal (component 3).
+  visaOfferings     VisaOffering[]
 
   @@index([departmentId, status])
 }
@@ -2146,11 +2155,15 @@ model PortalLoginUse {
   redeemedIp      String?
   outcome         PortalLoginOutcome?
   outcomeAt       DateTime?           @db.Timestamptz(3)
+  /// The case it was pressed on (component 3); null when pressed on Settings → Portal logins.
+  enquiryId       String?
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   portalLogin     PortalLogin         @relation(fields: [portalLoginId], references: [id], onDelete: Restrict)
   user            User                @relation("PortalLoginUsedBy", fields: [userId], references: [id], onDelete: Restrict)
+  enquiry         Enquiry?            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
 
   @@index([portalLoginId, redeemedAt])
   @@index([redeemedAt])
   @@index([userId])
+  @@index([enquiryId])
 }

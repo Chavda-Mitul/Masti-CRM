@@ -168,13 +168,15 @@ export const updateEnquirySourceSchema = z.object({
 export const createOfferingSchema = z.object({ countryId: id, visaTypeId: id });
 /**
  * Switching the visa off or on, and what "File ready" asks for (docs/decisions/0007-visa-file-prep.md Decision 6):
- * a portal appointment for every traveller, and a vendor. Both are off for e-visas.
+ * a portal appointment for every traveller, and a vendor. Both are off for e-visas. Also the portal its cases open with
+ * "Log in for me" (docs/decisions/0024-portal-logins.md component 3); null: none.
  */
 export const updateOfferingSchema = z
   .object({
     isActive: z.boolean().optional(),
     appointmentNeeded: z.boolean().optional(),
     vendorNeeded: z.boolean().optional(),
+    portalLoginId: z.uuid("Pick one of the Visa department's portals.").nullable().optional(),
   })
   .refine((v) => Object.values(v).some((value) => value !== undefined), { message: "Nothing to change." });
 

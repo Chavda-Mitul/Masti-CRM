@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
-import { audit } from "../../lib/audit";
+import { audit, auditMany } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { badRequest, fieldError, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
@@ -212,7 +212,10 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
   return toPortalLoginDto(await loadOr404(id), actor.user);
 }
 
-/** Off the list: its ID and password are wiped, the row is kept for the record. Removing a removed portal changes nothing. */
+/**
+ * Off the list: its ID and password are wiped, the row is kept for the record, and the visas whose cases opened it stop
+ * naming it (component 3). Removing a removed portal changes nothing.
+ */
 export async function removePortalLogin(id: string, actor: Actor) {
   const before = await loadOr404(id);
   if (!canManagePortal(actor.user, before.department.code)) throw forbidden("Only the Head and the department's HOD remove its portals.");
@@ -221,6 +224,21 @@ export async function removePortalLogin(id: string, actor: Actor) {
     if (count === 0) return;
     await audit(
       { actorId: actor.user.id, action: "portalLogin.remove", entityType: "PortalLogin", entityId: id, before: { status: "ACTIVE" }, after: { status: "REMOVED" }, ip: actor.ip },
+      tx,
+    );
+    const visas = await tx.visaOffering.findMany({ where: { portalLoginId: id }, select: { id: true } });
+    if (visas.length === 0) return;
+    await tx.visaOffering.updateMany({ where: { portalLoginId: id }, data: { portalLoginId: null } });
+    await auditMany(
+      visas.map((v) => ({
+        actorId: actor.user.id,
+        action: "visaOffering.update",
+        entityType: "VisaOffering",
+        entityId: String(v.id),
+        before: { portalLoginId: id },
+        after: { portalLoginId: null },
+        ip: actor.ip,
+      })),
       tx,
     );
   });
