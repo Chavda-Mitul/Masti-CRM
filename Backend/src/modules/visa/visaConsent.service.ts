@@ -102,7 +102,7 @@ export async function sendConsentLinkAgain(caseNo: string, travellerId: string, 
   await prisma.$transaction(async (tx) => {
     await lockCase(tx, enquiry.id, actor, CONSENTING);
     await lockPerson(tx, memberId);
-    if (await tx.consent.findUnique({ where: { memberId }, select: { id: true } })) throw conflict("They've already agreed: there's nothing to send.");
+    if (await tx.consent.findUnique({ where: { memberId }, select: { id: true } })) throw conflict("Their consent is already on file: there's nothing to send.");
     const member = await tx.clientMember.findUniqueOrThrow({ where: { id: memberId }, select: { consentDetailsAt: true } });
     if (!member.consentDetailsAt) throw conflict("Fill in their details first: the link goes out when they're saved.");
     await tx.consentLink.updateMany({ where: { memberId, usedAt: null, replacedAt: null }, data: { replacedAt: new Date() } });

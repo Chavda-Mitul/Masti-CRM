@@ -400,16 +400,18 @@ function openDocketOf(vendor: VendorRow | null) {
 
 /**
  * The consent card (0006 Decision 5, 0022): the person's form details, which staff fill in, and their consent, which the
- * client gives through the "I agree" link (0022 part 2). Flagged until then.
+ * client gives through the "I agree" link (0022 part 2) or signed on paper before the CRM (part 3, paperYear). Flagged
+ * until then.
  */
 function consentOf(t: TravellerRow) {
   if (!t.member) return { state: "UNLINKED" as const };
   const details = consentDetailsOf(t.member);
-  if (!t.member.consent) {
+  const { consent } = t.member;
+  if (!consent) {
     const open = t.member.consentLinks[0];
     return { state: "NONE" as const, details, link: open ? { sentAt: open.createdAt, toMobile: open.toMobile } : null };
   }
-  return { state: "ON_FILE" as const, agreedAt: t.member.consent.agreedAt, details };
+  return { state: "ON_FILE" as const, id: consent.id, agreedAt: consent.agreedAt, paperYear: consent.paperYear, details };
 }
 
 /**
