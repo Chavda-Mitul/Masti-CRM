@@ -1189,7 +1189,7 @@ This is the biggest technical unknown (§16.2).
 
 ### 12.21 WhatsApp automation and the message catalogue
 
-**Sending is built (20 Oct 2026, `docs/decisions/0020-whatsapp-sending.md`):** `src/lib/whatsapp/`, Twilio for now, with the provider picked in `.env`. **The outbox is built (21 Oct 2026, `docs/decisions/0021-whatsapp-outbox.md`):** a message is written in the change's transaction (`queueMessage`), sent once by a pg-boss job, and followed to delivered or read; outside production it goes to `WHATSAPP_TEST_NUMBER`. The first message is message 6, "All documents received", on Mark documents complete. Next, one at a time: the "Sent to the client" card, the other visa messages (from the drafted texts in `docs/whatsapp-visa-messages.md`), then the consent "I agree" link.
+**Sending is built (20 Oct 2026, `docs/decisions/0020-whatsapp-sending.md`):** `src/lib/whatsapp/`, Twilio for now, with the provider picked in `.env`. **The outbox is built (21 Oct 2026, `docs/decisions/0021-whatsapp-outbox.md`):** a message is written in the change's transaction (`queueMessage`), sent once by a pg-boss job, and followed to delivered or read; outside production it goes to `WHATSAPP_TEST_NUMBER`. The first message is message 6, "All documents received", on Mark documents complete. The case page's **"Sent to the client"** section lists them with where each has got to (0021 Amendment 1, 21 Oct 2026). Next, one at a time: the other visa messages (from the drafted texts in `docs/whatsapp-visa-messages.md`), then the consent "I agree" link.
 
 **Required for visa** ✅:
 1. pending-document reminders

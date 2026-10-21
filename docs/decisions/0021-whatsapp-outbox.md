@@ -110,9 +110,31 @@ On 21 Oct 2026 the project lead chose three things:
 - A staging server running with `NODE_ENV=production` on a copy of real data would message real clients. Give it
   `WHATSAPP_PROVIDER=log` or `off`.
 
+## Amendment 1 (21 Oct 2026): the "Sent to the client" card
+
+Built after the outbox, as the case page's right rail section from the demo (screen 06), between "Whose job it is
+now" and "Money on this case". The project lead chose these three on 21 Oct 2026:
+
+- **Each message shows where it has got to.** Its dot's colour and a word: Waiting to send, Sent, Delivered or Read
+  (green); Not sent or Not delivered (red, with the reason in plain words); Not sent: switched off (grey). The demo
+  showed a plain green dot for every message; this shows what the CRM records. A message that went to the test
+  number outside production says "to your test number".
+- **No "Open chat" button.** The demo's phone panel was demo-only. Clicking a message shows its words, exactly as sent.
+- **It updates by itself while a message is on its way.** It checks every 10 seconds while one is waiting (for up to
+  an hour) or sent but not yet delivered (for 15 minutes), and only while the page is in view. A step that queues a
+  message refreshes the card at once.
+
+The messages come from their own request, `GET /api/visa/cases/:caseNo/messages`, for anyone who can open the case
+(`findVisibleCase`). They aren't part of the case itself, so the card can refresh without reloading the case that the
+page's forms are built from. They come oldest first, like a chat. The sending details stay on the server.
+
+Not here: the client page's "WhatsApp messages sent". A client-wide list needs its own rule, because staff who can open
+one of a client's cases mustn't read messages about the others. "Send again" for a failed message isn't here either:
+it isn't in the demo, and messages are never sent by hand.
+
 ## Not in this step
 
-- **The "Sent to the client" card** on the case (next).
+- ~~The "Sent to the client" card~~: built, Amendment 1.
 - **The other visa messages** and the reminders (step 3), from `docs/whatsapp-visa-messages.md`. Messages 7 and 18
   attach a PDF, so a message gets an attachment then.
 - **The consent "I agree" link** (step 4).
