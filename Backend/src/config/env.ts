@@ -8,6 +8,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
   DATABASE_URL: z.string().min(1),
   CLIENT_URL: z.string().default("http://localhost:5173"),
+  // The address clients open links on, e.g. the consent form's (docs/decisions/0022-consent-form.md): Masti's own
+  // https address in production. A phone can't open localhost: on a laptop, open the link there, or use the laptop's LAN
+  // address with `vite --host`.
+  PUBLIC_APP_URL: z.url("A full address, e.g. https://crm.example.com").default("http://localhost:5173"),
   // Set when running behind a reverse proxy (nginx etc.) so req.ip is the real client IP: the hop count ("1" for one
   // nginx) or a comma-separated list of the proxies' IPs/subnets. "false" when there is no proxy. "true" is refused.
   TRUST_PROXY: z
@@ -144,6 +148,9 @@ if (isProduction && env.TRUST_PROXY === false) {
 
 if (isProduction && env.WHATSAPP_PROVIDER === "log") {
   console.warn("WHATSAPP_PROVIDER is log: WhatsApp messages go into the server log, and clients get nothing.");
+}
+if (isProduction && !env.PUBLIC_APP_URL.startsWith("https://")) {
+  console.warn("PUBLIC_APP_URL isn't https: the consent links sent to clients would open over an unprotected connection.");
 }
 if (isProduction && env.WHATSAPP_PROVIDER === "off") {
   console.warn("WHATSAPP_PROVIDER is off: clients get no WhatsApp messages, and each one is marked failed.");

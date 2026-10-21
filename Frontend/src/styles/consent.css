@@ -1,0 +1,108 @@
+/* The client's consent page (pages/consent/ConsentPage.tsx; docs/decisions/0022-consent-form.md, part 2): opened from
+   WhatsApp, mostly on a phone, so one narrow column on the login page's background. */
+.consent-page {
+  min-height: 100%;
+  padding: 20px 16px 32px;
+  background:
+    radial-gradient(1200px 500px at 15% -10%, #e2eaf6 0%, transparent 60%),
+    radial-gradient(900px 400px at 110% 110%, #fdece4 0%, transparent 55%),
+    var(--bg-page);
+}
+.consent-sheet {
+  width: min(480px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.consent-sheet .brand {
+  padding: 4px 2px 6px;
+}
+.consent-sheet .pad {
+  padding: 18px;
+}
+.consent-name {
+  font-size: 24px;
+  margin: 4px 0 6px;
+}
+.consent-lead {
+  margin: 12px 0 0;
+}
+.consent-sheet .consent-name + .consent-lead {
+  margin-top: 0;
+}
+/* The details staff filled in: each label above its value, to fit a phone. */
+.consent-person {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.consent-person dt {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.consent-person dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* The wording on its paper, a little larger to read on a phone. */
+.consent-sheet .letter-paper {
+  padding: 20px 18px;
+  font-size: 15px;
+}
+.consent-agree {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.consent-check {
+  font-size: 15px;
+  cursor: pointer;
+}
+.consent-check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+.consent-agree .btn-primary {
+  height: 48px;
+  font-size: 16px;
+}
+/* Opening, thank you, or a link that can't be used. */
+.consent-state {
+  text-align: center;
+}
+.consent-state p {
+  margin: 10px 0 0;
+}
+.consent-state .btn {
+  margin-top: 14px;
+}
+.consent-thanks-mark {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 10px;
+  border-radius: 999px;
+  background: var(--ok-bg);
+  color: var(--ok);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 800;
+}
+.consent-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.consent-foot strong {
+  color: var(--text-2);
+}

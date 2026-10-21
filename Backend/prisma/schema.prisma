@@ -82,6 +82,8 @@ model User {
   clientPhonesAdded     ClientPhone[]           @relation("ClientPhoneCreatedBy")
   clientMembersAdded    ClientMember[]          @relation("ClientMemberCreatedBy")
   consentDetailsFilled  ClientMember[]          @relation("ClientMemberConsentDetailsBy")
+  consentLinksSent      ConsentLink[]           @relation("ConsentLinkCreatedBy")
+  consentWordingsAdded  ConsentWording[]        @relation("ConsentWordingAddedBy")
   clientNotes           ClientNote[]            @relation("ClientNoteAuthor")
   holidaysAdded         Holiday[]               @relation("HolidayAddedBy")
   enquiriesOwned        Enquiry[]               @relation("EnquiryOwner")
@@ -453,6 +455,7 @@ model ClientMember {
   consentDetailsBy   User?               @relation("ClientMemberConsentDetailsBy", fields: [consentDetailsById], references: [id], onDelete: Restrict)
   travellers         VisaCaseTraveller[]
   consent            Consent?
+  consentLinks       ConsentLink[]
   documents          ClientDocument[]
 
   @@index([clientId])
@@ -1136,6 +1139,8 @@ model Enquiry {
   messages       OutboundMessage[]
   /// The AI calls made for it (docs/decisions/0023-ai.md).
   aiCalls        AiCall[]
+  /// Consent links sent from it (docs/decisions/0022-consent-form.md).
+  consentLinks   ConsentLink[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -1446,12 +1451,63 @@ model VisaHandover {
 
 /// The consent & liability form: one per person, for life; stays valid if the passport changes (§10.5).
 /// Filled by the "I agree" link, which comes with WhatsApp. Until then the case shows "None on file — flagged".
+/// One person's consent, given once for life (docs/decisions/0022-consent-form.md): the client tapped "I agree" on the
+/// form's link. It keeps what they agreed to, as evidence: the wording, the details as the page showed them, and where
+/// the tap came from.
 model Consent {
-  id        String       @id @default(uuid())
-  memberId  String       @unique
-  agreedAt  DateTime     @db.Timestamptz(3)
-  createdAt DateTime     @default(now()) @db.Timestamptz(3)
-  member    ClientMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  id        String         @id @default(uuid())
+  memberId  String         @unique
+  agreedAt  DateTime       @db.Timestamptz(3)
+  /// The wording they read and agreed to.
+  wordingId Int
+  /// The link they agreed through.
+  linkId    String         @unique
+  /// The name, passport number and form details as the page showed them.
+  details   Json
+  /// The phone's network address and browser when they tapped "I agree".
+  ip        String?
+  userAgent String?
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  member    ClientMember   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wording   ConsentWording @relation(fields: [wordingId], references: [id], onDelete: Restrict)
+  link      ConsentLink    @relation(fields: [linkId], references: [id], onDelete: Restrict)
+}
+
+/// The consent form's wording (0022). Never changed or removed (a trigger), because consents point at it; the newest is
+/// the one in use. Seeded with a draft until Masti's (Q9): addedById null marks it. Checks in the migration: no blank
+/// body, at most 8000 characters.
+model ConsentWording {
+  id        Int       @id @default(autoincrement())
+  body      String
+  addedById String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  addedBy   User?     @relation("ConsentWordingAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+  consents  Consent[]
+}
+
+/// A link to one person's consent form, sent on WhatsApp (0022). Only the token's SHA-256 is kept. It works until the
+/// client agrees through it or "Send the link again" replaces it. Checks in the migration: never both used and replaced,
+/// at most one link per person still open, the number's format.
+model ConsentLink {
+  id          String       @id @default(uuid())
+  memberId    String
+  /// The case it was sent from.
+  enquiryId   String
+  tokenHash   String       @unique
+  /// Where it went: the person's own number, or the client's main one.
+  toMobile    String
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  createdById String
+  /// "Send the link again" made a newer one.
+  replacedAt  DateTime?    @db.Timestamptz(3)
+  /// The client agreed through it.
+  usedAt      DateTime?    @db.Timestamptz(3)
+  member      ClientMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  enquiry     Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  createdBy   User         @relation("ConsentLinkCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  consent     Consent?
+
+  @@index([memberId, createdAt])
 }
 
 enum DocumentStatus {

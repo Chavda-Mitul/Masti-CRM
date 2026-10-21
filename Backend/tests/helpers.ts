@@ -5,6 +5,7 @@ import { clearOfficeNetworkCache } from "../src/modules/auth/officeNetwork";
 import { hashPassword } from "../src/modules/auth/password";
 import { seedClientLookups } from "../src/modules/clients/clients.seed";
 import { seedMessageTemplates } from "../src/modules/messages/messages.seed";
+import { seedConsentWording } from "../src/modules/consent/consent.seed";
 import { prisma } from "../src/config/prisma";
 
 export const PASSWORD = "Correct-Horse-9";
@@ -24,7 +25,7 @@ const DEPARTMENTS = [
  */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "AiCall", "OutboundMessage", "MessageTemplate", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
+    'TRUNCATE "AuditLog", "Session", "AiCall", "OutboundMessage", "MessageTemplate", "ConsentLink", "ConsentWording", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
       '"CaseCounter", "FollowUpOutcomeDepartment", "FollowUpNextStepDepartment", "EnquiryReasonDepartment", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientDocument", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
@@ -36,6 +37,7 @@ export async function resetDb() {
   });
   await seedClientLookups(prisma);
   await seedMessageTemplates(prisma);
+  await seedConsentWording(prisma);
   clearOfficeNetworkCache();
 }
 

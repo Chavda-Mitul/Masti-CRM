@@ -242,7 +242,8 @@ export interface ConsentDetailsBody {
 /** Flagged until the client agrees through the "I agree" link (0022 part 2). UNLINKED: the traveller isn't a family member yet. */
 export type CaseConsent =
   | { state: 'UNLINKED' }
-  | { state: 'NONE'; details: ConsentDetails }
+  /** link: the person's open "I agree" link (0022 part 2), sent when the details were saved; null when none is open. */
+  | { state: 'NONE'; details: ConsentDetails; link: { sentAt: string; toMobile: string } | null }
   | { state: 'ON_FILE'; agreedAt: string; details: ConsentDetails }
 
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
