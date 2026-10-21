@@ -37,7 +37,13 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
       }
     },
     async checkStatus(providerMessageId) {
-      const message = await client.messages(providerMessageId).fetch();
+      let message;
+      try {
+        message = await client.messages(providerMessageId).fetch();
+      } catch (error) {
+        // In plain words too, like a refused send: wrong keys, or Twilio out of reach.
+        throw new Error(reasonFor(error), { cause: error });
+      }
       const status = statusOf(message.status);
       // Both are empty on a message that hasn't failed, whatever Twilio's types say.
       const code = (message.errorCode as number | null | undefined) ?? null;
