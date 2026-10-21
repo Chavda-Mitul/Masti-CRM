@@ -14,7 +14,19 @@ export interface AuditEntry {
   ip?: string | null;
 }
 
-const SECRET_KEYS = new Set(["passwordHash", "tokenHash", "password", "newPassword", "currentPassword", "tempPassword"]);
+// secret, loginId and ticket: a portal login's sealed secret, its ID and a Log in for me ticket (0024), as a safety net;
+// portal snapshots leave them out anyway.
+const SECRET_KEYS = new Set([
+  "passwordHash",
+  "tokenHash",
+  "password",
+  "newPassword",
+  "currentPassword",
+  "tempPassword",
+  "secret",
+  "loginId",
+  "ticket",
+]);
 
 /** JSON-safe copy without secrets. Dates become ISO strings, BigInts become strings. */
 function snapshot(value: unknown): Prisma.InputJsonValue | undefined {
