@@ -1,6 +1,6 @@
 # 0004 · Client master: clients, numbers, family members, notes
 
-- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*); **amended 19 Oct 2026**: staff don't browse the client list (see *Amendment 2*); **amended 20 Oct 2026**: a family member's number finds the family (see *Amendment 3*).
+- **Status:** accepted and built (8 Oct 2026); **amended 9 Oct 2026**: the name is required (see *Amendment*); **amended 19 Oct 2026**: staff don't browse the client list (see *Amendment 2*); **amended 20 Oct 2026**: a family member's number finds the family (see *Amendment 3*); **amended 21 Oct 2026**: an HOD sees only their departments' clients (see *Amendment 4*).
 - **Date:** 8 Oct 2026
 - **Changes:** replaces the `Client` model proposed in [0003](0003-visa-intake.md). It is a superset: `mobile @unique` and `createdById` are unchanged, so 0003's `GET /api/clients/lookup` contract still holds (extended below). 0003 adds the `enquiries` and `messages` relations when Visa Step 1 is built.
 - **Order of work:** the client master is built before the System Masters (embassy holidays, rules, vendors, dropdown admin screens), which are on hold.
@@ -81,6 +81,29 @@ Finding the right file at once is what matters.
 - **Not done:** saving a member's number on the client page doesn't add it as an extra number by itself; the pooling
   happens the first time the number is used at intake.
 
+## Amendment 4 (21 Oct 2026, project lead): an HOD sees their departments' clients
+
+**The gap:** the role walkthrough of 21 Oct 2026 found that the Holidays HOD could open a visa family's page, see and
+add their passport scans, and change their main number. The page then said "No cases yet", though the family had an open
+visa case that the HOD isn't allowed to see. So she could take them for a new client.
+
+**The decision (project lead, option c):** a department's HOD doesn't see another department's clients.
+
+| Who | The Clients tab (list, search) | One client's page, and their scans |
+| --- | --- | --- |
+| The Head; Accounts (VIEW or EDIT: they bill every client) | Every client | Any client (scans: the Head, and an Accounts HOD, as before) |
+| An HOD | The clients with a case (open or finished) in a department they head, and the clients with no case yet | Those, or a client of a case they can see |
+| Other office staff | No (unchanged) | A client of a case they can see (unchanged) |
+
+- **Clients with no case** (added on the Clients tab) stay visible to every HOD, since no department owns them yet.
+  The first case decides. *(Default, not asked: say if it's wrong.)*
+- **Scans** ([0016](0016-client-documents.md) Decision 4, amended): an HOD sees a client's scans only on a client they
+  can open, so the Holidays HOD sees a family's passports once that family has a holiday case.
+- **Intake is unchanged:** the New enquiry lookup by mobile still finds any client, so a holiday enquiry for a visa
+  family goes on the same client. From then on, the Holidays HOD sees them.
+- **Code:** `clientsTabWhere` and `assertCanSeeClient` in `src/modules/clients/access.ts`. The frontend needed no
+  change: the server filters the list and refuses the rest.
+
 ## Context
 
 Every department works for the same clients, so the client record comes first. What the sources say (PROJECT_KNOWLEDGE.md §10.1, §12.14, and the 30 Sep transcript):
@@ -154,8 +177,8 @@ Clients are shared by every department, so the routes use `requireAuth → requi
 | Action | Who |
 | --- | --- |
 | Look up by mobile (New enquiry) | The Head and every office user. Field staff get 403. |
-| List, search, create from the Clients tab | The Head, any HOD, Accounts (*Amendment 2*) |
-| View one client | Those, or office staff who can see one of the client's cases (*Amendment 2*) |
+| List, search, create from the Clients tab | The Head, any HOD, Accounts (*Amendment 2*). An HOD lists only their departments' clients and clients with no case (*Amendment 4*) |
+| View one client | The clients their list shows, or a client of a case they can see (*Amendments 2 and 4*) |
 | Change clients, numbers, members, notes | A user who may view the client and has EDIT (or HOD) in **any** department |
 | Set, change or clear `accountingCode`, `billingCycleId`, `paymentHabitId` | `can(user, "ACCOUNTS", "EDIT")`: Accounts or the Head (Q34). Sending an unchanged value is fine. |
 | Change the settings | Head only |

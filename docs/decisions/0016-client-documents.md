@@ -95,6 +95,9 @@ The WhatsApp message (Decision 6) is recorded now and sent once the WhatsApp out
 **Defaults (not asked; say if any is wrong):**
 - **Every save and every opening is audited:** who, when, the IP, and the client, so the client's history shows them.
 - **Departments:** Tickets, Holidays and Insurance HODs see the list too, since their work needs passport copies.
+  *Amended 21 Oct 2026 (project lead, [0004](0004-client-master.md) amendment 4):* only on a client they can open,
+  i.e. one with a case in a department they head (or no case yet), so a Holidays HOD doesn't see a family that only
+  has visa cases.
   Their staff get the "On file" view when their case screens are built (Stage 2).
 
 **Built 17 Oct 2026** (component 1, the Documents card, Decisions 2–4):
