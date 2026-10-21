@@ -1,5 +1,6 @@
-import { type CSSProperties, type KeyboardEvent, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, type Ref, useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { usePopup } from './usePopup'
 
 type Column = 'hour' | 'minute' | 'half'
 type Draft = { hour?: string; minute?: string; half?: string }
@@ -56,7 +57,7 @@ export function TimePicker({
   // The columns picked since it opened: all three closes it.
   const [picked, setPicked] = useState<Column[]>([])
   const buttonRef = useRef<HTMLButtonElement | null>(null)
-  const popRef = useRef<HTMLDivElement>(null)
+  const popRef = usePopup(open, setOpen, buttonRef)
 
   const setButton = useCallback(
     (el: HTMLButtonElement | null) => {
@@ -82,48 +83,16 @@ export function TimePicker({
     if (done.length === 3) close(true)
   }
 
-  // Under the box (above it if there's no room below), on the page body so a table or card can't clip it. Each column
-  // scrolls to what's picked, and the hours take the focus.
+  // Each column scrolls to what's picked, and the hours take the focus.
   useLayoutEffect(() => {
     const pop = popRef.current
     if (!open || !pop) return
-    const place = () => {
-      const box = buttonRef.current?.getBoundingClientRect()
-      if (!box) return
-      const gap = 6
-      const edge = 8
-      const below = box.bottom + gap
-      const above = box.top - gap - pop.offsetHeight
-      const top = below + pop.offsetHeight > window.innerHeight - edge && above >= edge ? above : below
-      pop.style.top = `${top}px`
-      pop.style.left = `${Math.max(edge, Math.min(box.left, window.innerWidth - pop.offsetWidth - edge))}px`
-    }
-    place()
     for (const col of pop.querySelectorAll<HTMLElement>('.time-col')) {
       const on = col.querySelector<HTMLElement>('[aria-pressed="true"]')
       if (on) col.scrollTop = on.offsetTop - (col.clientHeight - on.offsetHeight) / 2
     }
     pop.querySelector<HTMLElement>('[tabindex="0"]')?.focus({ preventScroll: true })
-    const onScroll = (e: Event) => {
-      if (!pop.contains(e.target as Node)) place()
-    }
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', onScroll, true)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node
-      if (!popRef.current?.contains(target) && !buttonRef.current?.contains(target)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
+  }, [open, popRef])
 
   const onPopKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {

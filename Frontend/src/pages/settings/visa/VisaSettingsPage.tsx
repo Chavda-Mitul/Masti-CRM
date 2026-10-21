@@ -2,13 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
-import { FormField } from '../../../components/FormField'
+import { InfoButton } from '../../../components/InfoButton'
 import { TimePicker } from '../../../components/TimePicker'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useSaveVisaSettings, useVisaSettings } from '../masters/queries'
 import { visaTimingsFormSchema, type VisaTimingsFormValues } from '../masters/schemas'
 import type { VisaSettings } from '../masters/types'
+import { type HelpLines, VISA_SETTINGS_HELP as HELP } from './help'
 
 type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passportValidity' | 'childAge'>
 
@@ -34,6 +35,26 @@ const formValues = (s: VisaSettings): VisaTimingsFormValues => ({
 }) as VisaTimingsFormValues
 
 const days = (n: number) => `${n} office day${n === 1 ? '' : 's'}`
+
+const TIMINGS = 'When a case comes back due'
+const PASSPORT_VALIDITY = 'A passport must still run, after the trip comes back'
+const ADULT_FROM = 'A traveller counts as an adult from'
+
+/** The ⓘ next to a setting, with what it's for in plain words (help.ts). */
+function Help({ topic, lines }: { topic: string; lines: HelpLines }) {
+  return (
+    <InfoButton topic={topic}>
+      <dl className="info-list">
+        {lines.map(([heading, text]) => (
+          <div key={heading}>
+            <dt>{heading}</dt>
+            <dd>{text}</dd>
+          </div>
+        ))}
+      </dl>
+    </InfoButton>
+  )
+}
 
 /**
  * Settings → Visa (decided 19 Oct 2026, item 2 fixes): when a visa case comes back due on its processor's desk after each
@@ -72,10 +93,12 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
   return (
     <form onSubmit={onSubmit} noValidate className="visa-settings">
       <section className="card pad master-card">
-        <h2 className="h2">When a case comes back due</h2>
+        <h2 className="h2">
+          {TIMINGS} <Help topic={TIMINGS} lines={HELP.timings} />
+        </h2>
         <p className="muted small">
-          The case comes back to its processor on the open office day this many days on (Sundays and office holidays are skipped), at
-          this time. A change applies to the next case that reaches the step.
+          The case comes back to whoever is handling it on the open office day this many days on (Sundays and office holidays are
+          skipped), at this time. A change applies to the next case that reaches the step.
         </p>
         <table className="table">
           <thead>
@@ -89,7 +112,7 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
             {CHECKS.map((c) => (
               <tr key={c.key}>
                 <td>
-                  <strong>{c.what}</strong>
+                  <strong>{c.what}</strong> <Help topic={c.what} lines={HELP[c.key]} />
                   <div className="muted small">{c.from}</div>
                 </td>
                 <td>
@@ -110,7 +133,7 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
             ))}
             <tr>
               <td>
-                <strong>Check the collection with the vendor</strong>
+                <strong>Check the collection with the vendor</strong> <Help topic="Check the collection with the vendor" lines={HELP.collectionCheck} />
                 <div className="muted small">office days before the expected collection date</div>
               </td>
               <td>
@@ -137,14 +160,41 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
         <p className="muted small">
           Staff see “Check before saving” and can save anyway; the confirmation is recorded. These two values decide when.
         </p>
-        <div className="form-grid">
-          <FormField label="A passport must still run, after the trip comes back" hint="months" error={errors.passportValidity?.monthsAfterReturn?.message}>
-            <input className="input" type="number" min={0} max={24} style={{ width: 90 }} {...register('passportValidity.monthsAfterReturn', { valueAsNumber: true })} />
-          </FormField>
-          <FormField label="A traveller counts as an adult from" hint="years old" error={errors.childAge?.adultFrom?.message}>
-            <input className="input" type="number" min={1} max={25} style={{ width: 90 }} {...register('childAge.adultFrom', { valueAsNumber: true })} />
-          </FormField>
-        </div>
+        {/* A table, not FormFields: an ⓘ inside a field's <label> would open instead of focusing the box. */}
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Warning</th>
+              <th>Set to</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>{PASSPORT_VALIDITY}</strong> <Help topic={PASSPORT_VALIDITY} lines={HELP.passportValidity} />
+              </td>
+              <td>
+                <div className="unit-input">
+                  <input className="input" type="number" min={0} max={24} style={{ width: 90 }} aria-label={`${PASSPORT_VALIDITY}: months`} {...register('passportValidity.monthsAfterReturn', { valueAsNumber: true })} />
+                  <span className="muted small">months</span>
+                </div>
+                {errors.passportValidity?.monthsAfterReturn && <div className="field-error">{errors.passportValidity.monthsAfterReturn.message}</div>}
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>{ADULT_FROM}</strong> <Help topic={ADULT_FROM} lines={HELP.childAge} />
+              </td>
+              <td>
+                <div className="unit-input">
+                  <input className="input" type="number" min={1} max={25} style={{ width: 90 }} aria-label={`${ADULT_FROM}: years old`} {...register('childAge.adultFrom', { valueAsNumber: true })} />
+                  <span className="muted small">years old</span>
+                </div>
+                {errors.childAge?.adultFrom && <div className="field-error">{errors.childAge.adultFrom.message}</div>}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       {(serverIssue ?? (save.error && errorText(save.error))) && <div className="alert alert-bad">{serverIssue ?? errorText(save.error)}</div>}
@@ -162,12 +212,14 @@ function SettingsView({ settings: s }: { settings: VisaSettings }) {
   return (
     <div className="visa-settings">
       <section className="card pad master-card">
-        <h2 className="h2">When a case comes back due</h2>
+        <h2 className="h2">
+          {TIMINGS} <Help topic={TIMINGS} lines={HELP.timings} />
+        </h2>
         <dl className="kv-list">
           {CHECKS.map((c) => (
             <div key={c.key}>
               <dt>
-                {c.what} <span className="muted small">({c.from})</span>
+                {c.what} <Help topic={c.what} lines={HELP[c.key]} /> <span className="muted small">({c.from})</span>
               </dt>
               <dd>
                 {days(s[c.key].afterDays)} on, at {s[c.key].at}
@@ -175,7 +227,9 @@ function SettingsView({ settings: s }: { settings: VisaSettings }) {
             </div>
           ))}
           <div>
-            <dt>Check the collection with the vendor</dt>
+            <dt>
+              Check the collection with the vendor <Help topic="Check the collection with the vendor" lines={HELP.collectionCheck} />
+            </dt>
             <dd>
               {days(s.collectionCheck.daysBefore)} before, at {s.collectionCheck.at}
             </dd>
@@ -186,11 +240,15 @@ function SettingsView({ settings: s }: { settings: VisaSettings }) {
         <h2 className="h2">Warnings</h2>
         <dl className="kv-list">
           <div>
-            <dt>A passport must still run, after the trip comes back</dt>
+            <dt>
+              {PASSPORT_VALIDITY} <Help topic={PASSPORT_VALIDITY} lines={HELP.passportValidity} />
+            </dt>
             <dd>{s.passportValidity.monthsAfterReturn} months</dd>
           </div>
           <div>
-            <dt>A traveller counts as an adult from</dt>
+            <dt>
+              {ADULT_FROM} <Help topic={ADULT_FROM} lines={HELP.childAge} />
+            </dt>
             <dd>{s.childAge.adultFrom} years old</dd>
           </div>
         </dl>
