@@ -1,11 +1,15 @@
 import type { UserType } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
-import { audit } from "../../lib/audit";
+import { audit, auditMany } from "../../lib/audit";
 import { cleanEmail, cleanMobile } from "../../lib/contact";
+import { fromDbDate } from "../../lib/dates";
 import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { generateTempPassword, hashPassword } from "../auth/password";
-import { toUserDto, withDepartments, type Actor } from "./user";
+import { canOwnCases, type DepartmentCode } from "../auth/permissions";
+import { UNFINISHED } from "../enquiries/visibility";
+import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
+import { toUserDto, withDepartments, type Actor, type UserWithDepartments } from "./user";
 import type { CreateUserInput, Membership, UpdateUserInput } from "./users.schemas";
 
 /** Department codes → rows to insert. HODs always get EDIT. */
@@ -64,6 +68,81 @@ const LAST_HEAD = "There must always be at least one active Head.";
 async function lockAndAssertAnotherActiveHead(tx: Db, userId: string) {
   await tx.$queryRaw`SELECT "id" FROM "User" WHERE "type" = 'HEAD' AND "isActive" ORDER BY "id" FOR UPDATE`;
   if (!(await anotherActiveHeadExists(userId, tx))) throw new HttpError(409, LAST_HEAD);
+}
+
+/**
+ * Hands back what someone can no longer do, in the transaction that switches them off or changes their access
+ * (docs/decisions/0002-user-types.md amendment 1): their unfinished cases in the departments they can no longer edit
+ * lose their owner and wait in "To assign" for the HOD, and a boy who is switched off or no longer field staff has his
+ * booked jobs called off, so each case books another boy. Each is audited. Returns what was handed back.
+ */
+async function releaseWork(tx: Db, user: UserWithDepartments, actor: Actor, why: string) {
+  const owned = await tx.enquiry.findMany({
+    where: { AND: [{ ownerId: user.id }, UNFINISHED] },
+    select: { id: true, department: { select: { code: true } } },
+  });
+  const lost = owned.filter((e) => !canOwnCases(user, e.department.code as DepartmentCode)).map((e) => e.id);
+  const doesJobs = user.isActive && user.type === "FIELD";
+  const jobCases = doesJobs ? [] : await tx.fieldJob.findMany({ where: { assigneeId: user.id, status: "BOOKED" }, select: { enquiryId: true } });
+  const ids = [...new Set([...lost, ...jobCases.map((j) => j.enquiryId)])].sort();
+  if (ids.length === 0) return { cases: [], fieldJobs: [] };
+  // The cases' locks in id order (as a docket's dispatch takes them), so a save on one, or the boy's own step, waits.
+  await tx.$queryRaw`SELECT "id" FROM "Enquiry" WHERE "id" = ANY(${ids}) ORDER BY "id" FOR UPDATE`;
+
+  // Read again under the locks: only what is still theirs and unfinished.
+  const released = await tx.enquiry.findMany({
+    where: { AND: [{ id: { in: lost }, ownerId: user.id }, UNFINISHED] },
+    select: { id: true, caseNo: true, clientId: true },
+    orderBy: { caseNo: "asc" },
+  });
+  await tx.enquiry.updateMany({ where: { id: { in: released.map((e) => e.id) } }, data: { ownerId: null } });
+  await auditMany(
+    released.map((e) => ({
+      actorId: actor.user.id,
+      action: "enquiry.unassign",
+      entityType: "Enquiry",
+      entityId: e.id,
+      clientId: e.clientId,
+      before: { ownerId: user.id },
+      after: { ownerId: null, why },
+      ip: actor.ip,
+    })),
+    tx,
+  );
+  const fieldJobs = doesJobs ? [] : await cancelBookedFieldJobs(tx, { assigneeId: user.id }, actor, why);
+  return { cases: released.map((e) => e.caseNo), fieldJobs };
+}
+
+/** What releaseWork handed back, for the user change's audit: nothing when there was nothing. */
+function handedBack(released: Awaited<ReturnType<typeof releaseWork>>) {
+  return {
+    ...(released.cases.length > 0 ? { casesToAssign: released.cases } : {}),
+    ...(released.fieldJobs.length > 0 ? { fieldJobsCancelled: released.fieldJobs } : {}),
+  };
+}
+
+/**
+ * What the Deactivate and Edit dialogs warn about before saving: the person's unfinished cases (by department) and,
+ * for a boy, his booked jobs. Saving hands back the ones they can no longer do (releaseWork).
+ */
+export async function openWork(id: string) {
+  const user = await getUserOr404(id);
+  const [cases, jobs] = await Promise.all([
+    prisma.enquiry.findMany({
+      where: { AND: [{ ownerId: user.id }, UNFINISHED] },
+      select: { caseNo: true, status: true, department: { select: { code: true, name: true } }, client: { select: { name: true } } },
+      orderBy: { caseNo: "asc" },
+    }),
+    prisma.fieldJob.findMany({
+      where: { assigneeId: user.id, status: "BOOKED" },
+      select: { id: true, kind: true, day: true, enquiry: { select: { caseNo: true, client: { select: { name: true } } } } },
+      orderBy: [{ day: "asc" }, { id: "asc" }],
+    }),
+  ]);
+  return {
+    cases,
+    fieldJobs: jobs.map((j) => ({ id: j.id, kind: j.kind, day: fromDbDate(j.day), caseNo: j.enquiry.caseNo, client: j.enquiry.client })),
+  };
 }
 
 export async function listUsers() {
@@ -152,6 +231,7 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
         await tx.userDepartment.createMany({ data: memberships.map((m) => ({ ...m, userId: before.id })) });
       }
       const user = await tx.user.findUniqueOrThrow({ where: { id: before.id }, include: withDepartments });
+      const released = await releaseWork(tx, user, actor, "user's access changed");
       await audit(
         {
           actorId: actor.user.id,
@@ -159,7 +239,7 @@ export async function updateUser(id: string, input: UpdateUserInput, actor: Acto
           entityType: "User",
           entityId: user.id,
           before: toUserDto(before),
-          after: toUserDto(user),
+          after: { ...toUserDto(user), ...handedBack(released) },
           ip: actor.ip,
         },
         tx,
@@ -182,8 +262,17 @@ export async function deactivateUser(id: string, actor: Actor) {
     const user = await tx.user.update({ where: { id: before.id }, data: { isActive: false }, include: withDepartments });
     // Ends access immediately: every open session for this user is deleted.
     await tx.session.deleteMany({ where: { userId: before.id } });
+    const released = await releaseWork(tx, user, actor, "user deactivated");
     await audit(
-      { actorId: actor.user.id, action: "user.deactivate", entityType: "User", entityId: user.id, before: toUserDto(before), after: toUserDto(user), ip: actor.ip },
+      {
+        actorId: actor.user.id,
+        action: "user.deactivate",
+        entityType: "User",
+        entityId: user.id,
+        before: toUserDto(before),
+        after: { ...toUserDto(user), ...handedBack(released) },
+        ip: actor.ip,
+      },
       tx,
     );
     return user;

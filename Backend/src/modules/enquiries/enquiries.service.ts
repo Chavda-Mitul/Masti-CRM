@@ -10,7 +10,7 @@ import { visaNextStep } from "../visa/visaNextStep";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
-import { TO_HAND_BACK, toHandBack, visibleEnquiryWhere } from "./visibility";
+import { TO_HAND_BACK, toHandBack, UNFINISHED, visibleEnquiryWhere } from "./visibility";
 
 // The All enquiries list (§12.2): every department in one list, late first, then by time due (§9).
 // Each department adds its own part (VisaCase now; holidays, hotels… in Stage 2) and its own one-line summary.
@@ -120,8 +120,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     }
   }
 
-  // "To assign" stays open cases only.
-  const statusWhere: Prisma.EnquiryWhereInput = query.status === "OPEN" && !query.unassigned ? OPEN_TAB : { status: query.status };
+  // "To assign": every unfinished case nobody owns, whatever its status (0002 amendment 1).
+  const statusWhere: Prisma.EnquiryWhereInput = query.unassigned ? UNFINISHED : query.status === "OPEN" ? OPEN_TAB : { status: query.status };
   // Everything but the department, so the department chips can show their counts. Staff see only their own enquiries,
   // HODs their department's, the Head everything (visibility.ts).
   const base: Prisma.EnquiryWhereInput[] = [
@@ -176,6 +176,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       stage: toStageRef(row.stage, stagesOf(row.departmentId, row.stage.flow).length),
       /** This case's next step: the step's own, except where a visa case's state decides it (visaNextStep). */
       nextStep: visaNextStep(row.stage, row.visa),
+      /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+      matured: !!row.visa?.maturedAt,
       source: row.source,
       origin: row.origin,
       owner: row.owner,
@@ -194,13 +196,14 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
 }
 
 /**
- * The sidebar's "To assign" count: open cases with no owner (matured, waiting for a processor) in the departments this
- * user is HOD of; the Head counts every department. Cases should never sit idle without a processor (10 Oct 2026).
+ * The sidebar's "To assign" count: unfinished cases with no owner (matured and waiting for a processor, or a leaver's) in
+ * the departments this user is HOD of; the Head counts every department. Cases should never sit idle without a
+ * processor (10 Oct 2026).
  */
 export async function toAssignCount(user: UserWithDepartments) {
   const departments = await assigningDepartments(user);
   const count = await prisma.enquiry.count({
-    where: { status: "OPEN", ownerId: null, departmentId: { in: departments.map((d) => d.id) } },
+    where: { AND: [UNFINISHED, { ownerId: null, departmentId: { in: departments.map((d) => d.id) } }] },
   });
   return { count };
 }

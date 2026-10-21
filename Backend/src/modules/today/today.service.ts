@@ -139,6 +139,7 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
         resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
         toHandBack: toHandBack(row),
         whatFor: whatFor(row),
+        matured: !!row.visa?.maturedAt,
         owner: row.owner,
         dueAt: row.dueAt,
       })),

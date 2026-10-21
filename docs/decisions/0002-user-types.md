@@ -59,3 +59,35 @@ enum UserType { HEAD  OFFICE  FIELD }   // User.type, default OFFICE
 - **Can office staff cover a run** (e.g. Accounts on the collection boy's day off)? The data model allows it already (`FieldJob.assignee` is any user). If yes, open the `/api/field/*` routes and `/tasks` to any user with assigned jobs, and keep blocking FIELD users from the desktop. *QUESTIONS_TO_ASK M35 · PROJECT_KNOWLEDGE §18 #31.*
 - **Q3** (phone or tablet; web app or WhatsApp-only) is still open. The design holds either way: with WhatsApp-only jobs, FIELD users are assignees who never log in.
 - **Session length on a phone:** the 12 h idle timeout logs the collection boy out daily. Per-type session settings may be needed once the field app is in use.
+
+## Amendment 1: a leaver's work (21 Oct 2026, project lead)
+
+The role walkthrough of 21 Oct 2026 found that switching someone off ended their access but left their work with them,
+and nothing showed it:
+- the HOD's list still named them as the owner
+- their cases weren't under To assign
+- a switched-off boy's booked pickup stayed his, so nobody went
+
+The project lead picked these:
+
+1. **Their unfinished cases go to To assign.** These changes take away, in the same transaction, the cases the person
+   can no longer own (`canOwnCases`: EDIT in the case's department, or Head):
+   - switching them off
+   - taking a department away
+   - making them view-only there
+   - making them field staff
+
+   Unfinished means open, postponed, or cancelled with passports still to hand back (`UNFINISHED`). Finished cases keep
+   their owner, for the record. Each case is audited (`enquiry.unassign`, with why), and the user's own audit lists them
+   (`casesToAssign`). Making someone HOD or Head keeps their cases. Activating them again doesn't give the cases back.
+2. **To assign shows every unfinished case nobody owns** (it was open ones only). A leaver's postponed case shows there,
+   and so does a cancelled one still holding passports. The HOD can give a cancelled case to someone while its
+   passports are still to hand back ([0006](0006-visa-documents.md) amendment 21).
+3. **A boy's booked jobs are cancelled** when he is switched off, or made office staff or Head. Each one is marked
+   cancelled by whoever made the change (`field.job.cancel`, with why). Each case keeps its due time, so it comes back
+   up and staff book another boy. Done and failed jobs stay as they were.
+4. **The Head is warned before saving.** The Deactivate box and the Edit drawer list what saving hands back
+   (`GET /api/users/:id/open-work`, Head only). For example: "Ravi's 4 unfinished cases will go to To assign, for the
+   HOD to give to someone else", or "Farhan's booked job will be cancelled. Book another boy on its case."
+
+Not covered yet: switching a whole department off, which has no screen.

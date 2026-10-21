@@ -16,11 +16,12 @@ export async function listFieldStaff() {
 }
 
 /**
- * Calls off a case's booked field jobs, in the caller's transaction: when the case is postponed or cancelled, the boy
- * mustn't go (0015 Defaults). Each is audited (field.job.cancel, with why). Returns what was called off.
+ * Calls off booked field jobs, in the caller's transaction: a case's, when it is postponed or cancelled and the boy
+ * mustn't go (0015 Defaults), or a boy's, when he is switched off or no longer field staff (0002 amendment 1). The caller
+ * holds the cases' locks. Each is audited (field.job.cancel, with why). Returns what was called off.
  */
-export async function cancelBookedFieldJobs(tx: Db, enquiryId: string, actor: Actor, why: string) {
-  const jobs = await tx.fieldJob.findMany({ where: { enquiryId, status: "BOOKED" }, select: { id: true, kind: true, enquiry: { select: { clientId: true } } } });
+export async function cancelBookedFieldJobs(tx: Db, of: { enquiryId: string } | { assigneeId: string }, actor: Actor, why: string) {
+  const jobs = await tx.fieldJob.findMany({ where: { ...of, status: "BOOKED" }, select: { id: true, kind: true, enquiry: { select: { clientId: true } } } });
   const now = new Date();
   for (const job of jobs) {
     await tx.fieldJob.update({ where: { id: job.id }, data: { status: "CANCELLED", cancelledAt: now, cancelledById: actor.user.id } });

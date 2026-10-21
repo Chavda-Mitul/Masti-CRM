@@ -40,6 +40,8 @@ export interface EnquiryRow {
   stage: StageRef
   /** This case's next step: the step's own label, except where the case decides it ("Mark received" in transit). */
   nextStep: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   source: { code: string; name: string }
   origin: EnquiryOrigin
   owner: PersonRef | null
@@ -775,6 +777,8 @@ export interface FollowUpDeskRow {
   resumeOn: string | null
   /** "8 of 11 documents pending", or the stage's next step. */
   whatFor: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   lastContact: { outcome: string; at: string } | null
   owner: PersonRef | null
   dueAt: string | null

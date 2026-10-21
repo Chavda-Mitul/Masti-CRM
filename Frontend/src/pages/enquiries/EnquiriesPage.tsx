@@ -20,8 +20,8 @@ const SEEK_PAGES = 8
 
 /**
  * Open cases by default; postponed, cancelled and closed (delivered, 0014) ones are found here too (?status=postponed).
- * "To assign" (open, nobody's yet: matured and waiting for a processor) is for the HOD and the Head, who pick the
- * processor (?status=to_assign).
+ * "To assign" (unfinished and nobody's: matured and waiting for a processor, or a leaver's) is for the HOD and the
+ * Head, who pick who takes it (?status=to_assign).
  */
 const STATUSES: { value: ListStatus; label: string; assignersOnly?: boolean }[] = [
   { value: 'OPEN', label: 'Open' },
@@ -219,7 +219,7 @@ export function EnquiriesPage() {
               {filters.q || filters.mine
                 ? 'No enquiries match.'
                 : filters.status === 'TO_ASSIGN'
-                  ? 'No cases waiting for a processor.'
+                  ? 'No cases waiting to be assigned.'
                   : `No ${filters.status.toLowerCase()} enquiries.`}
               {canAdd && filters.status === 'OPEN' && !filters.q && !filters.mine && (
                 <div style={{ marginTop: 12 }}>
@@ -284,7 +284,7 @@ function summaryLine(status: ListStatus, total: number, late: number | undefined
   if (status === 'POSTPONED') return `${total} postponed · ${late} past their date · soonest back first · click a row to see its steps`
   if (status === 'CANCELLED') return `${total} cancelled · click a row to see its steps`
   if (status === 'CLOSED') return `${total} closed · click a row to see its steps`
-  if (status === 'TO_ASSIGN') return `${total} waiting for a processor · click a row to see its steps`
+  if (status === 'TO_ASSIGN') return `${total} waiting to be assigned · click a row to see its steps`
   return `${total} open · ${late} running late · late first, then by time due · click a row to see its steps`
 }
 

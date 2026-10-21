@@ -21,6 +21,8 @@ export interface UpNextRow {
   toHandBack: boolean
   /** "8 of 11 documents pending", or the case's next step. */
   whatFor: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   owner: PersonRef | null
   dueAt: string
 }

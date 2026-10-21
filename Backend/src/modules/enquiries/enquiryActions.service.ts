@@ -4,7 +4,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { addMonths, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, forbidden, notFound } from "../../lib/httpError";
-import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
+import { canOwnCases, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
 import { dueOnOfficeDay, getVisaSettings } from "../visa/visa.settings";
@@ -153,7 +153,7 @@ export async function logFollowUp(caseNo: string, input: LogFollowUpInput, actor
 function onHold(enquiryId: string, actor: Actor, why: string) {
   return async (tx: Db) => {
     await assertNotInOpenDocket(tx, enquiryId);
-    const jobs = await cancelBookedFieldJobs(tx, enquiryId, actor, why);
+    const jobs = await cancelBookedFieldJobs(tx, { enquiryId }, actor, why);
     return jobs.length > 0 ? { fieldJobsCancelled: jobs } : {};
   };
 }
@@ -228,18 +228,18 @@ function assertCanReassign(user: UserWithDepartments, enquiry: LoadedEnquiry) {
   }
 }
 
-/** Can own a case of this department: active, and EDIT there (the Head always). */
-const canOwn = (user: UserWithDepartments, code: string) => user.isActive && can(user, code as DepartmentCode, "EDIT");
-
-/** The HOD (or Head) gives the case to someone else: a colleague on leave, or a processor after maturity. */
+/**
+ * The HOD (or Head) gives the case to someone else: a colleague on leave, a processor after maturity, or a leaver's case
+ * from "To assign". A cancelled case can be given while its passports are still to hand back (0002 amendment 1).
+ */
 export async function reassign(caseNo: string, input: ReassignInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
   assertCanReassign(actor.user, enquiry);
-  if (enquiry.status === "CANCELLED" || enquiry.status === "CLOSED" || enquiry.status === "LOST") {
+  if (enquiry.status === "CLOSED" || enquiry.status === "LOST" || (enquiry.status === "CANCELLED" && !toHandBack(enquiry))) {
     throw conflict("This case is closed.");
   }
   const target = await prisma.user.findUnique({ where: { id: input.ownerId }, include: withDepartments });
-  if (!target || !canOwn(target, enquiry.department.code)) {
+  if (!target || !canOwnCases(target, enquiry.department.code as DepartmentCode)) {
     throw fieldError("ownerId", "This person can't take cases of this department.");
   }
   // Whoever collected the documents can't be the one who processes the file (0006 Decision 8).
@@ -260,6 +260,6 @@ export async function listAssignees(caseNo: string, user: UserWithDepartments) {
     orderBy: { name: "asc" },
   });
   return users
-    .filter((u) => canOwn(u, enquiry.department.code) && u.id !== enquiry.visa?.maturedById)
+    .filter((u) => canOwnCases(u, enquiry.department.code as DepartmentCode) && u.id !== enquiry.visa?.maturedById)
     .map((u) => ({ id: u.id, name: u.name, isOwner: u.id === enquiry.ownerId }));
 }
