@@ -187,7 +187,15 @@ export const visaCaseInclude = {
       travellers: {
         orderBy: { position: "asc" },
         include: {
-          member: { include: { relation: true, consent: true, consentDetailsBy: personSelect } },
+          member: {
+            include: {
+              relation: true,
+              consent: true,
+              consentDetailsBy: personSelect,
+              // The person's open "I agree" link (0022 part 2): at most one.
+              consentLinks: { where: { usedAt: null, replacedAt: null }, select: { createdAt: true, toMobile: true }, take: 1 },
+            },
+          },
           documents: {
             orderBy: { sortOrder: "asc" },
             include: {
@@ -397,7 +405,10 @@ function openDocketOf(vendor: VendorRow | null) {
 function consentOf(t: TravellerRow) {
   if (!t.member) return { state: "UNLINKED" as const };
   const details = consentDetailsOf(t.member);
-  if (!t.member.consent) return { state: "NONE" as const, details };
+  if (!t.member.consent) {
+    const open = t.member.consentLinks[0];
+    return { state: "NONE" as const, details, link: open ? { sentAt: open.createdAt, toMobile: open.toMobile } : null };
+  }
   return { state: "ON_FILE" as const, agreedAt: t.member.consent.agreedAt, details };
 }
 

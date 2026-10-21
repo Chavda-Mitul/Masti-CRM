@@ -136,6 +136,12 @@ router.put("/cases/:caseNo/travellers/:travellerId/consent-details", visaEdit, a
   res.json({ case: await consentService.saveConsentDetails(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
+/** "Send the link again" (0022 part 2): a new "I agree" link for a traveller who hasn't agreed; the old one stops working. */
+router.post("/cases/:caseNo/travellers/:travellerId/consent-link", visaEdit, async (req, res) => {
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await consentService.sendConsentLinkAgain(caseNo, idParam.parse(req.params.travellerId), actorOf(req)) });
+});
+
 /** Trip details: travelling out, coming back, the entry type and the hotel stay (Documents or File preparation). */
 router.patch("/cases/:caseNo/trip", visaEdit, async (req, res) => {
   const body = updateTripSchema.parse(req.body);

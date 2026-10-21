@@ -66,7 +66,14 @@ describe("the case page", () => {
     });
     const [adultRow] = await prisma.visaCaseTraveller.findMany({ where: { caseId: saved.id }, orderBy: { position: "asc" } });
     await prisma.visaCaseTraveller.update({ where: { id: adultRow!.id }, data: { memberId: member.id, name: member.name } });
-    await prisma.consent.create({ data: { memberId: member.id, agreedAt: new Date("2026-09-28T09:44:00Z") } });
+    // A consent given through its link, to the wording in use (docs/decisions/0022-consent-form.md).
+    const wording = await prisma.consentWording.findFirstOrThrow();
+    const link = await prisma.consentLink.create({
+      data: { memberId: member.id, enquiryId: saved.id, tokenHash: "test-hash", toMobile: "+919825041234", createdById: aarti.id, usedAt: new Date("2026-09-28T09:44:00Z") },
+    });
+    await prisma.consent.create({
+      data: { memberId: member.id, agreedAt: new Date("2026-09-28T09:44:00Z"), wordingId: wording.id, linkId: link.id, details: { name: member.name } },
+    });
 
     const docs = await prisma.visaCaseDocument.findMany({ where: { travellerId: adultRow!.id }, orderBy: { sortOrder: "asc" } });
     const receivedAt = new Date("2026-10-03T10:42:00Z");

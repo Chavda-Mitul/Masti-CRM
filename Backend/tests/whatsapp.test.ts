@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError } from "../src/lib/whatsapp";
-import { logOnlyProvider } from "../src/lib/whatsapp/logOnly";
+import { forTheLog, logOnlyProvider } from "../src/lib/whatsapp/logOnly";
 import { twilioProvider } from "../src/lib/whatsapp/twilio";
 
 // Sending WhatsApp (docs/decisions/0020-whatsapp-sending.md): the provider .env picks, and what Twilio is asked to do.
@@ -59,6 +59,17 @@ describe("choosing the provider", () => {
   it("log only: keeps the message in the server log, with an id like a sent one", async () => {
     const sent = await logOnlyProvider.send({ to, body: "Hello" });
     expect(sent.providerMessageId).toMatch(/^log-[0-9a-f-]{36}$/);
+  });
+
+  it("log only: hides a link's secret from the log when live, and keeps it on a laptop, where the log is the way in", () => {
+    const link = "https://crm.masti.in/consent#abcDEF123_-xyz";
+    const message = { to, body: `Please tap "I agree":\n${link}\n\nThank you.`, template: { id: "HX01", variables: { consent_link: link, case_no: "VISA-2026-0041" } } };
+    expect(forTheLog(message, true)).toEqual({
+      to,
+      body: 'Please tap "I agree":\nhttps://crm.masti.in/consent#…\n\nThank you.',
+      template: { id: "HX01", variables: { consent_link: "https://crm.masti.in/consent#…", case_no: "VISA-2026-0041" } },
+    });
+    expect(forTheLog(message, false)).toEqual(message);
   });
 });
 

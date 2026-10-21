@@ -7,6 +7,12 @@ import type { Db } from "../../config/prisma";
 /** Message 6: staff mark the documents complete and hand the case to the visa team. */
 export const VISA_DOCUMENTS_RECEIVED = "visa.documents_received";
 
+/**
+ * Message 4: staff save a traveller's consent details and that person hasn't agreed yet (docs/decisions/0022-consent-form.md).
+ * The draft's "Before we apply" is gone: consent never holds up the case.
+ */
+export const VISA_CONSENT_LINK = "visa.consent_link";
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
@@ -15,6 +21,20 @@ export const MESSAGE_TEMPLATES = [
       "Dear {{client_name}},",
       "",
       "Thank you! We have received all documents for your {{visa}} ({{case_no}}). Our visa team is now preparing your file, and we will update you at every step.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_CONSENT_LINK,
+    name: "Consent form (I agree)",
+    body: [
+      "Dear {{recipient_name}},",
+      "",
+      'For the {{visa}} ({{case_no}}), please read the consent and liability form for {{traveller_name}} and tap "I agree":',
+      "{{consent_link}}",
+      "",
+      "For any question, call us on {{office_phone}}.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),

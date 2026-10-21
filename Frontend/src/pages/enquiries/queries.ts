@@ -318,6 +318,13 @@ export function useSaveConsentDetails(caseNo: string) {
   )
 }
 
+/** "Send the link again" (0022 part 2): a new "I agree" link; the open one stops working. */
+export function useSendConsentLink(caseNo: string) {
+  return useCaseAction<{ travellerId: string }>(caseNo, (base, { travellerId }) =>
+    api(`${base}/travellers/${travellerId}/consent-link`, { method: 'POST' }),
+  )
+}
+
 /** Trip details: only the fields that changed; null clears one. */
 export function useUpdateTrip(caseNo: string) {
   return useCaseAction<{

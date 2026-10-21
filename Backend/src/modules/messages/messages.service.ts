@@ -6,6 +6,7 @@ import { audit } from "../../lib/audit";
 import { QUEUES, queueJob } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } from "../../lib/whatsapp";
+import { maskConsentLinks } from "../consent/consentToken";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
@@ -34,10 +35,12 @@ export interface NewMessage {
   key: string;
   /** A value for each of the template's placeholders. Values it doesn't use are left out. */
   variables: Record<string, string>;
+  /** Another number than the client's main one: a traveller's own, for their consent link (0022). +91XXXXXXXXXX. */
+  toMobile?: string;
 }
 
 /**
- * Writes one message to the client's main number, worded now, and queues its sending, in the caller's transaction: if
+ * Writes one message to the client's main number (or `toMobile`), worded now, and queues its sending, in the caller's transaction: if
  * the change rolls back, so does the message. Does nothing when the same key was queued before.
  *
  * A message problem never stops the change it reports. A wording the CRM can't fill is written down as failed, with
@@ -60,6 +63,7 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
   }
 
   const id = randomUUID();
+  const words = { body: filled?.body ?? template.body, variables: filled?.variables ?? input.variables };
   const { count } = await tx.outboundMessage.createMany({
     data: [
       {
@@ -67,9 +71,8 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
         templateId: template.id,
         clientId: input.clientId,
         enquiryId: input.enquiryId ?? null,
-        toMobile: client.mobile,
-        variables: filled?.variables ?? input.variables,
-        body: filled?.body ?? template.body,
+        toMobile: input.toMobile ?? client.mobile,
+        ...(problem ? withoutSecrets(words) : words),
         idempotencyKey: input.key,
         ...(problem ? { status: "FAILED" as const, error: problem, failedAt: new Date() } : {}),
       },
@@ -91,6 +94,18 @@ export function fill(template: string, values: Record<string, string>) {
     return value;
   });
   return { body, variables: used };
+}
+
+/**
+ * The words and values a settled message keeps: a consent link's secret is the client's alone, and once the message has
+ * gone, or won't go, nothing needs it (docs/decisions/0022-consent-form.md). Only a queued message holds it, for its try.
+ */
+function withoutSecrets(message: { body: string; variables: Prisma.JsonValue }) {
+  const variables = message.variables as Record<string, string>;
+  return {
+    body: maskConsentLinks(message.body),
+    variables: Object.fromEntries(Object.entries(variables).map(([name, value]) => [name, maskConsentLinks(value)])),
+  };
 }
 
 /**
@@ -150,7 +165,7 @@ async function claim(messageId: string): Promise<Claimed | null> {
     if (refusal) {
       await tx.outboundMessage.update({
         where: { id: messageId },
-        data: { ...refusal, sendingAt: null, ...(refusal.status === "FAILED" ? { failedAt: now } : {}) },
+        data: { ...refusal, ...withoutSecrets(message), sendingAt: null, ...(refusal.status === "FAILED" ? { failedAt: now } : {}) },
       });
       await auditOutcome(tx, message, refusal);
       return null;
@@ -180,7 +195,8 @@ function whyNotNow(
 
 /**
  * Records how a try went, unless the message moved on meanwhile (a second try marked it stuck). A message that's still
- * QUEUED waits for pg-boss's next try. A sent one gets its first status check, when the provider can be asked.
+ * QUEUED waits for pg-boss's next try. A settled one loses its secrets; a sent one gets its first status check, when the
+ * provider can be asked.
  */
 async function settle(
   message: Claimed["message"],
@@ -191,7 +207,7 @@ async function settle(
   await prisma.$transaction(async (tx) => {
     const { count } = await tx.outboundMessage.updateMany({
       where: { id: message.id, status: "QUEUED", sendingAt },
-      data: { ...data, sendingAt: null },
+      data: { ...data, ...(data.status ? withoutSecrets(message) : {}), sendingAt: null },
     });
     if (count === 0) {
       logger.warn({ messageId: message.id }, "A WhatsApp try finished after its message had moved on; nothing recorded.");
@@ -215,7 +231,10 @@ export async function giveUpMessage(messageId: string): Promise<void> {
     const message = await tx.outboundMessage.findUnique({ where: { id: messageId }, include: { template: { select: { code: true } } } });
     if (!message || message.status !== "QUEUED") return;
     const error = message.sendingAt ? STUCK : `It couldn't be sent${message.error ? `: ${message.error}` : "."}`;
-    await tx.outboundMessage.update({ where: { id: messageId }, data: { status: "FAILED", error, failedAt: new Date(), sendingAt: null } });
+    await tx.outboundMessage.update({
+      where: { id: messageId },
+      data: { status: "FAILED", error, failedAt: new Date(), sendingAt: null, ...withoutSecrets(message) },
+    });
     await auditOutcome(tx, message, { status: "FAILED", error });
   });
 }

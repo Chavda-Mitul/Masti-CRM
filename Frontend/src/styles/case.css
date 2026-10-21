@@ -982,6 +982,18 @@
 .consent-fill {
   margin-top: 8px;
 }
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.consent-tile .consent-error {
+  color: var(--bad);
+}
+.consent-mobile {
+  white-space: nowrap;
+}
 
 /* Follow-up history */
 .follow-list {

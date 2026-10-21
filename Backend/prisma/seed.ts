@@ -17,6 +17,7 @@ import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedMessageTemplates } from "../src/modules/messages/messages.seed";
+import { seedConsentWording } from "../src/modules/consent/consent.seed";
 import {
   AWB_KEY,
   DEFAULT_AWB,
@@ -121,6 +122,8 @@ async function main() {
   await seedEnquiryMasters(prisma);
   // The automatic WhatsApp wording (docs/decisions/0021-whatsapp-outbox.md), from the draft Masti is to approve (M1).
   await seedMessageTemplates(prisma);
+  // The consent form's draft wording (docs/decisions/0022-consent-form.md), until Masti's (Q9): only into an empty table.
+  await seedConsentWording(prisma);
   await prisma.setting.upsert({
     where: { key: FIRST_FOLLOW_UP_KEY },
     update: {},

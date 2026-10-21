@@ -15,6 +15,7 @@ import enquiryMasterRoutes from "./modules/enquiryMasters/enquiryMasters.routes"
 import fieldRoutes from "./modules/fieldJobs/field.routes";
 import healthRoutes from "./modules/health/health.routes";
 import companyRoutes from "./modules/company/company.routes";
+import consentPublicRoutes from "./modules/consent/consent.public.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import noticeRoutes from "./modules/notices/notices.routes";
 import todayRoutes from "./modules/today/today.routes";
@@ -37,6 +38,8 @@ app.use(cookieParser());
 app.use("/api", requireJson);
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
+// The client's consent page (docs/decisions/0022-consent-form.md): no login, so its router has no requireAuth.
+app.use("/api/public/consent", consentPublicRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/clients", clientRoutes);
