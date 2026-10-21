@@ -6,6 +6,7 @@ import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useMasterList } from '../../settings/masters/queries'
 import { useSaveSubmission } from '../queries'
 import type { VisaCase } from '../types'
@@ -21,6 +22,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
   const { data: me } = useMe()
   const toast = useToast()
   const save = useSaveSubmission(c.caseNo)
+  const guard = useWarningGuard()
   const embassies = useMasterList('embassies')
   const s = c.submission
   const options = (embassies.data ?? []).filter((e) => e.countryId === c.country.id && (e.isActive || e.id === s?.embassy.id))
@@ -40,7 +42,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
   const latestDay = appointments.length ? istParts(appointments.at(-1)!).date : null
   const tooEarly = !s && !!earliestAt && istToday() < istParts(earliestAt).date
 
-  const press = () => {
+  const press = (confirmWarnings = false): void => {
     const missing: Record<string, string> = {}
     if (!fileNo.trim()) missing.vendorFileNo = 'Enter the vendor’s file number.'
     if (!embassyId) missing.embassyId = 'Pick the embassy.'
@@ -48,13 +50,15 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
     setErrors(missing)
     if (!embassyId || !collectionOn || Object.keys(missing).length) return
     save.mutate(
-      { vendorFileNo: fileNo, embassyId, collectionOn, updatedAt: openedAt },
+      { vendorFileNo: fileNo, embassyId, collectionOn, updatedAt: openedAt, ...(confirmWarnings ? { confirmWarnings } : {}) },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: s ? 'Submission details saved.' : `${c.caseNo} is submitted at the embassy.` })
           onClose()
         },
         onError: (err) => {
+          // A collection date on or after the day the trip begins: check, then save again (21 Oct 2026).
+          if (guard.intercept(err, () => press(true))) return
           // Someone else changed the case (the case is reloaded, with a warning): reopening fills the form in afresh.
           if (isStale(err)) return onClose()
           const issues = errorBody(err)?.issues ?? {}
@@ -68,6 +72,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog submission-dialog" role="dialog" aria-modal="true" aria-labelledby="submission-title" onClick={(e) => e.stopPropagation()}>
+        {guard.modal}
         <h2 className="h2" id="submission-title">
           {s ? 'Change the submission' : 'Submitted at the embassy'}
         </h2>
@@ -147,7 +152,7 @@ export function SubmissionDialog({ visaCase: c, onClose }: { visaCase: VisaCase;
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary" disabled={save.isPending || options.length === 0 || tooEarly} onClick={press}>
+          <button type="button" className="btn btn-primary" disabled={save.isPending || options.length === 0 || tooEarly} onClick={() => press()}>
             {save.isPending ? 'Saving…' : 'Save'}
           </button>
         </div>

@@ -18,6 +18,8 @@ export const MAX_VENDOR_COUNTRIES = 50
 export const MAX_LETTER_COUNTRIES = 50
 /** The longest covering-letter wording, a page or two. */
 export const MAX_LETTER_CHARS = 6000
+/** The longest consent wording, as the database allows. */
+export const MAX_CONSENT_WORDING_CHARS = 8000
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -363,6 +365,12 @@ export const LETTER_BLANKS = [
   { token: 'days', label: 'Days away', example: '12' },
   { token: 'entry', label: 'Single, double or multiple', example: 'single' },
   { token: 'hotel', label: 'The hotel stay', example: 'Hotel Lutetia, Paris' },
+  {
+    token: 'purpose',
+    label: 'Why they travel, written with AI, on a line of its own',
+    example:
+      'We wish to see the famous places and natural beauty of France, including Paris, and to spend time together as a family. We will return to India at the end of our trip.',
+  },
 ] as const
 
 const BLANK = /\{([^{}]*)\}/g
@@ -383,6 +391,9 @@ export function wordingProblem(body: string): string | null {
   const travellers = text.match(/\{travellers\}/g)?.length ?? 0
   if (travellers > 1) return 'Use {travellers} only once: it prints the table of travellers.'
   if (travellers === 1 && !/^[ \t]*\{travellers\}[ \t]*$/m.test(text)) return 'Put {travellers} on a line of its own: it prints as a table.'
+  const purpose = text.match(/\{purpose\}/g)?.length ?? 0
+  if (purpose > 1) return 'Use {purpose} only once: the AI writes one paragraph there.'
+  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return 'Put {purpose} on a line of its own: the AI writes a paragraph there.'
   return null
 }
 
@@ -413,6 +424,20 @@ export const wordingFormSchema = z.object({
   effectiveFrom: z.string().regex(isoDate, 'Pick the day it’s used from.'),
 })
 export type WordingFormValues = z.infer<typeof wordingFormSchema>
+
+/** The consent form's wording (0022 part 2b): plain text, used from the moment it's saved. */
+export const consentWordingFormSchema = z.object({
+  body: z.string().superRefine((value, ctx) => {
+    const body = normaliseWording(value)
+    const problem = !body
+      ? 'Write the wording.'
+      : body.length > MAX_CONSENT_WORDING_CHARS
+        ? `At most ${MAX_CONSENT_WORDING_CHARS.toLocaleString('en-IN')} characters.`
+        : null
+    if (problem) ctx.addIssue({ code: 'custom', message: problem })
+  }),
+})
+export type ConsentWordingFormValues = z.infer<typeof consentWordingFormSchema>
 
 export const documentFormSchema = z.object({
   code: z

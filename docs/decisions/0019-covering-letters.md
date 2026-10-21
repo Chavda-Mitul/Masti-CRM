@@ -39,7 +39,8 @@
    A case is offered only the formats that fit its visa type, country and number of travellers; "Order in lists"
    decides which fitting one is picked first. Family, friends, or a parent travelling with a child are separate formats,
    told apart by name. A format is switched off, never deleted.
-4. **The wording** is plain text with `{blanks}`, filled in from the case when the letter is made:
+4. **The wording** is plain text with `{blanks}`, filled in from the case when the letter is made (and `{purpose}`,
+   the AI's paragraph, since amendment 2):
 
    | Blank | Prints |
    | --- | --- |
@@ -68,7 +69,8 @@
    - Every write sends the format's `updatedAt`; an old one gets 409 STALE. The wording editor keeps its draft until
      Reload.
 7. **Three sample formats** (the demo's "3 fixed formats" ⚠️): Schengen · tourist · family and Schengen · tourist · one
-   person (France), and China · tourist · family. They are named "(sample)", their wording has no author ("Set up with
+   person (France), and China · tourist · family. *Since amendment 2 (21 Oct 2026) they follow Masti's own letters, and a
+   fourth is for France business.* They are named "(sample)", their wording has no author ("Set up with
    the system"), and the screens say so. The seed adds them only to a database with no formats. **They must be replaced
    with Masti's formats before go-live (M13).**
 8. **Component 2: the card on the case**, beside "Saved file — kept as proof" as in the demo, once the case has matured.
@@ -102,7 +104,8 @@
 - **No `{embassy}` blank.** The embassy is only picked at Step 5 (0011 Decision 3), after the file is ready, so each
   format's own text holds the address: "Consulate General of {country}, Mumbai".
 - **No titles.** There's no Mr/Mrs field, so names print without one.
-- **Signed by the first traveller** in the samples ("Yours faithfully, {applicant}"). Each format can say otherwise.
+- **Signed by the first traveller** in the samples ("Yours faithfully, {applicant}"; "Yours truly," since amendment 2).
+  Each format can say otherwise.
 - **The relation** in the table is the one on the client's family list (Self, Spouse, Son…).
 - **English only**, as on the invoice.
 
@@ -246,3 +249,77 @@
 **Screens:** the card draws the letter as it stands (`LetterTextPaper`, marks as chips), with Edit the letter (a dialog:
 the text boxes and the table grid), Start again, Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
 **Tests:** `tests/visaCoveringLetter.test.ts` (19) and `tests/frontendRules.test.ts` (the marks and the limits).
+
+## Amendment 2 (21 Oct 2026): "Write it with AI"
+
+- **Why:** Masti writes every letter in ChatGPT because the paragraph on why they travel differs each time ([change
+  request 11](../change-requests.md)). The central AI part ([0023](0023-ai.md)) and the editable letter (amendment 1)
+  came first. The project lead decided:
+  - **19–21 Oct:** a button, never automatic; nothing typed first; instructions per visa type, fixed in the code;
+    staff may change anything afterwards.
+  - **21 Oct:** unknowns become ⟦marks⟧; the AI gets the trip and the hotel stay, never a name, a passport number or
+    a date of birth; the samples follow Masti's two letters; Business and Visitor visa types are added.
+- **Adds to Decision 4 and amendment 1.** The rest stands.
+
+1. **A `{purpose}` blank**, "Why they travel, written with AI".
+   - Like `{travellers}`, at most once and alone on its line ("Use {purpose} only once: the AI writes one paragraph
+     there."; "Put {purpose} on a line of its own: the AI writes a paragraph there."). Settings' blank picker inserts it
+     on a line of its own.
+   - The draft writes it as the mark `⟦why they travel⟧` (`PURPOSE_MARK`). It's not a gap in the case, so it's not in
+     `missing`, but it is a mark: the letter isn't made until the AI writes the paragraph, or staff type one.
+2. **"Write it with AI"** on the card, at File preparation, for the owner, the Visa HOD and the Head (as Make).
+   - It puts the paragraph where the mark is, or where the AI's last paragraph still stands unchanged; the other edits
+     stay. "Write it again" does the same.
+   - If the AI's paragraph was changed by hand, there's nowhere to put a new one: "Write it again" asks "Start again
+     with a new paragraph?" (only with unsaved changes), and drafts afresh with the new paragraph.
+   - A note says "Written by AI from the trip's details. Read it and change anything before you make the letter."
+     (§7.12). Nothing is saved on the case until "Make the letter".
+   - `POST /api/visa/cases/:caseNo/covering-letter/purpose` → `{ paragraph }`.
+3. **What the AI is sent** (`PurposeFacts`, built from the case on its own, never from the letter's facts):
+   - the country and the visa type (not the entry type: the letter states it, and a model given it said it again);
+   - the travellers in order, as adult or child with their relation to the client who booked (the first is the
+     applicant);
+   - the dates and days, or "not known yet";
+   - the hotel stay text, between markers, as data;
+   - whether a person or a company booked.
+
+   Never a name, a passport number, a date of birth, an address, a mobile or the case number; a test checks what the
+   AI receives. **Accepted risk:** the hotel stay is free text that staff may have put a name in.
+4. **The instructions** (`src/modules/coveringLetters/purpose.ts`), fixed in the code:
+   - **Shared:** one paragraph, 60–120 words, first person from the applicant, simple formal Indian English. Don't
+     repeat what the letter has (who applies for which visa, dates, entry type, hotels, names, passports, who pays).
+     Make each point once. Only the facts given; returning to India said simply, with no reasons it wasn't told
+     (family, work, property, ties). Others by relation ("my wife and our son"), never "the adult" or "a child". A short
+     `⟦placeholder⟧` for each fact it doesn't have, at most three. No agency or city in the instructions: told "Surat",
+     a model wrote "my family, business and property here in Surat".
+   - **By visa type code:**
+     - `TOURIST`: the famous places and nature, the cities the hotel stay names (else `⟦the places we plan to
+       visit⟧`), time together, back to India after.
+     - `BUSINESS`: meeting associates at `⟦name of the company we are visiting⟧` in `⟦city⟧` for `⟦purpose of the
+       meetings⟧`, colleagues by number ("with my three colleagues"), back after.
+     - `VISITOR`: visiting `⟦name and relation of the person we are visiting⟧` in `⟦city⟧`, back after.
+     - **Any other:** why they travel in general words.
+   - Tried on Claude Haiku 5.5 on 21 Oct 2026 for a tourist family, a business group, a visitor couple, a student and a
+     tourist alone, and tuned until nothing was invented or repeated: 63–71 words, placeholders where facts were missing,
+     about $0.0003–0.0005 and 3–4 seconds each.
+5. **The call:** `askAi`, use case `visa.coveringLetter.purpose` (effort `medium`, 3,000 tokens with the thinking), with
+   the user and the case; recorded in `AiCall`, not audited.
+6. **Tidying** (`tidyParagraph`):
+   - quotes around it, Markdown and list marks go;
+   - lines are joined into one paragraph;
+   - a placeholder written as `[…]` or `{…}` becomes a ⟦mark⟧, unless the hotel stay itself holds those brackets;
+   - empty → "The AI gave an empty answer. Please try again."
+7. **Errors:** any `AiError` reaches the client as 503 `{ message, details: { code: "AI_FAILED", retryable } }`
+   (`middleware/error.ts`), and the card shows the message.
+8. **The samples follow Masti's letters** (Decision 7):
+   - three tourist samples (France family, France one person, China family): "To, The Visa Officer, The Consulate
+     General of {country}, Mumbai, India.", "Sub: Application for a {visaType} visa", "Respected Sir/Madam,", "I, the
+     undersigned, {applicant}, am applying for …", `{purpose}`, "The passport details are below:" `{travellers}`, the
+     dates, who pays, the hotel, the documents attached, "Thanking you in anticipation, Yours truly,";
+   - a fourth, "Schengen · business · group (sample)", for France × Business, after Masti's business letter (the
+     company pays; "Yours faithfully,").
+   - Settings' frame for a new letter follows the same shape, with `{purpose}`.
+   - **A dev database keeps its old samples** (they're seeded only into a database with no letters): reset it, or add
+     `{purpose}` to a wording in Settings.
+9. **Visa types Business (`BUSINESS`) and Visitor (`VISITOR`)** are seeded, so their instructions match. As for any
+   visa type, a country needs an offering with a checklist before intake can use them.

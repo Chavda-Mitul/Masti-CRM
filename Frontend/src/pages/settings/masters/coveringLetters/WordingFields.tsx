@@ -19,14 +19,17 @@ export function WordingFields({ form }: { form: UseFormReturn<WordingFormValues>
   // Shown as you type; saving refuses it.
   const problem = wordingProblem(field.value)
 
-  /** Puts a blank where the cursor is (over a selection). {travellers} gets a line of its own: it prints as a table. */
+  /**
+   * Puts a blank where the cursor is (over a selection). {travellers} and {purpose} get a line of their own: one prints
+   * as a table, the other as the AI's paragraph.
+   */
   const insert = (token: string) => {
     const el = textarea.current
     const value = field.value
     const start = el?.selectionStart ?? value.length
     const end = el?.selectionEnd ?? value.length
     let piece = `{${token}}`
-    if (token === 'travellers') {
+    if (token === 'travellers' || token === 'purpose') {
       if (start > 0 && value[start - 1] !== '\n') piece = `\n${piece}`
       if (value[end] !== '\n') piece = `${piece}\n`
     }

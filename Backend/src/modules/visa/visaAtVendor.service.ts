@@ -3,6 +3,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { addDays, fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError } from "../../lib/httpError";
+import { checkWarnings, confirmedWarningsNote } from "../../lib/warnings";
 import { blockedDays } from "../holidays/blockedDays";
 import { longDay } from "../holidays/holiday";
 import type { Actor, UserWithDepartments } from "../users/user";
@@ -10,6 +11,7 @@ import { findVisibleCase, loadCase, lockCase, WITH_VENDOR } from "./caseLock";
 import { MAX_COLLECTION_DAYS_AHEAD, type SaveSubmissionInput, type VendorReceivedInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueBeforeOfficeDay, dueOnOfficeDay, getVisaSettings } from "./visa.settings";
+import { collectionWarnings } from "./visaWarnings";
 
 // Visa Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md). "Vendor got it, papers checked" (Decision 2) is
 // confirmed per file, on its own case page, by whoever can act on the case. The file then comes back due when the vendor
@@ -34,6 +36,7 @@ async function gather(db: Db, enquiryId: string) {
       vendorFileNo: true,
       embassyId: true,
       collectionOn: true,
+      departOn: true,
       offering: { select: { countryId: true, country: { select: { name: true } } } },
     },
   });
@@ -177,6 +180,8 @@ export async function saveSubmission(caseNo: string, input: SaveSubmissionInput,
     const was = g.submittedAt && { vendorFileNo: g.vendorFileNo, embassyId: g.embassyId, collectionOn: fromDbDate(g.collectionOn!) };
     const now = { vendorFileNo: input.vendorFileNo, embassyId: embassy.id, collectionOn: input.collectionOn };
     if (was && was.vendorFileNo === now.vendorFileNo && was.embassyId === now.embassyId && was.collectionOn === now.collectionOn) return;
+    // Collected on or after the day the trip begins: the client would travel without the passports (a warning, 21 Oct 2026).
+    const confirmed = was?.collectionOn === now.collectionOn ? [] : checkWarnings(collectionWarnings(g.departOn && fromDbDate(g.departOn), now.collectionOn), input.confirmWarnings);
 
     const dueAt = await dueBeforeOfficeDay(input.collectionOn, (await getVisaSettings(tx)).collectionCheck, tx);
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
@@ -197,7 +202,7 @@ export async function saveSubmission(caseNo: string, input: SaveSubmissionInput,
         entityId: enquiry.id,
         clientId: enquiry.clientId,
         before: { ...(was ?? {}), dueAt: locked.dueAt },
-        after: { ...now, embassy: embassy.name, dueAt },
+        after: { ...now, embassy: embassy.name, dueAt, ...confirmedWarningsNote(confirmed) },
         ip: actor.ip,
       },
       tx,

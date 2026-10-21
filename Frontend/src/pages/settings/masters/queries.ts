@@ -8,6 +8,7 @@ import type {
   BlockTarget,
   Checklist,
   ChecklistLineBody,
+  ConsentWordingVersion,
   CoveringLetter,
   CoveringLetterBody,
   CoveringLetterSummary,
@@ -67,6 +68,7 @@ export const masterKeys = {
   /** The list; one letter's key sits under it, so invalidating this refreshes both. */
   coveringLetters: ['masters', 'covering-letters'] as const,
   coveringLetter: (id: number) => ['masters', 'covering-letters', id] as const,
+  consentWording: ['masters', 'consent-wording'] as const,
 }
 
 /**
@@ -582,6 +584,30 @@ export function useAddWording(id: number) {
     mutationFn: async (body: { body: string; effectiveFrom: string; replacesId?: number; updatedAt: string }) =>
       (await api<{ format: CoveringLetter }>(`/masters/covering-letters/${id}/versions`, { method: 'POST', body })).format,
     onSuccess: onSaved,
+  })
+}
+
+/**
+ * The consent form's wording, every version newest first (0022 part 2b). No refetch on focus: the editor's basedOnId
+ * must stay the version it opened, so someone else's change shows as a 409 rather than a silent swap.
+ */
+export function useConsentWordings(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: masterKeys.consentWording,
+    queryFn: async () => (await api<{ versions: ConsentWordingVersion[] }>('/masters/consent-wording')).versions,
+    staleTime: MASTER_STALE,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** A new version of the consent wording, used from now on. A 409 STALE is left to the editor, which keeps the draft. */
+export function useAddConsentWording() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: { body: string; basedOnId: number }) =>
+      (await api<{ versions: ConsentWordingVersion[] }>('/masters/consent-wording', { method: 'POST', body })).versions,
+    onSuccess: (versions) => queryClient.setQueryData(masterKeys.consentWording, versions),
   })
 }
 

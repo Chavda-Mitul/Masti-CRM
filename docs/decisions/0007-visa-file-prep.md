@@ -167,6 +167,11 @@ The details the forms and the covering letter will need, "captured as the docume
 **Amended 19 Oct 2026 (project lead, item 2 fixes; M46 to confirm):** an appointment **on or after the trip's departure
 day** is a warning: the first save stops with "Check before saving" and the reason; staff save anyway, and the audit keeps what they confirmed (`lib/warnings.ts`). It can still be right if the trip moves.
 
+**Fixed 21 Oct 2026 (from the visa test):** the warning ran only when an appointment was saved, so moving travelling out
+to the appointment day or before, after booking, went through silently, and so did File ready. The same check
+(`appointmentWarnings` in `visaWarnings.ts`) now also runs when travelling out changes (`PATCH …/trip`, every
+traveller's booked appointment) and at File ready, with the passport check.
+
 **Built 12 Oct 2026:**
 
 - **API:** `PATCH /api/visa/cases/:caseNo/travellers/:travellerId/application`, audited as

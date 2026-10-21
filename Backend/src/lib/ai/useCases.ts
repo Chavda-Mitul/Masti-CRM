@@ -13,6 +13,8 @@ export interface AiUseCase {
 
 export const AI_USE_CASES = {
   "ai.test": { label: "Set-up check (npm run ai:test)", maxTokens: 1_000, effort: "low" },
+  /** "Write it with AI" on a visa case's covering letter (docs/decisions/0019-covering-letters.md amendment 2). */
+  "visa.coveringLetter.purpose": { label: "Covering letter: why they travel", maxTokens: 3_000, effort: "medium" },
 } as const satisfies Record<string, AiUseCase>;
 
 export type AiUseCaseCode = keyof typeof AI_USE_CASES;

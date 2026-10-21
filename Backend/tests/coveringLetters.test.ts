@@ -190,10 +190,11 @@ describe("adding a covering letter", () => {
   });
 
   it("checks the blanks", async () => {
-    const every = LETTER_BLANKS.filter((b) => b !== "travellers")
+    // {travellers} and {purpose} are paragraphs of their own; every other blank can sit in a sentence.
+    const every = LETTER_BLANKS.filter((b) => b !== "travellers" && b !== "purpose")
       .map((b) => `{${b}}`)
       .join(" ");
-    expect(wordingProblem(`${every}\n{travellers}\nThe end`)).toBeNull();
+    expect(wordingProblem(`${every}\n{travellers}\n{purpose}\nThe end`)).toBeNull();
     expect(wordingProblem("No blanks at all.")).toBeNull();
     expect(wordingProblem("Dear Sir,\r\n  {travellers}  \r\nThanks")).toBeNull();
 
@@ -205,6 +206,9 @@ describe("adding a covering letter", () => {
     expect(wordingProblem("I, {{applicant}}")).toMatch(/left over/);
     expect(wordingProblem("{travellers}\n{travellers}")).toMatch(/only once/);
     expect(wordingProblem("The travellers: {travellers}")).toBe("Put {travellers} on a line of its own: it prints as a table.");
+    expect(wordingProblem("Dear Sir,\r\n\r\n  {purpose}  \r\nThanks")).toBeNull();
+    expect(wordingProblem("{purpose}\n{purpose}")).toBe("Use {purpose} only once: the AI writes one paragraph there.");
+    expect(wordingProblem("Why: {purpose}")).toBe("Put {purpose} on a line of its own: the AI writes a paragraph there.");
 
     const hod = await visaHod();
     const res = await addLetter(hod, { body: "Passport {passport}" });
@@ -444,7 +448,7 @@ describe("changing a covering letter", () => {
     expect(readded.status).toBe(400);
     expect(readded.body.issues.countryIds[0]).toBe("Pick from the active countries.");
 
-    const business = await prisma.visaType.create({ data: { code: "BUSINESS", name: "Business" } });
+    const business = await prisma.visaType.findUniqueOrThrow({ where: { code: "BUSINESS" } });
     const moved = await hod.patch(`/api/masters/covering-letters/${id}`).send({ visaTypeId: business.id, updatedAt: dropped.body.format.updatedAt });
     expect(moved.status).toBe(200);
     const back = await hod.patch(`/api/masters/covering-letters/${id}`).send({ visaTypeId: await visaTypeId(), updatedAt: moved.body.format.updatedAt });
@@ -494,7 +498,7 @@ describe("changing a covering letter", () => {
 });
 
 describe("the sample letters", () => {
-  it("are seeded once: three, used from today, set up with the system", async () => {
+  it("are seeded once: four, after Masti's letters, used from today, set up with the system", async () => {
     await seedCoveringLetters(prisma);
     await seedCoveringLetters(prisma);
     const formats = await prisma.coveringLetterFormat.findMany({ include: { versions: true, countries: true }, orderBy: { sortOrder: "asc" } });
@@ -505,7 +509,11 @@ describe("the sample letters", () => {
       expect(f.versions[0]).toMatchObject({ addedById: null, effectiveFrom: new Date(`${istToday()}T00:00:00Z`) });
       expect(wordingProblem(f.versions[0]!.body), f.name).toBeNull();
     }
-    expect(formats.map((f) => f.party)).toEqual(["SEVERAL", "ONE", "SEVERAL"]);
+    expect(formats.map((f) => f.party)).toEqual(["SEVERAL", "ONE", "SEVERAL", "SEVERAL"]);
+    // Every sample has the paragraph "Write it with AI" writes (0019 amendment 2); the last is for Business.
+    for (const f of formats) expect(f.versions[0]!.body, f.name).toMatch(/^\{purpose\}$/m);
+    const types = await prisma.visaType.findMany({ where: { id: { in: formats.map((f) => f.visaTypeId) } } });
+    expect(formats.map((f) => types.find((v) => v.id === f.visaTypeId)!.code)).toEqual(["TOURIST", "TOURIST", "TOURIST", "BUSINESS"]);
 
     const [first] = (await (await visaHod()).get("/api/masters/covering-letters")).body.formats;
     expect(first.inUse).toMatchObject({ effectiveFrom: istToday(), addedBy: null });

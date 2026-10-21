@@ -453,7 +453,8 @@ model VisaChecklistItem {
 ```
 
 **Seed:**
-- Country France (Schengen), China; visa type Tourist; offering France × Tourist with the demo's 11 lines plus the three child alternatives (birth certificate, school letter, parents' NOC; salary slips are adults-only) (dummy, replaced when Masti sends B1).
+- Country France (Schengen), China; visa type Tourist (and Business and Visitor since 21 Oct 2026, for the covering
+  letter's AI instructions, 0019 amendment 2; no offering yet); offering France × Tourist with the demo's 11 lines plus the three child alternatives (birth certificate, school letter, parents' NOC; salary slips are adults-only) (dummy, replaced when Masti sends B1).
 - Embassy `FR-MUM` "French embassy, Mumbai".
 - Holiday "Every Sunday · Weekly off" → `ALL_EMBASSIES` + `MASTI_OFFICE` ⚠️ (M15). The demo's dated entries (China 1–7 Oct, Gandhi Jayanti, Dussehra) are test fixtures, not production seed.
 - The `holidays` setting.

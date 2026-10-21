@@ -1,11 +1,13 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
+import { askAi, AiError } from "../../lib/ai";
 import { audit } from "../../lib/audit";
 import { fromDbDate, istTimestamp, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError } from "../../lib/httpError";
 import { inForce } from "../coveringLetters/coveringLetter";
 import { marksIn, type LetterText } from "../coveringLetters/coveringLetters.schemas";
 import { draftLetter, type LetterFacts } from "../coveringLetters/fill";
+import { purposeAsk, tidyParagraph, type PurposeFacts } from "../coveringLetters/purpose";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING } from "./caseLock";
 import type { MakeCoveringLetterInput } from "./visa.schemas";
@@ -21,6 +23,8 @@ import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 // - Made at File preparation by the owner, the HOD or the Head; again as often as needed while there. The case keeps the
 //   letter's text as made, so a later print is the same letter (Decision 10), and the audit keeps each text made. Anyone
 //   who can open the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
+// - "Write it with AI" (amendment 2) writes the paragraph on why they travel from the trip alone, for the card to put in
+//   the letter. It saves nothing on the case; the AI call is recorded in AiCall (docs/decisions/0023-ai.md).
 
 const personSelect = { select: { id: true, name: true } } as const;
 
@@ -28,14 +32,16 @@ const letterCaseSelect = {
   id: true,
   caseNo: true,
   clientId: true,
-  client: { select: { name: true, addressLine: true, area: true, city: true, pincode: true } },
+  client: { select: { name: true, kind: true, addressLine: true, area: true, city: true, pincode: true } },
   visa: {
     select: {
       departOn: true,
       returnOn: true,
       entryType: true,
       hotelStay: true,
-      offering: { select: { countryId: true, visaTypeId: true, country: { select: { name: true } }, visaType: { select: { name: true } } } },
+      offering: {
+        select: { countryId: true, visaTypeId: true, country: { select: { name: true } }, visaType: { select: { code: true, name: true } } },
+      },
       travellers: {
         orderBy: { position: "asc" },
         select: {
@@ -82,6 +88,21 @@ function factsOf(row: LetterCaseRow, visa: LetterVisa): LetterFacts {
       dateOfBirth: t.member?.dateOfBirth ? fromDbDate(t.member.dateOfBirth) : null,
       passportNumber: t.member?.passportNumber ?? null,
     })),
+  };
+}
+
+/**
+ * What the AI may know for the paragraph on why they travel (amendment 2): the trip, never a name, a passport number, a
+ * date of birth or an address. Built from the case on its own, not from the letter's facts, which hold all of those.
+ */
+function purposeFactsOf(row: LetterCaseRow, visa: LetterVisa): PurposeFacts {
+  return {
+    country: visa.offering.country.name,
+    visaType: { code: visa.offering.visaType.code, name: visa.offering.visaType.name },
+    clientKind: row.client.kind,
+    travellers: visa.travellers.map((t) => ({ relation: t.member?.relation.name ?? null, isChild: t.isChild })),
+    trip: { departOn: visa.departOn && fromDbDate(visa.departOn), returnOn: visa.returnOn && fromDbDate(visa.returnOn) },
+    hotelStay: visa.hotelStay,
   };
 }
 
@@ -217,6 +238,23 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
     );
   });
   return coveringLetterView(caseNo, actor.user, letter.id);
+}
+
+/**
+ * "Write it with AI" (amendment 2), at File preparation, for the owner, the HOD or the Head: the paragraph on why they
+ * travel, from the trip alone, with a ⟦mark⟧ for what the AI can't know. Nothing is saved on the case: the card puts the
+ * paragraph in the letter, and staff read it before making the letter. The call is never inside a transaction (it can
+ * take seconds), and an AiError reaches the client as 503 AI_FAILED (middleware/error.ts).
+ */
+export async function writePurpose(caseNo: string, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, PREPARING);
+  const { row, visa } = await loadLetterCase(enquiry.id);
+  const facts = purposeFactsOf(row, visa);
+  const { system, prompt } = purposeAsk(facts);
+  const { text } = await askAi({ useCase: "visa.coveringLetter.purpose", system, prompt, userId: actor.user.id, enquiryId: enquiry.id });
+  const paragraph = tidyParagraph(text, facts.hotelStay);
+  if (!paragraph) throw new AiError("The AI gave an empty answer. Please try again.", true);
+  return { paragraph };
 }
 
 /**

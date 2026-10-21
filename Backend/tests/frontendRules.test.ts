@@ -8,6 +8,7 @@ import {
   LETTER_BLANKS,
   MARK_CLOSE,
   MARK_OPEN,
+  PURPOSE_MARK,
   MAX_LETTER_CELL_CHARS,
   MAX_LETTER_CHARS,
   MAX_LETTER_COLUMNS,
@@ -20,6 +21,7 @@ import {
   wordingProblem,
   type LetterText,
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
+import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
 import { PortalLoginOutcome } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
@@ -60,6 +62,10 @@ const WORDINGS = [
   "Half applicant}",
   "{ applicant }",
   "From {departOn} to {returnOn}, {days} days, {entry} entry, at {hotel}.",
+  "Dear Sir,\r\n\r\n  {purpose}  \r\nThanks",
+  "Why: {purpose}",
+  "{purpose}\n{purpose}",
+  "{travellers}\n{purpose}",
   "",
 ];
 
@@ -75,7 +81,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays, checklists, vendors and covering letters the same way (Settings → Masters)", async () => {
+  it("limits holidays, checklists, vendors, covering letters and the consent wording the same way (Settings → Masters)", async () => {
     const frontend = (await import(frontendMasterSchemas)) as {
       MAX_RANGE_DAYS: number;
       MAX_TARGETS: number;
@@ -83,7 +89,9 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_VENDOR_COUNTRIES: number;
       MAX_LETTER_CHARS: number;
       MAX_LETTER_COUNTRIES: number;
+      MAX_CONSENT_WORDING_CHARS: number;
     };
+    expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
     expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
     expect(frontend.MAX_CHECKLIST_ITEMS).toBe(MAX_CHECKLIST_ITEMS);
@@ -108,6 +116,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     const frontend = (await import(frontendLetter)) as {
       MARK_OPEN: string;
       MARK_CLOSE: string;
+      PURPOSE_MARK: string;
       MAX_LETTER_PART_CHARS: number;
       MAX_LETTER_COLUMNS: number;
       MAX_LETTER_ROWS: number;
@@ -116,6 +125,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       marksIn(letter: LetterText): string[];
     };
     expect([frontend.MARK_OPEN, frontend.MARK_CLOSE]).toEqual([MARK_OPEN, MARK_CLOSE]);
+    expect(frontend.PURPOSE_MARK).toBe(PURPOSE_MARK);
     expect(frontend.MAX_LETTER_PART_CHARS).toBe(MAX_LETTER_PART_CHARS);
     expect(frontend.MAX_LETTER_COLUMNS).toBe(MAX_LETTER_COLUMNS);
     expect(frontend.MAX_LETTER_ROWS).toBe(MAX_LETTER_ROWS);

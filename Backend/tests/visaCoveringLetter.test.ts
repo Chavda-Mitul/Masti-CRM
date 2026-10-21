@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, fullDate, istToday, toDbDate } from "../src/lib/dates";
-import { MAX_LETTER_ROWS, marksIn, type LetterText } from "../src/modules/coveringLetters/coveringLetters.schemas";
+import { MAX_LETTER_ROWS, marksIn, PURPOSE_MARK, type LetterText } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { draftLetter, namesInASentence, type LetterFacts } from "../src/modules/coveringLetters/fill";
 import { seedCoveringLetters } from "../src/modules/coveringLetters/coveringLetters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { MAX_ADULTS, MAX_CHILDREN } from "../src/modules/visa/visa.schemas";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
-import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { maturedCase, type Agent } from "./visaHelpers";
+import { loginAs, prisma, resetDb } from "./helpers";
+import { letterCase, letterOthers as others, type Agent } from "./visaHelpers";
 
-// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendment 1): which letters
-// fit, the draft with its marks, "Make the letter" with the text as staff left it, and the print of the letter made.
+// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1 and 2): which
+// letters fit, the draft with its marks, "Make the letter" with the text as staff left it, and the print of the letter
+// made. The AI paragraph itself is tested in coveringLetterPurpose.test.ts.
 
 beforeEach(async () => {
   await resetDb();
@@ -21,47 +22,11 @@ beforeEach(async () => {
 
 const FAMILY = "Schengen · tourist · family (sample)";
 const ONE_PERSON = "Schengen · tourist · one person (sample)";
-const HOTEL = "Hotel Lutetia, Paris";
 const COLUMNS = ["Name", "Relation", "Date of birth", "Passport no."];
-
-/**
- * A matured France case (Neha's, at File preparation) whose travellers are linked to the Mehtas on the family list, with
- * the trip details and the client's address: everything the sample letters need, unless told otherwise.
- */
-async function letterCase({ children = 1, hotel = HOTEL as string | null, childPassport = true } = {}) {
-  const c = await maturedCase({ extra: { children } });
-  const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
-  const relation = async (code: string) => (await prisma.relation.findUniqueOrThrow({ where: { code } })).id;
-  const family = [
-    { name: "RAKESH MEHTA", relationId: await relation("SELF"), dateOfBirth: toDbDate("1980-03-12"), passportNumber: "Z1234567" },
-    { name: "AARAV MEHTA", relationId: await relation("SON"), dateOfBirth: toDbDate("2014-01-19"), passportNumber: childPassport ? "Z1234569" : null },
-  ];
-  const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
-  for (const [i, t] of travellers.entries()) {
-    const member = await prisma.clientMember.create({ data: { ...family[i]!, clientId: c.client.id, createdById: aarti.id } });
-    await prisma.visaCaseTraveller.update({ where: { id: t.id }, data: { memberId: member.id, name: member.name } });
-  }
-  await prisma.client.update({ where: { id: c.client.id }, data: { addressLine: "12 Shanti Park", area: "Vesu", city: "Surat", pincode: "395007" } });
-  await prisma.visaCase.update({
-    where: { enquiryId: c.id },
-    data: {
-      departOn: toDbDate(addDays(istToday(), 30)),
-      returnOn: toDbDate(addDays(istToday(), 41)),
-      entryType: "SINGLE",
-      hotelStay: hotel,
-    },
-  });
-  return c;
-}
+/** What "Write it with AI" or staff put where {purpose} was. */
+const PURPOSE = "We wish to see the famous places of France and spend time together as a family.";
 
 const neha = () => loginAs("neha@masti.test");
-
-async function others() {
-  await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
-  await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
-  await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
-  return { hod: await loginAs("riya@masti.test"), head: await loginAs("vimal@masti.test"), viewer: await loginAs("meena@masti.test") };
-}
 
 const view = async (agent: Agent, caseNo: string, formatId?: number) =>
   agent.get(`/api/visa/cases/${caseNo}/covering-letter${formatId ? `?formatId=${formatId}` : ""}`);
@@ -74,10 +39,17 @@ async function draftOf(caseNo: string, format: number) {
   return selected as { formatId: number; versionId: number; draft: LetterText; missing: string[] };
 }
 
-/** "Make the letter": the draft as it stands, or as `edit` changes it. */
+/** The paragraph on why they travel written in, where the draft marks it. */
+const withPurpose = (letter: LetterText): LetterText => ({
+  ...letter,
+  top: letter.top.replace(PURPOSE_MARK, PURPOSE),
+  bottom: letter.bottom.replace(PURPOSE_MARK, PURPOSE),
+});
+
+/** "Make the letter": the draft with its paragraph on why they travel written in, as it stands or as `edit` changes it. */
 async function make(agent: Agent, caseNo: string, format: number, edit: (letter: LetterText) => LetterText = (l) => l) {
   const { versionId, draft } = await draftOf(caseNo, format);
-  return agent.post(`/api/visa/cases/${caseNo}/covering-letter`).send({ formatId: format, versionId, letter: edit(draft) });
+  return agent.post(`/api/visa/cases/${caseNo}/covering-letter`).send({ formatId: format, versionId, letter: edit(withPurpose(draft)) });
 }
 
 /** A copy of a letter with the table's cell changed. */
@@ -107,7 +79,8 @@ describe("which covering letters fit a case", () => {
     const c = await letterCase();
     const tourist = await prisma.visaType.findUniqueOrThrow({ where: { code: "TOURIST" } });
     const fr = await prisma.country.findUniqueOrThrow({ where: { code: "FR" } });
-    const business = await prisma.visaType.create({ data: { code: "BUSINESS", name: "Business" } });
+    // The seeded Business type, which also has its sample letter: neither fits a tourist case.
+    const business = await prisma.visaType.findUniqueOrThrow({ where: { code: "BUSINESS" } });
     const otherType = { name: "Business family", visaTypeId: business.id, party: "SEVERAL" as const };
     const later = { name: "Starts later", visaTypeId: tourist.id, party: "SEVERAL" as const };
     for (const [format, day] of [
@@ -134,16 +107,28 @@ describe("which covering letters fit a case", () => {
 });
 
 describe("drafting a letter", () => {
-  it("writes the case's values in, with the table of travellers from the family list", async () => {
+  it("writes the case's values in, the table of travellers from the family list, and marks where the AI writes", async () => {
     const c = await letterCase();
     const { draft, missing } = await draftOf(c.caseNo, await formatId(FAMILY));
     expect(missing).toEqual([]);
-    expect(marksIn(draft)).toEqual([]);
-    expect(draft.top).toMatch(
-      new RegExp(`^${fullDate(istToday())}\n\nTo,\nThe Visa Officer,\nConsulate General of France,\nMumbai\n\nSubject: Short-stay Tourist visa for RAKESH MEHTA and family \\(2 travellers\\)`),
+    expect(marksIn(draft)).toEqual(["why they travel"]);
+    expect(draft.top).toBe(
+      [
+        fullDate(istToday()),
+        "",
+        "To,\nThe Visa Officer,\nThe Consulate General of France,\nMumbai, India.",
+        "",
+        "Sub: Application for a Tourist visa",
+        "",
+        "Respected Sir/Madam,",
+        "",
+        "I, the undersigned, RAKESH MEHTA, am applying for a Tourist visa for France for my family and myself.",
+        "",
+        PURPOSE_MARK,
+        "",
+        "The passport details are below:",
+      ].join("\n"),
     );
-    expect(draft.top).toContain(`travel from ${fullDate(addDays(istToday(), 30))} to ${fullDate(addDays(istToday(), 41))}, a stay of 12 days, and request a single-entry visa.`);
-    expect(draft.top.endsWith("The travellers are:")).toBe(true);
     expect(draft.table).toEqual({
       columns: COLUMNS,
       rows: [
@@ -151,8 +136,11 @@ describe("drafting a letter", () => {
         ["AARAV MEHTA", "Son", "19 Jan 2014", "Z1234569"],
       ],
     });
-    expect(draft.bottom).toMatch(/^We will stay at Hotel Lutetia, Paris\./);
-    expect(draft.bottom.endsWith("Yours faithfully,\n\nRAKESH MEHTA\n12 Shanti Park, Vesu, Surat 395007")).toBe(true);
+    expect(draft.bottom.startsWith(
+      `We would like to travel to France from ${fullDate(addDays(istToday(), 30))} to ${fullDate(addDays(istToday(), 41))}, a stay of 12 days, and we request a single-entry visa.`,
+    )).toBe(true);
+    expect(draft.bottom).toContain("During our visit we will stay at Hotel Lutetia, Paris.");
+    expect(draft.bottom.endsWith("Yours truly,\n\nRAKESH MEHTA\n12 Shanti Park, Vesu, Surat 395007")).toBe(true);
   });
 
   it("marks what the case lacks in plain words, for staff to type over, and lists it", async () => {
@@ -160,8 +148,8 @@ describe("drafting a letter", () => {
     const { draft, missing } = await draftOf(c.caseNo, await formatId(FAMILY));
     expect(missing).toEqual(["AARAV MEHTA's passport number", "the hotel stay"]);
     expect(draft.table!.rows[1]![3]).toBe("⟦AARAV MEHTA's passport number⟧");
-    expect(draft.bottom).toMatch(/^We will stay at ⟦the hotel stay⟧\./);
-    expect(marksIn(draft)).toEqual(["AARAV MEHTA's passport number", "the hotel stay"]);
+    expect(draft.bottom).toContain("During our visit we will stay at ⟦the hotel stay⟧.");
+    expect(marksIn(draft)).toEqual(["why they travel", "AARAV MEHTA's passport number", "the hotel stay"]);
 
     const facts: LetterFacts = {
       clientName: "Rakesh Mehta",
@@ -186,6 +174,11 @@ describe("drafting a letter", () => {
         bottom: "",
       },
       missing: ["Adult 1's passport number", "Adult 1's name", "Adult 1's date of birth"],
+    });
+    // {purpose} isn't a gap in the case: the AI or staff write it.
+    expect(draftLetter("Dear Sir,\n\n{purpose}\n\nThank you.", facts, "2026-10-20")).toEqual({
+      letter: { top: `Dear Sir,\n\n${PURPOSE_MARK}\n\nThank you.`, table: null, bottom: "" },
+      missing: [],
     });
   });
 
@@ -236,7 +229,7 @@ describe("making the letter", () => {
     const c = await letterCase();
     const family = await formatId(FAMILY);
     const edited = (letter: LetterText): LetterText => ({
-      top: letter.top.replace("Dear Sir or Madam,", "Respected Sir/Madam,"),
+      top: letter.top.replace("Respected Sir/Madam,", "Dear Sir/Madam,"),
       table: {
         columns: ["Name", "Designation", "Passport no."],
         rows: [
@@ -250,7 +243,8 @@ describe("making the letter", () => {
     expect(res.status).toBe(200);
     expect(res.body.letter.made).toMatchObject({ formatId: family, formatName: FAMILY, madeBy: { name: "Neha Joshi" } });
 
-    const sent = edited((await draftOf(c.caseNo, family)).draft);
+    const sent = edited(withPurpose((await draftOf(c.caseNo, family)).draft));
+    expect(sent.top).toContain("Dear Sir/Madam,");
     const saved = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id } });
     const version = await prisma.coveringLetterVersion.findFirstOrThrow({ where: { formatId: family } });
     expect(saved.coveringLetterVersionId).toBe(version.id);
@@ -270,6 +264,15 @@ describe("making the letter", () => {
     expect((await make(viewer, c.caseNo, family)).status).toBe(403);
     expect((await make(hod, c.caseNo, family)).status).toBe(200);
     expect((await make(head, c.caseNo, family)).status).toBe(200);
+  });
+
+  it("waits for the paragraph on why they travel: the draft as it is can't be made", async () => {
+    const c = await letterCase();
+    const family = await formatId(FAMILY);
+    const { versionId, draft } = await draftOf(c.caseNo, family);
+    const res = await (await neha()).post(`/api/visa/cases/${c.caseNo}/covering-letter`).send({ formatId: family, versionId, letter: draft });
+    expect(res.status).toBe(409);
+    expect(res.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: ["why they travel"] });
   });
 
   it("waits while a mark is left, even half deleted: 409 LETTER_INCOMPLETE with the list, and nothing saved", async () => {
@@ -302,23 +305,24 @@ describe("making the letter", () => {
     const family = await formatId(FAMILY);
     const agent = await neha();
     const { versionId, draft } = await draftOf(c.caseNo, family);
+    const letter = withPurpose(draft);
     const send = (body: object) => agent.post(`/api/visa/cases/${c.caseNo}/covering-letter`).send(body);
 
-    const wrong = await send({ formatId: await formatId("China · tourist · family (sample)"), versionId, letter: draft });
+    const wrong = await send({ formatId: await formatId("China · tourist · family (sample)"), versionId, letter });
     expect(wrong.status).toBe(400);
     expect(wrong.body.issues.formatId[0]).toMatch(/doesn't fit this case/);
 
     const china = await prisma.coveringLetterVersion.findFirstOrThrow({ where: { format: { name: "China · tourist · family (sample)" } } });
     const tomorrow = await prisma.coveringLetterVersion.create({ data: { formatId: family, effectiveFrom: toDbDate(addDays(istToday(), 1)), body: "Later." } });
     for (const other of [china.id, tomorrow.id]) {
-      const res = await send({ formatId: family, versionId: other, letter: draft });
+      const res = await send({ formatId: family, versionId: other, letter });
       expect(res.status).toBe(400);
       expect(res.body.issues.versionId[0]).toMatch(/wording has changed/);
     }
 
     const dispatch = await prisma.departmentStage.findFirstOrThrow({ where: { code: "DISPATCH" } });
     await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: dispatch.id } });
-    const late = await send({ formatId: family, versionId, letter: draft });
+    const late = await send({ formatId: family, versionId, letter });
     expect(late.status).toBe(409);
     expect(late.body.message).toMatch(/file preparation/);
   });
@@ -392,6 +396,7 @@ describe("printing the letter made", () => {
     expect(res.status).toBe(200);
     expect(res.body.print).toMatchObject({ caseNo: c.caseNo, formatName: FAMILY, letterheadMm: 45, letter: made.letter });
     expect(res.body.print.letter.top.startsWith(fullDate(istToday()))).toBe(true);
+    expect(res.body.print.letter.top).toContain(PURPOSE);
   });
 
   it("prints the same letter after the wording or the case's details change", async () => {

@@ -20,6 +20,11 @@ export interface StepRule {
    * back after a cancel (docs/decisions/0006-visa-documents.md amendment 15).
    */
   cancelledToo?: boolean;
+  /**
+   * Allowed on a closed case too, i.e. one handed over and Delivered: its invoice can still turn out wrong
+   * (docs/decisions/0011-visa-at-vendor.md Decision 5).
+   */
+  closedToo?: boolean;
   /** Any of the department's staff with EDIT may, not only the case's owner, its HOD or the Head (0014 Decision 5). */
   anyEditor?: boolean;
 }
@@ -118,11 +123,12 @@ export const QUOTING: StepRule = {
 
 /**
  * A credit note against the case's invoice (docs/decisions/0011-visa-at-vendor.md Decision 5): an invoice can turn out
- * wrong at any step, before or after the file goes to the vendor.
+ * wrong at any step, before or after the file goes to the vendor, and after the handover too (closed, Delivered).
  */
 export const INVOICED: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH", "AT_VENDOR", "DECISION", "PASSPORT_BACK", "DELIVERED"],
   wrongStage: "This case's invoice can't be changed at this step.",
+  closedToo: true,
 };
 
 /**
@@ -150,8 +156,8 @@ export type LockedCase = Prisma.EnquiryGetPayload<{ include: typeof caseInclude 
 /**
  * Refuses unless this user may change the case and it is at one of the rule's steps: its owner, its HOD and the Head
  * may (only the HOD and the Head before a processor is assigned), or any of the department's staff with EDIT when
- * the rule says so; and only while the case is open (or cancelled, when the rule says so; or any status, when the rule
- * allows it).
+ * the rule says so; and only while the case is open (or cancelled, or closed, when the rule says so; or any status,
+ * when the rule allows it).
  */
 function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
   assertCanSeeEnquiry(actor.user, { ...enquiry, inStock: passportsInStock(enquiry) });
@@ -159,7 +165,10 @@ function assertCanChange(enquiry: LockedCase, actor: Actor, rule: StepRule) {
   else assertCanActOnEnquiry(actor.user, enquiry);
   if (!rule.anyStatus) {
     if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
-    const allowed = enquiry.status === "OPEN" || (rule.cancelledToo === true && enquiry.status === "CANCELLED");
+    const allowed =
+      enquiry.status === "OPEN" ||
+      (rule.cancelledToo === true && enquiry.status === "CANCELLED") ||
+      (rule.closedToo === true && enquiry.status === "CLOSED");
     if (!allowed) throw conflict("This case is closed, so it can't change.");
   }
   if (!rule.stages.includes(enquiry.stage.code)) throw conflict(rule.wrongStage);

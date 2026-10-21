@@ -311,3 +311,45 @@ export async function receivedCase(options: { extra?: Record<string, unknown>; v
   expect(received.status).toBe(200);
   return d;
 }
+
+/** The hotel stay letterCase saves, unless told otherwise. */
+export const LETTER_HOTEL = "Hotel Lutetia, Paris";
+
+/**
+ * A matured France case (Neha's, at File preparation) whose travellers are linked to the Mehtas on the family list, with
+ * the trip details and the client's address: everything the sample covering letters need, unless told otherwise
+ * (docs/decisions/0019-covering-letters.md).
+ */
+export async function letterCase({ children = 1, hotel = LETTER_HOTEL as string | null, childPassport = true } = {}) {
+  const c = await maturedCase({ extra: { children } });
+  const aarti = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+  const relation = async (code: string) => (await prisma.relation.findUniqueOrThrow({ where: { code } })).id;
+  const family = [
+    { name: "RAKESH MEHTA", relationId: await relation("SELF"), dateOfBirth: toDbDate("1980-03-12"), passportNumber: "Z1234567" },
+    { name: "AARAV MEHTA", relationId: await relation("SON"), dateOfBirth: toDbDate("2014-01-19"), passportNumber: childPassport ? "Z1234569" : null },
+  ];
+  const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+  for (const [i, t] of travellers.entries()) {
+    const member = await prisma.clientMember.create({ data: { ...family[i]!, clientId: c.client.id, createdById: aarti.id } });
+    await prisma.visaCaseTraveller.update({ where: { id: t.id }, data: { memberId: member.id, name: member.name } });
+  }
+  await prisma.client.update({ where: { id: c.client.id }, data: { addressLine: "12 Shanti Park", area: "Vesu", city: "Surat", pincode: "395007" } });
+  await prisma.visaCase.update({
+    where: { enquiryId: c.id },
+    data: {
+      departOn: toDbDate(addDays(istToday(), 30)),
+      returnOn: toDbDate(addDays(istToday(), 41)),
+      entryType: "SINGLE",
+      hotelStay: hotel,
+    },
+  });
+  return c;
+}
+
+/** The Visa HOD Riya, the Head Vimal and a Visa viewer Meena, logged in, for who-may tests on a letterCase. */
+export async function letterOthers() {
+  await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+  await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+  await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
+  return { hod: await loginAs("riya@masti.test"), head: await loginAs("vimal@masti.test"), viewer: await loginAs("meena@masti.test") };
+}

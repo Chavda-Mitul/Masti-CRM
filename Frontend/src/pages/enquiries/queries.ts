@@ -433,8 +433,9 @@ export function useVendorReceived(caseNo: string) {
 
 /** "Submitted at the embassy" (0011 Decisions 3 and 4), or a change to it at Step 5. */
 export function useSaveSubmission(caseNo: string) {
-  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
-    api(`${base}/submission`, { method: 'PUT', body }),
+  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string; confirmWarnings?: boolean }>(
+    caseNo,
+    (base, body) => api(`${base}/submission`, { method: 'PUT', body }),
   )
 }
 
@@ -792,6 +793,17 @@ export function useMakeCoveringLetter(caseNo: string) {
       })
       void queryClient.invalidateQueries({ queryKey: enquiryKeys.coveringLetterPrint(caseNo) })
     },
+  })
+}
+
+/**
+ * "Write it with AI": the paragraph on why they travel, written from the trip alone (0019 amendment 2). Nothing is saved:
+ * the card puts it in the letter. A failure is a 503 whose message says why (AI_FAILED).
+ */
+export function useWritePurpose(caseNo: string) {
+  return useMutation({
+    mutationFn: async () =>
+      api<{ paragraph: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/purpose`, { method: 'POST' }),
   })
 }
 

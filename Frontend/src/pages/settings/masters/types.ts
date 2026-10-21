@@ -247,6 +247,17 @@ export type WordingStatus = 'IN_USE' | 'SCHEDULED' | 'EARLIER'
 /** Null for a sample wording, set up with the system. */
 export type WordingAuthor = { id: string; name: string } | null
 
+/**
+ * One version of the consent form's wording (docs/decisions/0022-consent-form.md, part 2b). The list comes newest first:
+ * the first is the one clients agree to. A null addedBy is the draft set up with the system.
+ */
+export interface ConsentWordingVersion {
+  id: number
+  body: string
+  createdAt: string
+  addedBy: WordingAuthor
+}
+
 /** A covering-letter format in the list: its details, and the wording in use without its text. */
 export interface CoveringLetterSummary {
   id: number
