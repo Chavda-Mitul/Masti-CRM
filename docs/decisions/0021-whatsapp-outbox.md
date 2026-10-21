@@ -132,12 +132,20 @@ Not here: the client page's "WhatsApp messages sent". A client-wide list needs i
 one of a client's cases mustn't read messages about the others. "Send again" for a failed message isn't here either:
 it isn't in the demo, and messages are never sent by hand.
 
+## Amendment 2 (21 Oct 2026): a message can name its recipient
+
+The consent link (0022 part 2) goes to the traveller's own number when one is saved, so `queueMessage` takes an
+optional `toMobile`. Without it, a message goes to the client's main number, as before.
+
+The card shows a consent message with its secret hidden (`/consent#…`), so nobody in the office can open the client's
+form and agree for them.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
 - **The other visa messages** and the reminders (step 3), from `docs/whatsapp-visa-messages.md`. Messages 7 and 18
   attach a PDF, so a message gets an attachment then.
-- **The consent "I agree" link** (step 4).
+- ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code
   doesn't know would make the save that queues the message fail.
