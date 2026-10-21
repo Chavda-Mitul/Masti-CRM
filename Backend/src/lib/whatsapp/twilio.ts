@@ -33,7 +33,7 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
         });
         return { providerMessageId: sent.sid };
       } catch (error) {
-        throw errorFor(error);
+        throw errorFor(error, "send");
       }
     },
     async checkStatus(providerMessageId) {
@@ -42,7 +42,7 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
         message = await client.messages(providerMessageId).fetch();
       } catch (error) {
         // In plain words too, like a refused send: wrong keys, or Twilio out of reach.
-        throw new Error(reasonFor(error), { cause: error });
+        throw errorFor(error, "read");
       }
       const status = statusOf(message.status);
       // Both are empty on a message that hasn't failed, whatever Twilio's types say.
@@ -87,17 +87,17 @@ function failure(code: number | null, text: string | null): string {
 
 /**
  * Twilio's refusal (a RestException, with its code) is worth another try only when Twilio was down or busy. A network
- * error is worth one only when the request never left: a timeout or a dropped connection may come after Twilio took
- * the message, and trying again could send it twice.
+ * error on a send is worth one only when the request never left: a timeout or a dropped connection may come after
+ * Twilio took the message, and trying again could send it twice. A read (a status check) can always be asked again.
  */
-function errorFor(error: unknown): WhatsAppError {
+function errorFor(error: unknown, request: "send" | "read"): WhatsAppError {
   if (error instanceof twilio.RestException) {
     const retryable = error.status >= 500 || error.status === 429;
     return new WhatsAppError(failure(error.code ?? null, error.message), retryable, { cause: error });
   }
   const text = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: unknown } | null)?.code;
-  if (typeof code === "string" && NOT_REACHED.has(code)) {
+  if (request === "read" || (typeof code === "string" && NOT_REACHED.has(code))) {
     return new WhatsAppError(`Couldn't reach Twilio: ${text}`, true, { cause: error });
   }
   return new WhatsAppError(`Twilio didn't answer (${text}), so the message may or may not have gone. Check the chat.`, false, {

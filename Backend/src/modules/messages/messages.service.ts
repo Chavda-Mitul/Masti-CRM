@@ -5,7 +5,7 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { QUEUES, queueJob } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
-import { sendWhatsApp, whatsAppProvider, WhatsAppError } from "../../lib/whatsapp";
+import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } from "../../lib/whatsapp";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
@@ -14,8 +14,14 @@ import { sendWhatsApp, whatsAppProvider, WhatsAppError } from "../../lib/whatsap
 /** A message that couldn't go within this long isn't sent at all: its news would be stale. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** Once a message has gone, when to ask the provider where it has got to: after 1 min, 5 min, 15 min, 1 h, 4 h, 12 h. */
-const STATUS_CHECK_SECONDS = [60, 300, 900, 3600, 14_400, 43_200];
+/** When to ask the provider where a sent message has got to: 1 min, 5 min, 15 min, 1 h, 4 h and 12 h after it went. */
+const STATUS_CHECKS_AFTER_SENT_SECONDS = [60, 300, 900, 3600, 14_400, 43_200];
+
+/** When check number `check` is due: so long after the message went (pg-boss runs one already past at once). */
+function checkAt(sentAt: Date, check: number): Date | undefined {
+  const seconds = STATUS_CHECKS_AFTER_SENT_SECONDS[check];
+  return seconds === undefined ? undefined : new Date(sentAt.getTime() + seconds * 1000);
+}
 
 const STUCK = "The server stopped while sending this, so it may or may not have gone. Check the chat.";
 
@@ -97,12 +103,12 @@ export async function deliverMessage(messageId: string, { lastTry }: { lastTry: 
     return;
   }
 
-  const firstCheck = whatsAppProvider()?.checkStatus ? STATUS_CHECK_SECONDS[0] : undefined;
+  const sentAt = new Date();
   await settle(
     message,
     sendingAt,
-    { status: "SENT", provider: sent.provider, providerMessageId: sent.providerMessageId, sentTo: to, sentAt: new Date(), error: null },
-    firstCheck,
+    { status: "SENT", provider: sent.provider, providerMessageId: sent.providerMessageId, sentTo: to, sentAt, error: null },
+    whatsAppProvider()?.checkStatus ? checkAt(sentAt, 0) : undefined,
   );
 }
 
@@ -162,7 +168,7 @@ async function settle(
   message: Claimed["message"],
   sendingAt: Date,
   data: Prisma.OutboundMessageUpdateManyMutationInput & { status?: "SENT" | "FAILED" },
-  checkAfterSeconds?: number,
+  firstCheckAt?: Date,
 ) {
   await prisma.$transaction(async (tx) => {
     const { count } = await tx.outboundMessage.updateMany({
@@ -174,8 +180,8 @@ async function settle(
       return;
     }
     if (data.status) await auditOutcome(tx, message, { status: data.status, error: typeof data.error === "string" ? data.error : null });
-    if (checkAfterSeconds !== undefined) {
-      await queueJob(tx, QUEUES.whatsappStatus, { messageId: message.id, check: 0 }, { startAfter: checkAfterSeconds });
+    if (firstCheckAt) {
+      await queueJob(tx, QUEUES.whatsappStatus, { messageId: message.id, check: 0 }, { startAfter: firstCheckAt });
     }
   });
 }
@@ -198,18 +204,27 @@ async function auditOutcome(
 }
 
 /**
- * The "whatsapp-status" job: asks the provider where a sent message has got to, and asks again later until it's read or
- * failed, or the checks run out. Delivered and read are recorded when the CRM learns of them.
+ * The "whatsapp-status" job: asks the provider where a sent message has got to, and asks again at the next check time
+ * until it's read or failed, or the checks run out. A provider that can't be asked (an outage) is asked again at the
+ * next check, so the message never stays "sent" for want of an answer. Delivered and read are recorded when the CRM
+ * learns of them.
  */
 export async function checkMessageStatus(messageId: string, check: number): Promise<void> {
   const message = await prisma.outboundMessage.findUnique({ where: { id: messageId }, include: { template: { select: { code: true } } } });
-  if (!message?.providerMessageId || (message.status !== "SENT" && message.status !== "DELIVERED")) return;
+  if (!message?.providerMessageId || !message.sentAt || (message.status !== "SENT" && message.status !== "DELIVERED")) return;
   const provider = whatsAppProvider();
   // A message carried by another provider than today's can't be asked about.
   if (!provider?.checkStatus || provider.name !== message.provider) return;
 
-  const { status, error } = await provider.checkStatus(message.providerMessageId);
+  let answer: { status: WhatsAppStatus; error: string | null } | null = null;
+  try {
+    answer = await provider.checkStatus(message.providerMessageId);
+  } catch (err) {
+    logger.warn({ err, messageId }, "Couldn't ask where a WhatsApp message has got to; asking again at the next check.");
+  }
   const now = new Date();
+  const status = answer?.status;
+  const error = answer?.error ?? null;
   const data: Prisma.OutboundMessageUpdateManyMutationInput | null =
     status === "FAILED"
       ? { status: "FAILED", error: error ?? "It wasn't delivered.", failedAt: now }
@@ -218,7 +233,7 @@ export async function checkMessageStatus(messageId: string, check: number): Prom
         : status === "DELIVERED" && message.status === "SENT"
           ? { status: "DELIVERED", deliveredAt: now }
           : null;
-  const next = STATUS_CHECK_SECONDS[check + 1];
+  const next = checkAt(message.sentAt, check + 1);
 
   await prisma.$transaction(async (tx) => {
     if (data) {
@@ -226,7 +241,7 @@ export async function checkMessageStatus(messageId: string, check: number): Prom
       if (count === 0) return;
       if (status === "FAILED") await auditOutcome(tx, message, { status: "FAILED", error: error ?? "It wasn't delivered." });
     }
-    if (status !== "READ" && status !== "FAILED" && next !== undefined) {
+    if (status !== "READ" && status !== "FAILED" && next) {
       await queueJob(tx, QUEUES.whatsappStatus, { messageId, check: check + 1 }, { startAfter: next });
     }
   });

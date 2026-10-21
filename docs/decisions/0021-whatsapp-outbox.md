@@ -58,9 +58,11 @@ On 21 Oct 2026 the project lead chose three things:
    - Twilio gives up on a request after 30 seconds. The job counts as stuck after 2 minutes, so pg-boss never starts
      a second try while the first is still waiting.
 5. **Followed to delivered and read.** After a message goes, the `whatsapp-status` job asks the provider (Twilio's
-   `checkStatus`) after 1 min, 5 min, 15 min, 1 h, 4 h and 12 h, stopping once it is read or failed.
+   `checkStatus`) 1 min, 5 min, 15 min, 1 h, 4 h and 12 h after the message went, stopping once it is read or failed.
    - Failures that only show up later are recorded with their reason, e.g. "This phone hasn't joined the Twilio
      sandbox…".
+   - If Twilio can't be asked at one check (an outage), the next check still comes, so a message never stays "sent"
+     for want of an answer. A failed status check is safe to ask again, unlike a send.
    - This needs no public web address, so it works on a laptop and on a server reachable only from the office.
    - The times recorded are when the CRM learned of each change, so they're up to the next check late. Twilio's status
      webhook can replace this later.

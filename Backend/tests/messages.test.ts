@@ -262,13 +262,35 @@ describe("delivery checks", () => {
     expect((await statusJobs(m.id)).map((j) => j.data.check).sort()).toEqual([0, 1]);
   });
 
-  it("asks again later while it isn't delivered yet, until the checks run out", async () => {
+  it("asks again later while it isn't delivered yet, each check so long after the send, until the checks run out", async () => {
     const m = await sent();
+    const { sentAt } = await reload(m.id);
+    const dueAfterSend = async (check: number) => {
+      const job = (await statusJobs(m.id)).find((j) => j.data.check === check);
+      return Math.round((job!.startAfter.getTime() - sentAt!.getTime()) / 1000);
+    };
+    // 1, 5, 15 minutes … after it went, not each a further 5 or 15 minutes after the check before.
+    expect(await dueAfterSend(0)).toBe(60);
+    await checkMessageStatus(m.id, 0);
+    expect((await reload(m.id)).status).toBe("SENT");
+    expect(await dueAfterSend(1)).toBe(300);
+    await checkMessageStatus(m.id, 1);
+    expect(await dueAfterSend(2)).toBe(900);
+
+    await checkMessageStatus(m.id, 5);
+    expect((await statusJobs(m.id)).map((j) => j.data.check).sort()).toEqual([0, 1, 2]);
+  });
+
+  it("keeps checking when the provider can't be asked for a while", async () => {
+    const m = await sent();
+    stub.provider!.checkStatus.mockRejectedValueOnce(new WhatsAppError("Couldn't reach Twilio: getaddrinfo ENOTFOUND", true));
     await checkMessageStatus(m.id, 0);
     expect((await reload(m.id)).status).toBe("SENT");
     expect((await statusJobs(m.id)).map((j) => j.data.check).sort()).toEqual([0, 1]);
-    await checkMessageStatus(m.id, 5);
-    expect((await statusJobs(m.id)).map((j) => j.data.check).sort()).toEqual([0, 1]);
+
+    stub.provider!.checkStatus.mockResolvedValueOnce({ status: "DELIVERED", error: null });
+    await checkMessageStatus(m.id, 1);
+    expect((await reload(m.id)).status).toBe("DELIVERED");
   });
 
   it("records a message the provider couldn't deliver, with the reason", async () => {

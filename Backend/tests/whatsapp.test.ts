@@ -160,5 +160,11 @@ describe("Twilio", () => {
     );
     twilioMock.fetch.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND api.twilio.com"));
     await expect(provider.checkStatus("SM1")).rejects.toThrow("Couldn't reach Twilio: getaddrinfo ENOTFOUND api.twilio.com");
+    // Asking again sends nothing, so even a timeout is worth another try here, unlike on a send.
+    twilioMock.fetch.mockRejectedValueOnce(networkError("timeout of 30000ms exceeded", "ECONNABORTED"));
+    expect(await refusal(provider.checkStatus("SM1"))).toMatchObject({
+      message: "Couldn't reach Twilio: timeout of 30000ms exceeded",
+      retryable: true,
+    });
   });
 });
