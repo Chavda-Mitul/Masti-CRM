@@ -177,9 +177,20 @@ export function MembersCard({
   )
 }
 
-/** "On file · 28 Sep", "On file · 2025 (on paper)" or "Not on file", with the mark and undo buttons for those allowed. */
+/** The record opens in a tab of its own, to print or save as PDF (0022 part 3b). */
+const openRecord = (member: ClientMember) => window.open(`/print/consent/${member.clientId}/${member.id}`, '_blank')
+
+/**
+ * "On file · 28 Sep", "On file · 2025 (on paper)" or "Not on file": View record for one on file, and the mark and undo
+ * buttons for those allowed.
+ */
 function ConsentCell({ member, canMark, onMark, onUndo }: { member: ClientMember; canMark: boolean; onMark: () => void; onUndo: () => void }) {
   const { consent } = member
+  const view = (
+    <button type="button" className="btn-link small" onClick={() => openRecord(member)}>
+      View record
+    </button>
+  )
   if (!consent) {
     return (
       <span className="consent-cell">
@@ -196,6 +207,7 @@ function ConsentCell({ member, canMark, onMark, onUndo }: { member: ClientMember
     return (
       <span className="consent-cell">
         <span className="chip chip-ok">On file · {consent.paperYear} (on paper)</span>
+        {view}
         {canMark && (
           <button type="button" className="btn-link small" onClick={onUndo}>
             Undo
@@ -204,5 +216,10 @@ function ConsentCell({ member, canMark, onMark, onUndo }: { member: ClientMember
       </span>
     )
   }
-  return <span className="chip chip-ok">On file · {dayMonth(consent.agreedAt)}</span>
+  return (
+    <span className="consent-cell">
+      <span className="chip chip-ok">On file · {dayMonth(consent.agreedAt)}</span>
+      {view}
+    </span>
+  )
 }

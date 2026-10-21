@@ -3,29 +3,11 @@ import { useLocation } from 'react-router'
 import { ConsentWording } from '../../components/ConsentWording'
 import { ServerUnreachableError } from '../../lib/api'
 import { issueText } from '../../lib/apiErrors'
-import { formatDate } from '../../lib/format'
 import '../../styles/consent.css'
-import { formChanged, useAgreeConsent, useConsentView, type ConsentCompany, type ConsentPerson, type ConsentView } from './queries'
+import { dateTimeWithYear, detailRows } from './details'
+import { formChanged, useAgreeConsent, useConsentView, type ConsentCompany, type ConsentView } from './queries'
 
 const NOT_VALID = "This link isn't valid. Please use the link in Masti Tours & Travels' WhatsApp message."
-
-const WHOLE_RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
-
-/** "21 Oct 2026, 3:45 pm" in Indian time. */
-function agreedOn(iso: string): string {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Kolkata',
-  })
-    .format(new Date(iso))
-    .replace(/\bAM\b/i, 'am')
-    .replace(/\bPM\b/i, 'pm')
-}
 
 /** What went wrong, in plain words: the server's own message (a link that isn't valid, or was replaced), or a fallback. */
 const problemText = (error: unknown) => issueText(error) ?? 'Something went wrong. Please try again.'
@@ -33,25 +15,6 @@ const problemText = (error: unknown) => issueText(error) ?? 'Something went wron
 /** A number the phone can call: "+91-93777-57580" → tel:+919377757580. */
 function Phone({ phone }: { phone: string }) {
   return <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>{phone}</a>
-}
-
-/** The filled details in the form's order; what doesn't apply (a child's income) stays out. */
-function detailRows(p: ConsentPerson): [string, string][] {
-  const day = (value: string | null) => (value ? formatDate(value) : null)
-  const rows: [string, string | null][] = [
-    ['Passport number', p.passportNumber],
-    ['Date of birth', day(p.dateOfBirth)],
-    ['Spouse’s date of birth', day(p.spouseDateOfBirth)],
-    ['Anniversary', day(p.anniversary)],
-    ['Mother’s date of birth', day(p.motherDateOfBirth)],
-    ['Father’s date of birth', day(p.fatherDateOfBirth)],
-    ['Home address', p.residentialAddress],
-    ['Office address', p.officeAddress],
-    ['Profession', p.profession],
-    ['Annual income', p.annualIncome === null ? null : WHOLE_RUPEES.format(p.annualIncome)],
-    ['Education', p.education],
-  ]
-  return rows.filter((row): row is [string, string] => !!row[1])
 }
 
 function Problem({ message, onRetry }: { message: string; onRetry?: () => void }) {
@@ -76,7 +39,7 @@ function Thanks({ name, agreedAt }: { name: string; agreedAt: string }) {
       </div>
       <h1 className="h2">Thank you</h1>
       <p>
-        {name}’s consent was recorded on {agreedOn(agreedAt)}.
+        {name}’s consent was recorded on {dateTimeWithYear(agreedAt)}.
       </p>
       <p className="muted">There’s nothing more to do. You can close this page.</p>
     </section>

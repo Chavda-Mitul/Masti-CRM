@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
+import { agreeThroughLink, CONSENT_DETAILS, linkSent } from "./consentHelpers";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
-import { saveCase, visaStaff, type Agent } from "./visaHelpers";
+import type { Agent } from "./visaHelpers";
 
 // Consents signed on paper before the CRM (docs/decisions/0022-consent-form.md, part 3): the Head or the Visa HOD marks
 // them on file from the client page, with the year, so those people never get the "I agree" link; a mistaken mark can be
@@ -22,47 +23,16 @@ const mark = (agent: Agent, clientId: string, memberId: string, year: number) =>
 const undo = (agent: Agent, clientId: string, memberId: string) => agent.delete(`/api/clients/${clientId}/members/${memberId}/paper-consent`).send({});
 const consentMessages = () => prisma.outboundMessage.count({ where: { template: { code: "visa.consent_link" } } });
 
-const DETAILS = {
-  dateOfBirth: "1980-05-14",
-  spouseDateOfBirth: null,
-  anniversary: null,
-  motherDateOfBirth: null,
-  fatherDateOfBirth: null,
-  residentialAddress: "B-702, Raghuvir Residency, Vesu, Surat",
-  officeAddress: null,
-  annualIncome: 1_200_000,
-  profession: "Diamond trader",
-  education: null,
-};
-
 async function visaHod() {
   await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
   return loginAs("riya@masti.test");
-}
-
-/** A case whose traveller Rakesh has his details filled in, so his link went out; the token as the message carries it. */
-async function linkSent() {
-  const staff = await visaStaff();
-  const saved = await saveCase(staff);
-  const relationId = (await prisma.relation.findUniqueOrThrow({ where: { code: "SELF" } })).id;
-  const added = await staff.post(`/api/clients/${saved.client.id}/members`).send({ name: "Rakesh Mehta", relationId, passportNumber: "Z1234567" });
-  const memberId = added.body.member.id as string;
-  const fresh = (await staff.get(`/api/visa/cases/${saved.caseNo}`)).body.case;
-  const traveller = (await staff.put(`/api/visa/cases/${saved.caseNo}/travellers/${fresh.travellers[0].id}/member`).send({ memberId })).body.case.travellers[0];
-  const filled = await staff
-    .put(`/api/visa/cases/${saved.caseNo}/travellers/${traveller.id}/consent-details`)
-    .send({ ...DETAILS, updatedAt: traveller.consent.details.personUpdatedAt });
-  expect(filled.status).toBe(200);
-  const message = await prisma.outboundMessage.findFirstOrThrow({ where: { template: { code: "visa.consent_link" } }, orderBy: { createdAt: "desc" } });
-  const token = /consent#([A-Za-z0-9_-]+)/.exec(message.body)![1]!;
-  return { staff, caseNo: saved.caseNo, clientId: saved.client.id, memberId, travellerId: traveller.id as string, token };
 }
 
 /** Saves the traveller's details again, as staff would after a change. */
 async function saveDetailsAgain(staff: Agent, caseNo: string, travellerId: string) {
   const c = (await staff.get(`/api/visa/cases/${caseNo}`)).body.case;
   const t = c.travellers.find((x: { id: string }) => x.id === travellerId);
-  return staff.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/consent-details`).send({ ...DETAILS, profession: "Retired", updatedAt: t.consent.details.personUpdatedAt });
+  return staff.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/consent-details`).send({ ...CONSENT_DETAILS, profession: "Retired", updatedAt: t.consent.details.personUpdatedAt });
 }
 
 describe("marking a consent signed on paper", () => {
@@ -169,12 +139,7 @@ describe("undoing a paper mark", () => {
 
   it("never touches a consent given through the link, by the API or in the database", async () => {
     const { clientId, memberId, token } = await linkSent();
-    const opened = (await request(app).post("/api/public/consent/view").set(json).send({ token })).body.consent;
-    const agreed = await request(app)
-      .post("/api/public/consent/agree")
-      .set(json)
-      .send({ token, wordingId: opened.wording.id, detailsHash: opened.detailsHash });
-    expect(agreed.status).toBe(200);
+    await agreeThroughLink(token);
 
     const res = await undo(await visaHod(), clientId, memberId);
     expect(res.status).toBe(409);

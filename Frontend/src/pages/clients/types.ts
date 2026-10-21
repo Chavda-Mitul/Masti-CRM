@@ -1,5 +1,6 @@
 // Shapes returned by /api/clients (Backend/src/modules/clients/client.ts). Dates without a time are "YYYY-MM-DD".
 
+import type { ConsentCompany, ConsentPerson } from '../consent/queries'
 import type { EnquiryStatus } from '../enquiries/types'
 import type { ScanType } from './scanFiles'
 
@@ -73,6 +74,23 @@ export interface MemberConsent {
   agreedAt: string
   paperYear: number | null
 }
+
+/** The printable record of one person's consent (docs/decisions/0022-consent-form.md, part 3b). */
+export type ConsentRecord =
+  | {
+      source: 'LINK'
+      /** The person's name today; person.name is the name they agreed under. */
+      name: string
+      agreedAt: string
+      /** The details exactly as the page showed them when they agreed. */
+      person: ConsentPerson
+      wording: { id: number; body: string; createdAt: string }
+      link: { sentAt: string; toMobile: string; sentBy: string; caseNo: string }
+      ip: string | null
+      userAgent: string | null
+      company: ConsentCompany
+    }
+  | { source: 'PAPER'; name: string; paperYear: number; markedAt: string; markedBy: string | null; company: ConsentCompany }
 
 export interface ClientNote {
   id: string
