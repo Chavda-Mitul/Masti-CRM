@@ -1,0 +1,24 @@
+{
+  "name": "masti-crm-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Masti CRM helper: a Chrome extension that types a portal's saved ID and password when staff press Log in for me (docs/decisions/0024-portal-logins.md).",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-manifest.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "serve:test-portals": "node scripts/serve-test-portals.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.6",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "^21.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

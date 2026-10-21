@@ -1,0 +1,12 @@
+{
+  // The extension itself: src only, compiled as-is (ES2022 keeps async functions whole, so fillLogin can be sent to a
+  // page as text), into dist/, which Chrome loads.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["chrome"]
+  },
+  "include": ["src"]
+}

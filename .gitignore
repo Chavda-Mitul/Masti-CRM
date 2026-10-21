@@ -40,3 +40,7 @@ desktop.ini
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# The CRM helper: never commit a signing key or a packed extension (Helper/README.md).
+*.pem
+*.crx
