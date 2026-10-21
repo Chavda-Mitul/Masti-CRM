@@ -9,7 +9,16 @@ export const COUNTRIES = [
   { code: "CN", name: "China", zone: null, sortOrder: 2 },
 ];
 
-export const VISA_TYPES = [{ code: "TOURIST", name: "Tourist", sortOrder: 1 }];
+/**
+ * Business and Visitor (21 Oct 2026) so their covering letters' AI paragraph gets its own instructions, which go by these
+ * codes (docs/decisions/0019-covering-letters.md amendment 2). Like any visa type, a country needs an offering with a
+ * checklist (Settings) before intake can use them.
+ */
+export const VISA_TYPES = [
+  { code: "TOURIST", name: "Tourist", sortOrder: 1 },
+  { code: "BUSINESS", name: "Business", sortOrder: 2 },
+  { code: "VISITOR", name: "Visitor", sortOrder: 3 },
+];
 
 export const EMBASSIES = [{ code: "FR-MUM", countryCode: "FR", name: "French embassy, Mumbai", city: "Mumbai", sortOrder: 1 }];
 

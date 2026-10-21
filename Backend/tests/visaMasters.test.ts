@@ -53,7 +53,7 @@ describe("visa masters access", () => {
 
     await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
     const head = await loginAs("vimal@masti.test");
-    expect((await head.post("/api/masters/visa-types").send({ code: "business", name: "Business" })).status).toBe(201);
+    expect((await head.post("/api/masters/visa-types").send({ code: "student", name: "Student" })).status).toBe(201);
   });
 
   it("lets any HOD change embassies, but not plain staff", async () => {
@@ -122,8 +122,8 @@ describe("countries, visa types, documents and offerings", () => {
     expect((await hod.post("/api/masters/visa-offerings").send({ countryId: cn.id, visaTypeId: tourist.id })).status).toBe(409);
 
     await hod.patch(`/api/masters/countries/${cn.id}`).send({ isActive: false });
-    const business = await hod.post("/api/masters/visa-types").send({ code: "BUSINESS", name: "Business" });
-    const inactive = await hod.post("/api/masters/visa-offerings").send({ countryId: cn.id, visaTypeId: business.body.visaType.id });
+    const business = await prisma.visaType.findUniqueOrThrow({ where: { code: "BUSINESS" } });
+    const inactive = await hod.post("/api/masters/visa-offerings").send({ countryId: cn.id, visaTypeId: business.id });
     expect(inactive.status).toBe(400);
 
     const list = await hod.get("/api/masters/visa-offerings");

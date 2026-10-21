@@ -2,10 +2,12 @@ import type { CoveringLetterParty } from "../../../generated/prisma/enums";
 import type { Db } from "../../config/prisma";
 import { istToday, toDbDate } from "../../lib/dates";
 
-// Sample covering letters (docs/decisions/0019-covering-letters.md Decision 7) until Masti sends its own formats (M13):
-// the demo's "3 fixed formats" ⚠️, on the seeded France (Schengen) and China Tourist visas. Their names say "(sample)"
-// and their wording has no author ("set up with the system"), so the screens flag them; the Visa HOD replaces them in
-// Settings before go-live. Added only while there are no covering letters at all: re-seeding never adds them again.
+// Sample covering letters (docs/decisions/0019-covering-letters.md Decision 7, amendment 2) until the Visa HOD replaces
+// them with Masti's own (M13). Their wording follows the two letters Masti sent on 21 Oct 2026 (a France tourist and a
+// France business letter), with {purpose} where "Write it with AI" writes why they travel: three tourist letters on the
+// seeded France (Schengen) and China visas, and a business one for France. Their names say "(sample)" and their wording
+// has no author ("set up with the system"), so the screens flag them. Added only while there are no covering letters at
+// all: re-seeding never adds them again.
 
 interface Sample {
   name: string;
@@ -17,13 +19,43 @@ interface Sample {
 
 const ADDRESS = `To,
 The Visa Officer,
-Consulate General of {country},
-Mumbai`;
+The Consulate General of {country},
+Mumbai, India.`;
 
-const SIGN_OFF = `Yours faithfully,
+const SIGN_OFF = `Thanking you in anticipation,
+
+Yours truly,
 
 {applicant}
 {clientAddress}`;
+
+/** A family's tourist letter, after Masti's France tourist letter. */
+const familyTourist = `{date}
+
+${ADDRESS}
+
+Sub: Application for a {visaType} visa
+
+Respected Sir/Madam,
+
+I, the undersigned, {applicant}, am applying for a {visaType} visa for {country} for my family and myself.
+
+{purpose}
+
+The passport details are below:
+{travellers}
+
+We would like to travel to {country} from {departOn} to {returnOn}, a stay of {days} days, and we request a {entry}-entry visa.
+
+All the expenses of our trip will be borne by me.
+
+During our visit we will stay at {hotel}.
+
+I have attached the visa application forms, duly filled in and signed, with our valid passports, photographs and the relevant documents for your perusal.
+
+I kindly request you to grant us the visas at the earliest.
+
+${SIGN_OFF}`;
 
 export const SAMPLE_LETTERS: Sample[] = [
   {
@@ -31,22 +63,7 @@ export const SAMPLE_LETTERS: Sample[] = [
     countryCodes: ["FR"],
     visaTypeCode: "TOURIST",
     party: "SEVERAL",
-    body: `{date}
-
-${ADDRESS}
-
-Subject: Short-stay {visaType} visa for {applicant} and family ({travellerCount} travellers)
-
-Dear Sir or Madam,
-
-I, {applicant}, request a short-stay {visaType} visa for my family and myself to visit {country}. We plan to travel from {departOn} to {returnOn}, a stay of {days} days, and request a {entry}-entry visa.
-
-The travellers are:
-{travellers}
-
-We will stay at {hotel}. I will pay for our travel and stay, and we will return to India at the end of our trip. Our documents are attached for your kind consideration.
-
-${SIGN_OFF}`,
+    body: familyTourist,
   },
   {
     name: "Schengen · tourist · one person (sample)",
@@ -57,13 +74,26 @@ ${SIGN_OFF}`,
 
 ${ADDRESS}
 
-Subject: Short-stay {visaType} visa for {applicant}, passport no. {passportNo}
+Sub: Application for a {visaType} visa
 
-Dear Sir or Madam,
+Respected Sir/Madam,
 
-I, {applicant}, holding passport no. {passportNo}, request a short-stay {visaType} visa to visit {country} from {departOn} to {returnOn}, a stay of {days} days. I request a {entry}-entry visa.
+I, the undersigned, {applicant}, am applying for a {visaType} visa for {country}.
 
-I will stay at {hotel}. I will pay for my travel and stay, and I will return to India at the end of my trip. My documents are attached for your kind consideration.
+{purpose}
+
+The passport details are below:
+{travellers}
+
+I would like to travel to {country} from {departOn} to {returnOn}, a stay of {days} days, and I request a {entry}-entry visa.
+
+All the expenses of my trip will be borne by me.
+
+During my visit I will stay at {hotel}.
+
+I have attached the visa application form, duly filled in and signed, with my valid passport, photographs and the relevant documents for your perusal.
+
+I kindly request you to grant me the visa at the earliest.
 
 ${SIGN_OFF}`,
   },
@@ -72,21 +102,46 @@ ${SIGN_OFF}`,
     countryCodes: ["CN"],
     visaTypeCode: "TOURIST",
     party: "SEVERAL",
+    body: familyTourist,
+  },
+  {
+    // After Masti's France business letter: colleagues rather than a family, and the company pays. The table's
+    // "Relation" heading is changed to "Designation" on the case, as the letter is edited.
+    name: "Schengen · business · group (sample)",
+    countryCodes: ["FR"],
+    visaTypeCode: "BUSINESS",
+    party: "SEVERAL",
     body: `{date}
 
 ${ADDRESS}
 
-Subject: {visaType} visa for {travellerNames}
+Sub: Application for a {visaType} visa
 
-Dear Sir or Madam,
+Dear Sir/Madam,
 
-We, the {travellerCount} travellers listed below, request a {visaType} visa to visit {country} from {departOn} to {returnOn}, a stay of {days} days, with {entry} entry.
+I, the undersigned, {applicant}, am applying for {visaType} visas for {country} for my colleagues and myself.
 
+{purpose}
+
+The passport details are below:
 {travellers}
 
-We will stay at {hotel}. {applicant} will pay for our travel and stay, and we will all return to India at the end of the trip. Our documents are attached for your kind consideration.
+We would like to travel to {country} from {departOn} to {returnOn}, a stay of {days} days, and we request a {entry}-entry visa.
 
-${SIGN_OFF}`,
+All the expenses of our travel and stay will be borne by our company.
+
+During our visit we will stay at {hotel}.
+
+We have attached the visa application forms, duly filled in and signed, with our valid passports, photographs and the relevant documents for your perusal.
+
+We kindly request you to consider our applications; your cooperation will be highly appreciated.
+
+Thanking you,
+
+Yours faithfully,
+
+{applicant}
+{clientAddress}`,
   },
 ];
 

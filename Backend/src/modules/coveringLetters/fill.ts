@@ -1,6 +1,6 @@
 import type { EntryType } from "../../../generated/prisma/enums";
 import { dateLabel, daysInclusive, fullDate } from "../../lib/dates";
-import { mark, normaliseLetterPart, type LetterText } from "./coveringLetters.schemas";
+import { mark, normaliseLetterPart, PURPOSE_MARK, type LetterBlank, type LetterText } from "./coveringLetters.schemas";
 
 // Drafting a case's covering letter from a wording (docs/decisions/0019-covering-letters.md Decisions 4 and 8, amendment
 // 1). No queries here: the case's details come in as LetterFacts, so the rules are tested on their own. Only the blanks
@@ -58,7 +58,8 @@ export function draftLetter(body: string, facts: LetterFacts, day: string): { le
   };
   const nameOf = (t: LetterFacts["travellers"][number]) => valueOr(t.name, `${t.label}'s name`);
 
-  const blanks: Record<string, () => string> = {
+  // Every blank has its entry: one left out is a type error, not a {blank} printed as written.
+  const blanks: Record<LetterBlank, () => string> = {
     date: () => fullDate(day),
     clientName: () => valueOr(facts.clientName, "the client's name"),
     clientAddress: () => valueOr(facts.clientAddress, "the client's address"),
@@ -78,9 +79,14 @@ export function draftLetter(body: string, facts: LetterFacts, day: string): { le
     },
     entry: () => valueOr(trip.entryType && ENTRY_WORD[trip.entryType], "the entry type"),
     hotel: () => valueOr(trip.hotelStay, "the hotel stay"),
+    // Not a gap in the case: "Write it with AI" writes it, or staff type it (amendment 2).
+    purpose: () => PURPOSE_MARK,
+    // The table itself is drawn below; a {travellers} inside a sentence is refused when the wording is saved.
+    travellers: () => "",
   };
   // Wordings are checked when saved, so every blank is known; an unknown one would stay as written.
-  const fill = (text: string) => normaliseLetterPart(text.replace(/\{([^{}]*)\}/g, (whole, blank: string) => blanks[blank]?.() ?? whole));
+  const fill = (text: string) =>
+    normaliseLetterPart(text.replace(/\{([^{}]*)\}/g, (whole, blank: string) => (Object.hasOwn(blanks, blank) ? blanks[blank as LetterBlank]() : whole)));
 
   const lines = body.replace(/\r\n?/g, "\n").split("\n");
   const at = lines.findIndex((line) => TRAVELLERS_LINE.test(line));
