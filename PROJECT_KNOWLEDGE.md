@@ -566,6 +566,7 @@ These are used by every module.
   The **exact wording comes from Vimal** ❓ (Q9).
 - Entering a name shows whether a consent exists. Anyone without one is **flagged** ✅. The processor obtains it **in parallel** with processing ✅. It is taken once the business reaches a certain stage, not at enquiry ✅.
 - The record is kept digitally (Drive/OneDrive/link) ✅.
+- **Being built in 3 parts (21 Oct 2026, `docs/decisions/0022-consent-form.md`):** (1) staff fill each traveller's details from the case's consent card, kept on the person for life (**built**); (2) the per-traveller link (to the traveller's own number if saved, else the main one), the client's no-login page and "I agree", with my draft wording editable in Settings until Vimal's; (3) a printable record, the consent column on the client page and the New enquiry flag.
 - **Separate from this:** the **non-refundable consent** for hotels and tickets, agreed **by OTP** ✅ (PID).
 
 ### 10.6 Quote → invoice → payment → collection

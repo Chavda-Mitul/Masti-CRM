@@ -202,8 +202,48 @@ export interface CaseFile {
   uploadedBy: PersonRef
 }
 
-/** Flagged until the "I agree" link (WhatsApp) fills it. UNLINKED: the traveller isn't a family member yet. */
-export type CaseConsent = { state: 'UNLINKED' } | { state: 'NONE' } | { state: 'ON_FILE'; agreedAt: string }
+/**
+ * The consent form's details on the person (docs/decisions/0022-consent-form.md, part 1): staff fill them in by asking
+ * the client, for life. filledAt stays null until the form is saved (the date of birth may already be there).
+ */
+export interface ConsentDetails {
+  dateOfBirth: string | null
+  spouseDateOfBirth: string | null
+  anniversary: string | null
+  motherDateOfBirth: string | null
+  fatherDateOfBirth: string | null
+  residentialAddress: string | null
+  officeAddress: string | null
+  /** A year, in whole rupees. */
+  annualIncome: number | null
+  profession: string | null
+  education: string | null
+  filledAt: string | null
+  filledBy: PersonRef | null
+  /** The person's optimistic-lock token. */
+  personUpdatedAt: string
+}
+
+/** Every field each time; null clears one. updatedAt is the person's (personUpdatedAt). */
+export interface ConsentDetailsBody {
+  dateOfBirth: string
+  spouseDateOfBirth: string | null
+  anniversary: string | null
+  motherDateOfBirth: string | null
+  fatherDateOfBirth: string | null
+  residentialAddress: string
+  officeAddress: string | null
+  annualIncome: number | null
+  profession: string | null
+  education: string | null
+  updatedAt: string
+}
+
+/** Flagged until the client agrees through the "I agree" link (0022 part 2). UNLINKED: the traveller isn't a family member yet. */
+export type CaseConsent =
+  | { state: 'UNLINKED' }
+  | { state: 'NONE'; details: ConsentDetails }
+  | { state: 'ON_FILE'; agreedAt: string; details: ConsentDetails }
 
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
 export type VisaOutcome = 'APPROVED' | 'REFUSED'

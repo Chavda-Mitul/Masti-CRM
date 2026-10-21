@@ -81,6 +81,7 @@ model User {
   clientsCreated        Client[]                @relation("ClientCreatedBy")
   clientPhonesAdded     ClientPhone[]           @relation("ClientPhoneCreatedBy")
   clientMembersAdded    ClientMember[]          @relation("ClientMemberCreatedBy")
+  consentDetailsFilled  ClientMember[]          @relation("ClientMemberConsentDetailsBy")
   clientNotes           ClientNote[]            @relation("ClientNoteAuthor")
   holidaysAdded         Holiday[]               @relation("HolidayAddedBy")
   enquiriesOwned        Enquiry[]               @relation("EnquiryOwner")
@@ -335,10 +336,10 @@ enum ClientKind {
 /// Completed before invoicing; which fields are required is the clients.invoiceReadiness setting.
 /// Never deleted: enquiries and invoices will point here.
 model Client {
-  id             String           @id @default(uuid())
-  kind           ClientKind       @default(INDIVIDUAL)
+  id             String            @id @default(uuid())
+  kind           ClientKind        @default(INDIVIDUAL)
   /// +91XXXXXXXXXX. The lookup key, the WhatsApp number, and the match key for the Excel import.
-  mobile         String           @unique
+  mobile         String            @unique
   /// The person's name, or the company's. Required (0004 Amendment); a database check also refuses a blank one.
   /// Integrations and the Excel import must supply one too (e.g. the WhatsApp profile name).
   name           String
@@ -351,26 +352,26 @@ model Client {
   area           String?
   city           String?
   /// GST state code ("24" = Gujarat). Decides the place of supply on invoices.
-  stateCode      String?          @db.Char(2)
-  pincode        String?          @db.Char(6)
+  stateCode      String?           @db.Char(2)
+  pincode        String?           @db.Char(6)
   /// Uppercase AAAAA9999A. Typed in by staff; not verified (PAN verification is Q23, out of scope).
   pan            String?
   /// Uppercase, 15 characters. Characters 3–12 equal pan when both are set (database check).
   gstin          String?
   /// The client's code in Masti's accounting software ✅.
-  accountingCode String?          @unique
+  accountingCode String?           @unique
   billingCycleId Int
   paymentHabitId Int?
   /// The service sets the IST date; the Excel import may set an earlier one. The default is today in India too.
-  clientSince    DateTime         @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
-  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  clientSince    DateTime          @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token: PATCH sends back the updatedAt it read.
-  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
   /// Null when created by the WhatsApp bot, a website form or the import.
   createdById    String?
-  billingCycle   BillingCycle     @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
-  paymentHabit   PaymentHabit?    @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
-  createdBy      User?            @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  billingCycle   BillingCycle      @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
+  paymentHabit   PaymentHabit?     @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
+  createdBy      User?             @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   phones         ClientPhone[]
   members        ClientMember[]
   notes          ClientNote[]
@@ -410,31 +411,48 @@ model ClientPhone {
 /// Family & travellers ✅ (or a corporate's employees). Visa Step 2 links case travellers to these rows.
 /// Consent is its own model (one per person for life, keyed to the member, not the passport): see Consent.
 model ClientMember {
-  id             String              @id @default(uuid())
-  clientId       String
+  id                 String              @id @default(uuid())
+  clientId           String
   /// As printed in the passport, once seen.
-  name           String
-  relationId     Int
+  name               String
+  relationId         Int
   /// Age ("Son, 12") is worked out from this.
-  dateOfBirth    DateTime?           @db.Date
-  mobile         String?
+  dateOfBirth        DateTime?           @db.Date
+  mobile             String?
   /// Current passport only. Uppercase, no spaces. Not unique: a duplicate is a warning staff confirm.
   /// Earlier numbers stay in the audit log.
-  passportNumber String?
-  passportExpiry DateTime?           @db.Date
-  sortOrder      Int                 @default(0)
+  passportNumber     String?
+  passportExpiry     DateTime?           @db.Date
+  sortOrder          Int                 @default(0)
   /// Taken off the family list. Never deleted: past cases will point here.
-  archivedAt     DateTime?           @db.Timestamptz(3)
-  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  archivedAt         DateTime?           @db.Timestamptz(3)
+  // The consent form's details (docs/decisions/0022-consent-form.md): staff fill them in by asking the client, for
+  // life; the consent the client agrees to keeps a copy of them as they were. Checks in the migration: no blank
+  // text, income not negative, consentDetailsAt and consentDetailsById set together.
+  spouseDateOfBirth  DateTime?           @db.Date
+  anniversary        DateTime?           @db.Date
+  motherDateOfBirth  DateTime?           @db.Date
+  fatherDateOfBirth  DateTime?           @db.Date
+  residentialAddress String?
+  officeAddress      String?
+  /// A year, in whole rupees.
+  annualIncome       Int?
+  profession         String?
+  education          String?
+  /// When staff last saved the form, and who.
+  consentDetailsAt   DateTime?           @db.Timestamptz(3)
+  consentDetailsById String?
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token, as on Client.
-  updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
-  createdById    String
-  client         Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  relation       Relation            @relation(fields: [relationId], references: [id], onDelete: Restrict)
-  createdBy      User                @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  travellers     VisaCaseTraveller[]
-  consent        Consent?
-  documents      ClientDocument[]
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  createdById        String
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  relation           Relation            @relation(fields: [relationId], references: [id], onDelete: Restrict)
+  createdBy          User                @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  consentDetailsBy   User?               @relation("ClientMemberConsentDetailsBy", fields: [consentDetailsById], references: [id], onDelete: Restrict)
+  travellers         VisaCaseTraveller[]
+  consent            Consent?
+  documents          ClientDocument[]
 
   @@index([clientId])
   @@index([passportNumber])
@@ -817,16 +835,16 @@ enum NoticeStatus {
 /// author, the department's HOD and the Head change or remove it.
 /// Checks in the migration: title not blank; about and body null or not blank.
 model Notice {
-  id           String         @id @default(uuid())
-  departmentId Int
-  category     NoticeCategory
+  id             String         @id @default(uuid())
+  departmentId   Int
+  category       NoticeCategory
   /// Which airline, embassy or hotel ("China", "IndiGo", "Marriott Dubai"); for a general one a word such as "Process".
-  about        String?
-  title        String
+  about          String?
+  title          String
   /// The details. Optional: a title can say it all.
-  body         String?
-  source       NoticeSource   @default(TEAM)
-  status       NoticeStatus   @default(ACTIVE)
+  body           String?
+  source         NoticeSource   @default(TEAM)
+  status         NoticeStatus   @default(ACTIVE)
   /// When the Head or the Visa HOD put it in the visa team's login popup (Decision 12); null: not in it. Visa notices only.
   loginPopupAt   DateTime?      @db.Timestamptz(3)
   /// Who put it there: it isn't news to them (set exactly with loginPopupAt: a CHECK in the migration).
@@ -1075,37 +1093,37 @@ model EnquiryReasonDepartment {
 }
 
 model Enquiry {
-  id             String          @id @default(uuid())
+  id             String            @id @default(uuid())
   /// VISA-2026-0001. Never changes once issued.
-  caseNo         String          @unique
+  caseNo         String            @unique
   departmentId   Int
   clientId       String
   sourceId       Int
-  origin         EnquiryOrigin   @default(STAFF)
+  origin         EnquiryOrigin     @default(STAFF)
   /// A repeat request with the same key returns this enquiry instead of creating another.
-  idempotencyKey String?         @unique
+  idempotencyKey String?           @unique
   stageId        Int
-  status         EnquiryStatus   @default(OPEN)
+  status         EnquiryStatus     @default(OPEN)
   /// "Whose job it is now". Null = not assigned yet (e.g. a future bot enquiry).
   ownerId        String?
   /// When someone must next act on it: the list order, Today, the follow-up desk and "running late".
-  dueAt          DateTime?       @db.Timestamptz(3)
+  dueAt          DateTime?         @db.Timestamptz(3)
   /// Why it was postponed or cancelled. Checked in the migration: POSTPONED and CANCELLED need one.
   reasonId       Int?
   /// When a postponed enquiry comes back (POSTPONED needs one). dueAt is set to that day.
-  resumeOn       DateTime?       @db.Date
+  resumeOn       DateTime?         @db.Date
   /// Null when an integration created it.
   createdById    String?
-  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token for the case actions (follow-up, postpone, reassign, mature…).
-  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
-  department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  client         Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  source         EnquirySource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  stage          DepartmentStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  owner          User?           @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  createdBy      User?           @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  reason         EnquiryReason?  @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  department     Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  client         Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  source         EnquirySource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  stage          DepartmentStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner          User?             @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy      User?             @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reason         EnquiryReason?    @relation(fields: [reasonId], references: [id], onDelete: Restrict)
   visa           VisaCase?
   followUps      FollowUp[]
   files          CaseFile[]
