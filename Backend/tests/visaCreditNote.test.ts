@@ -5,7 +5,7 @@ import { getObject } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { dispatchCase, makeInvoiceable, mastiReady, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // Correcting a wrong invoice (docs/decisions/0011-visa-at-vendor.md Decision 5): a WHOLE credit note cancels it,
 // giving back everything it charged, its GST included; the invoice itself is never changed.
@@ -253,7 +253,7 @@ describe("on a cancelled case (0006 amendment 15)", () => {
     expect(requoted.body.message).toMatch(/closed/);
   });
 
-  it("a postponed case is resumed first, and a closed one keeps its invoice", async () => {
+  it("a postponed case is resumed first (a delivered one is credited as usual: see after the handover)", async () => {
     await mastiReady();
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     const hod = await loginAs("riya@masti.test");
@@ -261,10 +261,6 @@ describe("on a cancelled case (0006 amendment 15)", () => {
     const later = (await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRAVEL_DATES_MOVED" } })).id;
     await prisma.enquiry.update({ where: { id: c.id }, data: { status: "POSTPONED", reasonId: later, resumeOn: toDbDate(addMonths(istToday(), 1)) } });
     expect((await cancel(hod, c.caseNo)).body.message).toMatch(/Resume it first/);
-    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CLOSED", reasonId: null, resumeOn: null, dueAt: null } });
-    const closed = await cancel(hod, c.caseNo);
-    expect(closed.status).toBe(409);
-    expect(closed.body.message).toMatch(/closed/);
     expect(await prisma.creditNote.count()).toBe(0);
   });
 });
@@ -376,6 +372,44 @@ describe("the replacement invoice (Decision 5, M37)", () => {
     await expect(copy(null)).rejects.toThrow(/Invoice_one_original_per_case/);
     await expect(copy(invA.id)).rejects.toThrow(/once a credit note has cancelled it/);
     await expect(copy(invB.id)).rejects.toThrow(/same case/);
+  });
+});
+
+describe("after the handover (Delivered, closed)", () => {
+  /** Mehta's file (receivedCase) handed over at the office by Neha, its processor: Delivered and closed. */
+  async function delivered() {
+    const { c, processor, adult } = await receivedCase();
+    const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+    const photoId = (await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo.id;
+    const before = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case as { updatedAt: string };
+    const res = await processor
+      .post(`/api/visa/cases/${c.caseNo}/handover`)
+      .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: adult }, photoId, updatedAt: before.updatedAt });
+    expect(res.status).toBe(200);
+    expect(res.body.case).toMatchObject({ status: "CLOSED", stage: { code: "DELIVERED" } });
+    return { c, processor };
+  }
+
+  it("still cancels a wrong invoice with a credit note, and the corrected one replaces it; the case stays closed", async () => {
+    const { c, processor } = await delivered();
+    const invoiceNo = (await load(processor, c.caseNo)).invoice!.invoiceNo;
+
+    expect((await check(processor, c.caseNo)).body).toMatchObject({ invoiceNo, blockers: [] });
+    const res = await cancel(processor, c.caseNo);
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).invoice!.cancelled).toMatchObject({ reason: "Wrong amount" });
+
+    expect((await requote(processor, c, 70_000)).status).toBe(200);
+    const replacement = await raise(processor, c.caseNo);
+    expect(replacement.invoice).toMatchObject({ replaces: invoiceNo, cancelled: null });
+    expect(await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id }, select: { status: true } })).toEqual({ status: "CLOSED" });
+  });
+
+  it("is for the case's processor, the Visa HOD or the Head, as before", async () => {
+    const { c } = await delivered();
+    const other = await visaStaff();
+    const body = { invoiceNo: "MVI00000001", totalPaise: 1, reasonId: await reasonId() };
+    expect((await other.post(`/api/visa/cases/${c.caseNo}/invoice/cancel`).send(body)).status).toBe(403);
   });
 });
 

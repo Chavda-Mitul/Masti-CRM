@@ -340,8 +340,8 @@ export async function cancelInvoiceCheck(caseNo: string, user: UserWithDepartmen
  * "Cancel with a credit note" (Decision 5). Refused if the invoice or its total isn't the one the dialog showed, if
  * it's already cancelled or partly given back (a recall), or while Masti's details can't be printed. In one transaction
  * under the case lock: the WHOLE credit note issued (PDF, number, file, rows, audit). The invoice itself is untouched;
- * from now on it counts as cancelled. On an open case or a cancelled one (CREDITING); on a cancelled one, by the Visa
- * HOD or the Head only, as no corrected invoice follows (0006 amendment 15).
+ * from now on it counts as cancelled. On an open case, a delivered (closed) one or a cancelled one (CREDITING); on a
+ * cancelled one, by the Visa HOD or the Head only, as no corrected invoice follows (0006 amendment 15).
  */
 export async function cancelInvoice(caseNo: string, input: CancelInvoiceInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, CREDITING);
