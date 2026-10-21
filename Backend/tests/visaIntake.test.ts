@@ -469,10 +469,10 @@ describe("GET /api/clients/lookup: open enquiries", () => {
     const edited = await staff.patch(`/api/clients/${saved.client.id}`).send({ area: "Vesu", updatedAt: profile.body.client.updatedAt });
     expect(edited.body.client.cases).toHaveLength(1);
 
-    // The Holidays HOD may open every client, but sees only the cases of the departments she can view.
+    // The Holidays HOD doesn't open a family that has only visa cases (0004 amendment 4).
     await createUser({ name: "Hetal Shah", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", role: "HOD" }] });
     const holidays = await loginAs("hetal@masti.test");
-    expect((await holidays.get(`/api/clients/${saved.client.id}`)).body.client.cases).toEqual([]);
+    expect((await holidays.get(`/api/clients/${saved.client.id}`)).status).toBe(403);
   });
 
   it("list finished cases on the profile after the open ones, newest first", async () => {

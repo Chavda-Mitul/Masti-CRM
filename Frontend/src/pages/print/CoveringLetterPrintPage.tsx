@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useParams } from 'react-router'
-import { LetterPaper } from '../../components/LetterPaper'
+import { LetterTextPaper } from '../../components/LetterPaper'
 import { errorText } from '../../lib/apiErrors'
 import '../../styles/print.css'
 import { useCoveringLetterPrint } from '../enquiries/queries'
@@ -13,7 +13,7 @@ const SIDE_MM = 20
  * The covering letter made for a case, on A4, for printing on the client's letterhead
  * (docs/decisions/0019-covering-letters.md Decisions 10 and 11). Outside the app shell, so nothing else prints. The
  * first page leaves the letterhead space set in Settings at the top; "Plain paper" leaves the usual margin instead. It is
- * the letter as it was made, every time.
+ * the letter as it was made, staff's changes included (amendment 1), every time.
  */
 export function CoveringLetterPrintPage() {
   const { caseNo = '' } = useParams()
@@ -55,7 +55,7 @@ export function CoveringLetterPrintPage() {
         </span>
       </div>
       <div className="letter-sheet" style={{ '--letter-top': `${topMm}mm`, '--letter-edge': `${EDGE_MM}mm`, '--letter-side': `${SIDE_MM}mm` } as CSSProperties}>
-        <LetterPaper body={p.body} values={p.values} travellers={p.travellers} />
+        <LetterTextPaper letter={p.letter} />
       </div>
     </div>
   )

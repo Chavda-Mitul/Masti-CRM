@@ -92,8 +92,8 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
    Chrome offers that only on the pages the helper lists. No helper → "Log in for me works only on the office computers."
 2. `POST /api/portal-logins/:id/open` (session) checks the person may use the portal from here. It makes a **ticket**:
    32 random bytes, stored only as its sha256, valid for 30 seconds and once.
-3. The page hands the ticket to the helper. The helper `POST`s it to `/api/portal-helper/redeem`, the one API route
-   without a session:
+3. The page hands the ticket to the helper. The helper `POST`s it to `/api/portal-helper/redeem`, an API route
+   without a session (like the client's consent page, 0022):
    - **Only the helper:** `Origin` must be `chrome-extension://<an id in PORTAL_HELPER_IDS>`; no web page can fake that.
    - **Rate-limited:** 20 failures per 15 minutes from one address.
    - **Everything is checked again:** the person is active, not on a temporary password and still allowed; the portal
@@ -124,7 +124,7 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 
 ## Component 1 (built 21 Oct 2026)
 
-- **Data** (migration `20261021180000_portal_logins`):
+- **Data** (migration `20261021210000_portal_logins`):
   - `PortalLogin`: department (fixed once added), name, login address, what the first box is called (`idLabel`), the
     sealed `secret`, `passwordChangedAt`, ACTIVE/REMOVED, who added it.
   - `PortalLoginUser`: who may use it.

@@ -1,9 +1,11 @@
 import type { EntryType } from "../../../generated/prisma/enums";
 import { dateLabel, daysInclusive, fullDate } from "../../lib/dates";
+import { mark, normaliseLetterPart, type LetterText } from "./coveringLetters.schemas";
 
-// Filling a covering letter's {blanks} in from a case (docs/decisions/0019-covering-letters.md Decisions 4 and 9). No
-// queries here: the case's details come in as LetterFacts, so the rules are tested on their own. Only the blanks a
-// wording uses can be missing; the letter isn't made until nothing is (Decision 9).
+// Drafting a case's covering letter from a wording (docs/decisions/0019-covering-letters.md Decisions 4 and 8, amendment
+// 1). No queries here: the case's details come in as LetterFacts, so the rules are tested on their own. Only the blanks
+// a wording uses are filled. One the case can't fill becomes a mark in plain words (⟦the hotel stay⟧) that staff type
+// over before the letter is made, and is listed in `missing` so it can be added to the case too.
 
 /** What a case brings to its letter. Dates are YYYY-MM-DD (India). */
 export interface LetterFacts {
@@ -25,21 +27,13 @@ export interface LetterFacts {
   }[];
 }
 
-/** One row of the table {travellers} prints. */
-export interface LetterRow {
-  name: string;
-  relation: string;
-  dateOfBirth: string;
-  passportNo: string;
-}
-
-/** What the letter prints: each blank's words, and the table's rows. Also what a made letter keeps (its snapshot). */
-export interface LetterFill {
-  values: Record<string, string>;
-  travellers: LetterRow[];
-}
+/** The table {travellers} starts as. Staff may change its headings, rows and columns. */
+export const TRAVELLER_COLUMNS = ["Name", "Relation", "Date of birth", "Passport no."];
 
 const ENTRY_WORD: Record<EntryType, string> = { SINGLE: "single", DOUBLE: "double", MULTIPLE: "multiple" };
+
+/** {travellers} alone on its line: where the table goes. */
+const TRAVELLERS_LINE = /^[ \t]*\{travellers\}[ \t]*$/;
 
 /** "A", "A and B", "A, B and C". */
 export function namesInASentence(names: string[]): string {
@@ -47,63 +41,58 @@ export function namesInASentence(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
-/** The blanks a wording uses. */
-function blanksIn(body: string): Set<string> {
-  return new Set([...body.matchAll(/\{([^{}]*)\}/g)].map((m) => m[1]!));
-}
-
 /**
- * Fills a wording in for a case on a day (the letter's date). A blank the wording uses and the case can't fill is left
- * out of `values` and listed in `missing`, in plain words ("Diya Mehta's passport number", "the hotel stay").
+ * Drafts the letter for a case on a day (the letter's date): each blank the wording uses becomes the case's value, or a
+ * mark where the case lacks it. `missing` says, in plain words, what the case lacks ("Diya Mehta's passport number").
  */
-export function fillLetter(body: string, facts: LetterFacts, day: string): LetterFill & { missing: string[] } {
-  const used = blanksIn(body);
-  const values: Record<string, string> = {};
+export function draftLetter(body: string, facts: LetterFacts, day: string): { letter: LetterText; missing: string[] } {
   const missing = new Set<string>();
-  const put = (blank: string, value: string | null | undefined, what: string) => {
-    if (!used.has(blank)) return;
-    if (value) values[blank] = value;
-    else missing.add(what);
-  };
-
   const { trip } = facts;
-  const nameOf = (t: LetterFacts["travellers"][number]) => t.name ?? t.label;
   const first = facts.travellers[0];
+  const whoIs = (t: LetterFacts["travellers"][number]) => t.name ?? t.label;
+  /** The value, or a mark with the same words as `missing`. */
+  const valueOr = (value: string | null | undefined, what: string) => {
+    if (value) return value;
+    missing.add(what);
+    return mark(what);
+  };
+  const nameOf = (t: LetterFacts["travellers"][number]) => valueOr(t.name, `${t.label}'s name`);
 
-  put("date", fullDate(day), "the date");
-  put("clientName", facts.clientName, "the client's name");
-  put("clientAddress", facts.clientAddress, "the client's address");
-  put("applicant", first?.name, "the first traveller's name");
-  put("passportNo", first?.passportNumber, `${first ? nameOf(first) : "the first traveller"}'s passport number`);
-  put("travellerNames", namesInASentence(facts.travellers.map(nameOf)), "the travellers' names");
-  put("travellerCount", String(facts.travellers.length), "the number of travellers");
-  put("country", facts.country, "the country");
-  put("visaType", facts.visaType, "the visa type");
-  put("departOn", trip.departOn && fullDate(trip.departOn), "travelling out");
-  put("returnOn", trip.returnOn && fullDate(trip.returnOn), "coming back");
-  if (used.has("days")) {
-    if (trip.departOn && trip.returnOn) values.days = String(daysInclusive(trip.departOn, trip.returnOn));
-    if (!trip.departOn) missing.add("travelling out");
-    if (!trip.returnOn) missing.add("coming back");
-  }
-  put("entry", trip.entryType && ENTRY_WORD[trip.entryType], "the entry type");
-  put("hotel", trip.hotelStay, "the hotel stay");
+  const blanks: Record<string, () => string> = {
+    date: () => fullDate(day),
+    clientName: () => valueOr(facts.clientName, "the client's name"),
+    clientAddress: () => valueOr(facts.clientAddress, "the client's address"),
+    applicant: () => valueOr(first?.name, "the first traveller's name"),
+    passportNo: () => valueOr(first?.passportNumber, `${first ? whoIs(first) : "the first traveller"}'s passport number`),
+    travellerNames: () => namesInASentence(facts.travellers.map(nameOf)),
+    travellerCount: () => String(facts.travellers.length),
+    country: () => valueOr(facts.country, "the country"),
+    visaType: () => valueOr(facts.visaType, "the visa type"),
+    departOn: () => valueOr(trip.departOn && fullDate(trip.departOn), "travelling out"),
+    returnOn: () => valueOr(trip.returnOn && fullDate(trip.returnOn), "coming back"),
+    days: () => {
+      if (trip.departOn && trip.returnOn) return String(daysInclusive(trip.departOn, trip.returnOn));
+      if (!trip.departOn) missing.add("travelling out");
+      if (!trip.returnOn) missing.add("coming back");
+      return mark("the number of days");
+    },
+    entry: () => valueOr(trip.entryType && ENTRY_WORD[trip.entryType], "the entry type"),
+    hotel: () => valueOr(trip.hotelStay, "the hotel stay"),
+  };
+  // Wordings are checked when saved, so every blank is known; an unknown one would stay as written.
+  const fill = (text: string) => normaliseLetterPart(text.replace(/\{([^{}]*)\}/g, (whole, blank: string) => blanks[blank]?.() ?? whole));
 
-  const travellers: LetterRow[] = [];
-  if (used.has("travellers")) {
-    for (const t of facts.travellers) {
-      const name = nameOf(t);
-      if (!t.name) missing.add(`${name}'s name`);
-      if (!t.dateOfBirth) missing.add(`${name}'s date of birth`);
-      if (!t.passportNumber) missing.add(`${name}'s passport number`);
-      travellers.push({
-        name,
-        relation: t.relation ?? "",
-        dateOfBirth: t.dateOfBirth ? dateLabel(t.dateOfBirth) : "",
-        passportNo: t.passportNumber ?? "",
-      });
-    }
-  }
+  const lines = body.replace(/\r\n?/g, "\n").split("\n");
+  const at = lines.findIndex((line) => TRAVELLERS_LINE.test(line));
+  if (at < 0) return { letter: { top: fill(body), table: null, bottom: "" }, missing: [...missing] };
 
-  return { values, travellers, missing: [...missing] };
+  const top = fill(lines.slice(0, at).join("\n"));
+  const rows = facts.travellers.map((t) => [
+    nameOf(t),
+    t.relation ?? "",
+    valueOr(t.dateOfBirth && dateLabel(t.dateOfBirth), `${whoIs(t)}'s date of birth`),
+    valueOr(t.passportNumber, `${whoIs(t)}'s passport number`),
+  ]);
+  const bottom = fill(lines.slice(at + 1).join("\n"));
+  return { letter: { top, table: { columns: [...TRAVELLER_COLUMNS], rows }, bottom }, missing: [...missing] };
 }

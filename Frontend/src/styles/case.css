@@ -982,6 +982,18 @@
 .consent-fill {
   margin-top: 8px;
 }
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.consent-tile .consent-error {
+  color: var(--bad);
+}
+.consent-mobile {
+  white-space: nowrap;
+}
 
 /* Follow-up history */
 .follow-list {
@@ -1442,4 +1454,27 @@ button.tick:focus-visible {
 .reminders-note {
   display: block;
   margin-top: 4px;
+}
+/* "Edit the letter" (0019 amendment 1): the case's letter as plain text, and its table as a grid of boxes. */
+.covering-letter-editor {
+  width: min(960px, calc(100% - 32px));
+}
+.covering-letter-text {
+  font-family: var(--font-letter);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.covering-letter-table-edit {
+  overflow-x: auto;
+}
+.covering-letter-table-edit .table {
+  min-width: 100%;
+}
+.covering-letter-table-edit .input {
+  min-width: 120px;
+}
+.covering-letter-heading {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }

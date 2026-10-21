@@ -186,7 +186,7 @@ export async function deliverCase(
       ...(closes ? { status: "CLOSED", reasonId: null, resumeOn: null } : {}),
     },
   });
-  const fieldJobsCancelled = await cancelBookedFieldJobs(tx, locked.id, actor, why);
+  const fieldJobsCancelled = await cancelBookedFieldJobs(tx, { enquiryId: locked.id }, actor, why);
   return { closes, fieldJobsCancelled };
 }
 

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { FormField } from '../../components/FormField'
+import { FormAlert, FormField } from '../../components/FormField'
 import { useDrawerGuard } from '../../components/useDrawerGuard'
 import { istToday } from '../../lib/format'
 import { codeChars, filtered, mobileChars } from '../../lib/inputFilters'
@@ -107,11 +107,7 @@ export function MemberFormDrawer({
             </div>
             {!isNew && <span className="hint">A renewed passport replaces the old number here; the old one stays in the history.</span>}
 
-            {message && (
-              <div className="alert alert-bad" role="alert">
-                {message}
-              </div>
-            )}
+            {message && <FormAlert>{message}</FormAlert>}
           </div>
 
           <div className="pad drawer-foot">

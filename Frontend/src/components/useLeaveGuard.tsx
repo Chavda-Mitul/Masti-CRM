@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useBlocker } from 'react-router'
-import { ConfirmDialog } from '../../../../components/ConfirmDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 
 /**
  * Unsaved work on a page asks before it's lost, as the checklist editor does: leaving by a link, the sidebar or

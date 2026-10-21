@@ -6,11 +6,14 @@ import { ME_KEY, useMe } from '../auth/useAuth'
 import { api, ApiError } from '../lib/api'
 import { departmentStyle } from '../lib/departments'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { FormAlert } from '../components/FormField'
 import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
 import { mobileChars } from '../lib/inputFilters'
 import { useDepartments } from '../lib/useDepartments'
+import { KIND_LABEL, shortDay } from './field/labels'
+import type { FieldJobKind } from './field/types'
 
 type AccessChoice = '' | 'STAFF_VIEW' | 'STAFF_EDIT' | 'HOD'
 
@@ -45,6 +48,71 @@ function errorText(err: unknown): string | null {
   return err instanceof ApiError ? err.message : 'Something went wrong. Please try again.'
 }
 
+/** A person's unfinished cases and, for a boy, his booked jobs (GET /users/:id/open-work). */
+interface OpenWork {
+  cases: { caseNo: string; status: string; department: { code: string; name: string }; client: { name: string } }[]
+  fieldJobs: { id: string; kind: FieldJobKind; day: string; caseNo: string; client: { name: string } }[]
+}
+
+function useOpenWork(userId: string | null) {
+  return useQuery({
+    queryKey: ['users', userId, 'open-work'],
+    queryFn: () => api<OpenWork>(`/users/${userId}/open-work`),
+    enabled: !!userId,
+  })
+}
+
+/**
+ * What saving the drawer takes from them (docs/decisions/0002-user-types.md amendment 1): the cases of departments
+ * where they won't edit any more, and a boy's booked jobs once he isn't field staff.
+ */
+function handedBack(work: OpenWork | undefined, type: UserType, access: Record<string, AccessChoice>): OpenWork {
+  if (!work) return { cases: [], fieldJobs: [] }
+  const keeps = (code: string) => type === 'HEAD' || (type === 'OFFICE' && (access[code] === 'STAFF_EDIT' || access[code] === 'HOD'))
+  return { cases: work.cases.filter((c) => !keeps(c.department.code)), fieldJobs: type === 'FIELD' ? [] : work.fieldJobs }
+}
+
+/** The first few, then "and N more". */
+function FewOf({ items }: { items: string[] }) {
+  const shown = items.slice(0, 5)
+  return (
+    <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+      {shown.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+      {items.length > shown.length && <li>and {items.length - shown.length} more</li>}
+    </ul>
+  )
+}
+
+/** Where their cases and jobs go when they're switched off or lose access: To assign, and cancelled. */
+function HandBackNotice({ name, work }: { name: string; work: OpenWork }) {
+  const { cases, fieldJobs } = work
+  if (cases.length === 0 && fieldJobs.length === 0) return null
+  return (
+    <div className="alert alert-warn" role="status" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {cases.length > 0 && (
+        <div>
+          <strong>
+            {cases.length === 1 ? `${name}'s unfinished case` : `${name}'s ${cases.length} unfinished cases`} will go to To assign
+          </strong>
+          , for the HOD to give to someone else.
+          <FewOf items={cases.map((c) => `${c.caseNo} · ${c.client.name}`)} />
+        </div>
+      )}
+      {fieldJobs.length > 0 && (
+        <div>
+          <strong>
+            {fieldJobs.length === 1 ? `${name}'s booked job` : `${name}'s ${fieldJobs.length} booked jobs`} will be cancelled
+          </strong>
+          . Book another boy on {fieldJobs.length === 1 ? 'its case' : 'each case'}.
+          <FewOf items={fieldJobs.map((j) => `${KIND_LABEL[j.kind]} · ${shortDay(j.day)} · ${j.caseNo} · ${j.client.name}`)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 
 export function UsersPage() {
@@ -56,6 +124,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | 'new' | null>(null)
   const [confirming, setConfirming] = useState<{ kind: 'deactivate' | 'reset'; user: User } | null>(null)
   const [secret, setSecret] = useState<{ name: string; password: string; reason: 'created' | 'reset' } | null>(null)
+  const work = useOpenWork(confirming?.kind === 'deactivate' ? confirming.user.id : null)
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -247,7 +316,16 @@ export function UsersPage() {
               ? setActive.mutate({ id: confirming.user.id, active: false })
               : resetPassword.mutate(confirming.user.id)
           }
-        />
+        >
+          {confirming.kind === 'deactivate' &&
+            (work.isPending ? (
+              <p className="muted small" style={{ margin: 0 }}>
+                Checking their cases and jobs…
+              </p>
+            ) : (
+              work.data && <HandBackNotice name={confirming.user.name} work={work.data} />
+            ))}
+        </ConfirmDialog>
       )}
 
       {secret && (
@@ -278,6 +356,7 @@ function UserDrawer({
   onSaved: (result: { user: User; tempPassword?: string }) => void
 }) {
   const { data: me } = useMe()
+  const work = useOpenWork(user?.id ?? null)
   const [name, setName] = useState(user?.name ?? '')
   const [mobile, setMobile] = useState(user?.mobile ? formatMobile(user.mobile) : '')
   const [email, setEmail] = useState(user?.email ?? '')
@@ -394,11 +473,9 @@ function UserDrawer({
               </div>
             )}
 
-            {save.error && (
-              <div className="alert alert-bad" role="alert">
-                {errorText(save.error)}
-              </div>
-            )}
+            {user && <HandBackNotice name={user.name} work={handedBack(work.data, type, access)} />}
+
+            {save.error && <FormAlert>{errorText(save.error)}</FormAlert>}
           </div>
 
           <div className="pad" style={{ borderTop: '1px solid var(--border-card)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

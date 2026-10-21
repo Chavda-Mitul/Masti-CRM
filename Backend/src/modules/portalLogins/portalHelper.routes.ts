@@ -6,7 +6,7 @@ import { redeemSchema } from "./portalLogins.schemas";
 import * as portalHelperService from "./portalHelper.service";
 
 /**
- * The one route with no session (docs/decisions/0024-portal-logins.md): the CRM helper, a Chrome extension, collects a
+ * A route with no session (docs/decisions/0024-portal-logins.md): the CRM helper, a Chrome extension, collects a
  * portal's ID and password with the one-time ticket the page gave it. Only the helper may ask: the browser sets the
  * Origin header to chrome-extension://<its id>, and no web page can fake that.
  */

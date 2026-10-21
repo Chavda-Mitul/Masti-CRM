@@ -99,6 +99,7 @@ export async function followUpDesk(query: FollowUpDeskQuery, user: UserWithDepar
         reason: row.reason,
         resumeOn: row.resumeOn ? fromDbDate(row.resumeOn) : null,
         whatFor: whatFor(row),
+        matured: !!row.visa?.maturedAt,
         lastContact: last ? { outcome: last.outcome.name, at: last.createdAt } : null,
         owner: row.owner,
         dueAt: row.dueAt,

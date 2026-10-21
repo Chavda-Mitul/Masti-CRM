@@ -19,6 +19,11 @@ router.get("/:id", async (req, res) => {
   res.json({ user: await usersService.getUser(req.params.id) });
 });
 
+/** Their unfinished cases and booked field jobs: what Deactivate, or taking away access, hands back (0002 amendment 1). */
+router.get("/:id/open-work", async (req, res) => {
+  res.json(await usersService.openWork(req.params.id));
+});
+
 router.post("/", async (req, res) => {
   const body = createUserSchema.parse(req.body);
   const { user, tempPassword } = await usersService.createUser(body, actorOf(req));

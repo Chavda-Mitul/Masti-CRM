@@ -36,7 +36,7 @@ Make new migrations with `prisma migrate diff` and remove its proposed `DROP IND
 
 ## Building new routes
 
-Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`). The one route without a session is `POST /api/portal-helper/redeem`, for the CRM helper only (0024); don't add another.
+Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`). Two routers have no session on purpose: `/api/public/consent`, the client's consent page (0022), and `POST /api/portal-helper/redeem`, for the CRM helper only (0024). Don't add another without a decision record.
 
 Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod, `generated/prisma/enums` and other `*.schemas.ts` files, so it stays shareable with the frontend). Fields several modules validate alike (PAN, GSTIN, the GST states, a person's name) live in `src/lib/shared.schemas.ts`, not in one module's schemas.
 

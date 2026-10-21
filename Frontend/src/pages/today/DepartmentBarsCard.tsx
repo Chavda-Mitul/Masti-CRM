@@ -21,6 +21,9 @@ export function DepartmentBarsCard({ day }: { day: TodaySummary | undefined }) {
       </div>
       {!day ? (
         <p className="muted">Loading…</p>
+      ) : rows.length === 0 ? (
+        // e.g. Accounts staff: Accounts gets a bar only when it has open cases.
+        <p className="muted">None of your departments takes enquiries.</p>
       ) : (
         rows.map((d) => {
           const style = departmentStyle(d.code)

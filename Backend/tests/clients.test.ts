@@ -139,6 +139,42 @@ describe("who sees which client (0004 amendment, 19 Oct 2026)", () => {
     expect((await staff.get(`/api/clients/${id}`)).status).toBe(200);
   });
 
+  it("keeps an HOD to the clients of the departments they head, and the clients nobody has a case for (amendment 4)", async () => {
+    const { c } = await staffCase();
+    const head = await headAgent();
+    const newcomer = await createClient(head, { mobile: "9825049999", name: "Sunita Patel" });
+    await createUser({ name: "Hetal", email: "hetal@masti.test", departments: [{ code: "HOLIDAYS", role: "HOD" }] });
+    await createUser({ name: "Nisha", email: "nisha@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const holidaysHod = await loginAs("hetal@masti.test");
+    const visaHod = await loginAs("nisha@masti.test");
+    const accounts = await accountsAgent();
+    const names = async (agent: Agent) => ((await agent.get("/api/clients")).body.clients as { name: string }[]).map((x) => x.name).sort();
+
+    // Rakesh Mehta has only a visa case; Sunita Patel, added on the Clients tab, has none yet.
+    expect(await names(holidaysHod)).toEqual(["Sunita Patel"]);
+    for (const agent of [visaHod, accounts, head]) expect(await names(agent)).toEqual(["Rakesh Mehta", "Sunita Patel"]);
+
+    const id = c.client.id;
+    for (const res of [await holidaysHod.get(`/api/clients/${id}`), await holidaysHod.get(`/api/clients/${id}/documents`)]) {
+      expect(res.status).toBe(403);
+      expect(res.body.message).toBe("This client isn't on any of your cases. Ask your HOD.");
+    }
+    expect((await holidaysHod.get(`/api/clients/${newcomer.id}`)).status).toBe(200);
+    expect((await visaHod.get(`/api/clients/${id}`)).status).toBe(200);
+    expect((await visaHod.get(`/api/clients/${id}/documents`)).status).toBe(200);
+
+    // Once the family has a holiday enquiry too (straight in the database: Holidays comes in Stage 2), she sees them.
+    const holidays = await prisma.department.findUniqueOrThrow({ where: { code: "HOLIDAYS" } });
+    const stage = await prisma.departmentStage.create({
+      data: { departmentId: holidays.id, flow: "HOLIDAYS", code: "ENQUIRY", name: "Enquiry", sortOrder: 1, statusLabel: "Enquiry saved", nextStepLabel: "Send a quote" },
+    });
+    const source = await prisma.enquirySource.findFirstOrThrow();
+    await prisma.enquiry.create({ data: { caseNo: "HOL-2026-0001", departmentId: holidays.id, clientId: id, sourceId: source.id, stageId: stage.id } });
+    expect(await names(holidaysHod)).toEqual(["Rakesh Mehta", "Sunita Patel"]);
+    expect((await holidaysHod.get(`/api/clients/${id}`)).status).toBe(200);
+    expect((await holidaysHod.get(`/api/clients/${id}/documents`)).status).toBe(200);
+  });
+
   it("follows the case: a colleague who doesn't own it is refused, and so is the owner once it's given away", async () => {
     const { staff, c } = await staffCase();
     await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });

@@ -187,6 +187,12 @@ Amended 21 Oct 2026 (project lead), on seeing the card in use:
     card now holds only the reminder line and its On | Off switch; the header button is the one way to postpone or
     cancel, and its dialog no longer takes a reason picked beforehand.
 
+Amended 21 Oct 2026 (project lead), with a leaver's work ([0002](0002-user-types.md) amendment 1):
+
+21. **"To assign" lists every unfinished case nobody owns**, not only open ones: a postponed case, and a cancelled one
+    whose passports are still to hand back, too. That's where a switched-off person's cases go. The HOD can give a
+    cancelled case to someone while its passports are still to hand back; a finished case stays closed.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):
@@ -407,7 +413,7 @@ All routes are under `requireAuth → requirePasswordChanged → requireUserType
 | `POST /api/enquiries/:caseNo/postpone` · `/cancel` · `/resume` | `{ reasonId?, resumeOn?, updatedAt }` |
 | `PUT /api/enquiries/:caseNo/owner` | `{ ownerId, updatedAt }`, HOD or Head |
 | `GET /api/enquiries/follow-ups?bucket=&scope=` | The desk: rows and the four counts |
-| `GET /api/enquiries?unassigned=true` | The list's To assign tab: open cases with no owner, in the departments the user is HOD of (the Head: all); 403 for anyone else (amendment 10) |
+| `GET /api/enquiries?unassigned=true` | The list's To assign tab: unfinished cases (open, postponed, or cancelled with passports to hand back) with no owner, in the departments the user is HOD of (the Head: all); 403 for anyone else (amendments 10 and 21) |
 | `GET /api/enquiries/to-assign` | `{ count }` for the sidebar; an HOD (their departments) or the Head (all), 403 otherwise |
 | `GET/POST/PATCH /api/masters/follow-up-outcomes` · `/follow-up-next-steps` · `/enquiry-reasons` | The masters. Anyone signed in reads; the Head or any HOD writes. |
 

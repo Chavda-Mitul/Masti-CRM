@@ -1,6 +1,6 @@
 # 0022 · The consent & liability form
 
-- **Status:** decided 21 Oct 2026 (project lead). Part 1 is built; parts 2 and 3 follow, one at a time.
+- **Status:** decided 21 Oct 2026 (project lead). Part 1 and part 2a are built; 2b and part 3 follow, one at a time.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -66,25 +66,88 @@ details or record a consent.
 - **On the case:** each named traveller's consent carries `details`: the fields, `filledAt`, `filledBy`, and the
   person's `personUpdatedAt`. The tile shows "Details filled · 21 Oct" or "Details not filled".
 
-## Part 2: the link, the client's page and "I agree" (next)
+## Part 2: the link, the client's page and "I agree"
 
-- **The link:**
-  - One per traveller, with a secret token (only its hash is stored).
-  - It expires after a set time (7 days ⚠️, a setting).
-  - It goes out as message 4 when staff finish a traveller's details and that person has no consent on file.
-- **Who it goes to:** the traveller's own number, else the main one. The outbox gains an optional recipient (today it
-  always uses the client's main number).
-- **The client's page:** `/consent/:token`, with no login.
-  - It sits outside the office-network check and is rate-limited.
-  - It shows the details and the wording, with an **I agree** button.
-- **The wording:** in Settings, versioned. It starts with my draft, marked as a draft.
-- **"I agree" records the `Consent`:**
-  - when, which wording version, and a copy of the details shown
-  - the IP and the phone's user agent
-  - the channel
-- **The card** shows "Link sent · date", then "Agreed · date".
-- **Message 4's draft** says "Before we apply", which is wrong because consent never blocks. It gets fixed before
-  Meta approval (M1).
+The project lead's choices for this part (21 Oct 2026):
+- **The link goes automatically when staff save a traveller's details**, if that person hasn't agreed yet.
+- **The link has no expiry.** It works until it is used, or until a newer link replaces it. (The earlier plan was 7
+  days ⚠️.)
+- **The page shows the person's details and the clauses.**
+- **The Head and the Visa HOD can change the wording.**
+
+It is built as two components: 2a, the link, the page and "I agree"; then 2b, the wording editor in Settings.
+
+### 2a: the link, the page and "I agree" (built 21 Oct 2026)
+
+- **The wording** (`ConsentWording`):
+  - Each version is a row that can never be changed or deleted (a database trigger), because agreements point at it.
+    The version in use is the newest one.
+  - Its body is not blank and at most 8,000 characters. It's plain text: a blank line starts a paragraph.
+  - It starts with my draft (`src/modules/consent/consent.seed.ts`), seeded with no author. The draft has:
+    - the authorisation to collect, keep and send the passport
+    - clause 1, the passport in transit
+    - clause 2, bookings before the visa
+    - that the details shown are correct
+    - that the consent holds for life, even if the passport changes
+- **The link** (`ConsentLink`), one open per person:
+  - Saving the details sends one when the person has no consent and no open link. Saving again sends nothing more.
+  - **Send the link again** on the traveller's tile replaces the open link with a new one, for a lost message or a
+    wrong number. The old link then says it was replaced by a newer one.
+    `POST /api/visa/cases/:caseNo/travellers/:travellerId/consent-link`, with part 1's rule.
+  - It records the person, the case that sent it, the number it went to, who sent it and when, and when it was
+    replaced or used.
+  - Database checks: never both used and replaced, at most one open link per person, and a valid mobile.
+  - Audited as `consent.link.sent`, with the client.
+- **The message** is message 4, `visa.consent_link` ("Consent form (I agree)"), sent through the outbox (0021
+  Amendment 2):
+  - It goes to the traveller's own number when one is saved, addressed to them. Otherwise it goes to the client's main
+    number, addressed to the client.
+  - The draft's "Before we apply" is gone, because consent never blocks the case. The link sits on a line of its own.
+  - Its words are still Masti's to approve (M1).
+- **The client's page:** `/consent#<token>`, with no login, made for a phone.
+  - It shows the person's name, "Details given to us" (the filled fields only), the wording, a tick box "I have read
+    this form" and **I agree**, with Masti's name, address and phones.
+  - Once agreed, the link shows "Thank you" with the date and time, and no details.
+  - A replaced or unknown link says so in plain words.
+  - If the wording changes while the client reads, "I agree" is refused (409 `WORDING_CHANGED`). The page loads the new
+    wording, and the client reads it and ticks again.
+  - The same goes for the details (409 `DETAILS_CHANGED`) when staff change them meanwhile. The page sends back the
+    fingerprint (a SHA-256) of the details it showed, so the record always holds what the client read.
+- **"I agree" records the `Consent`** in one transaction:
+  - It records when, which wording version, the link (and so the number it went to), a copy of the details exactly as
+    shown, and the IP and the phone's user agent.
+  - The link becomes used.
+  - It's audited as `consent.agree`, with the client and no staff member.
+  - Agreeing again, or opening any of the person's links later, just shows the thank-you.
+- **The traveller's tile** shows "Details filled · 21 Oct" and "Link sent · 21 Oct · to +91 98250 41234", with **Send
+  the link again**. Once the client agrees, it shows "Agreed · 21 Oct".
+
+**Keeping the link safe:**
+- **The secret is after the `#`.** Browsers never send that part to a server, so neither the web server's log nor ours
+  ever holds it. The page posts it in the request body.
+  - With `WHATSAPP_PROVIDER=log`, the message itself goes into the server log. When live, that copy hides the part
+    after `#`. On a laptop it stays whole, because there the log is the only place to open the link.
+- **Only its SHA-256 hash is stored**, as with session tokens. The token is 32 random bytes. The outbox holds the whole
+  link only while message 4 waits to go. Once it's sent, fails or is skipped, the stored message keeps it hidden
+  (`/consent#…`), in its words and its values.
+- **Staff can't open it.** The "Sent to the client" box shows the message with the token hidden (`/consent#…`), so
+  nobody in the office can agree for the client.
+- **It's rate-limited:** 60 requests per 15 minutes per IP on `/api/public/consent`. It sits outside the office-network
+  rule, which binds staff only.
+- **It never expires** (the lead's choice). A link that leaks is stopped with **Send the link again**.
+- **The page shows Masti's name, address and phones only**, never its PAN, GSTIN or bank details.
+- **`PUBLIC_APP_URL`** is the address in the link. When live it's Masti's own https address, and the server warns if
+  it isn't https. A phone can't open `localhost`, so in development open the link on the laptop.
+
+### 2b: the wording editor in Settings (next)
+
+- **Settings → Masters → Consent wording** shows the version in use, since when and by whom, with a "Draft" note while
+  it's mine.
+  - **Change the wording** saves a new version, used from then on.
+  - Earlier versions can be viewed.
+- **The API:** `GET` for anyone with Visa view; `POST` for the Head or the Visa HOD only.
+  - It's refused if someone changed the wording first (409).
+  - It's audited as `consent.wording.add`.
 
 ## Part 3: the record and the flags (after part 2)
 

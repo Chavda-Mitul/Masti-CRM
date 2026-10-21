@@ -4,7 +4,22 @@ import { describe, expect, it } from "vitest";
 import { normaliseMobile } from "../src/lib/contact";
 import { PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN } from "../src/lib/shared.schemas";
-import { LETTER_BLANKS, MAX_LETTER_CHARS, MAX_LETTER_COUNTRIES, normaliseWording, wordingProblem } from "../src/modules/coveringLetters/coveringLetters.schemas";
+import {
+  LETTER_BLANKS,
+  MARK_CLOSE,
+  MARK_OPEN,
+  MAX_LETTER_CELL_CHARS,
+  MAX_LETTER_CHARS,
+  MAX_LETTER_COLUMNS,
+  MAX_LETTER_COUNTRIES,
+  MAX_LETTER_HEADING_CHARS,
+  MAX_LETTER_PART_CHARS,
+  MAX_LETTER_ROWS,
+  marksIn,
+  normaliseWording,
+  wordingProblem,
+  type LetterText,
+} from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
 import { PortalLoginOutcome } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
@@ -18,6 +33,7 @@ import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportVal
 
 const frontendSchemas = resolve(__dirname, "../../Frontend/src/pages/clients/schemas.ts");
 const frontendMasterSchemas = resolve(__dirname, "../../Frontend/src/pages/settings/masters/schemas.ts");
+const frontendLetter = resolve(__dirname, "../../Frontend/src/lib/letter.ts");
 const frontendInstalled = existsSync(resolve(__dirname, "../../Frontend/node_modules/zod"));
 
 interface FrontendRules {
@@ -88,6 +104,33 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       expect(frontend.normaliseWording(body), body).toBe(normaliseWording(body));
     }
   });
+  it("finds a case letter's marks and limits it the same way (0019 amendment 1)", async () => {
+    const frontend = (await import(frontendLetter)) as {
+      MARK_OPEN: string;
+      MARK_CLOSE: string;
+      MAX_LETTER_PART_CHARS: number;
+      MAX_LETTER_COLUMNS: number;
+      MAX_LETTER_ROWS: number;
+      MAX_LETTER_HEADING_CHARS: number;
+      MAX_LETTER_CELL_CHARS: number;
+      marksIn(letter: LetterText): string[];
+    };
+    expect([frontend.MARK_OPEN, frontend.MARK_CLOSE]).toEqual([MARK_OPEN, MARK_CLOSE]);
+    expect(frontend.MAX_LETTER_PART_CHARS).toBe(MAX_LETTER_PART_CHARS);
+    expect(frontend.MAX_LETTER_COLUMNS).toBe(MAX_LETTER_COLUMNS);
+    expect(frontend.MAX_LETTER_ROWS).toBe(MAX_LETTER_ROWS);
+    expect(frontend.MAX_LETTER_HEADING_CHARS).toBe(MAX_LETTER_HEADING_CHARS);
+    expect(frontend.MAX_LETTER_CELL_CHARS).toBe(MAX_LETTER_CELL_CHARS);
+    const letters: LetterText[] = [
+      { top: "We stay at ⟦the hotel stay⟧ for ⟦the number of days⟧ days.", table: null, bottom: "" },
+      { top: "Hotel [Opera], Paris", table: { columns: ["Name", "⟦heading⟧"], rows: [["⟦Adult 2's name⟧", "x⟧"]] }, bottom: "⟦half" },
+      { top: "⟦ ⟧ and ⟦the hotel stay⟧ twice: ⟦the hotel stay⟧", table: null, bottom: "" },
+      { top: "⟦a\nb⟧", table: null, bottom: "" },
+      { top: "", table: null, bottom: "" },
+    ];
+    for (const letter of letters) expect(frontend.marksIn(letter), JSON.stringify(letter)).toEqual(marksIn(letter));
+  });
+
   it("checks the visa timings and the warnings' values the same way (Settings → Visa)", async () => {
     type Check = { safeParse(value: unknown): { success: boolean } };
     const frontend = (await import(frontendMasterSchemas)) as { visaTimingsFormSchema: { shape: Record<string, Check> } };

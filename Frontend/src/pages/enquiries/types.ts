@@ -1,6 +1,6 @@
 // API shapes for the enquiry screens. Mirrors Backend/src/modules/enquiries and Backend/src/modules/visa.
 
-import type { LetterTraveller } from '../../components/LetterPaper'
+import type { LetterText } from '../../lib/letter'
 import type { ScanType } from '../clients/scanFiles'
 
 export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
@@ -40,6 +40,8 @@ export interface EnquiryRow {
   stage: StageRef
   /** This case's next step: the step's own label, except where the case decides it ("Mark received" in transit). */
   nextStep: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   source: { code: string; name: string }
   origin: EnquiryOrigin
   owner: PersonRef | null
@@ -242,7 +244,8 @@ export interface ConsentDetailsBody {
 /** Flagged until the client agrees through the "I agree" link (0022 part 2). UNLINKED: the traveller isn't a family member yet. */
 export type CaseConsent =
   | { state: 'UNLINKED' }
-  | { state: 'NONE'; details: ConsentDetails }
+  /** link: the person's open "I agree" link (0022 part 2), sent when the details were saved; null when none is open. */
+  | { state: 'NONE'; details: ConsentDetails; link: { sentAt: string; toMobile: string } | null }
   | { state: 'ON_FILE'; agreedAt: string; details: ConsentDetails }
 
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
@@ -775,6 +778,8 @@ export interface FollowUpDeskRow {
   resumeOn: string | null
   /** "8 of 11 documents pending", or the stage's next step. */
   whatFor: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   lastContact: { outcome: string; at: string } | null
   owner: PersonRef | null
   dueAt: string | null
@@ -836,37 +841,38 @@ export interface LogFollowUpBody {
 export interface CoveringLetterMade {
   formatId: number
   formatName: string
+  /** The wording its text started from: sent again when it's made again from this text. */
   versionId: number
   effectiveFrom: string
   madeAt: string
   madeBy: { id: string; name: string } | null
+  /** The letter as made (0019 amendment 1): what every print shows. */
+  letter: LetterText
 }
 
 /** GET /api/visa/cases/:caseNo/covering-letter: the card's view. */
 export interface CoveringLetterView {
   /** The letters that fit the case, in their order; the first is picked when nothing else is. */
   letters: { id: number; name: string; sample: boolean }[]
-  /** One letter filled in from the case today; null when none fits. A blank with no value is listed in missing. */
+  /**
+   * One letter drafted from the case today; null when none fits. What the case lacks is a ⟦mark⟧ in the draft, for staff
+   * to type over, and is listed in missing so it can be added to the case too.
+   */
   selected: {
     formatId: number
     name: string
     versionId: number
     effectiveFrom: string
     sample: boolean
-    body: string
-    values: Record<string, string>
-    travellers: LetterTraveller[]
+    draft: LetterText
     missing: string[]
   } | null
   made: CoveringLetterMade | null
   fits: { visaType: string; country: string; travellers: number }
 }
 
-/** GET …/covering-letter/print: the letter made, as it was filled in, and the space to leave for the letterhead. */
+/** GET …/covering-letter/print: the letter made, as it was made, and the space to leave for the letterhead. */
 export interface CoveringLetterPrint extends CoveringLetterMade {
   caseNo: string
-  body: string
-  values: Record<string, string>
-  travellers: LetterTraveller[]
   letterheadMm: number
 }

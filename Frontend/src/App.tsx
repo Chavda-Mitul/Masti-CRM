@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ClientDetailPage } from './pages/clients/ClientDetailPage'
 import { ClientDirectoryPage } from './pages/clients/ClientDirectoryPage'
+import { ConsentPage } from './pages/consent/ConsentPage'
 import { EnquiriesPage } from './pages/enquiries/EnquiriesPage'
 import { FieldRunPage } from './pages/field/FieldRunPage'
 import { FieldStopPage } from './pages/field/FieldStopPage'
@@ -43,6 +44,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* The client's consent form, opened from the WhatsApp link: no login (docs/decisions/0022-consent-form.md). */}
+      <Route path="/consent" element={<ConsentPage />} />
       <Route
         path="/change-password"
         element={

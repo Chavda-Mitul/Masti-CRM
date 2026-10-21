@@ -28,6 +28,15 @@ export function can(user: UserWithDepartments, departmentCode: DepartmentCode, a
   return membership ? grants(membership, access) : false;
 }
 
+/**
+ * May own a case of this department (be given it, keep it): EDIT there, or the Head. Someone who loses this (switched
+ * off, taken out of the department, made view-only) hands their unfinished cases back (docs/decisions/0002-user-types.md
+ * amendment 1).
+ */
+export function canOwnCases(user: UserWithDepartments, departmentCode: DepartmentCode): boolean {
+  return can(user, departmentCode, "EDIT");
+}
+
 /** EDIT in at least one active department (or Head). */
 export function canEditAnyDepartment(user: UserWithDepartments): boolean {
   if (!user.isActive) return false;

@@ -1,4 +1,5 @@
 import type { MessageTemplate, OutboundMessage } from "../../../generated/prisma/client";
+import { maskConsentLinks } from "../consent/consentToken";
 
 // A message to a client as the browser sees it (docs/decisions/0021-whatsapp-outbox.md, the "Sent to the client"
 // card): what it said, where it has got to, and why it failed. The sending details (the provider's id, the tries, the
@@ -8,7 +9,8 @@ export function toMessageDto(row: OutboundMessage & { template: Pick<MessageTemp
   return {
     id: row.id,
     title: row.template.name,
-    body: row.body,
+    // A consent link's secret is the client's alone: staff see the link without it (0022).
+    body: maskConsentLinks(row.body),
     status: row.status,
     error: row.error,
     createdAt: row.createdAt,

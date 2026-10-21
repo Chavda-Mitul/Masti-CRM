@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
 import { canEditVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
+import { useLeaveGuard } from '../../../../components/useLeaveGuard'
 import { applyServerIssues, errorBody, errorText } from '../../../../lib/apiErrors'
 import { istToday } from '../../../../lib/format'
 import { useToast } from '../../../../lib/toast'
@@ -18,7 +19,6 @@ import {
 import { DETAILS_FIELDS, detailsBody, detailsDefaults, WORDING_FIELDS } from './forms'
 import { STARTING_WORDING } from './labels'
 import { LetterDetailsFields } from './LetterDetailsFields'
-import { useLeaveGuard } from './useLeaveGuard'
 import { WordingFields } from './WordingFields'
 
 /** Add a covering letter: which cases it fits, and its first wording. The Visa HOD or the Head only. */

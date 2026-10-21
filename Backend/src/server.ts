@@ -4,6 +4,7 @@ import { prisma } from "./config/prisma";
 import { startJobs, stopJobs, stopWorkers } from "./lib/jobs";
 import { logger } from "./lib/logger";
 import { deleteExpiredSessions } from "./modules/auth/session";
+import { seedConsentWording } from "./modules/consent/consent.seed";
 import { startMessages } from "./modules/messages/messages.worker";
 
 /** How often expired sessions are swept out of the database. */
@@ -25,6 +26,8 @@ async function main() {
   // The job queue first (docs/decisions/0021-whatsapp-outbox.md): a save may queue a job, so requests wait for it.
   await startJobs();
   await startMessages();
+  // The consent form needs a wording: the draft, into a database with none (docs/decisions/0022-consent-form.md).
+  await seedConsentWording(prisma);
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server running on http://localhost:${env.PORT}`);

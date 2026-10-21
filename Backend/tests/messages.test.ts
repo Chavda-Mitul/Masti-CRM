@@ -3,7 +3,7 @@ import { env } from "../src/config/env";
 import { boss, QUEUES, stopWorkers } from "../src/lib/jobs";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppStatus } from "../src/lib/whatsapp";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { seedMessageTemplates, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
+import { seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
 import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage } from "../src/modules/messages/messages.service";
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
@@ -294,6 +294,71 @@ describe("sending", () => {
     await deliverMessage(m.id, { lastTry: false });
     expect(stub.provider!.send).not.toHaveBeenCalled();
     expect(await reload(m.id)).toMatchObject({ status: "FAILED", error: "It couldn't go within 24 hours, so it wasn't sent at all." });
+  });
+});
+
+describe("a consent link's secret (0022)", () => {
+  const SECRET = "abcDEF123_-xyz";
+  const LINK = `http://localhost:5173/consent#${SECRET}`;
+  const HIDDEN = "http://localhost:5173/consent#…";
+
+  /** Message 4 carrying a consent link, queued as saving a traveller's details queues it. */
+  async function linkQueued(key: string) {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    await prisma.$transaction(async (tx) => {
+      const basics = await visaMessageBasics(tx, c.id);
+      await queueMessage(tx, {
+        template: VISA_CONSENT_LINK,
+        clientId: basics.clientId,
+        enquiryId: c.id,
+        key,
+        variables: { ...basics.variables, recipient_name: "Rakesh Mehta", traveller_name: "Rakesh Mehta", consent_link: LINK, office_phone: "0261 400 0000" },
+      });
+    });
+    return prisma.outboundMessage.findUniqueOrThrow({ where: { idempotencyKey: key } });
+  }
+
+  const keepsNoSecret = async (id: string) => {
+    const row = await reload(id);
+    expect(JSON.stringify(row)).not.toContain(SECRET);
+    return row;
+  };
+
+  it("goes whole to the client, and the sent message keeps the link without it", async () => {
+    const m = await linkQueued("link:1");
+    expect(m.body).toContain(LINK);
+    await deliverMessage(m.id, { lastTry: false });
+
+    expect(stub.provider!.send.mock.calls[0]![0].body).toContain(LINK);
+    const after = await keepsNoSecret(m.id);
+    expect(after.status).toBe("SENT");
+    expect(after.body).toContain(`"I agree":\n${HIDDEN}\n`);
+    expect(after.variables).toMatchObject({ consent_link: HIDDEN, traveller_name: "Rakesh Mehta" });
+  });
+
+  it("stays while the message may still go, and goes once it won't: failed, skipped, given up or unfillable", async () => {
+    stub.provider!.send.mockRejectedValueOnce(new WhatsAppError("Twilio error 20500: busy", true));
+    const failed = await linkQueued("link:failed");
+    await expect(deliverMessage(failed.id, { lastTry: false })).rejects.toThrow("busy");
+    expect((await reload(failed.id)).body).toContain(LINK);
+    stub.provider!.send.mockRejectedValueOnce(new WhatsAppError("That number isn't on WhatsApp, or isn't written correctly.", false));
+    await deliverMessage(failed.id, { lastTry: false });
+    expect((await keepsNoSecret(failed.id)).status).toBe("FAILED");
+
+    const givenUp = await linkQueued("link:given-up");
+    await giveUpMessage(givenUp.id);
+    expect((await keepsNoSecret(givenUp.id)).status).toBe("FAILED");
+
+    const skipped = await linkQueued("link:skipped");
+    await prisma.messageTemplate.update({ where: { code: VISA_CONSENT_LINK }, data: { isActive: false } });
+    await deliverMessage(skipped.id, { lastTry: false });
+    expect((await keepsNoSecret(skipped.id)).status).toBe("SKIPPED");
+
+    await prisma.messageTemplate.update({ where: { code: VISA_CONSENT_LINK }, data: { body: "{{consent_link}} {{unknown}}" } });
+    const unfillable = await linkQueued("link:unfillable");
+    expect(unfillable.status).toBe("FAILED");
+    expect((await keepsNoSecret(unfillable.id)).variables).toMatchObject({ consent_link: HIDDEN });
   });
 });
 

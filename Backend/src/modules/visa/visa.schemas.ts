@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DocketKind, DocumentArrival, DocumentCheck, DocumentStatus, EntryType, InvoiceTaxType, ReceivedAs, StickerCheck, VisaOutcome } from "../../../generated/prisma/enums";
 import { confirmWarnings, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, timeOfDay } from "../../lib/shared.schemas";
+import { letterTextSchema } from "../coveringLetters/coveringLetters.schemas";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 
@@ -210,8 +211,15 @@ export const updateVisaSettingsSchema = visaSettingsSchema.partial();
 /** The covering letter to fill in on the case's card (docs/decisions/0019-covering-letters.md): one that fits, or the default. */
 export const coveringLetterQuerySchema = z.object({ formatId: z.coerce.number().int().positive().optional() });
 
-/** "Make the letter" (0019 Decision 10): with one of the covering letters that fit the case. */
-export const makeCoveringLetterSchema = z.object({ formatId: z.number("Pick a covering letter.").int().positive("Pick a covering letter.") });
+/**
+ * "Make the letter" (0019 Decision 10, amendment 1): one of the covering letters that fit the case, the wording its text
+ * started from (today's, or the made letter's), and the text as staff left it.
+ */
+export const makeCoveringLetterSchema = z.object({
+  formatId: z.number("Pick a covering letter.").int().positive("Pick a covering letter."),
+  versionId: z.number("Reload and try again.").int().positive("Reload and try again."),
+  letter: letterTextSchema,
+});
 
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
 export const createVisaCaseSchema = z

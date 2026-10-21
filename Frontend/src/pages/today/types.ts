@@ -1,7 +1,7 @@
 import type { EnquiryStatus, PersonRef } from '../enquiries/types'
 import type { NoticeFeedItem } from '../notices/types'
 
-// The Today page (docs/decisions/0017-today-dashboard.md): GET /api/today and the "today" setting.
+// The Today page (docs/decisions/0017-today-dashboard.md): GET /api/today.
 
 export type TodayScopeKind = 'ALL' | 'DEPARTMENTS' | 'MINE'
 
@@ -21,6 +21,8 @@ export interface UpNextRow {
   toHandBack: boolean
   /** "8 of 11 documents pending", or the case's next step. */
   whatFor: string
+  /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
+  matured: boolean
   owner: PersonRef | null
   dueAt: string
 }
@@ -42,9 +44,4 @@ export interface TodaySummary {
   openByDepartment: { code: string; name: string; count: number; mine: boolean }[]
   /** The notice card (Decision 11): the latest 3 of their departments' notices and the holiday entries still new. */
   notices: NoticeFeedItem[]
-}
-
-export interface TodaySettings {
-  /** "HH:mm": New enquiries count from this time on the previous office day. */
-  newSinceAt: string
 }

@@ -70,6 +70,15 @@ export function toHandBack(e: HeldFields & { visa: { docket: { dispatchedAt: Dat
 }
 
 /**
+ * A case someone must still own: open, postponed (it comes back), or cancelled with passports still to hand back.
+ * "To assign" lists those nobody owns: a matured case waiting for its processor, or a leaver's
+ * (docs/decisions/0002-user-types.md amendment 1).
+ */
+export const UNFINISHED: Prisma.EnquiryWhereInput = {
+  OR: [{ status: { in: ["OPEN", "POSTPONED"] } }, { status: "CANCELLED", ...TO_HAND_BACK }],
+};
+
+/**
  * The enquiries this user may see, among `departments` (the ones they can VIEW). An unowned enquiry (e.g. matured,
  * waiting for a processor) is seen by the HOD, the Head and view-only users, not by other staff.
  */
