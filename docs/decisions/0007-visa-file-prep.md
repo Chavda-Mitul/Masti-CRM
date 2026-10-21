@@ -149,7 +149,8 @@ The details the forms and the covering letter will need, "captured as the docume
 - **Settled while building:**
   - **Pre-filled means stored.** A new case with an exact travel date starts with `departOn` set to it, and the
     migration did the same for existing cases. So "File ready" reads what is stored, and nobody has to re-save it.
-  - **A newly set travelling out can't be in the past,** as at intake. Coming back is checked against travelling out
+  - **A newly set travelling out can't be in the past,** as at intake, and neither can a newly set coming back, even
+    with no travelling out yet (fixed 21 Oct 2026, from the visa test). Coming back is checked against travelling out
     as stored, so sending one date alone is checked too.
   - **Editable at Enquiry as well.** Like any Step 2 change, the first trip save at the Enquiry stage moves the case
     to Documents. After File preparation the answer is "Trip details can't change once the file is ready."
@@ -351,7 +352,8 @@ return changes (0006 amendment 18).
 
 - the stage moves to **Docket & dispatch**
 - the processor stays the owner (Step 4 is still processing)
-- the case is due now
+- the case is due the next open office day at 11:00 ⚠️, the setting `visa.dispatchCheck` (Settings → Visa). *Amended
+  21 Oct 2026 (project lead, from the visa test):* it was due "now", so it showed late the moment it was ready.
 - `fileReadyAt` and `fileReadyById` are stamped and audited
 - Step 3 becomes read-only: the checks, the travellers' numbers and appointments, the vendor and the file
 

@@ -3,7 +3,7 @@ import type { EnquiryOrigin } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { addDays, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
-import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
@@ -38,6 +38,7 @@ import {
   COVERING_LETTER_KEY,
   PASSPORT_VALIDITY_KEY,
   ASSIGN_CHECK_KEY,
+  DISPATCH_CHECK_KEY,
   HANDOVER_CHECK_KEY,
   HANDOVER_PHOTO_KEY,
   COLLECTION_CHECK_KEY,
@@ -107,6 +108,17 @@ export function formatCaseNo(prefix: string, year: number, value: number) {
 }
 
 /**
+ * The case a repeated Save made (the same Idempotency-Key), returned to whoever saved it. Anyone else's key is refused
+ * rather than answered with that case, which they may not be allowed to see (fixed 21 Oct 2026, from the visa test).
+ */
+async function replayOf(idempotencyKey: string, actor: Actor) {
+  const existing = await prisma.enquiry.findUnique({ where: { idempotencyKey }, select: { id: true, createdById: true } });
+  if (!existing) return null;
+  if (existing.createdById !== actor.user.id) throw conflict("This form was already saved by someone else. Reload the page and save again.");
+  return { case: await getVisaCaseById(existing.id), clientCreated: false, replayed: true };
+}
+
+/**
  * Finds or creates the client, issues the case number, creates the enquiry, the visa case and its placeholder travellers,
  * and copies the checklist onto each traveller: all in one transaction, audited as visa.case.create.
  * The WhatsApp bot and website forms will call this with their own origin.
@@ -114,8 +126,8 @@ export function formatCaseNo(prefix: string, year: number, value: number) {
  */
 export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: EnquiryOrigin, actor: Actor, idempotencyKey?: string) {
   if (idempotencyKey) {
-    const existing = await prisma.enquiry.findUnique({ where: { idempotencyKey }, select: { id: true } });
-    if (existing) return { case: await getVisaCaseById(existing.id), clientCreated: false, replayed: true };
+    const replayed = await replayOf(idempotencyKey, actor);
+    if (replayed) return replayed;
   }
 
   const mobile = requireMobile(input.mobile);
@@ -247,8 +259,8 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
     if (!isUniqueViolation(err)) throw err;
     // A double-clicked Save that raced past the check above: return the case the first click made.
     if (idempotencyKey) {
-      const existing = await prisma.enquiry.findUnique({ where: { idempotencyKey }, select: { id: true } });
-      if (existing) return { case: await getVisaCaseById(existing.id), clientCreated: false, replayed: true };
+      const replayed = await replayOf(idempotencyKey, actor);
+      if (replayed) return replayed;
     }
     // Two intakes created the same new client at once; this time the client exists.
     saved = await save();
@@ -338,6 +350,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: PASSPORTS_BACK_CHECK_KEY, before: before.passportsBackCheck, after: input.passportsBackCheck },
     { key: ARRIVAL_CHECK_KEY, before: before.arrivalCheck, after: input.arrivalCheck },
     { key: ASSIGN_CHECK_KEY, before: before.assignCheck, after: input.assignCheck },
+    { key: DISPATCH_CHECK_KEY, before: before.dispatchCheck, after: input.dispatchCheck },
     { key: HANDOVER_CHECK_KEY, before: before.handoverCheck, after: input.handoverCheck },
     { key: HANDOVER_PHOTO_KEY, before: before.handoverPhoto, after: input.handoverPhoto },
     { key: COLLECTION_CHECK_KEY, before: before.collectionCheck, after: input.collectionCheck },

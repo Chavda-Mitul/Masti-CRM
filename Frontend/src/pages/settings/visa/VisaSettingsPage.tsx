@@ -17,6 +17,7 @@ type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passp
 const CHECKS: { key: TimingKey; what: string; from: string }[] = [
   { key: 'firstFollowUp', what: 'First follow-up', from: 'after the enquiry is saved' },
   { key: 'assignCheck', what: 'Give a matured case to a processor', from: 'after the documents are marked complete (the HOD’s)' },
+  { key: 'dispatchCheck', what: 'Put a ready file in a docket and dispatch it', from: 'after File ready' },
   { key: 'vendorConfirm', what: 'Did the vendor get the docket?', from: 'after dispatch' },
   { key: 'onlineCheck', what: 'Check the e-visa portal', from: 'after Submitted online' },
   { key: 'submissionCheck', what: 'Get the file number from the vendor', from: 'after Vendor got it, when no appointment is still to come' },

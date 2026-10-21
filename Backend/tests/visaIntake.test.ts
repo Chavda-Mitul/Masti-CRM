@@ -204,6 +204,18 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(next.body.case.caseNo).toBe(`VS-${year + 1}-0001`);
   });
 
+  it("refuses someone else's Idempotency-Key rather than answering with their case (fixed 21 Oct 2026)", async () => {
+    const staff = await visaStaff();
+    const payload = await body();
+    expect((await staff.post("/api/visa/cases").set("Idempotency-Key", "form-aarti-0001").send(payload)).status).toBe(201);
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    const res = await neha.post("/api/visa/cases").set("Idempotency-Key", "form-aarti-0001").send(payload);
+    expect(res.status).toBe(409);
+    expect(res.body).not.toHaveProperty("case");
+    expect(await prisma.enquiry.count()).toBe(1);
+  });
+
   it("returns the same case for a repeated Idempotency-Key", async () => {
     const staff = await visaStaff();
     const payload = await body();
@@ -344,6 +356,7 @@ describe("intake dropdowns and settings", () => {
       passportsBackCheck: { afterDays: 1, at: "11:00" },
       arrivalCheck: { afterDays: 0, at: "11:00" },
       assignCheck: { afterDays: 1, at: "11:00" },
+      dispatchCheck: { afterDays: 1, at: "11:00" },
       handoverCheck: { afterDays: 1, at: "11:00" },
       handoverPhoto: { maxMb: 5 },
       collectionCheck: { daysBefore: 1, at: "11:00" },

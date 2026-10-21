@@ -13,6 +13,7 @@ import type {
   ClientOptions,
   ClientPhone,
   ClientProfile,
+  ConsentRecord,
   CreateClientBody,
   MemberBody,
   UpdateClientBody,
@@ -32,6 +33,7 @@ export const clientKeys = {
   detail: (id: string) => ['clients', 'detail', id] as const,
   notes: (id: string) => ['clients', 'notes', id] as const,
   documents: (id: string) => ['clients', 'documents', id] as const,
+  consentRecord: (id: string, memberId: string) => ['clients', 'consent-record', id, memberId] as const,
   options: ['clients', 'options'] as const,
 }
 
@@ -197,6 +199,34 @@ export function useArchiveMember(clientId: string) {
   return useMutation({
     mutationFn: async (memberId: string) =>
       (await api<{ member: ClientMember }>(`/clients/${clientId}/members/${memberId}/archive`, { method: 'POST' })).member,
+    onSuccess: invalidate,
+  })
+}
+
+/** The printable record of a person's consent (0022 part 3b), for anyone who can see the client. */
+export function useConsentRecord(clientId: string, memberId: string) {
+  return useQuery({
+    queryKey: clientKeys.consentRecord(clientId, memberId),
+    queryFn: async () => (await api<{ record: ConsentRecord }>(`/clients/${clientId}/members/${memberId}/consent`)).record,
+  })
+}
+
+/** A consent signed on paper before the CRM, marked on file with the year (the Head or the Visa HOD; 0022 part 3). */
+export function useMarkPaperConsent(clientId: string) {
+  const invalidate = useInvalidateClient(clientId)
+  return useMutation({
+    mutationFn: async ({ memberId, year }: { memberId: string; year: number }) =>
+      (await api<{ member: ClientMember }>(`/clients/${clientId}/members/${memberId}/paper-consent`, { method: 'POST', body: { year } })).member,
+    onSuccess: invalidate,
+  })
+}
+
+/** Takes a mistaken paper mark off: the person can then be sent the "I agree" link. */
+export function useRemovePaperConsent(clientId: string) {
+  const invalidate = useInvalidateClient(clientId)
+  return useMutation({
+    mutationFn: async (memberId: string) =>
+      (await api<{ member: ClientMember }>(`/clients/${clientId}/members/${memberId}/paper-consent`, { method: 'DELETE' })).member,
     onSuccess: invalidate,
   })
 }

@@ -28,3 +28,10 @@ export const addConsentWordingSchema = z.object({
 });
 
 export type AddConsentWordingInput = z.infer<typeof addConsentWordingSchema>;
+
+/** A consent signed on paper before the CRM (part 3): the year it was signed. Not a year still to come (the service). */
+export const paperConsentSchema = z.object({
+  year: z.number("Pick the year it was signed.").int("Pick the year it was signed.").min(1990, "Pick 1990 or later.").max(2100, "Pick the year it was signed."),
+});
+
+export type PaperConsentInput = z.infer<typeof paperConsentSchema>;

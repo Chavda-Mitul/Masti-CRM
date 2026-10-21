@@ -1005,9 +1005,6 @@
   margin-top: 2px;
   color: var(--text-3);
 }
-.consent-fill {
-  margin-top: 8px;
-}
 .consent-actions {
   display: flex;
   flex-wrap: wrap;

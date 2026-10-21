@@ -48,8 +48,8 @@ export function formDetailsOf(member: ClientMember & { relation: Relation }) {
 /** The details' fingerprint: "I agree" sends back the one the page showed, so staff changing them meanwhile is caught. */
 const detailsHashOf = (details: ReturnType<typeof formDetailsOf>) => createHash("sha256").update(JSON.stringify(details)).digest("hex");
 
-/** Masti's name, address and phones for the page: nothing of its tax or bank details. */
-async function companyForPage() {
+/** Masti's name, address and phones for the page (and the printed record): nothing of its tax or bank details. */
+export async function companyForPage() {
   const c = await getCompanyDetails();
   return { name: c.name, address: c.address, phone: c.phone, phone2: c.phone2 };
 }

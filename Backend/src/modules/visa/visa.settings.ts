@@ -17,6 +17,7 @@ import {
   passportsBackCheckSchema,
   arrivalCheckSchema,
   assignCheckSchema,
+  dispatchCheckSchema,
   handoverCheckSchema,
   handoverPhotoSchema,
   collectionCheckSchema,
@@ -43,6 +44,7 @@ import {
   type PassportsBackCheckSetting,
   type ArrivalCheckSetting,
   type AssignCheckSetting,
+  type DispatchCheckSetting,
   type HandoverCheckSetting,
   type HandoverPhotoSetting,
   type VendorConfirmSetting,
@@ -64,6 +66,7 @@ export const RECALL_RETURN_KEY = "visa.recallReturn";
 export const PASSPORTS_BACK_CHECK_KEY = "visa.passportsBackCheck";
 export const ARRIVAL_CHECK_KEY = "visa.arrivalCheck";
 export const ASSIGN_CHECK_KEY = "visa.assignCheck";
+export const DISPATCH_CHECK_KEY = "visa.dispatchCheck";
 export const HANDOVER_CHECK_KEY = "visa.handoverCheck";
 export const HANDOVER_PHOTO_KEY = "visa.handoverPhoto";
 export const COLLECTION_CHECK_KEY = "visa.collectionCheck";
@@ -115,6 +118,8 @@ export const DEFAULT_ARRIVAL_CHECK: ArrivalCheckSetting = { afterDays: 0, at: "1
 
 /** ⚠️ 0006, amended 16 Oct 2026: a matured case is due with the Visa HOD to assign the next office day at 11:00. */
 export const DEFAULT_ASSIGN_CHECK: AssignCheckSetting = { afterDays: 1, at: "11:00" };
+/** ⚠️ 0007, amended 21 Oct 2026: a file marked File ready is due for the docket and dispatch the next office day at 11:00. */
+export const DEFAULT_DISPATCH_CHECK: DispatchCheckSetting = { afterDays: 1, at: "11:00" };
 /** ⚠️ 0013 Decision 5: once the passports are in our stock, the processor arranges the handover the next office day at 11:00. */
 export const DEFAULT_HANDOVER_CHECK: HandoverCheckSetting = { afterDays: 1, at: "11:00" };
 
@@ -209,7 +214,7 @@ export async function nextReminderAt(
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, DOCUMENT_REMINDERS_KEY, COVERING_LETTER_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, DISPATCH_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, DOCUMENT_REMINDERS_KEY, COVERING_LETTER_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -225,6 +230,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const passportsBackCheck = passportsBackCheckSchema.safeParse(value(PASSPORTS_BACK_CHECK_KEY));
   const arrivalCheck = arrivalCheckSchema.safeParse(value(ARRIVAL_CHECK_KEY));
   const assignCheck = assignCheckSchema.safeParse(value(ASSIGN_CHECK_KEY));
+  const dispatchCheck = dispatchCheckSchema.safeParse(value(DISPATCH_CHECK_KEY));
   const handoverCheck = handoverCheckSchema.safeParse(value(HANDOVER_CHECK_KEY));
   const handoverPhoto = handoverPhotoSchema.safeParse(value(HANDOVER_PHOTO_KEY));
   const collectionCheck = collectionCheckSchema.safeParse(value(COLLECTION_CHECK_KEY));
@@ -248,6 +254,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     passportsBackCheck: passportsBackCheck.success ? passportsBackCheck.data : DEFAULT_PASSPORTS_BACK_CHECK,
     arrivalCheck: arrivalCheck.success ? arrivalCheck.data : DEFAULT_ARRIVAL_CHECK,
     assignCheck: assignCheck.success ? assignCheck.data : DEFAULT_ASSIGN_CHECK,
+    dispatchCheck: dispatchCheck.success ? dispatchCheck.data : DEFAULT_DISPATCH_CHECK,
     handoverCheck: handoverCheck.success ? handoverCheck.data : DEFAULT_HANDOVER_CHECK,
     handoverPhoto: handoverPhoto.success ? handoverPhoto.data : DEFAULT_HANDOVER_PHOTO,
     collectionCheck: collectionCheck.success ? collectionCheck.data : DEFAULT_COLLECTION_CHECK,

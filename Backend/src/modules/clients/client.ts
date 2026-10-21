@@ -13,6 +13,15 @@ export function requireMobile(value: string): string {
   return mobile;
 }
 
+/**
+ * A family member as the client page shows them: their relation, and whether their consent form is on file
+ * (docs/decisions/0022-consent-form.md, part 3).
+ */
+export const memberInclude = {
+  relation: true,
+  consent: { select: { id: true, agreedAt: true, paperYear: true } },
+} satisfies Prisma.ClientMemberInclude;
+
 /** Everything the profile page shows, except notes (loaded separately). */
 export const clientProfileInclude = {
   billingCycle: true,
@@ -20,13 +29,13 @@ export const clientProfileInclude = {
   phones: { orderBy: { createdAt: "asc" } },
   members: {
     where: { archivedAt: null },
-    include: { relation: true },
+    include: memberInclude,
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   },
 } satisfies Prisma.ClientInclude;
 
 type ClientProfileRow = Prisma.ClientGetPayload<{ include: typeof clientProfileInclude }>;
-type MemberRow = ClientMember & { relation: Relation };
+type MemberRow = ClientMember & { relation: Relation; consent: { id: string; agreedAt: Date; paperYear: number | null } | null };
 type NoteRow = ClientNote & { author: { id: string; name: string } };
 
 const lookup = (row: { id: number; code: string; name: string } | null) =>
@@ -55,6 +64,8 @@ export function toMemberDto(member: MemberRow, today: string, settings: ClientSe
     passportNumber: member.passportNumber,
     passportExpiry: member.passportExpiry ? fromDbDate(member.passportExpiry) : null,
     passportStatus: passportStatus(member.passportExpiry, today, settings.expiryWarnings.passportRenewSoonMonths),
+    // On file through the link, or on paper (paperYear). Only what the column shows: the record has the rest.
+    consent: member.consent && { id: member.consent.id, agreedAt: member.consent.agreedAt, paperYear: member.consent.paperYear },
     archivedAt: member.archivedAt,
     updatedAt: member.updatedAt,
   };

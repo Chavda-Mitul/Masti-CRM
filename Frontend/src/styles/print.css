@@ -38,6 +38,78 @@
   padding: 0;
   font-size: 12pt;
 }
+/* The consent record (0022 part 3b): Masti's name at the top, the sections, then the wording, on the same A4 sheet. */
+.consent-record {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 10.5pt;
+  color: var(--ink);
+}
+.consent-record section {
+  break-inside: avoid;
+}
+.consent-record .record-wording {
+  break-inside: auto;
+}
+.consent-record h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 12pt;
+}
+.consent-record p {
+  margin: 0 0 6px;
+}
+.consent-record .letter-paper {
+  font-size: 11pt;
+}
+.record-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-input);
+  font-size: 9.5pt;
+  color: var(--text-2);
+}
+.record-head strong {
+  font-family: var(--font-display);
+  font-size: 13pt;
+  color: var(--ink);
+}
+.record-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16pt;
+}
+.record-rows {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 16px;
+}
+.record-rows > div {
+  display: contents;
+}
+.record-rows dt {
+  color: var(--text-muted);
+}
+.record-rows dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* The network address and the browser: machine text, kept quiet. */
+.record-rows dd.mono {
+  font-weight: 400;
+  font-size: 9pt;
+}
+.record-foot {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-input);
+  font-size: 9pt;
+  color: var(--text-muted);
+}
 @media print {
   body {
     background: #fff;

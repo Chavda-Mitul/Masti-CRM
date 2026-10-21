@@ -1,6 +1,7 @@
 # 0022 · The consent & liability form
 
-- **Status:** decided 21 Oct 2026 (project lead). Parts 1 and 2 (2a, 2b) are built; part 3 follows.
+- **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
+  "Still open".
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -158,16 +159,64 @@ It is built as two components: 2a, the link, the page and "I agree"; then 2b, th
 - Consents already given keep their version: versions are never changed or removed. A client reading the form when it
   changes is asked to read it again (2a's `WORDING_CHANGED`).
 
-## Part 3: the record and the flags (after part 2)
+## Part 3: the client page and the record
 
-- **The record:** opens from the case and from the client page, and prints.
-- **The client page:** the family list gets a consent column ("On file · 28 Sep" / "Not on file").
-- **New enquiry:** the flag "Anyone without a consent form on file is flagged".
+The project lead's choices (21 Oct 2026):
+- **Consents signed on paper before the CRM** (the demo's "On file · 2025") are marked on file from the client page by
+  the Visa HOD or the Head, with the year. It's audited, and that person never gets a link.
+- **The printed record shows everything:** the details as agreed, the exact wording, when they agreed, the number the
+  link went to, and the phone's IP address and browser.
+- **New enquiry gets nothing more.** Its demo line "Anyone without a consent form on file is flagged" is the case's
+  consent card, which already flags them.
+
+It is built in two pieces: 3a, the client page's column and paper consents; then 3b, the printable record.
+
+### 3a: the consent column and paper consents (built 21 Oct 2026)
+
+- **The client page's "Family & travellers"** has a **Consent form** column: "On file · 21 Oct" (through the link),
+  "On file · 2025 (on paper)", or "Not on file", as the demo's chips.
+  - The Visa HOD and the Head see **Signed on paper** on a "Not on file" row. They pick the year (1990 to this year)
+    and confirm.
+  - On a paper row they see **Undo**, for a mistake. It asks first, and afterwards the person can be sent the link.
+    A consent given through the link can never be removed.
+  - The member's DTO carries `consent: { id, agreedAt, paperYear } | null`, and nothing more: the record has the rest.
+- **The data:** `Consent.source` (`LINK` or `PAPER`, default `LINK`), plus `paperYear` and `markedById`.
+  `wordingId`, `linkId` and `details` became optional, with database checks:
+  - A LINK consent has a wording, a link and the details, and no year or marker.
+  - A PAPER consent has a year (1990–2100) and a marker, and nothing of the link. Its `agreedAt` is when it was marked
+    on file.
+  - A trigger refuses any change to a consent, and any delete except a paper one's.
+- **Kept in `Consent`,** so every "already on file" check counts paper too: saving the details sends no link, **Send the
+  link again** is refused, and an old link says it's on file. Marking closes a link still open.
+- **The API:** `POST /api/clients/:id/members/:memberId/paper-consent { year }` and `DELETE …/paper-consent`, for the
+  Head or the Visa HOD on a client they can see.
+  - It refuses: a year still to come, a person already on file (409), a person taken off the list (409), a person on
+    another client (404), and a link consent on Undo (409).
+  - It's audited as `consent.paper.mark` and `consent.paper.remove`, with the client.
+- **The case's tile** shows "On file · 2025 (on paper)" for a paper consent.
+
+### 3b: the printable record (built 21 Oct 2026)
+
+**View record**, on the case's tile (an agreed traveller) and the client page's column, opens
+`/print/consent/:clientId/:memberId` in a new tab: an A4 sheet with Print and Close, to print or save as PDF. Nothing
+is stored, and the tab's title (`{name}_Consent_record`) names the saved PDF.
+- **A link consent:**
+  - Masti's name, address and phones only (`companyForPage`, as the client's page).
+  - "Agreed by": the name, relation, passport number and details from the consent's saved copy, so later changes to
+    the person don't show.
+  - "How it was given": when they agreed, the number the link went to, who sent it and when, and the case. Then the
+    network address and the phone's browser, and the wording's version and since when.
+  - The wording they agreed to, in full: the version the consent points at, not the one in use today.
+- **A paper consent:** the year it was signed, and who marked it on file and when. "The signed paper is kept at the
+  office."
+- **The footer** says who printed it and on what day.
+- **The API:** `GET /api/clients/:id/members/:memberId/consent`, for anyone who can see the client
+  (`assertCanSeeClient`). It's 404 with no consent on file or for another client's person. Printing changes nothing, so
+  it isn't audited, as with the parcel sticker.
 
 ## Still open
 
 - **The wording** (Q9/M12/C3).
 - **Who agrees for a child:** for now the client on the main number does.
-- **Consents given before the CRM** (the demo's "On file from 2025"): an import or a manual entry.
 - **SMS as the fallback channel**, which needs a provider with DLT registration.
 - **DPDP** (S11): these are personal details, so for now only staff who can open the case, or edit clients, see them.

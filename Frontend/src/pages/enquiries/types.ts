@@ -241,12 +241,15 @@ export interface ConsentDetailsBody {
   updatedAt: string
 }
 
-/** Flagged until the client agrees through the "I agree" link (0022 part 2). UNLINKED: the traveller isn't a family member yet. */
+/**
+ * Flagged until the client agrees through the "I agree" link (0022 part 2), or a consent signed on paper before the CRM
+ * is marked on file (part 3, paperYear). UNLINKED: the traveller isn't a family member yet.
+ */
 export type CaseConsent =
   | { state: 'UNLINKED' }
   /** link: the person's open "I agree" link (0022 part 2), sent when the details were saved; null when none is open. */
   | { state: 'NONE'; details: ConsentDetails; link: { sentAt: string; toMobile: string } | null }
-  | { state: 'ON_FILE'; agreedAt: string; details: ConsentDetails }
+  | { state: 'ON_FILE'; id: string; agreedAt: string; paperYear: number | null; details: ConsentDetails }
 
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
 export type VisaOutcome = 'APPROVED' | 'REFUSED'

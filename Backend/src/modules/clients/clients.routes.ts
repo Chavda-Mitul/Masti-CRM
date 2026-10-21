@@ -17,6 +17,8 @@ import {
   updateClientSettingsSchema,
   updateMemberSchema,
 } from "./clients.schemas";
+import { paperConsentSchema } from "../consent/consent.schemas";
+import * as consentService from "../consent/consent.service";
 import * as clientsService from "./clients.service";
 import * as membersService from "./members.service";
 
@@ -100,6 +102,21 @@ router.patch("/:id/members/:memberId", async (req, res) => {
 
 router.post("/:id/members/:memberId/archive", async (req, res) => {
   res.json({ member: await membersService.archiveMember(req.params.id, req.params.memberId, actorOf(req)) });
+});
+
+// The printable record of a person's consent (docs/decisions/0022-consent-form.md, part 3b): anyone who can see the client.
+router.get("/:id/members/:memberId/consent", async (req, res) => {
+  res.json({ record: await consentService.consentRecord(req.params.id, req.params.memberId, currentUser(req)) });
+});
+
+// A consent signed on paper before the CRM (docs/decisions/0022-consent-form.md, part 3): the Head or the Visa HOD.
+router.post("/:id/members/:memberId/paper-consent", async (req, res) => {
+  const body = paperConsentSchema.parse(req.body);
+  res.json({ member: await consentService.markPaperConsent(req.params.id, req.params.memberId, body, actorOf(req)) });
+});
+
+router.delete("/:id/members/:memberId/paper-consent", async (req, res) => {
+  res.json({ member: await consentService.removePaperConsent(req.params.id, req.params.memberId, actorOf(req)) });
 });
 
 router.get("/:id/notes", async (req, res) => {

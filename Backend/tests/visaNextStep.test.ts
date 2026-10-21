@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { loginAs, prisma, resetDb } from "./helpers";
-import { decidedCase, dispatchCase, makeInvoiceable, mastiReady, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { appointmentsHeld, aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The enquiries list's next step follows the case at Steps 6–7, as the case page's header button does (visaNextStep):
 // the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5), an e-visa, whose passports
@@ -139,6 +139,43 @@ describe("the enquiries list's next step at Steps 6–7", () => {
       stage: { code: "DECISION", nextStepLabel: "Passports on the way back" },
       nextStep: "No passports to bring back (e-visa)",
     });
+  });
+
+  it("follows a paper file through Steps 4 and 5: into a docket, dispatched, received, its file number, then the decision", async () => {
+    await mastiReady();
+    const c = await dispatchCase();
+    const processor = await loginAs("neha@masti.test");
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Add to docket");
+
+    const seen = (await load(processor, c.caseNo)).updatedAt;
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/docket`).send({ mode: "OWN", updatedAt: seen })).status).toBe(200);
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Dispatch the docket");
+
+    await makeInvoiceable(processor, c);
+    const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await processor.get(`/api/visa/cases/${c.caseNo}/invoice/check`)).body.preview;
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
+    const courier = await prisma.courier.findUniqueOrThrow({ where: { code: "BY_HAND" } });
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/dispatch`).send({ courierId: courier.id, awbNo: null, caseNos: [c.caseNo] })).status).toBe(200);
+    expect(await row(processor, c.caseNo)).toMatchObject({ stage: { code: "AT_VENDOR" }, nextStep: "Confirm vendor got it" });
+
+    const sent = (await load(processor, c.caseNo)).updatedAt;
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/vendor-received`).send({ updatedAt: sent })).status).toBe(200);
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Get the file number");
+
+    await appointmentsHeld(c.id);
+    const embassy = await prisma.embassy.findUniqueOrThrow({ where: { code: "FR-MUM" } });
+    const received = (await load(processor, c.caseNo)).updatedAt;
+    const submission = { vendorFileNo: "FR-MUM88421", embassyId: embassy.id, collectionOn: aWednesday(), updatedAt: received };
+    expect((await processor.put(`/api/visa/cases/${c.caseNo}/submission`).send(submission)).status).toBe(200);
+    expect((await row(processor, c.caseNo)).nextStep).toBe("Record the decision");
+  });
+
+  it("asks for an e-visa to be submitted online at Step 4", async () => {
+    await mastiReady();
+    const c = await dispatchCase({ extra: { mobile: "98250 41299", clientName: "Asha Desai" } });
+    const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
+    await prisma.visaOffering.update({ where: { id: offeringId }, data: { vendorNeeded: false } });
+    expect((await row(await loginAs("neha@masti.test"), c.caseNo)).nextStep).toBe("Submit it online");
   });
 
   it("shows the step's own next step everywhere else", async () => {

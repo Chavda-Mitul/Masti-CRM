@@ -114,7 +114,26 @@ export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, act
     // A postponed or cancelled case keeps its due time (a delivery can be booked for one; a pickup can't).
     const dueAt = locked.status === "OPEN" ? istDateTimeToUtc(input.day, slot.endsAt) : locked.dueAt;
     if (locked.status === "OPEN") await tx.enquiry.update({ where: { id: enquiry.id }, data: { dueAt } });
-    if (input.kind === "PICKUP") await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { arrival: "COLLECTION_BOY" } });
+    // A pickup means "Send collection boy": switched, and audited like any change to it (fixed 21 Oct 2026).
+    if (input.kind === "PICKUP") {
+      const was = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { arrival: true } });
+      if (was.arrival !== "COLLECTION_BOY") {
+        await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { arrival: "COLLECTION_BOY" } });
+        await audit(
+          {
+            actorId: actor.user.id,
+            action: "visa.case.update",
+            entityType: "VisaCase",
+            entityId: enquiry.id,
+            clientId: enquiry.clientId,
+            before: { arrival: was.arrival },
+            after: { arrival: "COLLECTION_BOY", why: "collection boy booked" },
+            ip: actor.ip,
+          },
+          tx,
+        );
+      }
+    }
     const job = await tx.fieldJob.create({
       data: {
         departmentId: locked.departmentId,

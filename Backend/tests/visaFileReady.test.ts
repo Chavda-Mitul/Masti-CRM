@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { addDays, istDateTimeToUtc, istToday } from "../src/lib/dates";
+import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
@@ -42,7 +44,7 @@ async function hodHeadViewer() {
 }
 
 describe('"File ready — add to docket" (Decision 9)', () => {
-  it("moves a complete case to Docket & dispatch, still the processor's, due now, stamped and audited", async () => {
+  it("moves a complete case to Docket & dispatch, still the processor's, due the next office day, stamped and audited", async () => {
     const c = await readyCase();
     const processor = await neha();
     const before = Date.now();
@@ -52,7 +54,8 @@ describe('"File ready — add to docket" (Decision 9)', () => {
     const after = res.body.case as CaseDto;
     expect(after).toMatchObject({ stage: { code: "DISPATCH" }, owner: { name: "Neha Joshi" }, fileReadyBy: { name: "Neha Joshi" } });
     expect(new Date(after.fileReadyAt!).getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(new Date(after.dueAt!).getTime()).toBe(new Date(after.fileReadyAt!).getTime());
+    // Due for the docket the next open office day at 11:00 ⚠️ (visa.dispatchCheck), not late the moment it's ready.
+    expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 1), { office: true }), "11:00").toISOString());
 
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.file.ready" } });
     expect(entry).toMatchObject({

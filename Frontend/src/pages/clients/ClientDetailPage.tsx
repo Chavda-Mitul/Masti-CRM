@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { can, canBrowseClients, canEditClients, isHodOfAny } from '../../auth/permissions'
+import { can, canBrowseClients, canEditClients, isHodOf, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ApiError } from '../../lib/api'
 import { departmentStyle } from '../../lib/departments'
@@ -106,7 +106,8 @@ export function ClientDetailPage() {
 
       <div className="client-grid">
         <div className="client-col">
-          <MembersCard client={c} options={options.data} canEdit={canEdit} />
+          {/* Paper consents: the Head or the Visa HOD (docs/decisions/0022-consent-form.md, part 3). */}
+          <MembersCard client={c} options={options.data} canEdit={canEdit} canMarkConsent={me ? isHodOf(me, 'VISA') : false} />
           {canSeeDocuments && <DocumentsCard client={c} />}
           <DetailsCard client={c} options={options.data} canEdit={canEdit} onEdit={() => setEditing(true)} />
           <CasesCard client={c} />

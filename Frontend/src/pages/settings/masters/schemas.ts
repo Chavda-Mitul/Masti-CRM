@@ -158,6 +158,7 @@ export const visaTimingsFormSchema = z.object({
   passportsBackCheck: officeDayTiming,
   arrivalCheck: officeDayTiming,
   assignCheck: officeDayTiming,
+  dispatchCheck: officeDayTiming,
   handoverCheck: officeDayTiming,
   collectionCheck: z.object({ daysBefore: dayCount, at: timeOfDay }),
   passportValidity: z.object({

@@ -85,6 +85,7 @@ model User {
   consentDetailsFilled  ClientMember[]          @relation("ClientMemberConsentDetailsBy")
   consentLinksSent      ConsentLink[]           @relation("ConsentLinkCreatedBy")
   consentWordingsAdded  ConsentWording[]        @relation("ConsentWordingAddedBy")
+  consentsMarked        Consent[]               @relation("ConsentMarkedBy")
   clientNotes           ClientNote[]            @relation("ClientNoteAuthor")
   holidaysAdded         Holiday[]               @relation("HolidayAddedBy")
   enquiriesOwned        Enquiry[]               @relation("EnquiryOwner")
@@ -1460,28 +1461,43 @@ model VisaHandover {
   @@index([receiverTravellerId])
 }
 
-/// The consent & liability form: one per person, for life; stays valid if the passport changes (§10.5).
-/// Filled by the "I agree" link, which comes with WhatsApp. Until then the case shows "None on file — flagged".
-/// One person's consent, given once for life (docs/decisions/0022-consent-form.md): the client tapped "I agree" on the
-/// form's link. It keeps what they agreed to, as evidence: the wording, the details as the page showed them, and where
-/// the tap came from.
+/// How a consent came to be on file (docs/decisions/0022-consent-form.md, part 3).
+enum ConsentSource {
+  /// The client tapped "I agree" on the form's link.
+  LINK
+  /// Signed on paper before the CRM, and marked on file by the Head or the Visa HOD.
+  PAPER
+}
+
+/// One person's consent & liability form, given once for life; it stays valid if the passport changes (§10.5,
+/// docs/decisions/0022-consent-form.md). Until there is one, the case shows "None on file — flagged". A LINK consent
+/// keeps what was agreed to, as evidence: the wording, the details as the page showed them, and where the tap came
+/// from. A PAPER one keeps the year it was signed and who marked it. Checks in the migration: each source has exactly
+/// its own fields; a trigger refuses any change, and any delete but a paper one's (a mistaken mark).
 model Consent {
-  id        String         @id @default(uuid())
-  memberId  String         @unique
-  agreedAt  DateTime       @db.Timestamptz(3)
-  /// The wording they read and agreed to.
-  wordingId Int
-  /// The link they agreed through.
-  linkId    String         @unique
-  /// The name, passport number and form details as the page showed them.
-  details   Json
-  /// The phone's network address and browser when they tapped "I agree".
-  ip        String?
-  userAgent String?
-  createdAt DateTime       @default(now()) @db.Timestamptz(3)
-  member    ClientMember   @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  wording   ConsentWording @relation(fields: [wordingId], references: [id], onDelete: Restrict)
-  link      ConsentLink    @relation(fields: [linkId], references: [id], onDelete: Restrict)
+  id         String          @id @default(uuid())
+  memberId   String          @unique
+  source     ConsentSource   @default(LINK)
+  /// When they tapped "I agree"; for a paper consent, when it was marked on file.
+  agreedAt   DateTime        @db.Timestamptz(3)
+  /// The wording they read and agreed to (LINK).
+  wordingId  Int?
+  /// The link they agreed through (LINK).
+  linkId     String?         @unique
+  /// The name, passport number and form details as the page showed them (LINK).
+  details    Json?
+  /// The phone's network address and browser when they tapped "I agree" (LINK).
+  ip         String?
+  userAgent  String?
+  /// The year it was signed on paper (PAPER).
+  paperYear  Int?
+  /// Who marked the paper consent on file (PAPER).
+  markedById String?
+  createdAt  DateTime        @default(now()) @db.Timestamptz(3)
+  member     ClientMember    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wording    ConsentWording? @relation(fields: [wordingId], references: [id], onDelete: Restrict)
+  link       ConsentLink?    @relation(fields: [linkId], references: [id], onDelete: Restrict)
+  markedBy   User?           @relation("ConsentMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
 }
 
 /// The consent form's wording (0022). Never changed or removed (a trigger), because consents point at it; the newest is
