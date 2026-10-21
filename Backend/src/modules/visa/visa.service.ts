@@ -44,6 +44,7 @@ import {
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
 import { remindersDue, toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
+import { casePortal } from "./visaPortal.service";
 
 // Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
 // Saving sends the client nothing yet: the document list (message 1) comes with the visa messages (0021).
@@ -266,7 +267,7 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
  */
 async function toDto(row: VisaCaseRow) {
   const memberIds = (row.visa?.travellers ?? []).flatMap((t) => (t.memberId ? [t.memberId] : []));
-  const [steps, clientSettings, visaSettings, scans] = await Promise.all([
+  const [steps, clientSettings, visaSettings, scans, portal] = await Promise.all([
     prisma.departmentStage.findMany({
       where: { departmentId: row.stage.departmentId, flow: row.stage.flow },
       orderBy: { sortOrder: "asc" },
@@ -275,14 +276,19 @@ async function toDto(row: VisaCaseRow) {
     getClientSettings(),
     getVisaSettings(),
     currentScansOf(memberIds),
+    casePortal(row.visa?.offering.portalLoginId ?? null),
   ]);
   const reminders = visaSettings.documentReminders;
   // The document list goes out at intake, so reminders count from that day (0006 amendment 19).
   const nextAt = remindersDue(row, reminders) ? await nextReminderAt(istToday(row.createdAt), reminders) : null;
-  return toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent, scans, {
-    setting: reminders,
-    nextAt,
-  });
+  return {
+    ...toVisaCaseDto(row, steps, istToday(), clientSettings, visaSettings.finalFile.maxMb, visaSettings.invoice.gstRatePercent, scans, {
+      setting: reminders,
+      nextAt,
+    }),
+    /** The portal its visa opens with Log in for me (0024 component 3), or null. */
+    portal,
+  };
 }
 
 export async function getVisaCaseById(id: string) {

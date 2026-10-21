@@ -44,6 +44,21 @@ export function canUsePortal(
   return portal.users.some((u) => u.user.id === user.id) && can(user, code, "VIEW");
 }
 
+/**
+ * On a visa case (component 3): also whoever the case is assigned to, while they can change the department's cases. The
+ * HOD decides who works on each case, so that person needn't be on the portal's list too. The Frontend's copy is in
+ * src/pages/enquiries/case/ApplicationCard.tsx.
+ */
+export function canUsePortalOnCase(
+  user: UserWithDepartments,
+  portal: { department: { code: string }; users: { user: { id: string } }[] },
+  enquiry: { ownerId: string | null; department: { code: string } },
+): boolean {
+  if (canUsePortal(user, portal)) return true;
+  if (!user.isActive || user.mustChangePassword || user.type !== "OFFICE") return false;
+  return enquiry.ownerId === user.id && can(user, enquiry.department.code as DepartmentCode, "EDIT");
+}
+
 /** "http://" addresses send the password unprotected; managers see a warning on the card. */
 export const isSecureAddress = (loginUrl: string) => loginUrl.startsWith("https://");
 

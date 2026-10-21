@@ -61,6 +61,7 @@ import * as passportsBackService from "./visaPassportsBack.service";
 import * as handoverService from "./visaHandover.service";
 import * as fieldJobService from "./visaFieldJobs.service";
 import { listFieldStaff } from "../fieldJobs/fieldJobs.service";
+import * as portalService from "./visaPortal.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -88,6 +89,14 @@ router.post("/cases", visaEdit, async (req, res) => {
 
 router.get("/cases/:caseNo", visaView, async (req, res) => {
   res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
+/**
+ * "Log in for me" on the case (docs/decisions/0024-portal-logins.md component 3): a one-time ticket for the CRM helper.
+ * The service decides who may: the case's person, the HOD, the Head and the portal's list.
+ */
+router.post("/cases/:caseNo/portal/open", visaView, async (req, res) => {
+  res.status(201).json(await portalService.openCasePortal(caseNoParam.parse(req.params.caseNo), actorOf(req)));
 });
 
 /** The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first. */

@@ -4,8 +4,8 @@ import { audit } from "../../lib/audit";
 import { badRequest, conflict, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { vaultReady } from "../../lib/secretBox";
 import { getOfficeNetworkSetting, ipAllowed, portalLoginNetwork, sameAddress } from "../auth/officeNetwork";
-import { withDepartments, type Actor } from "../users/user";
-import { canUsePortal, portalLoginInclude } from "./portalLogin";
+import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
+import { canUsePortal, canUsePortalOnCase, portalLoginInclude } from "./portalLogin";
 import type { OutcomeInput } from "./portalLogins.schemas";
 import { notSetUp, openPortalSecret } from "./portalLogins.service";
 
@@ -23,12 +23,20 @@ const hashOf = (ticket: string) => createHash("sha256").update(ticket).digest("h
 const runOut = () => new HttpError(410, "This login has run out. Press Log in for me again.");
 const onlyInOffice = () => forbidden("Log in for me works only in the office.");
 
-/** A press: checks the person may use the portal from here, then makes the ticket. */
+/** A press on Settings → Portal logins: checks the person may use the portal, then makes the ticket. */
 export async function openPortalLogin(id: string, actor: Actor) {
   const portal = await prisma.portalLogin.findUnique({ where: { id }, include: portalLoginInclude });
   if (!portal) throw notFound("Portal not found.");
   if (portal.status !== "ACTIVE" || !portal.department.isActive) throw badRequest("This portal was removed.");
   if (!canUsePortal(actor.user, portal)) throw forbidden("You aren't on this portal's list. Ask your HOD.");
+  return issueTicket(portal.id, actor, null);
+}
+
+/**
+ * The ticket for a press the caller has allowed (here, or on a visa case: visaPortal.service.ts): the server must be set
+ * up and the office rule met, then the press is kept, with its case when there is one.
+ */
+export async function issueTicket(portalLoginId: string, actor: Actor, onCase: { id: string; caseNo: string } | null) {
   if (!vaultReady()) throw notSetUp();
   if (!(await portalLoginNetwork(actor.ip ?? undefined)).allowed) throw onlyInOffice();
 
@@ -36,17 +44,39 @@ export async function openPortalLogin(id: string, actor: Actor) {
   const use = await prisma.$transaction(async (tx) => {
     const use = await tx.portalLoginUse.create({
       data: {
-        portalLoginId: id,
+        portalLoginId,
         userId: actor.user.id,
         openedIp: actor.ip,
         ticketHash: hashOf(ticket),
         ticketExpiresAt: new Date(Date.now() + TICKET_SECONDS * 1000),
+        enquiryId: onCase?.id ?? null,
       },
     });
-    await audit({ actorId: actor.user.id, action: "portalLogin.open", entityType: "PortalLogin", entityId: id, after: { useId: use.id }, ip: actor.ip }, tx);
+    const after = { useId: use.id, ...(onCase ? { caseNo: onCase.caseNo } : {}) };
+    await audit({ actorId: actor.user.id, action: "portalLogin.open", entityType: "PortalLogin", entityId: portalLoginId, after, ip: actor.ip }, tx);
     return use;
   });
   return { useId: use.id, ticket };
+}
+
+/** A press made on a case may still be collected only while the case could still make it (component 3). */
+async function caseStillAllows(enquiryId: string, user: UserWithDepartments, portal: Parameters<typeof canUsePortalOnCase>[1] & { id: string }) {
+  const enquiry = await prisma.enquiry.findUnique({
+    where: { id: enquiryId },
+    select: {
+      status: true,
+      ownerId: true,
+      department: { select: { code: true } },
+      visa: { select: { maturedAt: true, offering: { select: { portalLoginId: true } } } },
+    },
+  });
+  return (
+    !!enquiry &&
+    enquiry.status === "OPEN" &&
+    !!enquiry.visa?.maturedAt &&
+    enquiry.visa.offering.portalLoginId === portal.id &&
+    canUsePortalOnCase(user, portal, enquiry)
+  );
 }
 
 /** The ticket is spent and the press marked REFUSED; then the reason goes back to the helper. */
@@ -81,7 +111,8 @@ export async function redeemTicket(ticket: string, ip: string | undefined) {
     return refuse(use, from, "removed", new HttpError(410, "This portal was removed. Ask your HOD."));
   }
   const user = await prisma.user.findUniqueOrThrow({ where: { id: use.userId }, include: withDepartments });
-  if (!canUsePortal(user, portal)) return refuse(use, from, "not allowed", forbidden("You can't use this portal any more. Ask your HOD."));
+  const allowed = use.enquiryId ? await caseStillAllows(use.enquiryId, user, portal) : canUsePortal(user, portal);
+  if (!allowed) return refuse(use, from, "not allowed", forbidden("You can't use this portal any more. Ask your HOD."));
 
   const { allow } = await getOfficeNetworkSetting();
   if (!(await portalLoginNetwork(ip)).allowed) return refuse(use, from, "outside the office", onlyInOffice());

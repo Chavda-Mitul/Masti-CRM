@@ -69,15 +69,26 @@ async function managedDepartments(user: UserWithDepartments) {
   return departments.filter((d) => canManagePortal(user, d.code));
 }
 
-/** "Who used what": the last logins the helper collected, in these departments, newest first. */
+/** "Who used what": the last logins the helper collected, in these departments, newest first, with the case if any. */
 async function recentUses(departmentCodes: string[]) {
   const rows = await prisma.portalLoginUse.findMany({
     where: { redeemedAt: { not: null }, portalLogin: { department: { code: { in: departmentCodes } } } },
     orderBy: [{ redeemedAt: "desc" }, { id: "desc" }],
     take: RECENT_USES,
-    include: { user: { select: { id: true, name: true } }, portalLogin: { select: { id: true, name: true } } },
+    include: {
+      user: { select: { id: true, name: true } },
+      portalLogin: { select: { id: true, name: true } },
+      enquiry: { select: { caseNo: true } },
+    },
   });
-  return rows.map((r) => ({ id: r.id, user: r.user, portal: r.portalLogin, at: r.redeemedAt, outcome: r.outcome }));
+  return rows.map((r) => ({
+    id: r.id,
+    user: r.user,
+    portal: r.portalLogin,
+    caseNo: r.enquiry?.caseNo ?? null,
+    at: r.redeemedAt,
+    outcome: r.outcome,
+  }));
 }
 
 /**
