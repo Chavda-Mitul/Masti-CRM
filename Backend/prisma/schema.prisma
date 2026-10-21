@@ -1314,13 +1314,14 @@ model VisaCase {
   shortfallClearedAt      DateTime?              @db.Timestamptz(3)
   shortfallClearedById    String?
   shortfallReasonId       Int?
-  /// "Make the letter" (docs/decisions/0019-covering-letters.md Decision 10): the covering-letter wording used, who made
-  /// it and when, and what it was filled in with ({ values, travellers }), so a reprint is the same letter. Made at File
-  /// preparation, again as often as needed; all four set together (checked in the migration).
+  /// "Make the letter" (docs/decisions/0019-covering-letters.md Decision 10, amendment 1): the covering-letter wording its
+  /// text started from, who made it and when, and the letter's text as staff left it ({ top, table, bottom }), so a
+  /// reprint is the same letter. Made at File preparation, again as often as needed; all four set together, and the
+  /// text's shape and size (checked in the migrations).
   coveringLetterVersionId Int?
   coveringLetterMadeAt    DateTime?              @db.Timestamptz(3)
   coveringLetterMadeById  String?
-  coveringLetterFill      Json?
+  coveringLetterText      Json?
   enquiry                 Enquiry                @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering                VisaOffering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   maturedBy               User?                  @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)

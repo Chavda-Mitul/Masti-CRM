@@ -29,6 +29,14 @@
   padding: 1px 5px;
   white-space: nowrap;
 }
+/* A mark in a case's letter (⟦the hotel stay⟧): what staff still have to type. Its words can be long, so it wraps. */
+.letter-mark {
+  white-space: normal;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--warn);
+  background: var(--warn-bg);
+}
 .letter-table {
   width: 100%;
   border-collapse: collapse;
