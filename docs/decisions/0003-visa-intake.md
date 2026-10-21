@@ -109,6 +109,10 @@ The counter is a `CaseCounter` row incremented in the **same transaction** as th
 
 ### 6. Messages go through an outbox
 
+> **Built 21 Oct 2026** in `docs/decisions/0021-whatsapp-outbox.md`: pg-boss is the job runner, the tables gained the
+> sending details (attempts, the send mark, provider, where it went, delivery times), and there is no channel column
+> while WhatsApp is the only channel. The first message is "All documents received" (message 6), not the document list.
+
 Saving the enquiry inserts an `OutboundMessage` row (status `QUEUED`) in the same transaction. A separate sender delivers it later.
 - Intake never waits on WhatsApp.
 - A failed send can be retried without resending to the client (`idempotencyKey`).

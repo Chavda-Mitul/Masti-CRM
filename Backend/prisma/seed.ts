@@ -16,6 +16,7 @@ import { seedCoveringLetters } from "../src/modules/coveringLetters/coveringLett
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { seedMessageTemplates } from "../src/modules/messages/messages.seed";
 import {
   AWB_KEY,
   DEFAULT_AWB,
@@ -118,6 +119,8 @@ async function main() {
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.
   await seedEnquiryMasters(prisma);
+  // The automatic WhatsApp wording (docs/decisions/0021-whatsapp-outbox.md), from the draft Masti is to approve (M1).
+  await seedMessageTemplates(prisma);
   await prisma.setting.upsert({
     where: { key: FIRST_FOLLOW_UP_KEY },
     update: {},
