@@ -95,6 +95,10 @@ function blockersOf(g: Gathered, preparedBy: string): InvoiceBlocker[] {
   else {
     const missing = g.visa.travellers.filter((t) => !quote.lines.some((l) => l.travellerId === t.id)).map(label);
     if (missing.length) blockers.push({ kind: "QUOTE", label: "Give every traveller an amount in the quote.", items: missing });
+    // Nothing to invoice (decided 21 Oct 2026, project lead): every amount and the service charge are ₹0.
+    else if (quote.serviceChargePaise === 0 && quote.lines.every((l) => lineTotalPaise(l) === 0)) {
+      blockers.push({ kind: "QUOTE", label: "There's nothing to invoice: every amount is ₹0.", items: [] });
+    }
   }
 
   const unnamed = g.visa.travellers.filter((t) => !travellerName(t)).map(label);

@@ -250,6 +250,19 @@ describe("what blocks it", () => {
     expect(await prisma.invoice.count()).toBe(0);
   });
 
+  it("a quote where every amount is ₹0: there's nothing to invoice (decided 21 Oct 2026)", async () => {
+    await mastiReady();
+    const c = await invoiceableCase();
+    const speed = await prisma.processingSpeed.findUniqueOrThrow({ where: { code: "NORMAL" } });
+    const updatedAt = (await c.staff.get(`/api/visa/cases/${c.caseNo}`)).body.case.quote.updatedAt as string;
+    const lines = c.travellers.map((t) => ({ travellerId: t.id, form: "LUMP_SUM", lumpSumPaise: 0 }));
+    expect((await c.staff.put(`/api/visa/cases/${c.caseNo}/quote`).send({ processingSpeedId: speed.id, serviceChargePaise: 0, lines, updatedAt })).status).toBe(200);
+
+    expect(await blockersOf(c.staff, c.caseNo)).toEqual([{ kind: "QUOTE", label: "There's nothing to invoice: every amount is ₹0.", items: [] }]);
+    expect((await raise(c.staff, c.caseNo)).body.details.code).toBe("INVOICE_BLOCKED");
+    expect(await prisma.invoice.count()).toBe(0);
+  });
+
   it("non-English text anywhere it prints: Masti's phones, email and bank, the terms, and the name of whoever raises it", async () => {
     const head = await mastiReady();
     const c = await invoiceableCase();

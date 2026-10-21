@@ -204,6 +204,8 @@ stops issuing visa invoices. An export to it can come later (Q26).
   - `POST /api/visa/cases/:caseNo/invoice` with `{ quoteUpdatedAt, taxType, gstRatePercent, totalPaise }`, for the
     case owner, the Visa HOD or the Head, from Enquiry to Docket & dispatch. It's refused with:
     - 409 `INVOICE_BLOCKED` `{ blockers }`
+      - since 21 Oct 2026 (project lead, from the visa test) this includes a quote where every amount and the service
+        charge are ₹0: "There's nothing to invoice: every amount is ₹0."
     - 409 STALE if the quote changed since the dialog
     - 409 `INVOICE_CHANGED` if the GST rate, the tax type (the client's state) or the total did
     - 409 if already raised

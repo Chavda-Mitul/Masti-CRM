@@ -96,6 +96,10 @@ describe("Book the collection boy (phase 1)", () => {
     const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "field.job.book" } });
     expect(row).toMatchObject({ entityType: "FieldJob", entityId: job.id, clientId: c.client.id });
     expect(row.after).toMatchObject({ caseNo: c.caseNo, kind: "PICKUP", boy: "Ramesh", day, slot: "4–6 pm", address: ADDRESS, mapLink: null });
+    // "How the documents reach us" switched to Send collection boy, in the case's history too (fixed 21 Oct 2026).
+    const switched = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.case.update", entityId: c.id } });
+    expect(switched.after).toEqual({ arrival: "COLLECTION_BOY", why: "collection boy booked" });
+    expect((switched.before as { arrival: string | null }).arrival).not.toBe("COLLECTION_BOY");
     // Users are deactivated, never deleted: the job keeps its boy.
     await expect(prisma.user.delete({ where: { id: ramesh.id } })).rejects.toThrow();
   });
