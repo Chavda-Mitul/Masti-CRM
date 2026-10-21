@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { RequiredMark } from '../../components/FormField'
+import { TimePicker } from '../../components/TimePicker'
 import { errorBody, errorText } from '../../lib/apiErrors'
 import { istToday } from '../../lib/format'
 import { useToast } from '../../lib/toast'
@@ -108,7 +109,7 @@ export function LogCallForm({
               onChange={(e) => setNextOn(e.target.value)}
               aria-label="Next follow-up day"
             />
-            <input className="input" type="time" step={900} value={at} onChange={(e) => setAt(e.target.value)} aria-label="Next follow-up time" />
+            <TimePicker value={at} onChange={setAt} label="Next follow-up time" />
           </div>
           {(errors.nextOn || errors.at) && <span className="field-error">{errors.nextOn ?? errors.at}</span>}
         </div>

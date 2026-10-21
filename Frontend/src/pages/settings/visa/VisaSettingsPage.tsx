@@ -1,8 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
+import { TimePicker } from '../../../components/TimePicker'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useSaveVisaSettings, useVisaSettings } from '../masters/queries'
@@ -52,7 +53,7 @@ export function VisaSettingsPage() {
 function SettingsForm({ settings }: { settings: VisaSettings }) {
   const toast = useToast()
   const save = useSaveVisaSettings()
-  const { register, handleSubmit, formState, reset } = useForm<VisaTimingsFormValues>({
+  const { register, control, handleSubmit, formState, reset } = useForm<VisaTimingsFormValues>({
     resolver: zodResolver(visaTimingsFormSchema),
     defaultValues: formValues(settings),
   })
@@ -96,7 +97,13 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
                   {errors[c.key]?.afterDays && <div className="field-error">{errors[c.key]?.afterDays?.message}</div>}
                 </td>
                 <td>
-                  <input className="input" type="time" style={{ width: 120 }} aria-label={`${c.what}: at`} {...register(`${c.key}.at`)} />
+                  <Controller
+                    control={control}
+                    name={`${c.key}.at`}
+                    render={({ field }) => (
+                      <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label={`${c.what}: at`} invalid={!!errors[c.key]?.at} style={{ width: 132 }} />
+                    )}
+                  />
                   {errors[c.key]?.at && <div className="field-error">{errors[c.key]?.at?.message}</div>}
                 </td>
               </tr>
@@ -111,7 +118,13 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
                 {errors.collectionCheck?.daysBefore && <div className="field-error">{errors.collectionCheck.daysBefore.message}</div>}
               </td>
               <td>
-                <input className="input" type="time" style={{ width: 120 }} aria-label="Collection reminder: at" {...register('collectionCheck.at')} />
+                <Controller
+                  control={control}
+                  name="collectionCheck.at"
+                  render={({ field }) => (
+                    <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label="Collection reminder: at" invalid={!!errors.collectionCheck?.at} style={{ width: 132 }} />
+                  )}
+                />
                 {errors.collectionCheck?.at && <div className="field-error">{errors.collectionCheck.at.message}</div>}
               </td>
             </tr>

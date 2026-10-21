@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { FormField } from '../../../../components/FormField'
+import { TimePicker } from '../../../../components/TimePicker'
 import { applyServerIssues } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useMasterList, useSaveMaster } from '../queries'
@@ -66,7 +67,7 @@ export function FieldSlotsTable({ canEdit, showInactive }: { canEdit: boolean; s
 function SlotDrawer({ slot, onClose }: { slot: FieldSlot | null; onClose: () => void }) {
   const toast = useToast()
   const save = useSaveMaster('field-slots')
-  const { register, handleSubmit, setError, formState } = useForm<FieldSlotFormValues>({
+  const { register, control, handleSubmit, setError, formState } = useForm<FieldSlotFormValues>({
     resolver: zodResolver(fieldSlotFormSchema),
     defaultValues: {
       code: slot?.code ?? '',
@@ -107,10 +108,18 @@ function SlotDrawer({ slot, onClose }: { slot: FieldSlot | null; onClose: () => 
         <input className="input" {...register('name')} placeholder="4–6 pm" />
       </FormField>
       <FormField label="From" error={errors.startsAt?.message}>
-        <input className="input" type="time" {...register('startsAt')} />
+        <Controller
+          control={control}
+          name="startsAt"
+          render={({ field }) => <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label="Slot from" invalid={!!errors.startsAt} />}
+        />
       </FormField>
       <FormField label="To" error={errors.endsAt?.message}>
-        <input className="input" type="time" {...register('endsAt')} />
+        <Controller
+          control={control}
+          name="endsAt"
+          render={({ field }) => <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label="Slot to" invalid={!!errors.endsAt} />}
+        />
       </FormField>
       <FormField label="Order in lists" error={errors.sortOrder?.message}>
         <input className="input" type="number" min={0} {...register('sortOrder', { valueAsNumber: true })} />

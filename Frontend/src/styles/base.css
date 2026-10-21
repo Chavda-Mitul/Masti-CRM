@@ -289,6 +289,77 @@ a.btn-primary:hover {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
+/* A time box and its Hour / Minute / AM-PM columns (components/TimePicker.tsx). */
+.time-input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.time-input svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.time-input-empty {
+  color: var(--text-muted);
+}
+.time-input:disabled {
+  cursor: default;
+}
+.time-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 35; /* over a drawer (20) and the warning box (30), under the toasts (40) */
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+.time-col {
+  position: relative; /* the options' offsetTop counts from here, to scroll to the picked one */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 58px;
+  height: 230px;
+  overflow-y: auto;
+  scrollbar-width: none; /* the wheel scrolls it; Windows' arrows crowded the numbers */
+}
+.time-col + .time-col {
+  padding-left: 4px;
+  border-left: 1px solid var(--divider);
+}
+.time-opt {
+  flex-shrink: 0;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.time-opt:hover {
+  background: var(--fill-hover);
+}
+.time-opt[aria-pressed="true"] {
+  background: var(--primary-tint);
+  color: var(--primary);
+  font-weight: 700;
+}
+.time-opt:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
 .hint {
   font-size: 12.5px;
   font-weight: 600;
