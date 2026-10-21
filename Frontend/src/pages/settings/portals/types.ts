@@ -30,6 +30,8 @@ export interface PortalUse {
   id: string
   user: PortalPerson
   portal: { id: string; name: string }
+  /** The visa case it was pressed on (component 3); null from Settings → Portal logins. */
+  caseNo: string | null
   at: string
   outcome: Outcome | null
 }
