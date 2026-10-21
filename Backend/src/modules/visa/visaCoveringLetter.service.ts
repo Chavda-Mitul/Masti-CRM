@@ -4,21 +4,23 @@ import { audit } from "../../lib/audit";
 import { fromDbDate, istTimestamp, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError } from "../../lib/httpError";
 import { inForce } from "../coveringLetters/coveringLetter";
-import { fillLetter, type LetterFacts, type LetterFill } from "../coveringLetters/fill";
+import { marksIn, type LetterText } from "../coveringLetters/coveringLetters.schemas";
+import { draftLetter, type LetterFacts } from "../coveringLetters/fill";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING } from "./caseLock";
 import type { MakeCoveringLetterInput } from "./visa.schemas";
 import { getVisaSettings } from "./visa.settings";
 import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 
-// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12): the letters that fit the
-// case, one filled in from it, "Make the letter" at File preparation, and the print of the letter made.
+// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendment 1): the letters
+// that fit the case, one drafted from it, "Make the letter" at File preparation, and the print of the letter made.
 // - A letter fits a case: active, the case's visa type, one of its countries, and one traveller or two or more, with a
 //   wording in use today. A visa type or country switched off since still fits, so open cases keep their letters.
-// - Missing details block "Make the letter" (Decision 9): 409 LETTER_INCOMPLETE with the list.
+// - The draft writes the case's values in and marks what it lacks (⟦the hotel stay⟧). Staff may change any of the text,
+//   the table included, and type over the marks; "Make the letter" waits while a mark is left: 409 LETTER_INCOMPLETE.
 // - Made at File preparation by the owner, the HOD or the Head; again as often as needed while there. The case keeps the
-//   wording used and what it was filled in with, so a later print is the same letter (Decision 10). Anyone who can open
-//   the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
+//   letter's text as made, so a later print is the same letter (Decision 10), and the audit keeps each text made. Anyone
+//   who can open the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
 
 const personSelect = { select: { id: true, name: true } } as const;
 
@@ -45,8 +47,8 @@ const letterCaseSelect = {
       },
       coveringLetterMadeAt: true,
       coveringLetterMadeBy: personSelect,
-      coveringLetterFill: true,
-      coveringLetterVersion: { select: { id: true, effectiveFrom: true, body: true, format: { select: { id: true, name: true } } } },
+      coveringLetterText: true,
+      coveringLetterVersion: { select: { id: true, effectiveFrom: true, format: { select: { id: true, name: true } } } },
     },
   },
 } satisfies Prisma.EnquirySelect;
@@ -108,10 +110,10 @@ async function fittingLetters(visa: LetterVisa, today: string) {
   });
 }
 
-/** The letter made for the case, if any. */
+/** The letter made for the case, if any, with its text. */
 function madeOf(visa: LetterVisa) {
   const version = visa.coveringLetterVersion;
-  if (!version || !visa.coveringLetterMadeAt) return null;
+  if (!version || !visa.coveringLetterMadeAt || !visa.coveringLetterText) return null;
   return {
     formatId: version.format.id,
     formatName: version.format.name,
@@ -119,12 +121,14 @@ function madeOf(visa: LetterVisa) {
     effectiveFrom: fromDbDate(version.effectiveFrom),
     madeAt: visa.coveringLetterMadeAt,
     madeBy: visa.coveringLetterMadeBy,
+    // Written by makeCoveringLetter only, in this shape (and a CHECK in the migration).
+    letter: visa.coveringLetterText as unknown as LetterText,
   };
 }
 
 /**
- * The card's view: the letters that fit, the one asked for (or the one made, or the first) filled in from the case today,
- * with what's missing, and the letter made. Anyone who can open the case.
+ * The card's view: the letters that fit, the one asked for (or the one made, or the first) drafted from the case today,
+ * with what the case lacks, and the letter made with its text. Anyone who can open the case.
  */
 export async function coveringLetterView(caseNo: string, user: UserWithDepartments, formatId?: number) {
   const { id } = await findVisibleCase(caseNo, user);
@@ -141,8 +145,7 @@ export async function coveringLetterView(caseNo: string, user: UserWithDepartmen
       versionId: pick.wording.id,
       effectiveFrom: pick.wording.effectiveFrom,
       sample: pick.wording.addedById === null,
-      body: pick.wording.body,
-      ...fillLetter(pick.wording.body, factsOf(row, visa), today),
+      ...draftOf(pick.wording.body, row, visa, today),
     },
     made,
     /** For "No covering letter fits this case yet (Tourist · France · 2 travellers)". */
@@ -150,22 +153,33 @@ export async function coveringLetterView(caseNo: string, user: UserWithDepartmen
   };
 }
 
+/** A wording drafted from the case: the letter, and what the case lacks. */
+function draftOf(body: string, row: LetterCaseRow, visa: LetterVisa, today: string) {
+  const { letter, missing } = draftLetter(body, factsOf(row, visa), today);
+  return { draft: letter, missing };
+}
+
 /**
- * "Make the letter" (Decision 10), at File preparation: with a letter that fits, once nothing it needs is missing. Keeps
- * the wording used and what it was filled in with; making it again replaces them, and the audit keeps the earlier one.
- * Like the other Step 3 ticks, it doesn't move the case's updatedAt.
+ * "Make the letter" (Decision 10, amendment 1), at File preparation: with a letter that fits, its text as staff left it,
+ * once no mark is left in it. `versionId` is the wording the text started from (today's draft, or the made letter's):
+ * one of that letter's wordings whose day has come. Making it again replaces the text, and the audit keeps both. Like
+ * the other Step 3 ticks, it doesn't move the case's updatedAt.
  */
 export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLetterInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, PREPARING);
-  const { row, visa } = await loadLetterCase(enquiry.id);
+  const { visa } = await loadLetterCase(enquiry.id);
   const today = istToday();
   const letter = (await fittingLetters(visa, today)).find((l) => l.id === input.formatId);
   if (!letter) throw fieldError("formatId", "This covering letter doesn't fit this case. Pick another.");
-  const { values, travellers, missing } = fillLetter(letter.wording.body, factsOf(row, visa), today);
-  if (missing.length > 0) {
-    throw new HttpError(409, `Not ready yet. Still needed: ${missing.join("; ")}.`, { code: "LETTER_INCOMPLETE", missing });
+  const version = await prisma.coveringLetterVersion.findFirst({
+    where: { id: input.versionId, formatId: letter.id, effectiveFrom: { lte: toDbDate(today) } },
+    select: { id: true, effectiveFrom: true },
+  });
+  if (!version) throw fieldError("versionId", "This letter's wording has changed. Start again to draft it from the wording in use.");
+  const marks = marksIn(input.letter);
+  if (marks.length > 0) {
+    throw new HttpError(409, `Not ready yet. Fill these in first: ${marks.join("; ")}.`, { code: "LETTER_INCOMPLETE", missing: marks });
   }
-  const fill: LetterFill = { values, travellers };
   const before = madeOf(visa);
 
   await prisma.$transaction(async (tx) => {
@@ -173,10 +187,10 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
     await tx.visaCase.update({
       where: { enquiryId: enquiry.id },
       data: {
-        coveringLetterVersionId: letter.wording.id,
+        coveringLetterVersionId: version.id,
         coveringLetterMadeAt: new Date(),
         coveringLetterMadeById: actor.user.id,
-        coveringLetterFill: fill as unknown as Prisma.InputJsonValue,
+        coveringLetterText: input.letter as unknown as Prisma.InputJsonValue,
       },
     });
     await audit(
@@ -186,8 +200,17 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
         entityType: "VisaCase",
         entityId: enquiry.id,
         clientId: enquiry.clientId,
-        ...(before && { before: { formatName: before.formatName, versionId: before.versionId, madeAt: istTimestamp(before.madeAt) } }),
-        after: { formatId: letter.id, formatName: letter.name, versionId: letter.wording.id, effectiveFrom: letter.wording.effectiveFrom },
+        // The text too: it's free, so the audit is the only copy of an earlier letter once it's made again.
+        ...(before && {
+          before: { formatName: before.formatName, versionId: before.versionId, madeAt: istTimestamp(before.madeAt), letter: before.letter },
+        }),
+        after: {
+          formatId: letter.id,
+          formatName: letter.name,
+          versionId: version.id,
+          effectiveFrom: fromDbDate(version.effectiveFrom),
+          letter: input.letter,
+        },
         ip: actor.ip,
       },
       tx,
@@ -197,22 +220,13 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
 }
 
 /**
- * The letter made, to print (Decision 10): its wording and what it was filled in with when made, so every print is the
- * same letter, and the letterhead space (Decision 11). Anyone who can open the case; 409 before one is made.
+ * The letter made, to print (Decision 10): its text as made, so every print is the same letter, and the letterhead space
+ * (Decision 11). Anyone who can open the case; 409 before one is made.
  */
 export async function coveringLetterPrint(caseNo: string, user: UserWithDepartments) {
   const { id } = await findVisibleCase(caseNo, user);
   const [{ row, visa }, settings] = await Promise.all([loadLetterCase(id), getVisaSettings()]);
   const made = madeOf(visa);
-  if (!made || !visa.coveringLetterVersion || !visa.coveringLetterFill) throw conflict("No covering letter was made for this case yet.");
-  // Written by makeCoveringLetter only, in this shape.
-  const fill = visa.coveringLetterFill as unknown as LetterFill;
-  return {
-    caseNo: row.caseNo,
-    ...made,
-    body: visa.coveringLetterVersion.body,
-    values: fill.values,
-    travellers: fill.travellers,
-    letterheadMm: settings.coveringLetter.letterheadMm,
-  };
+  if (!made) throw conflict("No covering letter was made for this case yet.");
+  return { caseNo: row.caseNo, ...made, letterheadMm: settings.coveringLetter.letterheadMm };
 }

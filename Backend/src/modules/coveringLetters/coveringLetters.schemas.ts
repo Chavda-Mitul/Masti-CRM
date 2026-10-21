@@ -117,6 +117,110 @@ export const addWordingSchema = z.object({
 
 export const removeWordingSchema = z.object({ updatedAt });
 
+// ---------------------------------------------------------------------------------------------------------------------
+// A case's letter as staff edit it and make it (0019 amendment 1, 21 Oct 2026): its text, not a wording plus values.
+// Frontend/src/lib/letter.ts repeats the marks and the limits; tests/frontendRules.test.ts keeps the two the same.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * A mark the draft puts where the case lacks a value: ⟦the hotel stay⟧. Staff type over it, and "Make the letter" waits
+ * while any ⟦ or ⟧ is left. Nothing else in the CRM writes these two characters, unlike square brackets, which a hotel
+ * or an address may hold.
+ */
+export const MARK_OPEN = "⟦";
+export const MARK_CLOSE = "⟧";
+
+/** The text above or below the table: a page or two. */
+export const MAX_LETTER_PART_CHARS = 8000;
+export const MAX_LETTER_COLUMNS = 6;
+/** A row for every traveller a case can have: MAX_ADULTS + MAX_CHILDREN (visa.schemas.ts, checked by a test). */
+export const MAX_LETTER_ROWS = 60;
+export const MAX_LETTER_HEADING_CHARS = 60;
+/** A cell holds a name, a relation, a date or a passport number: 200 leaves room for the longest name. */
+export const MAX_LETTER_CELL_CHARS = 200;
+
+export interface LetterTable {
+  columns: string[];
+  rows: string[][];
+}
+
+/** The letter: the text above the table, the table (where {travellers} was; null when the wording has none), the text below. */
+export interface LetterText {
+  top: string;
+  table: LetterTable | null;
+  /** Empty when there's no table: all the text is then on top. */
+  bottom: string;
+}
+
+/** "the hotel stay" → "⟦the hotel stay⟧". */
+export function mark(what: string): string {
+  return `${MARK_OPEN}${what}${MARK_CLOSE}`;
+}
+
+/** The marks still in a letter, in plain words and in order, each once. A ⟦ or ⟧ left on its own counts too. */
+export function marksIn(letter: LetterText): string[] {
+  const parts = [letter.top, ...(letter.table ? [...letter.table.columns, ...letter.table.rows.flat()] : []), letter.bottom];
+  const found = new Set<string>();
+  for (const part of parts) {
+    for (const [, words] of part.matchAll(/⟦([^⟦⟧\n]*)⟧|[⟦⟧]/g)) found.add(words?.trim() || "a ⟦ or ⟧ left over");
+  }
+  return [...found];
+}
+
+/** Windows line breaks become plain ones, and blank lines at the ends go. The draft and "Make the letter" both use it. */
+export function normaliseLetterPart(text: string): string {
+  return text.replace(/\r\n?/g, "\n").replace(/^\s*\n/, "").trimEnd();
+}
+
+/** A heading or a cell sits on one line. */
+function oneLine(text: string): string {
+  return text.replace(/\s*[\r\n]+\s*/g, " ").trim();
+}
+
+const letterPart = (where: string) =>
+  z
+    .string(`Send the text ${where} the table.`)
+    .transform(normaliseLetterPart)
+    .pipe(z.string().max(MAX_LETTER_PART_CHARS, `Keep the text ${where} the table under ${MAX_LETTER_PART_CHARS} characters.`));
+
+/** The letter "Make the letter" sends. The messages say which part is wrong, since they arrive under one field. */
+export const letterTextSchema = z
+  .object({
+    top: letterPart("above"),
+    table: z
+      .object({
+        columns: z.array(z.string().transform(oneLine)),
+        rows: z.array(z.array(z.string().transform(oneLine))),
+      })
+      .nullable(),
+    bottom: letterPart("below"),
+  })
+  .superRefine((letter, ctx) => {
+    const problem = (message: string) => ctx.addIssue({ code: "custom", message });
+    const { table } = letter;
+    if (!table) {
+      if (letter.bottom) problem("Without a table, all the text goes above it.");
+      if (!letter.top) problem("Write the letter.");
+      return;
+    }
+    const { columns, rows } = table;
+    if (!letter.top && !letter.bottom && rows.length === 0) problem("Write the letter.");
+    if (columns.length < 1 || columns.length > MAX_LETTER_COLUMNS) problem(`Give the table 1 to ${MAX_LETTER_COLUMNS} columns.`);
+    columns.forEach((heading, c) => {
+      if (!heading) problem(`Give the table's column ${c + 1} a heading.`);
+      else if (heading.length > MAX_LETTER_HEADING_CHARS) problem(`Keep the heading "${heading.slice(0, 20)}…" under ${MAX_LETTER_HEADING_CHARS} characters.`);
+    });
+    if (rows.length > MAX_LETTER_ROWS) problem(`Keep the table to ${MAX_LETTER_ROWS} rows.`);
+    rows.forEach((cells, r) => {
+      if (cells.length !== columns.length) problem(`The table's row ${r + 1} needs one cell for each column.`);
+      cells.forEach((cell, c) => {
+        if (cell.length > MAX_LETTER_CELL_CHARS) {
+          problem(`The table's row ${r + 1}, ${columns[c] || `column ${c + 1}`}, is over ${MAX_LETTER_CELL_CHARS} characters.`);
+        }
+      });
+    });
+  });
+
 export type CoveringLetterListQuery = z.infer<typeof coveringLetterListQuerySchema>;
 export type CreateCoveringLetterInput = z.infer<typeof createCoveringLetterSchema>;
 export type UpdateCoveringLetterInput = z.infer<typeof updateCoveringLetterSchema>;

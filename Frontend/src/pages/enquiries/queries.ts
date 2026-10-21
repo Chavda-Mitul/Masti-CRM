@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
+import type { LetterText } from '../../lib/letter'
 import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
@@ -755,21 +756,27 @@ export function useCoveringLetter(caseNo: string, formatId: number | undefined, 
     staleTime: 0,
     // Picking another letter keeps the card's preview until the new one arrives.
     placeholderData: keepPreviousData,
+    // Coming back to the tab mustn't redraw the letter under someone typing in it (0019 amendment 1). Saving the case
+    // still refreshes it.
+    refetchOnWindowFocus: false,
   })
 }
 
-/** "Make the letter": answers with the card's view. The other letters' views and the print show the letter made. */
+/**
+ * "Make the letter" with its text as staff left it, and the wording that text started from (0019 amendment 1): answers
+ * with the card's view. The other letters' views and the print show the letter made.
+ */
 export function useMakeCoveringLetter(caseNo: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (formatId: number) =>
+    mutationFn: async (input: { formatId: number; versionId: number; letter: LetterText }) =>
       (
         await api<{ letter: CoveringLetterView }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter`, {
           method: 'POST',
-          body: { formatId },
+          body: input,
         })
       ).letter,
-    onSuccess: (letter, formatId) => {
+    onSuccess: (letter, { formatId }) => {
       const shown = enquiryKeys.coveringLetter(caseNo, formatId)
       queryClient.setQueryData(shown, letter)
       void queryClient.invalidateQueries({

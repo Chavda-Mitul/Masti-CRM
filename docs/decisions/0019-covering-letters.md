@@ -28,7 +28,7 @@
    1. the formats in Settings → Masters (this record's Schema, API and Screens);
    2. the card on the case at File preparation, and its print page (Decision 8), planned on its own.
 2. **One letter per case**, listing every traveller (the demo's "… and family (4)"). It is **locked**: it prints as the
-   format says, and staff can't type into it. A wrong detail is fixed on the case (trip details, a family member's
+   format says, and staff can't type into it. *Changed 21 Oct 2026, amendment 1: staff may change all of its text.* A wrong detail is fixed on the case (trip details, a family member's
    passport) and the letter is made again. No free text (§7 rule 2).
 3. **A format** has:
    - a **name**, which staff pick it by and which is never printed;
@@ -79,10 +79,12 @@
      a sentence ("A, B and C"), the number of days counting both ends, "single", "double" or "multiple", the hotel stay,
      the client's address, and the travellers' table from the family list. "See the whole letter" shows it all.
    - A sample wording says so on the card.
-9. **Missing details block** (project lead, 19 Oct 2026). A blank the wording uses that the case can't fill is listed in
+9. **Missing details block** (project lead, 19 Oct 2026). *Changed 21 Oct 2026, amendment 1: they become marks staff
+   type over.* A blank the wording uses that the case can't fill is listed in
    plain words ("Still needed: the hotel stay; AARAV MEHTA's passport number"), and Make the letter waits; the server
    refuses with 409 `LETTER_INCOMPLETE` too. Only the blanks a wording uses count.
-10. **Made at File preparation, printed again later** (project lead, 19 Oct 2026).
+10. **Made at File preparation, printed again later** (project lead, 19 Oct 2026). *Since amendment 1 the case keeps the
+    letter's text as made, not what its wording was filled in with.*
     - The owner, the Visa HOD or the Head make it at File preparation, again as often as needed there; each time is
       audited (`visa.coveringLetter.make`).
     - The case keeps the wording used, who made it, when, and **what it was filled in with** (a snapshot). Every print is
@@ -183,3 +185,64 @@
 - Whether "Covering letter" becomes a next step on the visa board.
 - Masti's own formats (M13), and the details in M47: titles, who signs, the letterhead's margin, the consulate address
   per country.
+
+## Amendment 1 (21 Oct 2026): the letter is editable
+
+- **Why:** on 21 Oct 2026 Masti sent two of their letters (France tourist, France business) and said they write every
+  letter in ChatGPT, because each one is different. The project lead chose to have the CRM write the paragraph on why
+  they travel with AI ([change request 11](../change-requests.md), [0023](0023-ai.md)). That paragraph must be
+  editable, so the letter comes first. The lead decided (21 Oct 2026):
+  - staff may change **everything**, the travellers' table included;
+  - a detail the case lacks becomes a marked blank staff type over, instead of blocking;
+  - edits are kept only when "Make the letter" is clicked: a reload loses them.
+- **Changes Decisions 2, 9 and 10.** The rest stands: who makes it and when, making it again, read-only printing after
+  File preparation, the letterhead space, "File ready" not needing it, and the wordings in Settings with their blanks.
+
+1. **A made letter is its text**, not a wording plus values: the text above the table, the table (its headings and
+   rows; null when the wording has no `{travellers}`), and the text below.
+   - The case keeps it in `VisaCase.coveringLetterText` (renamed from `coveringLetterFill`), with the wording it started
+     from, who made it and when. Every print is that text.
+   - The text is free, but it doesn't break §7 rule 2 (no free text): it's a letter to an embassy, not a reason, an
+     outcome or a status, and no report reads it.
+2. **The draft** (`draftLetter`, replacing `fillLetter`) writes the case's values into the wording.
+   - A value the case lacks becomes a **mark** with Decision 9's plain words: `⟦the hotel stay⟧`, `⟦Diya Mehta's
+     passport number⟧`, `⟦the number of days⟧` (for `{days}` without both dates).
+   - An unnamed traveller is `⟦Adult 2's name⟧` in `{travellerNames}` and in the table, where "Adult 2" used to reach
+     the letter.
+   - The table starts as Name · Relation · Date of birth · Passport no., a row per traveller. `{travellers}` may be the
+     first, last or only line.
+3. **Everything is editable** before "Make the letter":
+   - the text above and below the table;
+   - the table's headings and cells, with rows and columns added or removed (1–6 columns, at most 60 rows: a row per
+     traveller a case can have), e.g. "Designation" for "Relation" on a business trip.
+   - Adding or removing the table itself isn't offered.
+4. **A mark stops "Make the letter"** until it's typed over or deleted. Any `⟦` or `⟧` left anywhere counts, which also
+   catches a mark only half deleted.
+   - These two characters are written by nothing else in the CRM, unlike square brackets, which a hotel or an address
+     may hold.
+   - The card lists the marks; the server refuses too: 409 `LETTER_INCOMPLETE` with `details.missing`.
+   - The case itself isn't changed: the card still says what the case lacks, so it can be added there too.
+5. **Edits live on the card until "Make the letter".**
+   - Leaving the page, reloading, picking another letter or "Start again" asks first ("Discard your changes?").
+   - Print waits until the edits are made into the letter.
+   - Once made, the card starts from the letter made, with its date. "Start again" drafts it fresh, dated today.
+6. **Make sends `{ formatId, versionId, letter }`.**
+   - `versionId` is the wording the text started from: today's draft, or the made letter's. It must be one of that
+     letter's wordings whose day has come, and the letter must still fit the case.
+   - **The audit keeps the text**, before and after (`visa.coveringLetter.make`). With free text, it's the only copy of
+     an earlier letter once it's made again (golden rule 5).
+7. **Limits** (`coveringLetters.schemas.ts`, repeated in `Frontend/src/lib/letter.ts` with a drift test):
+   - the text above and below the table: at most 8,000 characters each, with some text or a table;
+   - a heading: at most 60 characters; a cell: at most 200; each on one line;
+   - every row has one cell per column;
+   - Windows line breaks become plain ones.
+   - The 400 messages say which part is wrong ("The table's row 2, Passport no., is over 200 characters.").
+8. **The database:** migration `20261021200000_covering_letter_text`, hand-written.
+   - It renames the column, so the four-together CHECK follows it. `prisma migrate diff` would drop the column and add a
+     new one, which drops that CHECK.
+   - A new CHECK keeps the text's shape (`top` and `bottom` strings, `table` an object or null) and bounds its size.
+   - A dev database with letters made before this keeps them in the old shape: reset it, or make them again.
+
+**Screens:** the card draws the letter as it stands (`LetterTextPaper`, marks as chips), with Edit the letter (a dialog:
+the text boxes and the table grid), Start again, Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
+**Tests:** `tests/visaCoveringLetter.test.ts` (19) and `tests/frontendRules.test.ts` (the marks and the limits).

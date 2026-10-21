@@ -860,7 +860,9 @@ This worked example follows the demo's Mehta family case (France Schengen touris
   - Formats are with Riya and Vimal ❓ (Q10).
   - **Decided 19 Oct 2026 (project lead):** built now with three sample formats, which the Visa HOD replaces in Settings
     when Masti's arrive (`docs/decisions/0019-covering-letters.md`).
-    - One letter per case, listing every traveller. It prints as the format says; staff can't type into it.
+    - One letter per case, listing every traveller. Staff may change all of its text, the table too (0019 amendment 1,
+      21 Oct 2026): a detail the case lacks is a mark (`⟦the hotel stay⟧`) to type over, and Make waits while one is
+      left. The case keeps the text as made.
     - A format is for one visa type, a set of countries, and one traveller or two or more (the "family type").
     - Changing the wording adds a version with a "Use from" day. A wording in use is never changed.
     - The formats in Settings are built (component 1), and so is the card on the case with its print page
