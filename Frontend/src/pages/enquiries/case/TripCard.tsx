@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
-import { FormField } from '../../../components/FormField'
+import { FormField, RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDate, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -116,7 +116,8 @@ function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
   return (
     <div className="trip-form">
       <div className="form-grid">
-        <FormField label="Travelling out" error={errors.departOn}>
+        {/* The * marks what "File ready" needs; Save takes the details a few at a time. */}
+        <FormField label="Travelling out" required error={errors.departOn}>
           <input
             className="input"
             type="date"
@@ -128,7 +129,7 @@ function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
             }}
           />
         </FormField>
-        <FormField label="Coming back" error={errors.returnOn}>
+        <FormField label="Coming back" required error={errors.returnOn}>
           <input
             className="input"
             type="date"
@@ -145,7 +146,10 @@ function TripForm({ visaCase: c }: { visaCase: VisaCase }) {
           <strong className="trip-duration">{daysText(tripDays(draft.departOn, draft.returnOn)) ?? <span className="muted">—</span>}</strong>
         </div>
         <div className="field">
-          <span>Entry</span>
+          <span>
+            Entry
+            <RequiredMark />
+          </span>
           <div className="seg-btn" role="radiogroup" aria-label="Entry">
             {ENTRY_TYPES.map((t) => (
               <button

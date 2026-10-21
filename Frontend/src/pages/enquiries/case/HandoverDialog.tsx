@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useWarningGuard } from '../../../lib/useWarningGuard'
@@ -122,7 +123,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
         )}
 
         <div className="field">
-          <span className="lbl">Booklets counted</span>
+          <span className="lbl">Booklets counted<RequiredMark /></span>
           <div className="receive-booklets">
             {count(current, setCurrent, 'Current')}
             {count(old, setOld, 'Old')}
@@ -137,7 +138,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
         </div>
 
         <div className="field">
-          <span className="lbl">Who collected them</span>
+          <span className="lbl">Who collected them<RequiredMark /></span>
           <div className="receiver-options" role="radiogroup" aria-label="Who collected them">
             {c.travellers.map((t) => (
               <label key={t.id}>
@@ -186,7 +187,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
         </div>
 
         <div className="field">
-          <span className="lbl">Photo of the person collecting</span>
+          <span className="lbl">Photo of the person collecting<RequiredMark /></span>
           <PhotoCapture
             caseNo={c.caseNo}
             value={photo}

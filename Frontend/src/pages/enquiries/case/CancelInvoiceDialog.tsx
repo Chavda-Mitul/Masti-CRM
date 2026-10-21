@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { isHodOf } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { formatRupees } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
@@ -130,7 +131,7 @@ export function CancelInvoiceDialog({ visaCase: c, invoiceNo, onClose }: { visaC
               </div>
             ) : (
               <label className="field">
-                <span className="lbl">Why it’s cancelled</span>
+                <span className="lbl">Why it’s cancelled<RequiredMark /></span>
                 <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} disabled={cancel.isPending} autoFocus>
                   <option value="">{reasons.isPending ? 'Loading…' : 'Pick the reason…'}</option>
                   {options.map((r) => (

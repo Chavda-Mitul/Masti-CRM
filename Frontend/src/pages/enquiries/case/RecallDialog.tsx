@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
 import { formatRupees, parseRupees, rupeesInput } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
@@ -146,7 +147,7 @@ export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
             )}
 
             <label className="field">
-              <span className="lbl">Why it’s taken back</span>
+              <span className="lbl">Why it’s taken back<RequiredMark /></span>
               <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} disabled={recall.isPending}>
                 <option value="">{reasons.isPending ? 'Loading…' : 'Pick the reason…'}</option>
                 {options.map((r) => (

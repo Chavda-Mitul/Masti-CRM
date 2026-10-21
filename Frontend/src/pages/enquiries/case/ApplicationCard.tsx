@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDateTime, istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -38,8 +39,9 @@ export function ApplicationCard({ visaCase: c }: { visaCase: VisaCase }) {
           <thead>
             <tr>
               <th>Traveller</th>
-              <th>Acknowledgement no. (typed in)</th>
-              {c.appointmentNeeded && <th>Appointment</th>}
+              {/* Needed by "File ready", not by each row's Save: a row can be saved half done. */}
+              <th>Acknowledgement no. (typed in){editable && <RequiredMark />}</th>
+              {c.appointmentNeeded && <th>Appointment{editable && <RequiredMark />}</th>}
               {editable && <th aria-label="Save" />}
             </tr>
           </thead>

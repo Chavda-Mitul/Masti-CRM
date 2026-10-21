@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { formatRupees, gstPaise, parseRupees, rupeesInput } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
@@ -172,7 +173,7 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
                     </div>
                     <div className={`quote-amounts${d.form === 'ITEMISED' ? ' itemised' : ''}`}>
                       {d.form === 'LUMP_SUM' ? (
-                        <MoneyInput label="Amount" value={d.lumpSum} onChange={(v) => setDraft(t.id, { lumpSum: v })} placeholder="0.00" />
+                        <MoneyInput label="Amount" required value={d.lumpSum} onChange={(v) => setDraft(t.id, { lumpSum: v })} placeholder="0.00" />
                       ) : (
                         ITEMS.map(([key, label]) => (
                           <MoneyInput key={key} label={label} value={d[key]} onChange={(v) => setDraft(t.id, { [key]: v })} placeholder="0" />
@@ -192,7 +193,7 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
 
           <section className="quote-section quote-case">
             <label className="field">
-              <span className="lbl">Processing speed</span>
+              <span className="lbl">Processing speed<RequiredMark /></span>
               <select className="select" value={chosenSpeed} onChange={(e) => setSpeedId(e.target.value)} disabled={speeds.isPending}>
                 {!chosenSpeed && <option value="">{speeds.isPending ? 'Loading…' : 'Pick a speed…'}</option>}
                 {speedOptions.map((s) => (
@@ -256,10 +257,23 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
 }
 
 /** An amount in rupees, with ₹ inside the box and the figures right-aligned. */
-function MoneyInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
+function MoneyInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  /** Shows the red *: the lump sum must be filled in; a blank fee counts as 0. */
+  required?: boolean
+}) {
   return (
     <label className="field money-field">
-      <span className="lbl">{label}</span>
+      <span className="lbl">{label}{required && <RequiredMark />}</span>
       <span className="money-input">
         <span aria-hidden="true">₹</span>
         <input className="input" inputMode="decimal" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />

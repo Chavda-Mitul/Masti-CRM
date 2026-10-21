@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -71,7 +72,7 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
         </p>
 
         <label className="field">
-          <span className="lbl">Vendor collected them on</span>
+          <span className="lbl">Vendor collected them on<RequiredMark /></span>
           <input
             type="date"
             className="input"
@@ -85,7 +86,7 @@ export function PassportsBackDialog({ visaCase: c, onClose }: { visaCase: VisaCa
         </label>
 
         <div className="field">
-          <span className="lbl">Expected at our office</span>
+          <span className="lbl">Expected at our office<RequiredMark /></span>
           <span className="hint" style={{ marginTop: 0 }}>
             Sundays and our office’s holidays can’t be picked.
           </span>

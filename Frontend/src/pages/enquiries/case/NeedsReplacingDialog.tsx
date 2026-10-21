@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -60,7 +61,7 @@ export function NeedsReplacingDialog({
         </p>
 
         <label className="field">
-          <span className="lbl">What’s wrong with it</span>
+          <span className="lbl">What’s wrong with it<RequiredMark /></span>
           <select
             className="select"
             value={reasonId}

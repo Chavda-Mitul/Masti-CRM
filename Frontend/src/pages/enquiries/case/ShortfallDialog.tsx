@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -112,7 +113,7 @@ export function ShortfallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
           </p>
         ) : (
           <div className="field">
-            <span className="lbl">What happened?</span>
+            <span className="lbl">What happened?<RequiredMark /></span>
             <span className="seg-btn" role="radiogroup" aria-label="What happened">
               <button type="button" role="radio" aria-checked={choice === 'CAME'} className={choice === 'CAME' ? 'on' : ''} disabled={pending} onClick={() => pick('CAME')}>
                 {one ? 'It came' : 'Some came'}
@@ -126,7 +127,7 @@ export function ShortfallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
 
         {choice === 'CAME' && (
           <div className="field">
-            <span className="lbl">Booklets that came</span>
+            <span className="lbl">Booklets that came<RequiredMark /></span>
             <div className="receive-booklets">
               {m.current > 0 && count(current, setCurrent, 'Current', m.current)}
               {m.old > 0 && count(old, setOld, 'Old', m.old)}
@@ -138,7 +139,7 @@ export function ShortfallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
         {choice === 'GONE' && (
           <>
             <label className="field">
-              <span className="lbl">{one ? 'Why it won’t come back' : 'Why they won’t come back'}</span>
+              <span className="lbl">{one ? 'Why it won’t come back' : 'Why they won’t come back'}<RequiredMark /></span>
               <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} disabled={pending}>
                 <option value="">{reasons.isPending ? 'Loading…' : 'Pick the reason…'}</option>
                 {options.map((x) => (

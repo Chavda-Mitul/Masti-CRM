@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { Link } from 'react-router'
 import { canActOnCase, canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDateTime, formatMobile } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -49,7 +50,10 @@ export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
 
   return (
     <section className="card pad saved-file">
-      <h2 className="h2">Saved file — kept as proof</h2>
+      <h2 className="h2">
+        Saved file — kept as proof
+        {editable && <RequiredMark />}
+      </h2>
       {file ? (
         <>
           <div className="kv">
@@ -161,7 +165,10 @@ function VendorRow({ visaCase: c, editable }: { visaCase: VisaCase; editable: bo
       {editable ? (
         // Label above, full width: like the other pickers on the case (the demo shows only the read-only row).
         <label className="field">
-          <span className="lbl">Vendor the file goes to</span>
+          <span className="lbl">
+            Vendor the file goes to
+            {c.vendorNeeded && <RequiredMark />}
+          </span>
           <select
             className="select"
             value={picked?.id ?? ''}

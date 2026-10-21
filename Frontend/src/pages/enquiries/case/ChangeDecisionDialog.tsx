@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useWarningGuard } from '../../../lib/useWarningGuard'
@@ -99,6 +100,7 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
             <div className="decision-row">
               <span>
                 <strong>The sticker</strong>
+                <RequiredMark />
                 <span className="muted small" style={{ display: 'block' }}>
                   Against the passport, as at Mark received
                 </span>
