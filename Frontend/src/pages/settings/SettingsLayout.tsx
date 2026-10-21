@@ -6,13 +6,14 @@ import './settings.css'
 
 /**
  * Settings, as in the demo: tabs across the top, then the tab's page.
- * Portal logins (the credential vault) isn't built yet. Company & invoice is everyone's to read (0009). Visa, the
- * timings and the warnings' values, is the Visa department's to read (19 Oct 2026). Staff & roles is the Head's.
+ * Portal logins is everyone's: staff see the portals they're on the list for (0024). Company & invoice is everyone's to
+ * read (0009). Visa, the timings and the warnings' values, is the Visa department's to read (19 Oct 2026). Staff & roles
+ * is the Head's.
  */
 export function SettingsLayout() {
   const { data: me } = useMe()
   const tabs: Tab[] = [
-    { label: 'Portal logins' },
+    { label: 'Portal logins', to: '/settings/portals' },
     { label: 'Masters & holiday calendar', to: '/settings/masters' },
     { label: 'Company & invoice', to: '/settings/company' },
   ]

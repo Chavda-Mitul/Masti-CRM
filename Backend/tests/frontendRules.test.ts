@@ -6,6 +6,8 @@ import { PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN } from "../src/lib/shared.schemas";
 import { LETTER_BLANKS, MAX_LETTER_CHARS, MAX_LETTER_COUNTRIES, normaliseWording, wordingProblem } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
+import { PortalLoginOutcome } from "../generated/prisma/enums";
+import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
 import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
@@ -114,5 +116,44 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       const v = { adultFrom: age };
       expect(shape.childAge!.safeParse(v).success, `age ${age}`).toBe(childAgeSchema.safeParse(v).success);
     }
+  });
+});
+
+// Portal logins (docs/decisions/0024-portal-logins.md): the drawer repeats the backend's limits and address rule, and the
+// helper, the page and the database must name the same outcomes. Helper/src/protocol.ts imports nothing, so it's
+// checked even without the Helper's packages.
+const frontendPortalSchemas = resolve(__dirname, "../../Frontend/src/pages/settings/portals/schemas.ts");
+const frontendPortalHelper = resolve(__dirname, "../../Frontend/src/lib/portalHelper.ts");
+const helperProtocol = resolve(__dirname, "../../Helper/src/protocol.ts");
+
+const ADDRESSES = [
+  "https://france-visas.gouv.fr/login",
+  "http://www.hiaceindia.in/",
+  "https://www.gold-medal.in/pos/#/auth/landing",
+  "ftp://france-visas.gouv.fr",
+  "javascript:alert(1)",
+  "https://agent:secret@france-visas.gouv.fr/login",
+  "france-visas.gouv.fr",
+  `https://example.com/${"a".repeat(500)}`,
+  "",
+];
+
+describe.skipIf(!frontendInstalled)("portal logins' copied rules match the backend", () => {
+  it("checks the drawer's limits and login addresses the same way", async () => {
+    const backend = portalRules;
+    const frontend = (await import(frontendPortalSchemas)) as typeof portalRules;
+    for (const key of ["MAX_PORTAL_NAME", "MAX_PORTAL_URL", "MAX_ID_LABEL", "MAX_LOGIN_ID", "MAX_PORTAL_PASSWORD"] as const) {
+      expect(frontend[key], key).toBe(backend[key]);
+    }
+    for (const address of ADDRESSES) expect(frontend.loginUrlProblem(address), address).toBe(backend.loginUrlProblem(address));
+  });
+
+  it("names the same outcomes in the database, the helper and the page", async () => {
+    const database = Object.values(PortalLoginOutcome);
+    const page = ((await import(frontendPortalHelper)) as { OUTCOMES: readonly string[] }).OUTCOMES;
+    const helper = ((await import(helperProtocol)) as { OUTCOMES: readonly string[] }).OUTCOMES;
+    expect([...page]).toEqual(database);
+    expect([...helper]).toEqual(database);
+    expect([...portalRules.HELPER_OUTCOMES]).toEqual(database.filter((o) => o !== "REFUSED"));
   });
 });

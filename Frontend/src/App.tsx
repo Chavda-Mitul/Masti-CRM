@@ -22,6 +22,7 @@ import { MasterListsPage } from './pages/settings/masters/lists/MasterListsPage'
 import { CoveringLetterPrintPage } from './pages/print/CoveringLetterPrintPage'
 import { StickerPrintPage } from './pages/print/StickerPrintPage'
 import { MastersPage } from './pages/settings/masters/MastersPage'
+import { PortalLoginsPage } from './pages/settings/portals/PortalLoginsPage'
 import { SettingsLayout } from './pages/settings/SettingsLayout'
 import { VisaSettingsPage } from './pages/settings/visa/VisaSettingsPage'
 import { TodayPage } from './pages/today/TodayPage'
@@ -112,6 +113,7 @@ export default function App() {
         {/* Settings (demo screen 29). Masters are readable by the Head and office staff; the rest is the Head's. */}
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="masters" replace />} />
+          <Route path="portals" element={<PortalLoginsPage />} />
           <Route path="masters" element={<MastersPage />} />
           <Route path="masters/checklists" element={<ChecklistsPage />} />
           <Route path="masters/checklists/:offeringId" element={<ChecklistEditorPage />} />
