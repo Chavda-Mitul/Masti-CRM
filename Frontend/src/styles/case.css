@@ -973,6 +973,15 @@
   background: var(--warn-bg);
   color: var(--warn);
 }
+/* The details' state under the consent line, and the button to fill them in (0022) */
+.consent-tile .small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-3);
+}
+.consent-fill {
+  margin-top: 8px;
+}
 
 /* Follow-up history */
 .follow-list {

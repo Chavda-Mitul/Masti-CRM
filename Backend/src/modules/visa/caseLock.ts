@@ -101,6 +101,15 @@ export const LETTERS: StepRule = {
   wrongStage: "A refusal letter is added once the decision is recorded.",
 };
 
+/**
+ * The consent form's details (docs/decisions/0022-consent-form.md): not at enquiry (Masti takes consent once the
+ * business has reached that far), then alongside processing, until the passports are handed over.
+ */
+export const CONSENTING: StepRule = {
+  stages: ["DOCUMENTS", "FILE_PREPARATION", "DISPATCH", "AT_VENDOR", "DECISION", "PASSPORT_BACK"],
+  wrongStage: "Consent details are filled in from Documents until the passports are handed over.",
+};
+
 /** The quote (docs/decisions/0009-visa-invoice.md Decision 2): from Step 1 until the file goes to the vendor. */
 export const QUOTING: StepRule = {
   stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH"],

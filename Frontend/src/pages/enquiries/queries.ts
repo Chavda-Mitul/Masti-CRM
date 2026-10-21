@@ -7,6 +7,7 @@ import type { ScanType } from '../clients/scanFiles'
 import type {
   CaseMessage,
   ClientLookup,
+  ConsentDetailsBody,
   CoveringLetterPrint,
   CoveringLetterView,
   CreateVisaCaseBody,
@@ -307,6 +308,13 @@ export function useOpenCaseScan(caseNo: string) {
 export function useLinkTraveller(caseNo: string) {
   return useCaseAction<{ travellerId: string; memberId: string; confirmWarnings?: boolean }>(caseNo, (base, { travellerId, ...body }) =>
     api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body }),
+  )
+}
+
+/** The consent form's details for one named traveller (docs/decisions/0022-consent-form.md, part 1). */
+export function useSaveConsentDetails(caseNo: string) {
+  return useCaseAction<{ travellerId: string } & ConsentDetailsBody>(caseNo, (base, { travellerId, ...body }) =>
+    api(`${base}/travellers/${travellerId}/consent-details`, { method: 'PUT', body }),
   )
 }
 

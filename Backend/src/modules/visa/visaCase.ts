@@ -187,7 +187,7 @@ export const visaCaseInclude = {
       travellers: {
         orderBy: { position: "asc" },
         include: {
-          member: { include: { relation: true, consent: true } },
+          member: { include: { relation: true, consent: true, consentDetailsBy: personSelect } },
           documents: {
             orderBy: { sortOrder: "asc" },
             include: {
@@ -390,11 +390,39 @@ function openDocketOf(vendor: VendorRow | null) {
   return open && open._count.cases > 0 ? { docketNo: open.docketNo, caseCount: open._count.cases } : null;
 }
 
-/** The consent card (0006 Decision 5): flagged until the "I agree" link, which comes with WhatsApp, fills it. */
+/**
+ * The consent card (0006 Decision 5, 0022): the person's form details, which staff fill in, and their consent, which the
+ * client gives through the "I agree" link (0022 part 2). Flagged until then.
+ */
 function consentOf(t: TravellerRow) {
   if (!t.member) return { state: "UNLINKED" as const };
-  if (!t.member.consent) return { state: "NONE" as const };
-  return { state: "ON_FILE" as const, agreedAt: t.member.consent.agreedAt };
+  const details = consentDetailsOf(t.member);
+  if (!t.member.consent) return { state: "NONE" as const, details };
+  return { state: "ON_FILE" as const, agreedAt: t.member.consent.agreedAt, details };
+}
+
+/**
+ * The consent form's details on the person (docs/decisions/0022-consent-form.md, part 1), as the form starts from
+ * them: filledAt stays null until staff save the form (the date of birth may already be there from the client page).
+ * personUpdatedAt is the person's optimistic-lock token.
+ */
+function consentDetailsOf(m: NonNullable<TravellerRow["member"]>) {
+  const day = (value: Date | null) => (value ? fromDbDate(value) : null);
+  return {
+    dateOfBirth: day(m.dateOfBirth),
+    spouseDateOfBirth: day(m.spouseDateOfBirth),
+    anniversary: day(m.anniversary),
+    motherDateOfBirth: day(m.motherDateOfBirth),
+    fatherDateOfBirth: day(m.fatherDateOfBirth),
+    residentialAddress: m.residentialAddress,
+    officeAddress: m.officeAddress,
+    annualIncome: m.annualIncome,
+    profession: m.profession,
+    education: m.education,
+    filledAt: m.consentDetailsAt,
+    filledBy: m.consentDetailsBy,
+    personUpdatedAt: m.updatedAt,
+  };
 }
 
 /**
