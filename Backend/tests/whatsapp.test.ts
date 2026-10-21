@@ -115,4 +115,14 @@ describe("Twilio", () => {
     answer("failed");
     await expect(provider.checkStatus("SM1")).resolves.toEqual({ status: "FAILED", error: "Twilio didn't say why." });
   });
+
+  it("explains a status check Twilio refused or couldn't answer, as for a send", async () => {
+    const provider = twilioProvider(settings);
+    twilioMock.fetch.mockRejectedValueOnce(new twilioMock.RestException("Authenticate", 20003));
+    await expect(provider.checkStatus("SM1")).rejects.toThrow(
+      "Twilio refused the Account SID or Auth Token. Copy both again from the Twilio Console.",
+    );
+    twilioMock.fetch.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND api.twilio.com"));
+    await expect(provider.checkStatus("SM1")).rejects.toThrow("Couldn't reach Twilio: getaddrinfo ENOTFOUND api.twilio.com");
+  });
 });
