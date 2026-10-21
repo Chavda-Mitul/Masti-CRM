@@ -376,6 +376,8 @@ model Client {
   notes          ClientNote[]
   documents      ClientDocument[]
   enquiries      Enquiry[]
+  /// What the CRM has sent them (docs/decisions/0021-whatsapp-outbox.md).
+  messages       OutboundMessage[]
 
   @@index([name])
   @@index([pan])
@@ -1111,6 +1113,8 @@ model Enquiry {
   /// The collection and delivery boy's jobs for it (0015).
   fieldJobs      FieldJob[]
   creditNotes    CreditNote[]
+  /// The client's messages about it (docs/decisions/0021-whatsapp-outbox.md).
+  messages       OutboundMessage[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -1842,4 +1846,85 @@ model InvoiceCharge {
 model InvoiceCounter {
   id        Int @id @default(1)
   lastValue Int
+}
+
+// ---------------------------------------------------------------------------
+// Messages to clients (docs/decisions/0021-whatsapp-outbox.md): a transactional outbox. A message is written in the
+// transaction of the change it reports, and the pg-boss job "whatsapp-send" sends it afterwards.
+// ---------------------------------------------------------------------------
+
+/// Code branches on it.
+enum MessageStatus {
+  /// Waiting for the sender, or for its next try.
+  QUEUED
+  /// Handed to the provider, not confirmed delivered yet.
+  SENT
+  DELIVERED
+  READ
+  /// It didn't go, or the provider reported it undelivered: `error` says why.
+  FAILED
+  /// Not sent on purpose: its template is switched off.
+  SKIPPED
+}
+
+/// The wording of one automatic message (docs/whatsapp-visa-messages.md): seeded, the words still Masti's to approve
+/// (M1). Checks in the migration: no blank name or body.
+model MessageTemplate {
+  id                 Int               @id @default(autoincrement())
+  /// "visa.documents_received": the code queues messages by it. Never changes.
+  code               String            @unique
+  /// "All documents received"
+  name               String
+  /// The words, with {{placeholders}} such as {{client_name}}, {{visa}} and {{case_no}}.
+  body               String
+  /// The provider's id for the Meta-approved version (Twilio: its Content SID, "HX…"). Empty until approved: the body
+  /// then goes as written, which WhatsApp delivers only within 24 hours of the client's last message to us.
+  providerTemplateId String?
+  /// Switched off: its messages are still written down, but never sent (SKIPPED).
+  isActive           Boolean           @default(true)
+  messages           OutboundMessage[]
+}
+
+/// One message to a client, and the record of what they were told. Its id is also its pg-boss job's id.
+/// Checks in the migration: one that went (SENT, DELIVERED, READ) has sentAt, provider, providerMessageId and sentTo,
+/// plus deliveredAt or readAt for those two; a FAILED one has error and failedAt; sendingAt only while QUEUED;
+/// attempts never negative; no blank body; the number's format.
+model OutboundMessage {
+  id                String          @id @default(uuid())
+  templateId        Int
+  clientId          String
+  /// The case it's about, when there is one.
+  enquiryId         String?
+  /// The client's main number when it was queued: who it is for.
+  toMobile          String
+  /// The values put into the template's placeholders.
+  variables         Json
+  /// The words as rendered when it was queued.
+  body              String
+  /// "visa.documents_received:<enquiryId>": the same event never queues a second message.
+  idempotencyKey    String          @unique
+  status            MessageStatus   @default(QUEUED)
+  /// Tries so far.
+  attempts          Int             @default(0)
+  /// Set while a try is with the provider. A try that never came back isn't repeated: the message may have gone.
+  sendingAt         DateTime?       @db.Timestamptz(3)
+  /// Who carried it ("twilio", "log") and their id for it, which delivery updates refer to.
+  provider          String?
+  providerMessageId String?
+  /// The number it went to: outside production, always WHATSAPP_TEST_NUMBER.
+  sentTo            String?
+  /// Why the last try failed, or why it wasn't delivered, in plain words.
+  error             String?
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  sentAt            DateTime?       @db.Timestamptz(3)
+  deliveredAt       DateTime?       @db.Timestamptz(3)
+  readAt            DateTime?       @db.Timestamptz(3)
+  failedAt          DateTime?       @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+  template          MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  client            Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  enquiry           Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, createdAt])
+  @@index([enquiryId, createdAt])
 }

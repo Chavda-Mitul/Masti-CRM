@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import type { WhatsAppProvider, WhatsAppStatus } from "./types";
+import { WhatsAppError, type WhatsAppProvider, type WhatsAppStatus } from "./types";
 
 // WhatsApp through Twilio (https://www.twilio.com/docs/whatsapp): its sandbox while we build, Masti's own number once
 // Meta approves it (docs/decisions/0020-whatsapp-sending.md). Everything Twilio-specific stays in this file.
@@ -11,8 +11,14 @@ export interface TwilioSettings {
   from: string;
 }
 
+/** Twilio gives up on a request after this long, well inside the send job's 2 minutes (src/lib/jobs.ts). */
+const TIMEOUT_MS = 30_000;
+
+/** Errors that mean the request never reached Twilio, so trying again can't send twice. */
+const NOT_REACHED = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"]);
+
 export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvider> {
-  const client = twilio(settings.accountSid, settings.authToken);
+  const client = twilio(settings.accountSid, settings.authToken, { timeout: TIMEOUT_MS });
   return {
     name: "twilio",
     async send(message) {
@@ -27,7 +33,7 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
         });
         return { providerMessageId: sent.sid };
       } catch (error) {
-        throw new Error(reasonFor(error), { cause: error });
+        throw errorFor(error);
       }
     },
     async checkStatus(providerMessageId) {
@@ -73,8 +79,22 @@ function failure(code: number | null, text: string | null): string {
   return REASONS[code] ?? `Twilio error ${code}: ${text ?? "no details"} (https://www.twilio.com/docs/api/errors/${code})`;
 }
 
-/** Twilio's RestException carries a numeric code; anything else never reached Twilio (network, DNS). */
-function reasonFor(error: unknown): string {
-  if (error instanceof twilio.RestException) return failure(error.code ?? null, error.message);
-  return `Couldn't reach Twilio: ${error instanceof Error ? error.message : String(error)}`;
+/**
+ * Twilio's refusal (a RestException, with its code) is worth another try only when Twilio was down or busy. A network
+ * error is worth one only when the request never left: a timeout or a dropped connection may come after Twilio took
+ * the message, and trying again could send it twice.
+ */
+function errorFor(error: unknown): WhatsAppError {
+  if (error instanceof twilio.RestException) {
+    const retryable = error.status >= 500 || error.status === 429;
+    return new WhatsAppError(failure(error.code ?? null, error.message), retryable, { cause: error });
+  }
+  const text = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && NOT_REACHED.has(code)) {
+    return new WhatsAppError(`Couldn't reach Twilio: ${text}`, true, { cause: error });
+  }
+  return new WhatsAppError(`Twilio didn't answer (${text}), so the message may or may not have gone. Check the chat.`, false, {
+    cause: error,
+  });
 }

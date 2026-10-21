@@ -4,6 +4,7 @@ import app from "../src/app";
 import { clearOfficeNetworkCache } from "../src/modules/auth/officeNetwork";
 import { hashPassword } from "../src/modules/auth/password";
 import { seedClientLookups } from "../src/modules/clients/clients.seed";
+import { seedMessageTemplates } from "../src/modules/messages/messages.seed";
 import { prisma } from "../src/config/prisma";
 
 export const PASSWORD = "Correct-Horse-9";
@@ -17,10 +18,13 @@ const DEPARTMENTS = [
   { code: "ACCOUNTS", casePrefix: "ACC" },
 ];
 
-/** Wipes every table and recreates the departments and client lookups. TRUNCATE is allowed on the append-only audit log. */
+/**
+ * Wipes every table and recreates the departments, client lookups and message wordings. TRUNCATE is allowed on the
+ * append-only audit log.
+ */
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "Session", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
+    'TRUNCATE "AuditLog", "Session", "OutboundMessage", "MessageTemplate", "Notice", "FieldJob", "FieldSlot", "FieldFailReason", "CreditNoteLine", "CreditNote", "CreditNoteCounter", "InvoiceLine", "Invoice", "InvoiceCounter", "CaseFile", "VisaQuoteLine", "VisaQuote", "ProcessingSpeed", "Docket", "Courier", "CreditNoteReason", "RecallReason", "MissingPassportReason", "ExtraCharge", "DocketCounter", "VendorCountry", "Vendor", "VisaCaseDocument", "VisaHandover", "VisaCaseTraveller", "VisaCase", "FollowUp", "Enquiry", ' +
       '"CaseCounter", "FollowUpOutcomeDepartment", "FollowUpNextStepDepartment", "EnquiryReasonDepartment", "FollowUpOutcome", "FollowUpNextStep", "EnquiryReason", "Consent", ' +
       '"DepartmentStage", "EnquirySource", "UserDepartment", "ClientDocument", "ClientNote", "ClientMember", "ClientPhone", "Client", ' +
       '"BillingCycle", "PaymentHabit", "Relation", "HolidayTarget", "Holiday", "VisaChecklistItem", "VisaOffering", ' +
@@ -31,6 +35,7 @@ export async function resetDb() {
     data: DEPARTMENTS.map(({ code, casePrefix }, i) => ({ code, casePrefix, name: code[0] + code.slice(1).toLowerCase(), sortOrder: i + 1 })),
   });
   await seedClientLookups(prisma);
+  await seedMessageTemplates(prisma);
   clearOfficeNetworkCache();
 }
 

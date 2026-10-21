@@ -367,6 +367,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       // Nothing changed.
       expect(await load(staff, c.caseNo)).toMatchObject({ stage: { code: "DOCUMENTS" }, owner: { name: "Aarti Patel" }, maturedAt: null });
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
+      expect(await prisma.outboundMessage.count()).toBe(0);
 
       // One paper short is still refused.
       const other = await freshCase(staff);
@@ -407,6 +408,17 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
         after: { stage: "FILE_PREPARATION", ownerId: null, maturedById: aarti.id },
       });
 
+      // The client's "All documents received" WhatsApp is queued with the move (0021); messages.test.ts sends it.
+      const messages = await prisma.outboundMessage.findMany({ include: { template: { select: { code: true } } } });
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        status: "QUEUED",
+        clientId: c.client.id,
+        enquiryId: c.id,
+        toMobile: "+919825041234",
+        template: { code: "visa.documents_received" },
+      });
+
       // The owner is cleared, so whoever matured it no longer opens it: it is the HOD's to assign.
       expect((await staff.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
     });
@@ -427,6 +439,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(refused.status).toBe(409);
       expect(refused.body.message).toBe("The collection boy is still booked for this case. Cancel his pickup first.");
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
+      expect(await prisma.outboundMessage.count()).toBe(0);
 
       await prisma.fieldJob.update({ where: { id: job.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: aarti.id } });
       expect((await mature(staff, c, updatedAt)).status).toBe(200);
@@ -451,6 +464,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect((await mature(await loginAs("neha@masti.test"), c, updatedAt)).status).toBe(403);
       await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
       expect((await mature(await loginAs("meena@masti.test"), c, updatedAt)).status).toBe(403);
+      expect(await prisma.outboundMessage.count()).toBe(0);
 
       await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
       const byHod = await mature(await loginAs("riya@masti.test"), c, updatedAt);
@@ -480,6 +494,8 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(again.status).toBe(409);
       expect(again.body.message).toMatch(/moved past/);
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(1);
+      // One message for the one move: a stale page or a second press queues none.
+      expect(await prisma.outboundMessage.count()).toBe(1);
 
       const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
       const held = await freshCase(staff);
