@@ -1,7 +1,6 @@
 import { Link } from 'react-router'
 import { canViewVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
-import { TodaySettingsCard } from '../../today/TodaySettingsCard'
 import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { ReminderRulesCard } from './ReminderRulesCard'
@@ -138,7 +137,6 @@ export function MastersPage() {
         )}
 
         <HolidaySettingsCard />
-        <TodaySettingsCard />
         {visa && <ReminderRulesCard />}
 
         {NOT_BUILT.map((name) => (

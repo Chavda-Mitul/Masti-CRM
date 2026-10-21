@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { actorOf, currentUser, requireAuth, requireHead, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { updateTodaySettingsSchema } from "./today.schemas";
+import { currentUser, requireAuth, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import * as todayService from "./today.service";
 
 /**
@@ -13,15 +12,6 @@ router.use(requireAuth, requirePasswordChanged, requireUserType("HEAD", "OFFICE"
 /** One person's day: the banner's sentence and the tiles. */
 router.get("/", async (req, res) => {
   res.json(await todayService.todaySummary(currentUser(req)));
-});
-
-router.get("/settings", async (_req, res) => {
-  res.json({ settings: await todayService.getSettings() });
-});
-
-router.put("/settings", requireHead, async (req, res) => {
-  const body = updateTodaySettingsSchema.parse(req.body);
-  res.json({ settings: await todayService.updateSettings(body, actorOf(req)) });
 });
 
 export default router;
