@@ -17,6 +17,7 @@ import healthRoutes from "./modules/health/health.routes";
 import companyRoutes from "./modules/company/company.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import noticeRoutes from "./modules/notices/notices.routes";
+import portalHelperRoutes from "./modules/portalLogins/portalHelper.routes";
 import portalLoginRoutes from "./modules/portalLogins/portalLogins.routes";
 import todayRoutes from "./modules/today/today.routes";
 import userRoutes from "./modules/users/users.routes";
@@ -53,6 +54,8 @@ app.use("/api/field", fieldRoutes);
 app.use("/api/today", todayRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/portal-logins", portalLoginRoutes);
+// The one route without a session: the CRM helper collects a login with a one-time ticket (0024).
+app.use("/api/portal-helper", portalHelperRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);

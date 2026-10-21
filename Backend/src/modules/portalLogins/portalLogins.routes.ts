@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { actorOf, currentUser, requireAuth, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { createPortalLoginSchema, peopleQuerySchema, updatePortalLoginSchema } from "./portalLogins.schemas";
+import { createPortalLoginSchema, outcomeSchema, peopleQuerySchema, updatePortalLoginSchema } from "./portalLogins.schemas";
+import * as portalHelperService from "./portalHelper.service";
 import * as portalLoginsService from "./portalLogins.service";
 
 /**
@@ -18,6 +19,12 @@ router.get("/people", async (req, res) => {
   res.json(await portalLoginsService.listPeople(department, currentUser(req)));
 });
 
+/** What the CRM helper said happened after a press, reported by the page of the person who pressed. */
+router.post("/uses/:useId/outcome", async (req, res) => {
+  const body = outcomeSchema.parse(req.body);
+  res.json(await portalHelperService.reportOutcome(req.params.useId, body, actorOf(req)));
+});
+
 router.get("/", async (req, res) => {
   res.json(await portalLoginsService.listPortalLogins(currentUser(req)));
 });
@@ -30,6 +37,11 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   const body = updatePortalLoginSchema.parse(req.body);
   res.json({ portal: await portalLoginsService.updatePortalLogin(req.params.id, body, actorOf(req)) });
+});
+
+/** "Log in for me": a one-time ticket the page hands to the CRM helper. The ID and password never come back here. */
+router.post("/:id/open", async (req, res) => {
+  res.status(201).json(await portalHelperService.openPortalLogin(req.params.id, actorOf(req)));
 });
 
 router.post("/:id/remove", async (req, res) => {
