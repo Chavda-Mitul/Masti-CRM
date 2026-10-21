@@ -14,6 +14,7 @@ import {
   assertCanChangeAccountsFields,
   assertCanEditClients,
   assertCanSeeClient,
+  clientsTabWhere,
 } from "./access";
 import { assertFresh, onlyChanged, pick, staleError } from "../../lib/changes";
 import { clientProfileInclude, requireMobile, toClientProfile, toClientSummary, toNoteDto, toPhoneDto } from "./client";
@@ -287,7 +288,7 @@ function searchWhere(q: string): Prisma.ClientWhereInput {
 export async function listClients(query: ListClientsQuery, user: UserWithDepartments) {
   assertCanBrowseClients(user);
   const settings = await getClientSettings();
-  const and: Prisma.ClientWhereInput[] = [];
+  const and: Prisma.ClientWhereInput[] = [clientsTabWhere(user)];
   if (query.kind) and.push({ kind: query.kind });
   if (query.incomplete !== undefined) {
     const incomplete = incompleteWhere(settings.invoiceReadiness);

@@ -11,19 +11,24 @@ import { MB, pdfPageCount } from "../../lib/pdf";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { isHodOfAny } from "../auth/permissions";
 import type { Actor, UserWithDepartments } from "../users/user";
+import { assertCanSeeClient } from "./access";
 import { SCAN_TYPES, type AddClientDocumentQuery, type ScanType } from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";
 
 // The client document vault (docs/decisions/0016-client-documents.md): scans of a client's papers (passport, Aadhaar
 // card, PAN card…), per family member, kept in the private bucket for good (rule 4) and reused on later cases. On the
-// client page only the Head and the HOD of any department see a client's whole list, add scans and open them (Decision
-// 4). The core (saving a scan, opening one, the current scan of a paper) is shared with a visa case's checklist
+// client page the Head and an HOD who can open the client see its whole list, add scans and open them (Decision 4,
+// amended 21 Oct 2026). The core (saving a scan, opening one, the current scan of a paper) is shared with a visa case's checklist
 // (Decision 5, visaCaseScans.service.ts), whose own rules say who may. Every save and every opening is audited. Nothing
 // is changed or deleted: a newer scan of a paper for the same person becomes the current one, and the older ones stay.
 
-/** Only the Head and HODs (any department) see a client's documents (Decision 4). Field staff never reach here. */
-function assertCanSeeDocuments(user: UserWithDepartments) {
+/**
+ * The Head and HODs see a client's documents (Decision 4), of a client they can open: a Holidays HOD not those of a
+ * family that only has visa cases (amended 21 Oct 2026, 0004 amendment 4). Field staff never reach here.
+ */
+async function assertCanSeeDocuments(user: UserWithDepartments, clientId: string) {
   if (!isHodOfAny(user)) throw forbidden("Only an HOD or the Head can see a client's documents.");
+  await assertCanSeeClient(user, clientId);
 }
 
 const scanSelect = {
@@ -101,7 +106,7 @@ async function vaultOf(clientId: string) {
 }
 
 export async function listClientDocuments(clientId: string, user: UserWithDepartments) {
-  assertCanSeeDocuments(user);
+  await assertCanSeeDocuments(user, clientId);
   if (!(await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } }))) throw notFound("Client not found.");
   return vaultOf(clientId);
 }
@@ -137,7 +142,7 @@ export async function clientScanLimit() {
  * wrong upload is never held in memory.
  */
 export async function clientDocumentLimit(clientId: string, query: AddClientDocumentQuery, user: UserWithDepartments) {
-  assertCanSeeDocuments(user);
+  await assertCanSeeDocuments(user, clientId);
   await scanTarget(prisma, clientId, query);
   return clientScanLimit();
 }
@@ -237,7 +242,7 @@ export async function saveClientScan(
 
 /** The client page's "Add a scan": HODs and the Head. Returns the whole vault. */
 export async function addClientDocument(clientId: string, query: AddClientDocumentQuery, contentType: ScanType, bytes: Buffer, actor: Actor) {
-  assertCanSeeDocuments(actor.user);
+  await assertCanSeeDocuments(actor.user, clientId);
   await saveClientScan(clientId, query, contentType, bytes, actor);
   return vaultOf(clientId);
 }
@@ -262,7 +267,7 @@ const openSelect = { id: true, clientId: true, storageKey: true, fileName: true 
 
 /** Opens one of the client's scans from the client page: HODs and the Head. */
 export async function openClientDocument(clientId: string, clientDocumentId: string, actor: Actor) {
-  assertCanSeeDocuments(actor.user);
+  await assertCanSeeDocuments(actor.user, clientId);
   const scan = await prisma.clientDocument.findFirst({ where: { id: clientDocumentId, clientId }, select: openSelect });
   if (!scan) throw notFound("Document not found on this client.");
   return openClientScan(scan, actor);

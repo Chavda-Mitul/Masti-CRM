@@ -100,8 +100,9 @@ describe("Save scan from the case", () => {
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "client.document.add", entityId: row.id } });
     expect(entry).toMatchObject({ clientId: c.client.id, after: { paper: BANK, person: "Rakesh Mehta", case: c.caseNo } });
 
-    // It's in the client's vault, which an HOD sees on the client page.
-    await createUser({ name: "Kiran Shah", email: "kiran@masti.test", departments: [{ code: "HOLIDAYS", role: "HOD" }] });
+    // It's in the client's vault, which the Visa HOD sees on the client page (a Holidays HOD doesn't: the family has
+    // only a visa case, 0004 amendment 4).
+    await createUser({ name: "Kiran Shah", email: "kiran@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     const hod = await loginAs("kiran@masti.test");
     const vault = (await hod.get(`/api/clients/${c.client.id}/documents`)).body;
     expect(vault.groups).toHaveLength(1);
