@@ -1,7 +1,7 @@
 # 0022 · The consent & liability form
 
-- **Status:** decided 21 Oct 2026 (project lead). Parts 1 and 2 (2a, 2b) and 3a are built; 3b, the printable record,
-  follows.
+- **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
+  "Still open".
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -195,13 +195,24 @@ It is built in two pieces: 3a, the client page's column and paper consents; then
   - It's audited as `consent.paper.mark` and `consent.paper.remove`, with the client.
 - **The case's tile** shows "On file · 2025 (on paper)" for a paper consent.
 
-### 3b: the printable record (next)
+### 3b: the printable record (built 21 Oct 2026)
 
-**View record**, from the case's tile and the client page's column, opens a page to print (or save as PDF), with
-nothing stored:
-- **A link consent:** Masti's name, address and phone; the details as agreed; when and how it was given (the number,
-  who sent the link, the case); the IP address and the phone's browser; the wording version, in full.
-- **A paper consent:** the year it was signed, and who marked it on file and when.
+**View record**, on the case's tile (an agreed traveller) and the client page's column, opens
+`/print/consent/:clientId/:memberId` in a new tab: an A4 sheet with Print and Close, to print or save as PDF. Nothing
+is stored, and the tab's title (`{name}_Consent_record`) names the saved PDF.
+- **A link consent:**
+  - Masti's name, address and phones only (`companyForPage`, as the client's page).
+  - "Agreed by": the name, relation, passport number and details from the consent's saved copy, so later changes to
+    the person don't show.
+  - "How it was given": when they agreed, the number the link went to, who sent it and when, and the case. Then the
+    network address and the phone's browser, and the wording's version and since when.
+  - The wording they agreed to, in full: the version the consent points at, not the one in use today.
+- **A paper consent:** the year it was signed, and who marked it on file and when. "The signed paper is kept at the
+  office."
+- **The footer** says who printed it and on what day.
+- **The API:** `GET /api/clients/:id/members/:memberId/consent`, for anyone who can see the client
+  (`assertCanSeeClient`). It's 404 with no consent on file or for another client's person. Printing changes nothing, so
+  it isn't audited, as with the parcel sticker.
 
 ## Still open
 
