@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
-import { dayLabel, fromDbDate, istDateTimeToUtc } from "../../lib/dates";
+import { fromDbDate, istDateTimeToUtc } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
 import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
@@ -14,7 +14,7 @@ import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateAppl
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
-import { passportWarnings, travellerPapersSelect } from "./visaWarnings";
+import { appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
 // traveller's portal details, and the saved file. Every write locks the case first (caseLock.ts), so "File ready" and a change here take turns.
@@ -110,14 +110,9 @@ export async function updateApplication(caseNo: string, travellerId: string, inp
         where: { enquiryId: enquiry.id },
         select: { departOn: true, travellers: { select: { isChild: true } } },
       });
-      const depart = departOn && fromDbDate(departOn);
       // Named as the case names them: the passport name, else "Adult 1".
       const name = before.name ?? travellerLabel(before, countTravellers(travellers).adults);
-      const warnings: Warning[] =
-        depart && appointment.on >= depart
-          ? [{ code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE", message: `${name}'s appointment (${dayLabel(appointment.on)}) is on or after the day the trip begins (${dayLabel(depart)}).` }]
-          : [];
-      confirmed = checkWarnings(warnings, confirmWarnings);
+      confirmed = checkWarnings(appointmentWarnings(departOn && fromDbDate(departOn), [{ name, appointmentAt: changes.appointmentAt }]), confirmWarnings);
     }
     const after = await tx.visaCaseTraveller.update({ where: { id: found.id }, data: changes });
     await audit(
@@ -368,12 +363,19 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
     const { missing, country } = await missingForFileReady(tx, enquiry.id);
     const parts = describeMissing(missing, country);
     if (parts.length > 0) throw new HttpError(409, `Not ready yet. Still needed: ${parts.join("; ")}.`, { code: "NOT_READY", missing });
-    // The last look before the file goes out: a passport that runs out too soon after the trip (a warning, 19 Oct 2026).
+    // The last look before the file goes out (warnings, 19 and 21 Oct 2026): a passport that runs out too soon after the
+    // trip, and an appointment on or after the day it begins (the trip may have moved since the appointment was booked).
     const trip = await tx.visaCase.findUniqueOrThrow({
       where: { enquiryId: enquiry.id },
-      select: { returnOn: true, travellers: { orderBy: { position: "asc" }, select: travellerPapersSelect } },
+      select: { departOn: true, returnOn: true, travellers: { orderBy: { position: "asc" }, select: { ...travellerPapersSelect, ...appointmentSelect } } },
     });
-    const confirmed = checkWarnings(await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), trip.travellers), input.confirmWarnings);
+    const confirmed = checkWarnings(
+      [
+        ...(await passportWarnings(tx, trip.returnOn && fromDbDate(trip.returnOn), trip.travellers)),
+        ...appointmentWarnings(trip.departOn && fromDbDate(trip.departOn), namedAppointments(trip.travellers)),
+      ],
+      input.confirmWarnings,
+    );
 
     const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt: now } });

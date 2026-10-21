@@ -16,7 +16,7 @@ import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
 import { visaMessageBasics } from "./visaMessages";
-import { ageWarnings, passportWarnings, travellerPapersSelect } from "./visaWarnings";
+import { ageWarnings, appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
 // documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
@@ -238,12 +238,18 @@ export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: 
     const departOn = changes.departOn !== undefined ? changes.departOn : before.departOn;
     const returnOn = changes.returnOn !== undefined ? changes.returnOn : before.returnOn;
     if (departOn && returnOn && returnOn < departOn) throw fieldError("returnOn", "Coming back can't be before travelling out.");
-    // A new return: the linked passports should still run long enough after it (a warning, decided 19 Oct 2026).
-    let confirmed: Warning[] = [];
+    // Warnings (decided 19 Oct 2026): a new return, if a linked passport runs out too soon after it; a new travelling
+    // out, if a booked appointment is now on or after it (21 Oct 2026: moving the trip used to skip that one).
+    const found: Warning[] = [];
     if (changes.returnOn) {
       const travellers = await tx.visaCaseTraveller.findMany({ where: { caseId: enquiry.id }, orderBy: { position: "asc" }, select: travellerPapersSelect });
-      confirmed = checkWarnings(await passportWarnings(tx, fromDbDate(changes.returnOn), travellers), confirmWarnings);
+      found.push(...(await passportWarnings(tx, fromDbDate(changes.returnOn), travellers)));
     }
+    if (changes.departOn) {
+      const travellers = await tx.visaCaseTraveller.findMany({ where: { caseId: enquiry.id }, orderBy: { position: "asc" }, select: appointmentSelect });
+      found.push(...appointmentWarnings(fromDbDate(changes.departOn), namedAppointments(travellers)));
+    }
+    const confirmed = checkWarnings(found, confirmWarnings);
 
     const after = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: changes });
     await audit(

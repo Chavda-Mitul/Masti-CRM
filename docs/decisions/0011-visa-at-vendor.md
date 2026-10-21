@@ -115,6 +115,9 @@ that embassy's holidays (`blockedDays` with `{ embassyId }`, 0005 §3).
 - **The reminder ⚠️:** the case is due the open office day before the collection date, at 11:00, as a setting
   (proposed; settled in component 2's plan). The case isn't touched until then.
 - **The chip:** "Submitted · FR-MUM-88421", as in the demo.
+- **A collection date on or after the day the trip begins is a warning** (21 Oct 2026, from the visa test): the client
+  would travel without the passports. "Check before saving" names both dates; staff save anyway if the trip moves,
+  and the audit keeps it (`collectionWarnings`). An unchanged date isn't asked again.
 
 **Decided 15 Oct 2026 (project lead), while planning component 2:**
 - **One file number per file,** as in the demo. The per-traveller portal numbers are already in Step 3.
