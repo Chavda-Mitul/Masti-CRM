@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday, isoWeekday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { dueOnOfficeDay } from "../src/modules/visa/visa.settings";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
@@ -83,7 +84,7 @@ describe("postpone, resume and cancel", () => {
     expect(entry).toMatchObject({ clientId: c.client.id, before: { status: "OPEN" }, after: { status: "POSTPONED", resumeOn: sunday } });
   });
 
-  it("resumes a postponed case: open again, due now, reason cleared", async () => {
+  it("resumes a postponed case: open again, due at the follow-up time, reason cleared", async () => {
     const staff = await visaStaff();
     const c = await saveCase(staff);
     expect((await staff.post(`/api/enquiries/${c.caseNo}/resume`).send({ updatedAt: await updatedAtOf(c.id) })).status).toBe(409);
@@ -94,7 +95,9 @@ describe("postpone, resume and cancel", () => {
     expect(res.status).toBe(200);
     const row = await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } });
     expect(row).toMatchObject({ status: "OPEN", reasonId: null, resumeOn: null });
-    expect(row.dueAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    // Today at the follow-up time (11:00 ⚠️), or the next open office day at it once that has passed: never late at once.
+    expect(row.dueAt!.getTime()).toBeGreaterThan(before);
+    expect(row.dueAt).toEqual(await dueOnOfficeDay({ afterDays: 0, at: "11:00" }));
     expect(await prisma.auditLog.count({ where: { action: "enquiry.resume", clientId: c.client.id } })).toBe(1);
   });
 

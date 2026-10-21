@@ -27,6 +27,10 @@ export const VISA_SETTINGS_HELP: Record<keyof VisaTimingsFormValues | 'timings',
     ['Where', 'The HOD’s Today page and the To assign list.'],
     ['Example (1 day · 11:00 AM)', 'Papers complete on Tuesday → reminder on Wednesday at 11:00 AM.'],
   ],
+  dispatchCheck: [
+    ['What it’s for', 'When the processor marks the visa file ready, this reminds them to add it to a docket and send it to the vendor.'],
+    ['Example (1 day · 11:00 AM)', 'File ready on Thursday → reminder on Friday at 11:00 AM.'],
+  ],
   vendorConfirm: [
     ['What it’s for', 'We send the file to the vendor (the agency that takes it to the embassy). This reminds us to check that the vendor got it.'],
     ['Example (1 day · 11:00 AM)', 'Sent on Monday → check on Tuesday at 11:00 AM.'],

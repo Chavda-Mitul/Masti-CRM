@@ -12,7 +12,7 @@ import type { Actor } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING, visaStage } from "./caseLock";
 import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateApplicationInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
-import { getVisaSettings } from "./visa.settings";
+import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
 import { appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
@@ -378,7 +378,10 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
     );
 
     const dispatch = await visaStage(tx, enquiry.departmentId, "DISPATCH");
-    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt: now } });
+    // Due for the docket and dispatch on the next office day (visa.dispatchCheck ⚠️), not "now", which showed it late at
+    // once (amended 21 Oct 2026).
+    const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).dispatchCheck, tx);
+    await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: dispatch.id, dueAt } });
     const visa = await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { fileReadyAt: now, fileReadyById: actor.user.id } });
     // What went to the docket: the current saved file and the vendor.
     const file = await tx.caseFile.findFirstOrThrow({
@@ -396,7 +399,7 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
         before: { stage: locked.stage.code, dueAt: locked.dueAt },
         after: {
           stage: "DISPATCH",
-          dueAt: now,
+          dueAt,
           fileReadyAt: now,
           fileReadyById: actor.user.id,
           vendorId: visa.vendorId,

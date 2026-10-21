@@ -285,7 +285,9 @@ These live on the shared `Enquiry`, so Holidays, Hotels and the others reuse the
 
 - Needs a POSTPONE reason and a resume date.
 - Status becomes `POSTPONED`, and `dueAt` becomes the resume date's next open day at the follow-up time setting (`visa.firstFollowUp.at`). The case resurfaces on the desk then ("Postponed to Jan — confirm new month").
-- **Resume** puts it back to `OPEN`.
+- **Resume** puts it back to `OPEN`. *Amended 21 Oct 2026 (project lead, from the visa test):* it's due today at the
+  follow-up time (`visa.firstFollowUp.at`, 11:00 ⚠️), or the next open office day at it once that has passed. It was
+  due "now", so it showed late at once.
 
 **Cancel:**
 
