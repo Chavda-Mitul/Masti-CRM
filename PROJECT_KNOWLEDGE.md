@@ -873,8 +873,10 @@ This worked example follows the demo's Mehta family case (France Schengen touris
   - **Changed 21 Oct 2026 (project lead):** Masti sent two of their letters and said they write each one in ChatGPT,
     because every letter differs. Only the paragraph on why they travel really does. The CRM will write that paragraph
     with AI from the case (no typing first), with instructions per visa type, and staff may change any of the letter's
-    text before making it (change request 11). The central AI part is built (`docs/decisions/0023-ai.md`); the letter
-    is part 2, next.
+    text before making it (change request 11). The central AI part is built (`docs/decisions/0023-ai.md`), then the
+    editable letter (0019 amendment 1), then **"Write it with AI"** (0019 amendment 2): a `{purpose}` blank, the AI sent
+    only the trip (never names, passports or dates of birth), ⟦marks⟧ for what it can't know, instructions for Tourist,
+    Business and Visitor, and samples shaped like Masti's two letters.
 - **Saved file, kept as proof** ✅: the final file (application form, ITR, bank statement, passport scan…) is saved as **one PDF, linked under the case number** in Drive. "Every page as it went to the vendor, stored in your Drive; the CRM keeps the link." Masti already keeps a single scanned PDF like this today; the CRM links it to the case *(transcript, 7:18 PM)*.
 - The vendor comes from the approved list ✅.
 
@@ -1315,7 +1317,7 @@ This is the biggest technical unknown (§16.2).
 | **Visa portals** (VFS, China, e-visa…) and **airline/booking portals** (IndiGo…) | Click-to-login vault | ✅ Promised. The mechanism is unproven (browser extension?): spike it first. |
 | **IVS** visa-news feed (paid) | Daily visa updates → notice board and login popup | ❓ Subscription, cost, integration (Q24). Also written "IVF" or "IBS" in the sources. |
 | PAN verification | Fetch details from a PAN (like EasyLife/TBO) into bookings and vouchers | ❓ In scope? Which provider? (Q23). Listed in the PID's third-party costs. |
-| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. **21 Oct 2026 (project lead):** one way in, `src/lib/ai/` (`askAi`), one model for every use (`AI_MODEL`: Claude Haiku 5.5), every call and its cost recorded in `AiCall`, no spending limit (`docs/decisions/0023-ai.md`). The first use is the covering letter's paragraph, about ₹0.15 a letter (change request 11). |
+| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. **21 Oct 2026 (project lead):** one way in, `src/lib/ai/` (`askAi`), one model for every use (`AI_MODEL`: Claude Haiku 5.5), every call and its cost recorded in `AiCall`, no spending limit (`docs/decisions/0023-ai.md`). The first use is the covering letter's paragraph (0019 amendment 2): about $0.0003–0.0005 a paragraph, measured 21 Oct 2026 (change request 11). |
 | Passport MRZ / barcode | Visa form autofill | ❓ "If technology allows" (Q13) |
 | Accounting software (unnamed) | Store client codes; export/upload file | ❓ Name, format, phase (Q26) |
 | Weather API | Forecast for the next 10 days' travellers | ❓ Nice-to-have (Q25) |
@@ -1493,7 +1495,7 @@ Masti CRM/
 │   │                                *_visa_intake (casePrefix backfill, travel month/date CHECKs),
 │   │                                *_client_name_required (Client.name NOT NULL + not-blank CHECK),
 │   │                                *_department_stage_flow (steps per department + flow, e.g. Insurance policy vs claim)
-│   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
+│   ├── prisma/seed.ts            ← departments, client lookups + settings, dummy visa masters (France Tourist; Business and Visitor types), weekly Sunday off, first Head user (SEED_HEAD_* in .env; promotes a matching user if no Head exists)
 │   ├── src/app.ts                ← helmet, cors, json, cookies, requireJson, routes, errorHandler
 │   ├── src/config/               ← env.ts (zod-validated), prisma.ts (PrismaClient + @prisma/adapter-pg)
 │   ├── src/modules/              ← one folder per feature: *.routes.ts (HTTP only), *.service.ts (logic, transactions,

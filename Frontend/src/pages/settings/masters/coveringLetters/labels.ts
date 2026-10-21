@@ -16,19 +16,26 @@ export const authorName = (author: WordingAuthor) => author?.name ?? 'Set up wit
 export const coverage = (letter: Pick<CoveringLetterSummary, 'visaType' | 'countries'>) =>
   `${letter.visaType.name} · ${letter.countries.map((c) => c.name).join(', ')}`
 
-/** A new letter's wording starts as the frame every covering letter has, for the HOD to fill in. */
+/**
+ * A new letter's wording starts as the frame every covering letter has, for the HOD to fill in: shaped like Masti's own
+ * letters, with {purpose} where "Write it with AI" writes why they travel (0019 amendment 2).
+ */
 export const STARTING_WORDING = `{date}
 
 To,
 The Visa Officer,
-Consulate General of {country},
-Mumbai
+The Consulate General of {country},
+Mumbai, India.
 
-Subject: {visaType} visa for {travellerNames}
+Sub: Application for a {visaType} visa
 
-Dear Sir or Madam,
+Respected Sir/Madam,
 
-Yours faithfully,
+{purpose}
+
+Thanking you in anticipation,
+
+Yours truly,
 
 {applicant}
 {clientAddress}`

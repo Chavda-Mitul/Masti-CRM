@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { z } from "zod";
+import { AiError } from "../lib/ai/types";
 import { HttpError } from "../lib/httpError";
 
 /** 404 for unknown /api routes. */
@@ -14,6 +15,12 @@ export const apiNotFound: RequestHandler = (_req, res) => {
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof HttpError) {
     res.status(err.status).json({ message: err.message, ...(err.details ? { details: err.details } : {}) });
+    return;
+  }
+
+  // The AI gave no usable answer (docs/decisions/0023-ai.md): its reason in plain words, and whether trying again may help.
+  if (err instanceof AiError) {
+    res.status(503).json({ message: err.message, details: { code: "AI_FAILED", retryable: err.retryable } });
     return;
   }
 

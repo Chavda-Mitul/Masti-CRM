@@ -30,6 +30,8 @@ function piecesOf(line: string): LetterPiece[] {
 /** Where the case lacked a value, the draft writes ⟦the hotel stay⟧; "Make the letter" waits while any ⟦ or ⟧ is left. */
 export const MARK_OPEN = '⟦'
 export const MARK_CLOSE = '⟧'
+/** Where {purpose} is in a draft: the paragraph "Write it with AI" writes, or staff type (0019 amendment 2). */
+export const PURPOSE_MARK = '⟦why they travel⟧'
 
 export const MAX_LETTER_PART_CHARS = 8000
 export const MAX_LETTER_COLUMNS = 6

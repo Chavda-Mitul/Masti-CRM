@@ -796,6 +796,17 @@ export function useMakeCoveringLetter(caseNo: string) {
   })
 }
 
+/**
+ * "Write it with AI": the paragraph on why they travel, written from the trip alone (0019 amendment 2). Nothing is saved:
+ * the card puts it in the letter. A failure is a 503 whose message says why (AI_FAILED).
+ */
+export function useWritePurpose(caseNo: string) {
+  return useMutation({
+    mutationFn: async () =>
+      api<{ paragraph: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/purpose`, { method: 'POST' }),
+  })
+}
+
 /** The letter made, to print: the same letter every time (0019 Decision 10). */
 export function useCoveringLetterPrint(caseNo: string) {
   return useQuery({

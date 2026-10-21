@@ -8,6 +8,7 @@ import {
   LETTER_BLANKS,
   MARK_CLOSE,
   MARK_OPEN,
+  PURPOSE_MARK,
   MAX_LETTER_CELL_CHARS,
   MAX_LETTER_CHARS,
   MAX_LETTER_COLUMNS,
@@ -61,6 +62,10 @@ const WORDINGS = [
   "Half applicant}",
   "{ applicant }",
   "From {departOn} to {returnOn}, {days} days, {entry} entry, at {hotel}.",
+  "Dear Sir,\r\n\r\n  {purpose}  \r\nThanks",
+  "Why: {purpose}",
+  "{purpose}\n{purpose}",
+  "{travellers}\n{purpose}",
   "",
 ];
 
@@ -111,6 +116,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     const frontend = (await import(frontendLetter)) as {
       MARK_OPEN: string;
       MARK_CLOSE: string;
+      PURPOSE_MARK: string;
       MAX_LETTER_PART_CHARS: number;
       MAX_LETTER_COLUMNS: number;
       MAX_LETTER_ROWS: number;
@@ -119,6 +125,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       marksIn(letter: LetterText): string[];
     };
     expect([frontend.MARK_OPEN, frontend.MARK_CLOSE]).toEqual([MARK_OPEN, MARK_CLOSE]);
+    expect(frontend.PURPOSE_MARK).toBe(PURPOSE_MARK);
     expect(frontend.MAX_LETTER_PART_CHARS).toBe(MAX_LETTER_PART_CHARS);
     expect(frontend.MAX_LETTER_COLUMNS).toBe(MAX_LETTER_COLUMNS);
     expect(frontend.MAX_LETTER_ROWS).toBe(MAX_LETTER_ROWS);

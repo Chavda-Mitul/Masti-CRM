@@ -110,11 +110,11 @@ async function main() {
   // System masters (docs/decisions/0005-system-masters.md): dummy until Masti sends B1/B2. Existing rows are kept.
   await seedVisaMasters(prisma);
   await seedHolidays(prisma);
-  // Sample covering letters (docs/decisions/0019-covering-letters.md) until Masti sends its formats: only into a database
-  // with none.
+  // Sample covering letters (docs/decisions/0019-covering-letters.md, amendment 2) until Masti's own replace them: only
+  // into a database with none.
   await seedCoveringLetters(prisma);
   console.log(
-    "Visa masters (France Tourist dummy), document problem reasons, processing speeds, the weekly Sunday off, holiday settings and sample covering letters ready.",
+    "Visa masters (France Tourist dummy; Business and Visitor visa types, which need an offering and a checklist before intake can use them), document problem reasons, processing speeds, the weekly Sunday off, holiday settings and sample covering letters ready.",
   );
 
   // Visa intake (docs/decisions/0003-visa-intake.md): sources, the 8 visa steps and the follow-up timing ⚠️.

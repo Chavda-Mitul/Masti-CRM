@@ -191,10 +191,18 @@ router.get("/cases/:caseNo/covering-letter", visaView, async (req, res) => {
   res.json({ letter: await coveringLetterService.coveringLetterView(caseNoParam.parse(req.params.caseNo), currentUser(req), formatId) });
 });
 
-/** "Make the letter", at File preparation: 409 LETTER_INCOMPLETE with details.missing while the case lacks a detail. */
+/** "Make the letter", at File preparation, with its text: 409 LETTER_INCOMPLETE with details.missing while a mark is left. */
 router.post("/cases/:caseNo/covering-letter", visaEdit, async (req, res) => {
   const body = makeCoveringLetterSchema.parse(req.body);
   res.json({ letter: await coveringLetterService.makeCoveringLetter(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/**
+ * "Write it with AI", at File preparation: the paragraph on why they travel, written from the trip's details (0019
+ * amendment 2). The card puts it in the letter; nothing is saved. 503 AI_FAILED, in plain words, when the AI can't.
+ */
+router.post("/cases/:caseNo/covering-letter/purpose", visaEdit, async (req, res) => {
+  res.json(await coveringLetterService.writePurpose(caseNoParam.parse(req.params.caseNo), actorOf(req)));
 });
 
 /** The letter made, to print: the same letter every time. Anyone who can open the case; 409 before one is made. */
