@@ -88,13 +88,13 @@ export function AppShell() {
             </span>
           )}
         </NavLink>
-        {/* HODs and the Head only: matured cases waiting for a processor. Cases should never sit idle. */}
+        {/* HODs and the Head only: cases nobody owns (matured, or a leaver's). Cases should never sit idle. */}
         {assigns && (
           <Link to="/enquiries?status=to_assign" className={`nav${onToAssign ? ' active' : ''}`}>
             <NavIcon name="toAssign" />
             To assign
             {waiting > 0 && (
-              <span className="nav-badge" title={`${waiting} waiting for a processor`} aria-label={`${waiting} waiting for a processor`}>
+              <span className="nav-badge" title={`${waiting} waiting to be assigned`} aria-label={`${waiting} waiting to be assigned`}>
                 {waiting > 99 ? '99+' : waiting}
               </span>
             )}

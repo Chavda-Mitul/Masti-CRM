@@ -8,7 +8,7 @@ import { formatMobile, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useAssignees, useReassignCase } from '../queries'
 import type { VisaCase } from '../types'
-import { isFollowUpStep } from './labels'
+import { isFollowUpStep, windingDown } from './labels'
 import { MessagesSection } from './MessagesSection'
 import { MoneySection } from './MoneySection'
 
@@ -19,7 +19,8 @@ import { MoneySection } from './MoneySection'
 export function CaseRail({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
   const [reassigning, setReassigning] = useState(false)
-  const canReassign = !!me && isHodOf(me, c.department.code) && (c.status === 'OPEN' || c.status === 'POSTPONED')
+  // A cancelled case too while its passports are still to hand back (docs/decisions/0002-user-types.md amendment 1).
+  const canReassign = !!me && isHodOf(me, c.department.code) && (c.status === 'OPEN' || c.status === 'POSTPONED' || windingDown(c))
 
   return (
     <aside className="card pad">
@@ -50,12 +51,12 @@ export function CaseRail({ visaCase: c }: { visaCase: VisaCase }) {
           </div>
         ) : (
           <p className="muted small" style={{ margin: '8px 0 0' }}>
-            Waiting for the HOD to pick a processor.
+            {isFollowUpStep(c) ? 'Waiting for the HOD to give it to someone.' : 'Waiting for the HOD to pick a processor.'}
           </p>
         )}
         {canReassign && (
           <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => setReassigning(true)}>
-            {c.owner ? 'Reassign' : 'Assign processor'}
+            {c.owner ? 'Reassign' : isFollowUpStep(c) ? 'Assign' : 'Assign processor'}
           </button>
         )}
       </div>
@@ -91,7 +92,7 @@ function ReassignDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose:
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="reassign-title" onClick={(e) => e.stopPropagation()}>
         <h2 className="h2" id="reassign-title">
-          {c.owner ? `Give ${c.caseNo} to someone else` : `Pick a processor for ${c.caseNo}`}
+          {c.owner ? `Give ${c.caseNo} to someone else` : isFollowUpStep(c) ? `Give ${c.caseNo} to someone` : `Pick a processor for ${c.caseNo}`}
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
           {c.owner ? `It is with ${c.owner.name} now. ` : ''}They will see it in their list and do its follow-ups.

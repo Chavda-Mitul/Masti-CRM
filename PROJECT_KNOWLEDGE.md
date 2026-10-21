@@ -395,6 +395,7 @@ The database refuses department rows for anyone but `OFFICE`. Whether office sta
   - For tickets, the handler does their own follow-up ✅.
   - Whether follow-up is one pool or a team per department is ❓ (Q2).
 - Deactivating leavers is the client's job, through the admin panel ✅. One switch-off must end CRM access and, through the vault, portal access too. Whether Gmail/Google Workspace access can also be cut from the CRM is ❓ (Q15).
+- **A leaver's work is handed back** (decided 21 Oct 2026, project lead, [0002](docs/decisions/0002-user-types.md) amendment 1). Switching someone off, or taking away their EDIT in a department, sends their unfinished cases there to **To assign** for the HOD. A switched-off boy's booked jobs are cancelled, so each case books another boy. The Deactivate box and the Edit drawer say so before saving.
 - The "white-label, IP-based" CRM login was discussed; its details are ❓ (Q14). Portal logins work from the office network only ✅.
 - Our own access after handover is partial and role-based. Design admin and ops so that maintenance never needs owner-level access ✅.
 - Dashboards per role (Staff / HOD / Head): Vimal wants "my dashboard the way I want" ❓ (Q28).
@@ -1543,7 +1544,8 @@ Masti CRM/
 | `POST /api/auth/change-password` | signed in | Clears `mustChangePassword` and logs out other devices. Needs `currentPassword`, except for the forced change right after a temporary-password login |
 | `GET /api/departments` | Head, office staff | Active departments |
 | `GET/POST /api/users`, `GET/PATCH /api/users/:id` | Head | List, create (returns a one-time `tempPassword`), edit. `type` is HEAD / OFFICE / FIELD; departments only for OFFICE; FIELD needs a mobile. |
-| `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately** |
+| `POST /api/users/:id/deactivate` / `activate` / `reset-password` | Head | Deactivating or resetting **ends their sessions immediately**. Deactivating, or a PATCH that takes away EDIT, also hands back their unfinished cases (to To assign) and a boy's booked jobs (cancelled) |
+| `GET /api/users/:id/open-work` | Head | Their unfinished cases and booked field jobs: what the Deactivate box and Edit drawer warn about |
 | `/api/clients/*` | Head, office staff. List/search/create: Head, HODs, Accounts; one client: those, or staff with a visible case of that client (0004 *Amendment 2*); edit: any department EDIT; billing fields: Accounts | Client master: lookup, search, profile, create/edit (optimistic locking), main/extra numbers, members, notes, readiness, settings. Full list in `docs/decisions/0004-client-master.md`. |
 | `/api/masters/*` | Visa VIEW to read; Visa HOD (or Head) to write. Embassies: office staff read, any HOD writes | Countries, visa types, embassies, documents, country × type offerings, and their checklists (`PUT …/visa-offerings/:id/checklist` replaces the whole list). Full list in `docs/decisions/0005-system-masters.md`. |
 | `GET /api/enquiries` · `GET /api/enquiries/sources` | Head + office staff; rows only from departments they can VIEW | All enquiries (late first, then by due time; department, Only mine, search, cursor) and the staff "Came in through" sources. `/api/masters/enquiry-sources` edits the sources (Visa HOD or Head). |
