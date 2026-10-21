@@ -1,6 +1,6 @@
 # 0022 · The consent & liability form
 
-- **Status:** decided 21 Oct 2026 (project lead). Part 1 and part 2a are built; 2b and part 3 follow, one at a time.
+- **Status:** decided 21 Oct 2026 (project lead). Parts 1 and 2 (2a, 2b) are built; part 3 follows.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -139,15 +139,24 @@ It is built as two components: 2a, the link, the page and "I agree"; then 2b, th
 - **`PUBLIC_APP_URL`** is the address in the link. When live it's Masti's own https address, and the server warns if
   it isn't https. A phone can't open `localhost`, so in development open the link on the laptop.
 
-### 2b: the wording editor in Settings (next)
+### 2b: the wording editor in Settings (built 21 Oct 2026)
 
-- **Settings → Masters → Consent wording** shows the version in use, since when and by whom, with a "Draft" note while
-  it's mine.
-  - **Change the wording** saves a new version, used from then on.
-  - Earlier versions can be viewed.
-- **The API:** `GET` for anyone with Visa view; `POST` for the Head or the Visa HOD only.
-  - It's refused if someone changed the wording first (409).
+- **Settings → Masters → Consent wording** (`/settings/masters/consent-wording`). The Masters page has a card for it,
+  marked **Draft** while my wording is in use.
+  - The page shows the version in use, as the client's phone shows it, since when and by whom, with a "Draft" note
+    while it's mine.
+  - **Change the wording** opens the words in a text box, with a live preview and a count (at most 8,000 characters,
+    the database's limit). Saving asks first: "Use this wording from now on?" The change is kept as a new version, used
+    from then on.
+  - Leaving with unsaved words asks first. Earlier versions fold out, each with **View**.
+- **The API:** `GET /api/masters/consent-wording` returns every version, newest first, for anyone with Visa view.
+  `POST { body, basedOnId }` is for the Head or the Visa HOD only (`assertCanEditVisaMasters`, as for covering letters).
+  - `basedOnId` is the version the editor opened. If another was added since, it's refused (409 STALE): of two saves at
+    once, one goes through and the other is told to reload. The draft stays in the editor.
+  - The same words as the version in use are refused (400).
   - It's audited as `consent.wording.add`.
+- Consents already given keep their version: versions are never changed or removed. A client reading the form when it
+  changes is asked to read it again (2a's `WORDING_CHANGED`).
 
 ## Part 3: the record and the flags (after part 2)
 
