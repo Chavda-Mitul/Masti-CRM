@@ -626,7 +626,7 @@ All intervals are configurable masters. The values below are demo samples (⚠�
 | Billing-cycle day | cycle customers surface with all their outstanding |
 | Accounts routine tasks | daily / weekly / monthly / quarterly due dates |
 
-The backend therefore needs a reliable, self-hostable scheduler or job queue. That choice is still to be decided.
+The backend therefore needs a reliable, self-hostable scheduler or job queue. **Decided 21 Oct 2026 (project lead): pg-boss**, keeping its jobs in the same Postgres; it first sends the WhatsApp outbox (`docs/decisions/0021-whatsapp-outbox.md`).
 
 ### 10.10 Notifications
 
@@ -1189,7 +1189,7 @@ This is the biggest technical unknown (§16.2).
 
 ### 12.21 WhatsApp automation and the message catalogue
 
-**Sending is built (20 Oct 2026, `docs/decisions/0020-whatsapp-sending.md`):** `src/lib/whatsapp/`, Twilio for now, with the provider picked in `.env`. Next, one at a time: the outbox, the visa messages at every step (from the drafted texts in `docs/whatsapp-visa-messages.md`), then the consent "I agree" link.
+**Sending is built (20 Oct 2026, `docs/decisions/0020-whatsapp-sending.md`):** `src/lib/whatsapp/`, Twilio for now, with the provider picked in `.env`. **The outbox is built (21 Oct 2026, `docs/decisions/0021-whatsapp-outbox.md`):** a message is written in the change's transaction (`queueMessage`), sent once by a pg-boss job, and followed to delivered or read; outside production it goes to `WHATSAPP_TEST_NUMBER`. The first message is message 6, "All documents received", on Mark documents complete. Next, one at a time: the "Sent to the client" card, the other visa messages (from the drafted texts in `docs/whatsapp-visa-messages.md`), then the consent "I agree" link.
 
 **Required for visa** ✅:
 1. pending-document reminders
@@ -1434,7 +1434,7 @@ Source: `04_Engineering_Constraints.md`. Neither the contract-based nor the clie
 
 Present these to Shivanshu around day 3–4, as short decision records (the options considered, the pick, and why).
 
-1. **Stack:** frontend, backend, DB, ORM, background jobs and queues, file/PDF generation. *Partly implied by the current scaffold (§16.4); formal records still due.*
+1. **Stack:** frontend, backend, DB, ORM, background jobs and queues, file/PDF generation. *Partly implied by the current scaffold (§16.4); formal records still due.* Background jobs: **pg-boss** (21 Oct 2026, 0021).
 2. **Architecture:**
    - module boundaries
    - the shared enquiry and stage model across departments
@@ -1590,6 +1590,7 @@ Masti CRM/
 | `Backend/.env` | `SEED_HEAD_NAME` / `SEED_HEAD_MOBILE` / `SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD` | First Head user for `db:seed` |
 | `Backend/.env` | `LOG_LEVEL` (`info`), `LOG_DIR` (`logs`), `LOG_RETENTION_DAYS` (90) | The server log: one file a day, the last 90 days kept plus today's. An unexpected error shows the user a request code to grep for (`docs/decisions/0010-server-logs.md`) |
 | `Backend/.env` | `WHATSAPP_PROVIDER` (`off`), `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_WHATSAPP_FROM` | WhatsApp: `off`, `log` (into the server log instead) or `twilio`. Check with `npm run whatsapp:test -- <mobile>`. Tests force `off` (`docs/decisions/0020-whatsapp-sending.md`) |
+| `Backend/.env` | `WHATSAPP_TEST_NUMBER` | Outside production every message goes to this phone instead of the client's; required then with `twilio`, refused in production (`docs/decisions/0021-whatsapp-outbox.md`) |
 | `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 
@@ -1631,7 +1632,7 @@ Masti CRM/
 - **Invoice immutability:** enforce it below the API too. No update routes, plus a DB trigger or revoked UPDATE/DELETE privileges on invoice tables. Corrections are credit notes or the additional invoice.
 - **Masters as tables**, not Prisma enums, so admins can add values without a deploy. Keep stable IDs so reports survive renames.
 - **Stage flows as data** per department. Phase-2 departments then slot in.
-- **A durable, self-hostable job scheduler** for reminders, rotations, cycle days and check-in lists (e.g. pg-boss, or BullMQ + Redis).
+- **A durable, self-hostable job scheduler** for reminders, rotations, cycle days and check-in lists. **pg-boss, decided 21 Oct 2026** (0021).
 - **Idempotent outbound messaging** with a message log, so retries never double-send to a client.
 - **Vault:** encrypt credentials at rest with a key kept outside the DB. Never send a secret to the browser in readable form. Log every use.
 - **Field app:** a mobile web view (PWA-style). Camera and geolocation need HTTPS.

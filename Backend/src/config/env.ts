@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { normaliseMobile } from "../lib/contact";
 import { parseTrustProxy } from "./trustProxy";
 
 const envSchema = z.object({
@@ -65,12 +66,44 @@ const envSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.string().regex(/^\+[1-9]\d{6,14}$/, "The number with + and the country code, e.g. +14155238886.").optional(),
   ),
+  // Outside production every client message goes to this phone instead (docs/decisions/0021-whatsapp-outbox.md): yours,
+  // joined to the Twilio sandbox. Needed outside production when WHATSAPP_PROVIDER is twilio; refused in production.
+  WHATSAPP_TEST_NUMBER: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .transform((raw, ctx) => {
+        const mobile = normaliseMobile(raw);
+        if (!mobile) {
+          ctx.addIssue({ code: "custom", message: "A 10-digit Indian mobile number, e.g. 98250 41234." });
+          return z.NEVER;
+        }
+        return mobile;
+      })
+      .optional(),
+  ),
   // The server log (src/lib/logger.ts, docs/decisions/0010-server-logs.md): one file a day in LOG_DIR (relative to the
   // folder the server starts in, Backend/), keeping the last LOG_RETENTION_DAYS days plus today's file (90: the project
   // lead, 15 Oct 2026).
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   LOG_DIR: z.string().min(1).default("logs"),
   LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+}).superRefine((e, ctx) => {
+  // A laptop must never message a real client, and production must never send every client's message to one phone.
+  if (e.NODE_ENV === "production" && e.WHATSAPP_TEST_NUMBER) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["WHATSAPP_TEST_NUMBER"],
+      message: "Leave it empty in production: every client's message would go to this number.",
+    });
+  }
+  if (e.NODE_ENV !== "production" && e.WHATSAPP_PROVIDER === "twilio" && !e.WHATSAPP_TEST_NUMBER) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["WHATSAPP_TEST_NUMBER"],
+      message: "Outside production, set the phone that gets every message instead of the client: yours, joined to the sandbox.",
+    });
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);

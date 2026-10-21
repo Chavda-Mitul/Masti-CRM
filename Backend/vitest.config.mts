@@ -24,6 +24,7 @@ const testEnv = {
   TWILIO_ACCOUNT_SID: "",
   TWILIO_AUTH_TOKEN: "",
   TWILIO_WHATSAPP_FROM: "",
+  WHATSAPP_TEST_NUMBER: "",
   NODE_ENV: "test",
   DOTENV_CONFIG_QUIET: "true",
 };
@@ -42,6 +43,8 @@ export default defineConfig({
   test: {
     env: testEnv,
     globalSetup: ["tests/globalSetup.ts"],
+    // Starts pg-boss (without workers) for each file: saves queue jobs (docs/decisions/0021-whatsapp-outbox.md).
+    setupFiles: ["tests/setup.ts"],
     // One shared database, wiped between tests, so test files must not run in parallel.
     fileParallelism: false,
     testTimeout: 20_000,

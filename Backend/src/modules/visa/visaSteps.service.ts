@@ -7,12 +7,15 @@ import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { currentScan } from "../clients/clientDocuments.service";
+import { VISA_DOCUMENTS_RECEIVED } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
 import type { LinkTravellerInput, MatureCaseInput, SetRemindersInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import { visaMessageBasics } from "./visaMessages";
 import { ageWarnings, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
@@ -352,7 +355,8 @@ async function missingForMaturity(db: Db, enquiryId: string) {
  * the staff member who pressed it may no longer be able to open it.
  *
  * The checklist is checked under the case's lock, in the same transaction as the move (lockCase), so a paper
- * un-ticked at the same moment either lands first and stops it, or waits and is then refused.
+ * un-ticked at the same moment either lands first and stops it, or waits and is then refused. The client's "All
+ * documents received" WhatsApp is queued in that transaction too.
  */
 export async function mature(caseNo: string, input: MatureCaseInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, COLLECTING);
@@ -391,6 +395,13 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
       },
       tx,
     );
+    // Message 6, "All documents received" (docs/decisions/0021-whatsapp-outbox.md): queued with the move, sent after it.
+    await queueMessage(tx, {
+      template: VISA_DOCUMENTS_RECEIVED,
+      enquiryId: enquiry.id,
+      key: `${VISA_DOCUMENTS_RECEIVED}:${enquiry.id}`,
+      ...(await visaMessageBasics(tx, enquiry.id)),
+    });
   });
   return getVisaCaseById(enquiry.id);
 }

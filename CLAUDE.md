@@ -43,6 +43,7 @@ Inside the route and its service:
 - Shared helpers live in `src/lib/`: `contact.ts` (mobile/email clean-up), `prismaErrors.ts` (`isUniqueViolation`, `rethrowUnique`), `settings.ts` (`saveSetting`), `dates.ts`, `audit.ts`, `httpError.ts`, `logger.ts` (the server log; use `logger`, never `console`). Reuse them rather than copying.
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
+- Tell the client with `queueMessage(tx, …)` (`src/modules/messages`), in the same transaction; never call `sendWhatsApp` from a service. Background work runs on pg-boss (`src/lib/jobs.ts`, `docs/decisions/0021-whatsapp-outbox.md`).
 - Throw `HttpError` helpers for errors.
 
 See PROJECT_KNOWLEDGE.md §16.4.

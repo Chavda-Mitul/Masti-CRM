@@ -16,13 +16,27 @@ export interface WhatsAppMessage {
   template?: { id: string; variables: Record<string, string> };
 }
 
+/**
+ * Why a provider couldn't take a message, in plain words. `retryable`: trying again later may work (the provider was
+ * down or busy). False when it can't (a wrong number or wrong keys), or when the message may already have gone.
+ */
+export class WhatsAppError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+  }
+}
+
 /** Where a message has got to, in the CRM's words: the same for every provider. */
 export type WhatsAppStatus = "QUEUED" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 
 export interface WhatsAppProvider {
   /** Saved with each message, so the log shows who carried it: "twilio", "log". */
   readonly name: string;
-  /** Hands the message over, returning the provider's id for it. Delivery happens later. Throws with a short reason. */
+  /** Hands the message over, returning the provider's id for it. Delivery happens later. Throws a WhatsAppError. */
   send(message: WhatsAppMessage): Promise<{ providerMessageId: string }>;
   /** Asks where a message has got to, for providers that answer (others only report back through a webhook). */
   checkStatus?(providerMessageId: string): Promise<{ status: WhatsAppStatus; error: string | null }>;
