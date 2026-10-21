@@ -25,6 +25,10 @@ createServer((req, res) => {
       const right = values.includes(RIGHT_ID) && values.includes(RIGHT_PASSWORD);
       const needsLetters = sent.has("captcha");
       const lettersRight = !needsLetters || sent.get("captcha")?.toUpperCase() === "7K2P";
+      // Each attempt in the console (never the password), so whoever is testing sees the result here too.
+      const from = new URL(req.headers.referer ?? "http://unknown/").pathname;
+      const result = right && lettersRight ? `logged in as ${RIGHT_ID}` : right ? "wrong letters" : "wrong ID or password";
+      console.log(`${new Date().toLocaleTimeString("en-IN")} ${from}: ${result}`);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(
         right && lettersRight
