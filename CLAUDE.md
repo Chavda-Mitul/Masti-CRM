@@ -18,6 +18,7 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 |---|---|
 | `Backend/` | Express 5 + TypeScript (strict, compiles to CommonJS) + Prisma 7 (`prisma-client` generator → `generated/prisma`, `@prisma/adapter-pg`) + PostgreSQL. Auth is built: server-side sessions, account types (Head / Office / Field) with Staff/HOD roles per department for office staff, an append-only audit log, a Head-only users API, and tests. |
 | `Frontend/` | React 19 + Vite 8 + TypeScript, React Router, TanStack Query. Vite proxies `/api` to `http://localhost:5000`. All API calls go through `src/lib/api.ts`. |
+| `Helper/` | The CRM helper: a Chrome extension (Manifest V3, TypeScript, built into `Helper/dist`) that types a portal's saved login for "Log in for me" (`docs/decisions/0024-portal-logins.md`). Its own package; see `Helper/README.md`. |
 | `docs/decisions/` | Decision records (start with `0001-auth-sessions.md`) |
 | `Masti-CRM-Handover/` | Requirements, the contract (PID), and the approved clickable demo and its screenshots. Gitignored, local only. |
 
@@ -27,6 +28,7 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 |---|---|
 | `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, + Mailpit, which catches outgoing email at http://localhost:8025, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket, and Mailpit), `npm run typecheck`, `npm run build`, `npm run whatsapp:test -- <mobile>` (one test WhatsApp through `WHATSAPP_PROVIDER`, `docs/decisions/0020-whatsapp-sending.md`), `npm run ai:test` (one test AI answer through `AI_PROVIDER` and `AI_MODEL`, `docs/decisions/0023-ai.md`) |
 | `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
+| `Helper/` | `npm run build` (then Load unpacked `Helper/dist` in Chrome), `npm test`, `npm run typecheck`, `npm run serve:test-portals` (pretend portals on port 5199) |
 
 Make new migrations with `prisma migrate diff` and remove its proposed `DROP INDEX "HolidayTarget_unique"` (hand-written SQL that must stay). `npm run db:migrate` (`prisma migrate dev`) stops at a prompt over that index and holds the migration lock.
 
@@ -34,7 +36,7 @@ Make new migrations with `prisma migrate diff` and remove its proposed `DROP IND
 
 ## Building new routes
 
-Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`).
+Protect them with `requireAuth`, then `requirePasswordChanged`, then `requireDepartment(code, 'VIEW' | 'EDIT')` (or `requireHead`) from `src/middleware/auth.ts`. A route with no department check needs `requireUserType(...)`; field staff only get `/api/auth/*` and their own jobs (`docs/decisions/0002-user-types.md`). The one route without a session is `POST /api/portal-helper/redeem`, for the CRM helper only (0024); don't add another.
 
 Each feature is a folder in `Backend/src/modules/<feature>/`: `*.routes.ts` (HTTP only), `*.service.ts` (rules, queries, transactions, audit; no `req`/`res`) and `*.schemas.ts` (zod; imports only zod, `generated/prisma/enums` and other `*.schemas.ts` files, so it stays shareable with the frontend). Fields several modules validate alike (PAN, GSTIN, the GST states, a person's name) live in `src/lib/shared.schemas.ts`, not in one module's schemas.
 

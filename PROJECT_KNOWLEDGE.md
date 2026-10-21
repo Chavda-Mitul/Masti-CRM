@@ -1174,6 +1174,13 @@ This is the biggest technical unknown (§16.2).
 - **Portals:** VFS (Belgium), China, e-visa and other visa portals; IndiGo and other airline agent portals; booking platforms. Per-portal rotation: daily, weekly or monthly ("we change monthly").
 - **Why rotation is enforced:** ex-staff know the pattern used to make the passwords, and policies "get rolled out but never applied". So the system has to make the HOD do it *(transcript, 6:54 PM and 8:20 PM)*.
 - Vimal also restated that the CRM login itself is to be "white label, IP-based", a "secure login", as discussed at an earlier meeting (Q14) *(transcript, 8:21 PM)*.
+- **Decided 21 Oct 2026 (project lead), a trial: our own Chrome helper.** The design is `docs/decisions/0024-portal-logins.md` (Q4/R3; Shivanshu approves once the trial passes).
+  - **How it works:** a small Chrome extension (`Helper/`). On a press, the CRM hands it a one-time ticket; it collects the ID and password from the one session-less route, opens the portal and types them in. There's no per-portal code: it finds the login boxes by itself. Staff press one button, read plain words, and never install or fix anything.
+  - **Who manages and uses it:** the Head and the department's HOD manage; they and the staff on a portal's list use it.
+  - **Office network:** it works only from the office IP list once Masti gives it (M19), the Head included; until then, from anywhere with a warning.
+  - **Built (component 1, branch `feat/portal-logins`):** Settings → Portal logins, the helper, and "Who used what". Next, one at a time: 2 scheduled password changes and "Locked"; 3 the button on visa Step 3, with the case in the log; 4 the office-PC setup kit.
+  - **What it can't do (S13):** captchas and one-time codes need the person; logins with three boxes; single sign-on elsewhere; someone technical with the browser's tools until component 4.
+  - **Research for 0024:** Masti's 61 bookmarks are mostly e-visa sites with no Masti account, so they aren't the list of company logins (M49). In the Internet Archive's copies since 2020, no login box was renamed and 2 logins moved address.
 
 ### 12.20 Settings: masters, staff and roles ✅
 
@@ -1282,8 +1289,8 @@ This is the biggest technical unknown (§16.2).
 | Vendor | type, location, countries/services, approval status, approved by |
 | Embassy (0005) | country, code (`FR-MUM`), name, city: a post where files are submitted |
 | Holiday / HolidayTarget (0005) | name, dates (range or weekly), status (active / removed), reference, added by; targets: all embassies / country / embassy / our office |
-| PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only |
-| PortalUsageLog | user, portal, at, case |
+| PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only. **Built 21 Oct 2026 as `PortalLogin`** (0024 component 1): department, name, login address, `idLabel`, sealed `secret` (null once removed), `passwordChangedAt`, status, added by; `PortalLoginUser` = allowed users. Rotation and locking come in component 2; the office rule is the office IP list for all portals |
+| PortalUsageLog | user, portal, at, case. **Built as `PortalLoginUse`** (0024): user, portal, opened/collected IPs and times, ticket hash and expiry, outcome. The case comes with component 3 |
 | Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag. **Built 19 Oct 2026** (0017 Decision 11): department, category, about (the tag), title, body, source (team / IVS), status (active / removed), posted by; holiday entries come from the calendar itself; the login-popup flag is `loginPopupAt` (when it was picked) and `loginPopupById` (who picked it; both or neither, 0017 Decision 12), with each user's `loginPopupSeenAt` |
 | MessageLog | template, recipient, channel (WhatsApp / SMS / email), payload, status, sent at, case |
 | RoutineTask | name, frequency, owner, due, done at |
@@ -1430,7 +1437,7 @@ Source: `04_Engineering_Constraints.md`. Neither the contract-based nor the clie
 
 | Risk | Why it matters | First step |
 |---|---|---|
-| **Click-to-login portal vault** | The core promise ("staff never see passwords"), on government and airline portals we don't control. Feasibility is unconfirmed. | Spike in weeks 1–2 on one visa portal and one airline portal. A likely approach: a managed browser extension that injects stored credentials, with server-side rotation and locking. Tell Shivanshu what *can't* be done before the client assumes it can. |
+| **Click-to-login portal vault** | The core promise ("staff never see passwords"), on government and airline portals we don't control. Feasibility is unconfirmed. | Spike in weeks 1–2 on one visa portal and one airline portal. A likely approach: a managed browser extension that injects stored credentials, with server-side rotation and locking. Tell Shivanshu what *can't* be done before the client assumes it can. **21 Oct 2026:** trying our own Chrome helper; component 1 is built (`docs/decisions/0024-portal-logins.md`). It still waits for a real visa and airline portal (M49), and what it can't do goes to Shivanshu (S13). |
 | **WhatsApp Business API** | Meta verification, the BSP account and template approval take days to weeks. Everything client-facing depends on it. | Pick a BSP in week 1, get Masti's Meta details, submit templates early. |
 | **AI parsing** (enquiries, holiday itineraries, ticket screenshots) | Accuracy, Gujarati/Hindi input, cost per call | Keep it assistive (staff confirm). Track the cost per call. |
 | **Holiday quote automation** | "Already discussed and built earlier" | Ask Shivanshu on day 1 what exists. |
@@ -1449,7 +1456,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
 3. Hosting recommendation for Masti's account, with a monthly cost, plus our dev and staging setup until handover.
 4. WhatsApp BSP and template strategy. **Started 20 Oct 2026:** Twilio for now, behind a sender that can change provider (0020).
 5. SMS/OTP provider.
-6. Click-to-login approach, after the spike.
+6. Click-to-login approach, after the spike. *21 Oct 2026: our own Chrome helper, as a trial (0024); Shivanshu approves once it passes.*
 7. Field-staff device: phone or tablet, PWA or WhatsApp-only.
 8. Docket grouping recommendation.
 9. **Engineering setup:**
@@ -1468,6 +1475,7 @@ Built so far: **authentication, users, department roles and the audit log**, end
 Masti CRM/
 ├── CLAUDE.md, PROJECT_KNOWLEDGE.md, QUESTIONS_TO_ASK.md
 ├── docs/decisions/               ← decision records (0001-auth-sessions.md)
+├── Helper/                       ← the CRM helper: a Chrome extension (MV3, TypeScript) for "Log in for me" (0024); README.md
 ├── Backend/                      ← Express 5 + TypeScript 6 (strict, CommonJS) + Prisma 7 + PostgreSQL
 │   ├── docker-compose.yml        ← local dev Postgres 17 (credentials from .env POSTGRES_*)
 │   ├── prisma/schema.prisma      ← Department (+ casePrefix), User (type HEAD/OFFICE/FIELD), UserDepartment, FieldJob (skeleton), Session, AuditLog, Setting,
@@ -1642,7 +1650,7 @@ Masti CRM/
 - **Stage flows as data** per department. Phase-2 departments then slot in.
 - **A durable, self-hostable job scheduler** for reminders, rotations, cycle days and check-in lists. **pg-boss, decided 21 Oct 2026** (0021).
 - **Idempotent outbound messaging** with a message log, so retries never double-send to a client.
-- **Vault:** encrypt credentials at rest with a key kept outside the DB. Never send a secret to the browser in readable form. Log every use.
+- **Vault:** encrypt credentials at rest with a key kept outside the DB. Log every use. ~~Never send a secret to the browser in readable form.~~ **Narrowed 21 Oct 2026 (0024 Decision 6):** the secret goes only to the CRM helper, at the moment of login, and never in any answer to a CRM page. Any filling must put it in the portal's password box inside the browser.
 - **Field app:** a mobile web view (PWA-style). Camera and geolocation need HTTPS.
 - **Personal data:** the CRM holds sensitive personal data (passport numbers, DOBs, income, addresses). Use least-privilege access, HTTPS everywhere and encrypted backups, and check obligations under India's DPDP Act with Shivanshu.
 
@@ -1863,7 +1871,7 @@ Masti CRM/
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? **13 Oct:** one open docket per vendor ("Send on its own" for a single file), one email per docket at dispatch (0008); confirm with Vimal | Y→C | 1 |
 | 2 | ~~Follow-up team split~~ **Answered 8 Oct:** the assigned Visa employee follows up (confirm with Vimal) | C | 1 |
 | 3 | Collection boy's device: phone or tablet; web app or WhatsApp-only jobs? **17 Oct:** a phone website (`/tasks`, 0015); his sign-in works as office staff's until the device is confirmed; confirm with Vimal | Y→C | 1 |
-| 4 | Click-to-login: how it works, which portals it supports | Y | 1 |
+| 4 | Click-to-login: how it works, which portals it supports. **21 Oct:** our own Chrome helper, as a trial; component 1 is built (0024). Which portals it supports waits for M49 | Y | 1 |
 | 5 | ~~Reminder schedule~~ **Answered 8 Oct:** an admin setting, seeded 2 days / 11:00 | C | 1 |
 | 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** answered in 0009: any time after the quote, required before dispatch (0008) | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
