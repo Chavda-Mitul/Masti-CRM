@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>Government portal</title><link rel="stylesheet" href="/portal.css">
+<main>
+  <h1>e-Services login</h1>
+  <form method="post" action="/login">
+    <label>Email ID <input name="emailId" type="text"></label>
+    <label>Password <input name="password" type="password"></label>
+    <img id="captchaImage" src="/captcha.svg" alt="Security code" width="120" height="40">
+    <label>Type the code above <input name="captcha"></label>
+    <button type="submit">Login</button>
+  </form>
+</main>

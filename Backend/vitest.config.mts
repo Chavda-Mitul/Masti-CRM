@@ -30,6 +30,9 @@ const testEnv = {
   AI_MODEL: "claude-haiku-5-5",
   ANTHROPIC_API_KEY: "",
   ANTHROPIC_WORKSPACE_ID: "",
+  // Portal logins (docs/decisions/0024-portal-logins.md): a fixed test key and a made-up helper ID, whatever .env says.
+  PORTAL_VAULT_KEY: Buffer.from("portal-logins-test-key-32-bytes!").toString("base64"),
+  PORTAL_HELPER_IDS: "aaaabbbbccccddddeeeeffffgggghhhh",
   NODE_ENV: "test",
   DOTENV_CONFIG_QUIET: "true",
 };

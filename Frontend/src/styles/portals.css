@@ -1,0 +1,95 @@
+/* Settings → Portal logins (demo screen 28) */
+
+.portal-strip {
+  margin-bottom: 16px;
+}
+
+.portal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.portal-card .h2 {
+  margin: 0;
+}
+.portal-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.portal-people-line {
+  text-align: right;
+}
+.portal-secret {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-3);
+}
+.portal-status {
+  margin: 0;
+}
+.portal-warn {
+  margin: 0;
+  color: var(--warn);
+}
+.portal-go {
+  width: 100%;
+  margin-top: auto;
+}
+.portal-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Who used what: the demo's dashed card */
+.who-used {
+  border-style: dashed;
+  box-shadow: none;
+}
+.who-used-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.who-used-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.who-used-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 14px;
+}
+.who-used-list li:last-child {
+  border-bottom: 0;
+}
+.who-used-when {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* The drawer */
+.portal-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.portal-people-hint {
+  margin: 0;
+}
+.portal-people {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

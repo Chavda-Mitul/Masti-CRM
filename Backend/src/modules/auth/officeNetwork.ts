@@ -58,3 +58,19 @@ export async function officeNetworkAllows(user: UserWithDepartments, ip: string 
   if (setting.exemptUserTypes.includes(user.type)) return true;
   return ipAllowed(ip, setting.allow);
 }
+
+/**
+ * Portal logins (docs/decisions/0024-portal-logins.md) work only from the office addresses, for everyone and whatever the
+ * CRM-wide switch says. While no address is listed yet (M19), they work from anywhere.
+ */
+export async function portalLoginNetwork(ip: string | undefined): Promise<{ addressesSet: boolean; allowed: boolean }> {
+  const { allow } = await getOfficeNetworkSetting();
+  const addressesSet = allow.length > 0;
+  return { addressesSet, allowed: !addressesSet || ipAllowed(ip, allow) };
+}
+
+/** The same address, however it's written ("::ffff:203.0.113.10" and "203.0.113.10"). */
+export function sameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return normaliseIp(a) === normaliseIp(b);
+}

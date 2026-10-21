@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Masti CRM helper",
+  "version": "0.1.0",
+  "description": "Types Masti's saved portal logins when you press Log in for me in the Masti CRM.",
+  "minimum_chrome_version": "120",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzPaXYMq6E2VPx8sDtW+EnlmGP+YlGI1xyO0mtbPX9/eUpmzKJito9viNNa05j4wu1TSH7usGhGrHx0vYSQSVWxOyYrNEREKVAmk6oYQYKy7XIQfsfTRw9Z8bFFbSEYw/c6LjccAE2bb+wOxXs0nqAVUNCrAJXMcb/ELA6W0gSJ9im3QxdptoKYH9FqGFM5nIo9pdAelawK6JLxA0jatONw2pf7kqY/SQ7MRSeU/QbNx86G2WcPVRe54DLccvj+t2n8DdQomtJGbzqyWB9pQ7Fkqtz9kQgNpVeJ8W6FGMwMl6JXd2NabAtM6uVDjInIUVghTPENNAcOwgfJm8e3OoFQIDAQAB",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["scripting", "privacy"],
+  "host_permissions": ["https://*/*", "http://*/*"],
+  "externally_connectable": {
+    "matches": ["http://localhost/*", "http://127.0.0.1/*", "http://portal.localhost/*"]
+  }
+}

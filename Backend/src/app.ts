@@ -18,6 +18,8 @@ import companyRoutes from "./modules/company/company.routes";
 import consentPublicRoutes from "./modules/consent/consent.public.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import noticeRoutes from "./modules/notices/notices.routes";
+import portalHelperRoutes from "./modules/portalLogins/portalHelper.routes";
+import portalLoginRoutes from "./modules/portalLogins/portalLogins.routes";
 import todayRoutes from "./modules/today/today.routes";
 import userRoutes from "./modules/users/users.routes";
 import vendorRoutes from "./modules/vendors/vendors.routes";
@@ -54,6 +56,9 @@ app.use("/api/visa", visaRoutes);
 app.use("/api/field", fieldRoutes);
 app.use("/api/today", todayRoutes);
 app.use("/api/notices", noticeRoutes);
+app.use("/api/portal-logins", portalLoginRoutes);
+// No session here either: the CRM helper collects a login with a one-time ticket (0024).
+app.use("/api/portal-helper", portalHelperRoutes);
 
 app.use("/api", apiNotFound);
 app.use(errorHandler);

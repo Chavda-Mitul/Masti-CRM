@@ -2,6 +2,7 @@ import "dotenv/config";
 import { z } from "zod";
 import { normaliseMobile } from "../lib/contact";
 import { parseTrustProxy } from "./trustProxy";
+import { parseHelperIds, parseVaultKey } from "./vaultKey";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -101,6 +102,36 @@ const envSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.string().regex(/^wrkspc_[A-Za-z0-9]+$/, "Starts with wrkspc_: copy it from the Anthropic Console's Settings → Workspaces.").optional(),
   ),
+  // Portal logins (docs/decisions/0024-portal-logins.md): the key that locks every saved portal ID and password, 32
+  // random bytes in base64. Production refuses to start without it; elsewhere, without it, Portal logins say they
+  // aren't set up. Back it up apart from the database, and never change it once logins are saved: they can't be read
+  // with another key.
+  PORTAL_VAULT_KEY: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .transform((raw, ctx) => {
+        const parsed = parseVaultKey(raw);
+        if ("error" in parsed) {
+          ctx.addIssue({ code: "custom", message: parsed.error });
+          return z.NEVER;
+        }
+        return parsed.value;
+      })
+      .optional(),
+  ),
+  // The CRM helper's Chrome extension ID(s), comma-separated: only the helper may collect a portal's login.
+  PORTAL_HELPER_IDS: z
+    .string()
+    .default("")
+    .transform((raw, ctx) => {
+      const parsed = parseHelperIds(raw);
+      if ("error" in parsed) {
+        ctx.addIssue({ code: "custom", message: parsed.error });
+        return z.NEVER;
+      }
+      return parsed.value;
+    }),
   // The server log (src/lib/logger.ts, docs/decisions/0010-server-logs.md): one file a day in LOG_DIR (relative to the
   // folder the server starts in, Backend/), keeping the last LOG_RETENTION_DAYS days plus today's file (90: the project
   // lead, 15 Oct 2026).
@@ -114,6 +145,13 @@ const envSchema = z.object({
       code: "custom",
       path: ["WHATSAPP_TEST_NUMBER"],
       message: "Leave it empty in production: every client's message would go to this number.",
+    });
+  }
+  if (e.NODE_ENV === "production" && !e.PORTAL_VAULT_KEY) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["PORTAL_VAULT_KEY"],
+      message: "Set it in production: portal logins can't be saved or used without it (see .env.example).",
     });
   }
   if (e.NODE_ENV !== "production" && e.WHATSAPP_PROVIDER === "twilio" && !e.WHATSAPP_TEST_NUMBER) {
@@ -161,6 +199,10 @@ if (isProduction && env.AI_PROVIDER === "fake") {
 }
 if (isProduction && env.AI_PROVIDER === "off") {
   console.warn("AI_PROVIDER is off: everything that uses AI says it isn't set up yet.");
+}
+
+if (isProduction && env.PORTAL_HELPER_IDS.length === 0) {
+  console.warn("PORTAL_HELPER_IDS is empty: Log in for me can't work until the CRM helper's extension ID is set.");
 }
 
 /** Value for Express's "trust proxy" setting. */

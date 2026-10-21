@@ -28,6 +28,7 @@ model Department {
   caseCounters      CaseCounter[]
   enquiries         Enquiry[]
   notices           Notice[]
+  portalLogins      PortalLogin[]
   /// The follow-up and reason dropdown values shown in this department (0018).
   followUpOutcomes  FollowUpOutcomeDepartment[]
   followUpNextSteps FollowUpNextStepDepartment[]
@@ -115,6 +116,9 @@ model User {
   coveringLettersAdded  CoveringLetterVersion[] @relation("CoveringLetterVersionAddedBy")
   coveringLettersMade   VisaCase[]              @relation("VisaCaseCoveringLetterMadeBy")
   aiCalls               AiCall[]                @relation("AiCallBy")
+  portalLoginsAdded     PortalLogin[]           @relation("PortalLoginCreatedBy")
+  portalLogins          PortalLoginUser[]       @relation("PortalLoginUsers")
+  portalLoginUses       PortalLoginUse[]        @relation("PortalLoginUsedBy")
 
   @@index([type, isActive])
 }
@@ -2051,4 +2055,102 @@ model AiCall {
 
   @@index([createdAt])
   @@index([enquiryId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Portal logins: "Log in for me" (docs/decisions/0024-portal-logins.md, demo screen 28)
+// ---------------------------------------------------------------------------
+
+enum PortalLoginStatus {
+  /// In use.
+  ACTIVE
+  /// Taken off the list. Its saved ID and password are wiped; the row stays for the record.
+  REMOVED
+}
+
+/// What happened after a press of "Log in for me" (0024). The CRM helper reports all but REFUSED, which the server sets.
+enum PortalLoginOutcome {
+  /// The helper filled the boxes and pressed the portal's login button (whether the portal accepted it isn't known).
+  SUBMITTED
+  /// The helper filled the boxes and left the letters to type (a captcha) to the staff member.
+  WAITING_FOR_STAFF
+  /// The helper found nowhere to log in on the page.
+  NO_LOGIN_BOXES
+  /// The portal opened on another address, so nothing was typed.
+  ADDRESS_CHANGED
+  /// The page never finished opening.
+  DIDNT_OPEN
+  /// The server refused to hand the login over (switched off, taken off the list, outside the office…).
+  REFUSED
+  /// Anything else.
+  FAILED
+}
+
+/// A company account on a visa, airline or supplier portal (demo screen 28). Staff press "Log in for me" and never see the
+/// ID or password; the Head and the department's HOD add, change and remove it.
+/// Checks in the migration: name and ID label not blank and not too long; the address http(s); the secret kept exactly
+/// while ACTIVE; one active name per department, whatever the case.
+model PortalLogin {
+  /// Made by the server before saving: the secret is sealed with it ("portal-login:<id>").
+  id                String            @id
+  /// Fixed once added.
+  departmentId      Int
+  /// "France visa portal"
+  name              String
+  /// The portal's login page.
+  loginUrl          String
+  /// What the portal calls the first box: "ID", "User ID", "Agency code".
+  idLabel           String            @default("ID")
+  /// The ID and password, sealed by src/lib/secretBox.ts under PORTAL_VAULT_KEY. Null once removed.
+  secret            Bytes?
+  /// When the password was last saved: on adding, or when an HOD typed a new one.
+  passwordChangedAt DateTime          @db.Timestamptz(3)
+  status            PortalLoginStatus @default(ACTIVE)
+  createdById       String
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  /// Also the optimistic-lock token for PATCH; moves on every change, the list of people included.
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+  department        Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdBy         User              @relation("PortalLoginCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  users             PortalLoginUser[]
+  uses              PortalLoginUse[]
+
+  @@index([departmentId, status])
+}
+
+/// Who may press "Log in for me" on a portal, besides the Head and the department's HOD.
+model PortalLoginUser {
+  portalLoginId String
+  userId        String
+  portalLogin   PortalLogin @relation(fields: [portalLoginId], references: [id], onDelete: Cascade)
+  user          User        @relation("PortalLoginUsers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([portalLoginId, userId])
+  @@index([userId])
+}
+
+/// One press of "Log in for me" (0024): a one-time ticket for the CRM helper, then whether the helper collected the
+/// login and what it said happened. "Who used what" reads the collected ones.
+/// Checks in the migration: the ticket expires after it's made; a collected ticket's hash is gone; an outcome has its time.
+model PortalLoginUse {
+  id              String              @id @default(uuid())
+  portalLoginId   String
+  userId          String
+  /// Where the button was pressed from.
+  openedIp        String?
+  /// sha256 of the ticket while it can still be collected; cleared once it has been, or refused.
+  ticketHash      String?             @unique
+  ticketExpiresAt DateTime            @db.Timestamptz(3)
+  /// When the helper collected the ID and password, and from where.
+  redeemedAt      DateTime?           @db.Timestamptz(3)
+  redeemedIp      String?
+  outcome         PortalLoginOutcome?
+  outcomeAt       DateTime?           @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  portalLogin     PortalLogin         @relation(fields: [portalLoginId], references: [id], onDelete: Restrict)
+  user            User                @relation("PortalLoginUsedBy", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([portalLoginId, redeemedAt])
+  @@index([redeemedAt])
+  @@index([userId])
 }
