@@ -20,6 +20,7 @@ import {
   wordingProblem,
   type LetterText,
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
+import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
@@ -73,7 +74,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays, checklists, vendors and covering letters the same way (Settings → Masters)", async () => {
+  it("limits holidays, checklists, vendors, covering letters and the consent wording the same way (Settings → Masters)", async () => {
     const frontend = (await import(frontendMasterSchemas)) as {
       MAX_RANGE_DAYS: number;
       MAX_TARGETS: number;
@@ -81,7 +82,9 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_VENDOR_COUNTRIES: number;
       MAX_LETTER_CHARS: number;
       MAX_LETTER_COUNTRIES: number;
+      MAX_CONSENT_WORDING_CHARS: number;
     };
+    expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
     expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
     expect(frontend.MAX_CHECKLIST_ITEMS).toBe(MAX_CHECKLIST_ITEMS);

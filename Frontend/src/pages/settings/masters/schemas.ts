@@ -18,6 +18,8 @@ export const MAX_VENDOR_COUNTRIES = 50
 export const MAX_LETTER_COUNTRIES = 50
 /** The longest covering-letter wording, a page or two. */
 export const MAX_LETTER_CHARS = 6000
+/** The longest consent wording, as the database allows. */
+export const MAX_CONSENT_WORDING_CHARS = 8000
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -413,6 +415,20 @@ export const wordingFormSchema = z.object({
   effectiveFrom: z.string().regex(isoDate, 'Pick the day it’s used from.'),
 })
 export type WordingFormValues = z.infer<typeof wordingFormSchema>
+
+/** The consent form's wording (0022 part 2b): plain text, used from the moment it's saved. */
+export const consentWordingFormSchema = z.object({
+  body: z.string().superRefine((value, ctx) => {
+    const body = normaliseWording(value)
+    const problem = !body
+      ? 'Write the wording.'
+      : body.length > MAX_CONSENT_WORDING_CHARS
+        ? `At most ${MAX_CONSENT_WORDING_CHARS.toLocaleString('en-IN')} characters.`
+        : null
+    if (problem) ctx.addIssue({ code: 'custom', message: problem })
+  }),
+})
+export type ConsentWordingFormValues = z.infer<typeof consentWordingFormSchema>
 
 export const documentFormSchema = z.object({
   code: z
