@@ -283,6 +283,7 @@ export const linkTravellerSchema = z.object({
 
 export type UpdateCaseDocumentInput = z.infer<typeof updateCaseDocumentSchema>;
 export type LinkTravellerInput = z.infer<typeof linkTravellerSchema>;
+export type ConsentDetailsInput = z.infer<typeof consentDetailsSchema>;
 
 const booklets = z.number().int().min(0, "Can't be below 0.").max(50, "50 at most.").nullable().optional();
 
@@ -337,6 +338,33 @@ export const checkCaseDocumentSchema = z
 export type CheckCaseDocumentInput = z.infer<typeof checkCaseDocumentSchema>;
 
 const blankToNull = (value: unknown) => (typeof value === "string" && value.trim() === "" ? null : value);
+
+const consentDate = z.preprocess(blankToNull, z.iso.date("Use a valid date.").nullable());
+const consentText = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max, `At most ${max} characters.`).nullable());
+
+/**
+ * A traveller's consent form details (docs/decisions/0022-consent-form.md, part 1), every field each time: staff fill
+ * them in by asking the client. The date of birth and the home address are needed ⚠️; the rest may stay empty (a child
+ * has no spouse, income or office), and "" or null clears one. updatedAt is the person's, as the browser read it.
+ */
+export const consentDetailsSchema = z.object({
+  dateOfBirth: z.iso.date("Enter the date of birth."),
+  spouseDateOfBirth: consentDate,
+  anniversary: consentDate,
+  motherDateOfBirth: consentDate,
+  fatherDateOfBirth: consentDate,
+  residentialAddress: z.string("Enter the home address.").trim().min(1, "Enter the home address.").max(300, "At most 300 characters."),
+  officeAddress: consentText(300),
+  /** A year, in whole rupees. */
+  annualIncome: z.preprocess(
+    blankToNull,
+    z.number("Enter the income in rupees.").int("Whole rupees only.").min(0, "It can't be negative.").max(2_000_000_000, "That's too large.").nullable(),
+  ),
+  profession: consentText(100),
+  education: consentText(100),
+  updatedAt: z.iso.datetime("Reload and try again."),
+});
+
 /** A partial update names at least one field (saving again past a warning, confirmWarnings, isn't a change). */
 const somethingToChange = (v: object) => Object.entries(v).some(([key, value]) => key !== "confirmWarnings" && value !== undefined);
 

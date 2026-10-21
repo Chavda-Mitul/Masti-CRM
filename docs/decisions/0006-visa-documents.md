@@ -261,7 +261,7 @@ Who counts as a child stays as set at intake (0005).
   - "Name this traveller first" when the traveller isn't linked yet
   - "None on file — flagged"
   - (later) "Agreed · 28 Sep" or "On file from 2025"
-- Consent never blocks maturity; it is obtained in parallel.
+- Consent never blocks maturity; it is obtained in parallel. **Built further in `docs/decisions/0022-consent-form.md` (21 Oct 2026): the details, then the "I agree" link and the record.**
 
 ### 6. Follow-ups, postpone, cancel, resume, reassign
 

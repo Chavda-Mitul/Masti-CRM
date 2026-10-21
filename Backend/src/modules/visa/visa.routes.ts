@@ -15,6 +15,7 @@ import {
   receivePassportsSchema,
   receiveRestSchema,
   clearShortfallSchema,
+  consentDetailsSchema,
   handOverSchema,
   bookFieldJobSchema,
   changeFieldJobSchema,
@@ -45,6 +46,7 @@ import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
 import * as caseMessagesService from "./visaCaseMessages.service";
 import * as caseScansService from "./visaCaseScans.service";
+import * as consentService from "./visaConsent.service";
 import * as coveringLetterService from "./visaCoveringLetter.service";
 import * as docketService from "./visaDocket.service";
 import * as dispatchService from "./visaDispatch.service";
@@ -125,6 +127,13 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
   const body = linkTravellerSchema.parse(req.body);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
+});
+
+/** The consent form's details for one named traveller (docs/decisions/0022-consent-form.md, part 1). */
+router.put("/cases/:caseNo/travellers/:travellerId/consent-details", visaEdit, async (req, res) => {
+  const body = consentDetailsSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await consentService.saveConsentDetails(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /** Trip details: travelling out, coming back, the entry type and the hotel stay (Documents or File preparation). */
