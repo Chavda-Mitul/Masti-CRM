@@ -89,6 +89,10 @@ describe("trip details (Decision 4)", () => {
     const past = await saveTrip(staff, c.caseNo, { departOn: inDays(-1) });
     expect(past.status).toBe(400);
     expect(past.body.issues.departOn[0]).toMatch(/can't be in the past/);
+    // Coming back in the past, with no travelling out yet: refused on its own (fixed 21 Oct 2026).
+    const pastReturn = await saveTrip(staff, c.caseNo, { returnOn: inDays(-20) });
+    expect(pastReturn.status).toBe(400);
+    expect(pastReturn.body.issues.returnOn[0]).toBe("Coming back can't be in the past.");
 
     const backwards = await saveTrip(staff, c.caseNo, { departOn: inDays(10), returnOn: inDays(9) });
     expect(backwards.status).toBe(400);

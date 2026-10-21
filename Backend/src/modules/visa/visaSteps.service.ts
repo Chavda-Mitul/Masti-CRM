@@ -235,6 +235,10 @@ export async function updateTrip(caseNo: string, input: UpdateTripInput, actor: 
     if (changes.departOn && fromDbDate(changes.departOn) < istToday()) {
       throw fieldError("departOn", "Travelling out can't be in the past.");
     }
+    // Checked on its own too, so a past return can't be saved before travelling out is (fixed 21 Oct 2026).
+    if (changes.returnOn && fromDbDate(changes.returnOn) < istToday()) {
+      throw fieldError("returnOn", "Coming back can't be in the past.");
+    }
     const departOn = changes.departOn !== undefined ? changes.departOn : before.departOn;
     const returnOn = changes.returnOn !== undefined ? changes.returnOn : before.returnOn;
     if (departOn && returnOn && returnOn < departOn) throw fieldError("returnOn", "Coming back can't be before travelling out.");

@@ -149,7 +149,8 @@ The details the forms and the covering letter will need, "captured as the docume
 - **Settled while building:**
   - **Pre-filled means stored.** A new case with an exact travel date starts with `departOn` set to it, and the
     migration did the same for existing cases. So "File ready" reads what is stored, and nobody has to re-save it.
-  - **A newly set travelling out can't be in the past,** as at intake. Coming back is checked against travelling out
+  - **A newly set travelling out can't be in the past,** as at intake, and neither can a newly set coming back, even
+    with no travelling out yet (fixed 21 Oct 2026, from the visa test). Coming back is checked against travelling out
     as stored, so sending one date alone is checked too.
   - **Editable at Enquiry as well.** Like any Step 2 change, the first trip save at the Enquiry stage moves the case
     to Documents. After File preparation the answer is "Trip details can't change once the file is ready."
