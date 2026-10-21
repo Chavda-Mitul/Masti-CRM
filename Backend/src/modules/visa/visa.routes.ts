@@ -43,6 +43,7 @@ import {
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
+import * as caseMessagesService from "./visaCaseMessages.service";
 import * as caseScansService from "./visaCaseScans.service";
 import * as coveringLetterService from "./visaCoveringLetter.service";
 import * as docketService from "./visaDocket.service";
@@ -85,6 +86,11 @@ router.post("/cases", visaEdit, async (req, res) => {
 
 router.get("/cases/:caseNo", visaView, async (req, res) => {
   res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
+/** The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first. */
+router.get("/cases/:caseNo/messages", visaView, async (req, res) => {
+  res.json({ messages: await caseMessagesService.getCaseMessages(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
 });
 
 // Step 2 (docs/decisions/0006-visa-documents.md). The service also requires the case's owner, its HOD or the Head.

@@ -1002,6 +1002,62 @@
 .rail-section + .rail-section {
   margin-top: 18px;
 }
+.rail-note {
+  margin: 8px 0 0;
+}
+
+/* Sent to the client (0021): one row per message, its dot coloured by where the message has got to */
+.message-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.message-head {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.message-head strong,
+.message-head .small {
+  display: block;
+}
+.message-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  flex-shrink: 0;
+  border-radius: 99px;
+  background: var(--ok);
+}
+.message-wait .message-dot {
+  background: var(--text-3);
+}
+.message-bad .message-dot {
+  background: var(--bad);
+}
+.message-error {
+  margin: 4px 0 0 18px;
+  color: var(--bad);
+}
+.message-body {
+  margin: 8px 0 0 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--fill-muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
 
 /* Step 2 actions (part 5): the Step 1 note, naming a traveller, ticking */
 .case-page .alert-info {

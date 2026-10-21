@@ -9,12 +9,12 @@ import { useToast } from '../../../lib/toast'
 import { useAssignees, useReassignCase } from '../queries'
 import type { VisaCase } from '../types'
 import { isFollowUpStep } from './labels'
+import { MessagesSection } from './MessagesSection'
 import { MoneySection } from './MoneySection'
 
 /**
- * The right rail (demo screen 07): who the case is for, whose job it is now, and the money on the case (the quote,
- * 0009). The HOD or the Head can give the case to someone else (0006 Decision 6). "Sent to the client" joins it with
- * WhatsApp.
+ * The right rail (demo screen 07): who the case is for, whose job it is now, what the CRM has sent the client (0021),
+ * and the money on the case (the quote, 0009). The HOD or the Head can give the case to someone else (0006 Decision 6).
  */
 export function CaseRail({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -60,6 +60,7 @@ export function CaseRail({ visaCase: c }: { visaCase: VisaCase }) {
         )}
       </div>
 
+      <MessagesSection visaCase={c} />
       <MoneySection visaCase={c} />
       {reassigning && <ReassignDialog visaCase={c} onClose={() => setReassigning(false)} />}
     </aside>

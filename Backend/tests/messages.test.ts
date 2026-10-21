@@ -8,7 +8,7 @@ import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage }
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
-import { prisma, resetDb } from "./helpers";
+import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { saveCase, visaStaff } from "./visaHelpers";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md): a message is written with the change it reports, then the
@@ -412,6 +412,92 @@ describe("the workers, through pg-boss", () => {
       if (state !== "retry") await new Promise((resolve) => setTimeout(resolve, 250));
     }
     expect(state).toBe("retry");
+  });
+});
+
+describe("the case's messages (the Sent to the client card)", () => {
+  /** A saved case with its "All documents received" message queued, as Mark documents complete leaves it. */
+  async function caseWithMessage() {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    await prisma.$transaction(async (tx) =>
+      queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key: `k:${c.id}`, ...(await visaMessageBasics(tx, c.id)) }),
+    );
+    const message = await prisma.outboundMessage.findUniqueOrThrow({ where: { idempotencyKey: `k:${c.id}` } });
+    return { staff, c, message };
+  }
+  const list = (agent: Awaited<ReturnType<typeof visaStaff>>, caseNo: string) => agent.get(`/api/visa/cases/${caseNo}/messages`);
+
+  it("lists them oldest first: words, status, the reason a failed one didn't go, and nothing of the sending details", async () => {
+    const { staff, c, message } = await caseWithMessage();
+    const sentAt = new Date(Date.now() - 60_000);
+    const deliveredAt = new Date();
+    await prisma.outboundMessage.update({
+      where: { id: message.id },
+      data: { status: "DELIVERED", provider: "twilio", providerMessageId: "SM1", sentTo: "+919000000001", sentAt, deliveredAt, attempts: 1 },
+    });
+    const template = await prisma.messageTemplate.findUniqueOrThrow({ where: { code: VISA_DOCUMENTS_RECEIVED } });
+    const failedAt = new Date();
+    await prisma.outboundMessage.create({
+      data: {
+        templateId: template.id,
+        clientId: c.client.id,
+        enquiryId: c.id,
+        toMobile: message.toMobile,
+        variables: {},
+        body: "Dear Rakesh Mehta, …",
+        idempotencyKey: "later",
+        status: "FAILED",
+        error: "Twilio refused the Account SID or Auth Token. Copy both again from the Twilio Console.",
+        failedAt,
+        createdAt: new Date(Date.now() + 1000),
+      },
+    });
+
+    const res = await list(staff, c.caseNo.toLowerCase());
+    expect(res.status).toBe(200);
+    expect(res.body.messages).toEqual([
+      {
+        id: message.id,
+        title: "All documents received",
+        body: BODY,
+        status: "DELIVERED",
+        error: null,
+        createdAt: message.createdAt.toISOString(),
+        sentAt: sentAt.toISOString(),
+        deliveredAt: deliveredAt.toISOString(),
+        readAt: null,
+        failedAt: null,
+        toTestNumber: true,
+      },
+      expect.objectContaining({
+        title: "All documents received",
+        status: "FAILED",
+        error: "Twilio refused the Account SID or Auth Token. Copy both again from the Twilio Console.",
+        sentAt: null,
+        failedAt: failedAt.toISOString(),
+        toTestNumber: false,
+      }),
+    ]);
+    expect(Object.keys(res.body.messages[0])).not.toContain("providerMessageId");
+  });
+
+  it("is empty for a case with no messages", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    expect((await list(staff, c.caseNo)).body).toEqual({ messages: [] });
+  });
+
+  it("shows only to whoever can open the case", async () => {
+    const { c } = await caseWithMessage();
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const other = await list(await loginAs("neha@masti.test"), c.caseNo);
+    expect(other.status).toBe(403);
+    expect(other.body.messages).toBeUndefined();
+
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    expect((await list(await loginAs("riya@masti.test"), c.caseNo)).body.messages).toHaveLength(1);
+    expect((await list(await loginAs("riya@masti.test"), "VISA-2099-9999")).status).toBe(404);
   });
 });
 
