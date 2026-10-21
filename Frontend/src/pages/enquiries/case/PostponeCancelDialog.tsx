@@ -8,7 +8,7 @@ import { useCancelCase, usePostponeCase } from '../queries'
 import type { VisaCase } from '../types'
 import { firstName, heldAtOffice, liveInvoice, toHandBack } from './labels'
 
-export type HoldKind = 'POSTPONE' | 'CANCEL'
+type HoldKind = 'POSTPONE' | 'CANCEL'
 
 /** Where the passports are now: "in our office" (before dispatch), "with the vendor", "on their way back" or "in our stock". */
 function passportsWhere(c: VisaCase) {
@@ -54,26 +54,15 @@ function nextDay(date: string) {
 
 /**
  * Postpone (a reason and when it comes back) or cancel (a reason) a case (0006 Decision 6). Reasons are fixed lists
- * from Settings → Masters: "Fixed reasons only — no free text anywhere." The Reminders card opens it with the reason
- * already picked (0006 amendment 19).
+ * from Settings → Masters: "Fixed reasons only — no free text anywhere."
  */
-export function PostponeCancelDialog({
-  visaCase: c,
-  onClose,
-  initialKind = 'POSTPONE',
-  initialReasonId = '',
-}: {
-  visaCase: VisaCase
-  onClose: () => void
-  initialKind?: HoldKind
-  initialReasonId?: string
-}) {
+export function PostponeCancelDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
   const reasons = useMasterList('enquiry-reasons')
   const postpone = usePostponeCase(c.caseNo)
   const cancel = useCancelCase(c.caseNo)
-  const [kind, setKind] = useState<HoldKind>(initialKind)
-  const [reasonId, setReasonId] = useState(initialReasonId)
+  const [kind, setKind] = useState<HoldKind>('POSTPONE')
+  const [reasonId, setReasonId] = useState('')
   const [resumeOn, setResumeOn] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 

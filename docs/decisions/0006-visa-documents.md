@@ -177,7 +177,15 @@ deferred "with messaging". WhatsApp and the job runner still aren't built:
       `visa.reminders.update` when it changes.
     - **"Postpone or cancel — reason"** on the card lists the department's postpone and cancel reasons; picking one
       opens the usual Postpone / Cancel dialog with that reason chosen. There is still one way to postpone or cancel.
+      *Removed by amendment 20.*
     - **The card says** "Sending starts once WhatsApp is connected", so nobody thinks a reminder went out.
+
+Amended 21 Oct 2026 (project lead), on seeing the card in use:
+
+20. **No "Postpone or cancel — reason" on the Reminders card.** The demo's screen 07 had it, but it repeated the
+    case header's "Postpone or cancel" button, and it showed even when nothing was missing and no reminder was due. The
+    card now holds only the reminder line and its On | Off switch; the header button is the one way to postpone or
+    cancel, and its dialog no longer takes a reason picked beforehand.
 
 ## Context
 
