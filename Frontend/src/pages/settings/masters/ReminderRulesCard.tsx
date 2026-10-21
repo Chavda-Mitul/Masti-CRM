@@ -1,8 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
+import { TimePicker } from '../../../components/TimePicker'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useDocumentRemindersSetting, useSaveDocumentRemindersSetting } from './queries'
@@ -58,7 +59,7 @@ export function ReminderRulesCard() {
 function SettingForm({ setting }: { setting: DocumentRemindersSetting }) {
   const toast = useToast()
   const save = useSaveDocumentRemindersSetting()
-  const { register, handleSubmit, formState, reset } = useForm<DocumentRemindersFormValues>({
+  const { register, control, handleSubmit, formState, reset } = useForm<DocumentRemindersFormValues>({
     resolver: zodResolver(documentRemindersFormSchema),
     defaultValues: setting,
   })
@@ -85,7 +86,11 @@ function SettingForm({ setting }: { setting: DocumentRemindersSetting }) {
           <input className="input" type="number" min={1} max={30} {...register('everyDays', { valueAsNumber: true })} />
         </FormField>
         <FormField label="At" error={errors.sendAt?.message}>
-          <input className="input" type="time" {...register('sendAt')} />
+          <Controller
+            control={control}
+            name="sendAt"
+            render={({ field }) => <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label="Send reminders at" invalid={!!errors.sendAt} />}
+          />
         </FormField>
         <FormField label="On" error={errors.channel?.message}>
           <select className="select" {...register('channel')}>

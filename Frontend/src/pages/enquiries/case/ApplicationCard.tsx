@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { RequiredMark } from '../../../components/FormField'
+import { TimePicker } from '../../../components/TimePicker'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { formatDateTime, istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
@@ -161,13 +162,11 @@ function ApplicationRow({ caseNo, traveller: t, appointmentNeeded }: { caseNo: s
                 setSaveErrors({ ...saveErrors, appointment: undefined })
               }}
             />
-            <input
-              className="input"
-              type="time"
+            <TimePicker
               value={at}
-              aria-label={`Appointment time for ${name}`}
-              onChange={(e) => {
-                setAt(e.target.value)
+              label={`Appointment time for ${name}`}
+              onChange={(time) => {
+                setAt(time)
                 setSaveErrors({ ...saveErrors, appointment: undefined })
               }}
             />

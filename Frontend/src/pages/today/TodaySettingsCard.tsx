@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { useMe } from '../../auth/useAuth'
 import { FormField } from '../../components/FormField'
+import { TimePicker } from '../../components/TimePicker'
 import { errorText } from '../../lib/apiErrors'
 import { useToast } from '../../lib/toast'
 import { useTodaySettings, useUpdateTodaySettings } from './queries'
@@ -38,7 +39,7 @@ export function TodaySettingsCard() {
 function SettingsForm({ settings }: { settings: TodaySettings }) {
   const toast = useToast()
   const update = useUpdateTodaySettings()
-  const { register, handleSubmit, formState, reset } = useForm<TodaySettingsFormValues>({
+  const { control, handleSubmit, formState, reset } = useForm<TodaySettingsFormValues>({
     resolver: zodResolver(todaySettingsFormSchema),
     defaultValues: settings,
   })
@@ -59,7 +60,13 @@ function SettingsForm({ settings }: { settings: TodaySettings }) {
         error={formState.errors.newSinceAt?.message}
         hint="This time on the previous office day (Sundays and office holidays are skipped): the demo's “since yesterday evening”."
       >
-        <input className="input" type="time" {...register('newSinceAt')} style={{ maxWidth: 140 }} />
+        <Controller
+          control={control}
+          name="newSinceAt"
+          render={({ field }) => (
+            <TimePicker ref={field.ref} value={field.value} onChange={field.onChange} label="New enquiries count from" invalid={!!formState.errors.newSinceAt} style={{ maxWidth: 140 }} />
+          )}
+        />
       </FormField>
       {update.error && <div className="alert alert-bad">{errorText(update.error)}</div>}
       <div>
