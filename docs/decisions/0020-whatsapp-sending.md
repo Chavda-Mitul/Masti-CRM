@@ -60,8 +60,8 @@ changing provider must not touch the code that decides what to send.
    WhatsApp message) and accept the sandbox terms.
 3. From each phone that should get test messages, send the `join <two words>` message shown there to the sandbox
    number, or scan the QR code. A join lasts 3 days; then send it again.
-4. Put the Account SID and Auth Token in `Backend/.env`, with `WHATSAPP_PROVIDER=twilio` and
-   `TWILIO_WHATSAPP_FROM=+14155238886`.
+4. Put the Account SID and Auth Token in `Backend/.env`, with `WHATSAPP_PROVIDER=twilio`,
+   `TWILIO_WHATSAPP_FROM=+14155238886` and (since 0021) `WHATSAPP_TEST_NUMBER` set to your phone, the one that joined.
 5. Run `npm run whatsapp:test -- <your mobile>`.
 
 The sandbox reaches only phones that joined it, so it can't message a real client by mistake. It can't use our own
@@ -80,7 +80,7 @@ hours of the tester's last message to the sandbox.
 
 ## Next steps (agreed 20 Oct 2026, one at a time)
 
-2. **The outbox:** `MessageTemplate` and `OutboundMessage` (0003 Decision 6), written in the same transaction as the
+2. **Built 21 Oct 2026, `docs/decisions/0021-whatsapp-outbox.md`. The outbox:** `MessageTemplate` and `OutboundMessage` (0003 Decision 6), written in the same transaction as the
    change they report, and a background sender (pg-boss is the suggestion in §16.5) that retries without sending twice.
 3. **The visa messages at every step,** from the drafted texts (`docs/whatsapp-visa-messages.md`, waiting for Masti's
    approval, M1). Messages 7 and 18 attach a PDF, so a message gets an attachment then.
