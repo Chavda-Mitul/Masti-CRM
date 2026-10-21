@@ -82,6 +82,21 @@ const envSchema = z.object({
       })
       .optional(),
   ),
+  // AI (docs/decisions/0023-ai.md), through src/lib/ai only. "anthropic" asks Anthropic's API with ANTHROPIC_API_KEY;
+  // "fake" gives a fixed answer, for a laptop with no key; "off" uses no AI ("AI isn't set up yet").
+  AI_PROVIDER: z.enum(["off", "fake", "anthropic"]).default("off"),
+  // The one model every AI use runs on: Claude Haiku 5.5 (the project lead, 21 Oct 2026). src/lib/ai/prices.ts must
+  // know its price, or calls are recorded without a cost.
+  AI_MODEL: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("claude-haiku-5-5")),
+  // A key made inside a workspace (Anthropic Console → Settings → Workspaces → API keys); needed when AI_PROVIDER is
+  // anthropic. Never committed.
+  ANTHROPIC_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // Only for a user key (sk-ant-usr-…), which isn't tied to a workspace: the workspace its calls are billed to,
+  // Anthropic Console → Settings → Workspaces. Not a secret.
+  ANTHROPIC_WORKSPACE_ID: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^wrkspc_[A-Za-z0-9]+$/, "Starts with wrkspc_: copy it from the Anthropic Console's Settings → Workspaces.").optional(),
+  ),
   // The server log (src/lib/logger.ts, docs/decisions/0010-server-logs.md): one file a day in LOG_DIR (relative to the
   // folder the server starts in, Backend/), keeping the last LOG_RETENTION_DAYS days plus today's file (90: the project
   // lead, 15 Oct 2026).
@@ -132,6 +147,13 @@ if (isProduction && env.WHATSAPP_PROVIDER === "log") {
 }
 if (isProduction && env.WHATSAPP_PROVIDER === "off") {
   console.warn("WHATSAPP_PROVIDER is off: clients get no WhatsApp messages, and each one is marked failed.");
+}
+
+if (isProduction && env.AI_PROVIDER === "fake") {
+  console.warn("AI_PROVIDER is fake: every AI answer is a fixed text, not a real one.");
+}
+if (isProduction && env.AI_PROVIDER === "off") {
+  console.warn("AI_PROVIDER is off: everything that uses AI says it isn't set up yet.");
 }
 
 /** Value for Express's "trust proxy" setting. */

@@ -18,13 +18,15 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "whatsapp:test": "tsx src/scripts/whatsappTest.ts"
+    "whatsapp:test": "tsx src/scripts/whatsappTest.ts",
+    "ai:test": "tsx src/scripts/aiTest.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@anthropic-ai/sdk": "0.134.0",
     "@aws-sdk/client-s3": "^3.1149.0",
     "@aws-sdk/s3-request-presigner": "^3.1149.0",
     "@node-rs/argon2": "^2.2.2",

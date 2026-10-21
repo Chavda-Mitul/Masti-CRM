@@ -25,7 +25,7 @@ Go-live is **1 Jan 2027**, delivered in 3 stages: Visa → Departments → Final
 
 | Where | Commands |
 |---|---|
-| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, + Mailpit, which catches outgoing email at http://localhost:8025, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket, and Mailpit), `npm run typecheck`, `npm run build`, `npm run whatsapp:test -- <mobile>` (one test WhatsApp through `WHATSAPP_PROVIDER`, `docs/decisions/0020-whatsapp-sending.md`) |
+| `Backend/` | `npm run db:up` (local Postgres + MinIO, the S3-compatible document store, + Mailpit, which catches outgoing email at http://localhost:8025, via docker compose), `npm run db:deploy` (apply migrations), `npm run db:generate` (run after every schema change), `npm run db:seed`, `npm run dev` (port 5000), `npm test` (needs `npm run db:up`: it uses its own database and MinIO bucket, and Mailpit), `npm run typecheck`, `npm run build`, `npm run whatsapp:test -- <mobile>` (one test WhatsApp through `WHATSAPP_PROVIDER`, `docs/decisions/0020-whatsapp-sending.md`), `npm run ai:test` (one test AI answer through `AI_PROVIDER` and `AI_MODEL`, `docs/decisions/0023-ai.md`) |
 | `Frontend/` | `npm run dev` (port 5173), `npm run build`, `npm run typecheck`, `npm run lint` (oxlint) |
 
 Make new migrations with `prisma migrate diff` and remove its proposed `DROP INDEX "HolidayTarget_unique"` (hand-written SQL that must stay). `npm run db:migrate` (`prisma migrate dev`) stops at a prompt over that index and holds the migration lock.
@@ -44,6 +44,7 @@ Inside the route and its service:
 - Check finer rules with `can()` / `isHodOf()`.
 - Write `audit({...}, tx)` for every change, in the same transaction.
 - Tell the client with `queueMessage(tx, …)` (`src/modules/messages`), in the same transaction; never call `sendWhatsApp` from a service. Background work runs on pg-boss (`src/lib/jobs.ts`, `docs/decisions/0021-whatsapp-outbox.md`).
+- Use AI only through `askAi()` (`src/lib/ai`), with the use listed in `src/lib/ai/useCases.ts`, and never inside a transaction (`docs/decisions/0023-ai.md`). Send it only what the answer needs, never a passport number.
 - Throw `HttpError` helpers for errors.
 
 See PROJECT_KNOWLEDGE.md §16.4.

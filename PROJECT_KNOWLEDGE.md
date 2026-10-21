@@ -866,6 +866,11 @@ This worked example follows the demo's Mehta family case (France Schengen touris
     - The formats in Settings are built (component 1), and so is the card on the case with its print page
       (component 2). Missing details block Make the letter; it's made at File preparation and printed again later as
       the same letter; the letterhead space is a setting (45 mm ⚠️); "File ready" doesn't need it.
+  - **Changed 21 Oct 2026 (project lead):** Masti sent two of their letters and said they write each one in ChatGPT,
+    because every letter differs. Only the paragraph on why they travel really does. The CRM will write that paragraph
+    with AI from the case (no typing first), with instructions per visa type, and staff may change any of the letter's
+    text before making it (change request 11). The central AI part is built (`docs/decisions/0023-ai.md`); the letter
+    is part 2, next.
 - **Saved file, kept as proof** ✅: the final file (application form, ITR, bank statement, passport scan…) is saved as **one PDF, linked under the case number** in Drive. "Every page as it went to the vendor, stored in your Drive; the CRM keeps the link." Masti already keeps a single scanned PDF like this today; the CRM links it to the case *(transcript, 7:18 PM)*.
 - The vendor comes from the approved list ✅.
 
@@ -1299,7 +1304,7 @@ This is the biggest technical unknown (§16.2).
 | **Visa portals** (VFS, China, e-visa…) and **airline/booking portals** (IndiGo…) | Click-to-login vault | ✅ Promised. The mechanism is unproven (browser extension?): spike it first. |
 | **IVS** visa-news feed (paid) | Daily visa updates → notice board and login popup | ❓ Subscription, cost, integration (Q24). Also written "IVF" or "IBS" in the sources. |
 | PAN verification | Fetch details from a PAN (like EasyLife/TBO) into bookings and vouchers | ❓ In scope? Which provider? (Q23). Listed in the PID's third-party costs. |
-| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. |
+| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. **21 Oct 2026 (project lead):** one way in, `src/lib/ai/` (`askAi`), one model for every use (`AI_MODEL`: Claude Haiku 5.5), every call and its cost recorded in `AiCall`, no spending limit (`docs/decisions/0023-ai.md`). The first use is the covering letter's paragraph, about ₹0.15 a letter (change request 11). |
 | Passport MRZ / barcode | Visa form autofill | ❓ "If technology allows" (Q13) |
 | Accounting software (unnamed) | Store client codes; export/upload file | ❓ Name, format, phase (Q26) |
 | Weather API | Forecast for the next 10 days' travellers | ❓ Nice-to-have (Q25) |
@@ -1496,7 +1501,8 @@ Masti CRM/
 │   │                                requireUserType, requirePasswordChanged), error.ts, requireJson.ts
 │   ├── src/lib/                  ← audit.ts (append-only audit helper), httpError.ts, dates.ts (IST today, @db.Date helpers),
 │                                contact.ts (mobile/email clean-up), prismaErrors.ts (isUniqueViolation, rethrowUnique),
-│                                changes.ts (onlyChanged, definedOnly, optimistic locking), settings.ts (saveSetting: upsert + audit)
+│                                changes.ts (onlyChanged, definedOnly, optimistic locking), settings.ts (saveSetting: upsert + audit),
+│                                ai/ (askAi, the only way to AI: providers, the use list, prices; 0023)
 │   ├── tests/                    ← vitest + supertest against masti_crm_test (.env.test)
 │   └── .env / .env.test          ← gitignored; see .env.example / .env.test.example
 └── Frontend/                     ← React 19 + Vite 8 + TypeScript 6
@@ -1592,6 +1598,7 @@ Masti CRM/
 | `Backend/.env` | `LOG_LEVEL` (`info`), `LOG_DIR` (`logs`), `LOG_RETENTION_DAYS` (90) | The server log: one file a day, the last 90 days kept plus today's. An unexpected error shows the user a request code to grep for (`docs/decisions/0010-server-logs.md`) |
 | `Backend/.env` | `WHATSAPP_PROVIDER` (`off`), `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_WHATSAPP_FROM` | WhatsApp: `off`, `log` (into the server log instead) or `twilio`. Check with `npm run whatsapp:test -- <mobile>`. Tests force `off` (`docs/decisions/0020-whatsapp-sending.md`) |
 | `Backend/.env` | `WHATSAPP_TEST_NUMBER` | Outside production every message goes to this phone instead of the client's; required then with `twilio`, refused in production (`docs/decisions/0021-whatsapp-outbox.md`) |
+| `Backend/.env` | `AI_PROVIDER` (`off`), `AI_MODEL` (`claude-haiku-5-5`), `ANTHROPIC_API_KEY`, `ANTHROPIC_WORKSPACE_ID` | AI: `off`, `fake` (a fixed answer, for a laptop) or `anthropic`; one model for every use; the workspace only for a user key (`sk-ant-usr-…`). Check with `npm run ai:test`. Tests force `off` (`docs/decisions/0023-ai.md`) |
 | `Backend/.env.test` | `DATABASE_URL` | Must contain "test" in the database name (it is wiped) |
 | Frontend | `VITE_API_URL` | Optional; defaults to `/api` |
 
