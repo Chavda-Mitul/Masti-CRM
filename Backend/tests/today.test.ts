@@ -172,10 +172,6 @@ describe("todaySummary", () => {
     expect(await todaySummary(vimal, mondayMorning)).toMatchObject({ newEnquiries: 3, newSince: istDateTimeToUtc(saturday, "18:00") });
     // Tuesday counts from Monday evening.
     expect((await todaySummary(vimal, istDateTimeToUtc(addDays(monday, 1), "10:00"))).newSince).toEqual(istDateTimeToUtc(monday, "18:00"));
-
-    // Masti moves the cut-off: from 09:00, Saturday's 17:59 enquiry counts too.
-    await prisma.setting.create({ data: { key: "today", value: { newSinceAt: "09:00" } } });
-    expect((await todaySummary(vimal, mondayMorning)).newEnquiries).toBe(4);
   });
 });
 
@@ -271,26 +267,5 @@ describe("the notice card", () => {
     expect(staff[1]).toMatchObject({ kind: "NOTICE", department: { code: "VISA", name: "Visa" }, postedBy: { name: "Vimal" }, source: "TEAM" });
     // The Head's departments are all of them.
     expect(titles((await todaySummary(vimal, now)).notices)).toEqual(["Tickets, just now", "Dussehra", "Visa, an hour ago"]);
-  });
-});
-
-describe("Today settings", () => {
-  it("are everyone's to read; only the Head changes the cut-off, and the change is audited", async () => {
-    const aarti = await visaStaff();
-    expect((await aarti.get("/api/today/settings")).body).toEqual({ settings: { newSinceAt: "18:00" } });
-
-    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
-    const riya = await loginAs("riya@masti.test");
-    expect((await riya.put("/api/today/settings").send({ newSinceAt: "19:00" })).status).toBe(403);
-
-    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
-    const vimal = await loginAs("vimal@masti.test");
-    expect((await vimal.put("/api/today/settings").send({ newSinceAt: "25:00" })).status).toBe(400);
-    const res = await vimal.put("/api/today/settings").send({ newSinceAt: "19:30" });
-    expect(res.status).toBe(200);
-    expect(res.body.settings).toEqual({ newSinceAt: "19:30" });
-    expect((await aarti.get("/api/today/settings")).body.settings).toEqual({ newSinceAt: "19:30" });
-    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "setting.update", entityId: "today" } });
-    expect(entry).toMatchObject({ before: { newSinceAt: "18:00" }, after: { newSinceAt: "19:30" } });
   });
 });

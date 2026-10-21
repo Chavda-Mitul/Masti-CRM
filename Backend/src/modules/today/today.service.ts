@@ -1,7 +1,6 @@
 import type { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { addDays, fromDbDate, istDateTimeToUtc, istToday } from "../../lib/dates";
-import { saveSetting } from "../../lib/settings";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { OPEN_TAB, summaryOf, viewableDepartments } from "../enquiries/enquiries.service";
 import { whatFor, withPapers } from "../enquiries/followUpDesk.service";
@@ -11,14 +10,12 @@ import { holidayInclude } from "../holidays/holiday";
 import { getHolidaySettings } from "../holidays/holidays.settings";
 import { holidayItem, newHolidaysWhere, noticeItem } from "../notices/feed";
 import { noticeInclude } from "../notices/notice";
-import type { Actor, UserWithDepartments } from "../users/user";
-import type { UpdateTodaySettingsInput } from "./today.schemas";
-import { getTodaySettings, TODAY_SETTINGS_KEY } from "./today.settings";
+import type { UserWithDepartments } from "../users/user";
 
 // The Today page: one person's day (docs/decisions/0017-today-dashboard.md). In India time:
 // - Running late: due before now
 // - Due today: due from now until midnight tonight; the late ones are counted apart, as in the demo's "8 … and 2 …"
-// - New enquiries: created since the cut-off time on the previous office day (Sunday and office holidays skipped)
+// - New enquiries: created since 18:00 on the previous office day (Sunday and office holidays skipped)
 // Whose cases (Decision 1): the Head's are every department's; an HOD's the whole of each department they lead; anyone
 // else's (and an HOD's elsewhere) only the ones they own. View-only staff own none, so their day is empty, like their
 // Follow-ups badge.
@@ -30,6 +27,12 @@ const UP_NEXT_LIMIT = 200;
 
 /** The notice card's length: the demo's latest 3 (Decision 11). */
 const NOTICE_CARD = 3;
+
+/**
+ * New enquiries count from this time on the previous office day (Decision 3). Fixed, not a setting: the project lead's
+ * choice (amendment 1). Still our guess at the demo's "since yesterday evening" ⚠️.
+ */
+const NEW_SINCE_AT = "18:00";
 
 /**
  * A case someone has to act on (Decision 2): open or postponed (due again on its resume day), or cancelled with its
@@ -57,11 +60,10 @@ async function todayScope(user: UserWithDepartments) {
   };
 }
 
-/** Where "New enquiries" start (Decision 3): the setting's time on the last office day before today. */
+/** Where "New enquiries" start (Decision 3): 18:00 on the last office day before today. */
 async function newSince(now: Date) {
-  const { newSinceAt } = await getTodaySettings();
   const day = await previousOpenDay(addDays(istToday(now), -1), { office: true });
-  return istDateTimeToUtc(day, newSinceAt);
+  return istDateTimeToUtc(day, NEW_SINCE_AT);
 }
 
 /**
@@ -151,17 +153,4 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
     })),
     notices,
   };
-}
-
-export async function getSettings() {
-  return getTodaySettings();
-}
-
-/** The Head changes the cut-off (the route checks). One audited change, as setting.update. */
-export async function updateSettings(input: UpdateTodaySettingsInput, actor: Actor) {
-  const before = await getTodaySettings();
-  const after = { ...before, ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) };
-  if (JSON.stringify(after) === JSON.stringify(before)) return before;
-  await prisma.$transaction((tx) => saveSetting(tx, { key: TODAY_SETTINGS_KEY, before, after, actorId: actor.user.id, ip: actor.ip }));
-  return getTodaySettings();
 }

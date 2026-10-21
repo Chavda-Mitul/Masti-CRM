@@ -3,7 +3,7 @@
 - **Status:** decided (19 Oct 2026, project lead). Built one component at a time (Decision 7), all five on 19 Oct 2026:
   the banner and the four tiles (component 1); Up next (component 2); open enquiries by department and the "Comes with
   …" cards (component 3); the notice board and its card on Today (component 4); the visa team's login popup
-  (component 5).
+  (component 5). **Amended 21 Oct 2026:** New enquiries count from a fixed 18:00, with no setting (see *Amendment 1*).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -16,6 +16,17 @@
   - [0005](0005-system-masters.md): office days (`previousOpenDay`) and the holiday calendar
   - [0006](0006-visa-documents.md): who sees which enquiry (Decision 1, amended), the follow-up desk and its badge
     (Decision 9), postpone and cancel with fixed reasons (Decision 6)
+
+## Amendment 1 (21 Oct 2026, project lead): New enquiries count from a fixed 18:00
+
+The Today page's setting (Settings → Masters & holiday calendar → **Today page**) is removed: the project lead found it
+made the software harder to follow for one value. **New enquiries** count from **18:00 on the previous office day**,
+fixed in the code (`NEW_SINCE_AT` in `today.service.ts`). Sundays and office holidays are still skipped, so on a
+Monday it counts from Saturday 18:00. The rest of Decision 3 is unchanged.
+
+- **This sets golden rule 1 aside** (PROJECT_KNOWLEDGE.md §7) for this one value, on purpose. 18:00 is still our guess
+  at the demo's "since yesterday evening" ⚠️: if Masti's evening is another time, it is a code change and a redeploy.
+- **Gone:** `GET` and `PUT /api/today/settings`, the `today` Setting row in the seed, and the card in Settings.
 
 ## Context
 
@@ -62,6 +73,8 @@ Per-role dashboards (Q28 / M32) stay open with Vimal; this is our answer until h
   list's Open tab leaves postponed cases out, so its numbers wouldn't match.
 
 ### 3. New enquiries: since the previous office day's evening ⚠️
+
+**Amended 21 Oct 2026:** the time is fixed at 18:00, not a setting (*Amendment 1*).
 
 - **Every enquiry created since 18:00 ⚠️ on the previous office day,** whatever its status now: it counts what came in.
   Sundays and office holidays are skipped (`previousOpenDay`), so on a Monday it counts from Saturday evening.
@@ -198,6 +211,6 @@ team"):
 ## Still needed
 
 - **M32 (Q28):** what staff, HODs and Vimal should see on the home screen. Decision 1 stands until then.
-- **The 18:00 cut-off ⚠️:** Masti's own "evening".
+- **The 18:00 cut-off ⚠️:** Masti's own "evening". Fixed in the code since Amendment 1, so another time is a code change.
 - **Q24 (the IVS feed) and Q25 (weather, automatic alerts):** until then, the board's two cards say what they wait for,
   and IVS news is posted by hand "From the IVS visa-news feed".

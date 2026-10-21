@@ -70,7 +70,6 @@ import {
   EXPIRY_WARNINGS_KEY,
   INVOICE_READINESS_KEY,
 } from "../src/modules/clients/clients.settings";
-import { DEFAULT_TODAY_SETTINGS, TODAY_SETTINGS_KEY } from "../src/modules/today/today.settings";
 import { prisma } from "../src/config/prisma";
 import { audit } from "../src/lib/audit";
 
@@ -164,10 +163,6 @@ async function main() {
   console.log(
     "Enquiry sources, visa steps, follow-up and reason dropdowns, visa follow-up timing, the docket prefix, the sticker size, the invoice series and GST rate, the vendor email's wording, the covering letter's letterhead space, the company details and the invoice terms ready.",
   );
-
-  // The Today page: when "New enquiries" start counting (docs/decisions/0017-today-dashboard.md Decision 3) ⚠️.
-  await prisma.setting.upsert({ where: { key: TODAY_SETTINGS_KEY }, update: {}, create: { key: TODAY_SETTINGS_KEY, value: DEFAULT_TODAY_SETTINGS } });
-  console.log("Today page settings ready.");
 
   // An inactive Head doesn't count: if every Head was deactivated, the seed is how Masti gets back in.
   if (await prisma.user.findFirst({ where: { type: "HEAD", isActive: true } })) {
