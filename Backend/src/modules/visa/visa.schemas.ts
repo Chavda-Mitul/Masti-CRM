@@ -481,6 +481,8 @@ export const saveSubmissionSchema = z.object({
   embassyId: z.number("Pick the embassy.").int().positive("Pick the embassy."),
   collectionOn: z.iso.date("Pick the expected collection date."),
   updatedAt: z.iso.datetime("Reload and try again."),
+  /** Saving again past a warning (a collection date on or after the day the trip begins). */
+  confirmWarnings,
 });
 
 /**

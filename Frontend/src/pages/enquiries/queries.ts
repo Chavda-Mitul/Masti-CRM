@@ -433,8 +433,9 @@ export function useVendorReceived(caseNo: string) {
 
 /** "Submitted at the embassy" (0011 Decisions 3 and 4), or a change to it at Step 5. */
 export function useSaveSubmission(caseNo: string) {
-  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string }>(caseNo, (base, body) =>
-    api(`${base}/submission`, { method: 'PUT', body }),
+  return useCaseAction<{ vendorFileNo: string; embassyId: number; collectionOn: string; updatedAt: string; confirmWarnings?: boolean }>(
+    caseNo,
+    (base, body) => api(`${base}/submission`, { method: 'PUT', body }),
   )
 }
 

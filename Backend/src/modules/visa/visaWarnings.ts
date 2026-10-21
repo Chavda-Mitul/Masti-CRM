@@ -1,7 +1,8 @@
 import type { Db } from "../../config/prisma";
-import { addMonths, dateLabel, fromDbDate, wholeYearsBetween } from "../../lib/dates";
+import { addMonths, dateLabel, dayLabel, fromDbDate, istToday, wholeYearsBetween } from "../../lib/dates";
 import type { Warning } from "../../lib/warnings";
 import { getVisaSettings } from "./visa.settings";
+import { countTravellers, travellerLabel } from "./visaCase";
 
 // A visa case's soft warnings about its travellers (decided 19 Oct 2026, M46; lib/warnings.ts): things that are usually
 // a mistake but can be right, so staff confirm them rather than being stopped.
@@ -55,4 +56,52 @@ export async function ageWarnings(db: Db, on: string, travellers: { isChild: boo
     }
     return [];
   });
+}
+
+/** A traveller's embassy appointment, named as the case names them: the passport name, else "Adult 1". */
+export interface NamedAppointment {
+  name: string;
+  appointmentAt: Date | null;
+}
+
+/** What namedAppointments needs of each traveller. */
+export const appointmentSelect = { name: true, position: true, isChild: true, appointmentAt: true } as const;
+
+/** Every traveller of the case (all of them, so "Adult 2" counts right), named for appointmentWarnings. */
+export function namedAppointments(rows: { name: string | null; position: number; isChild: boolean; appointmentAt: Date | null }[]): NamedAppointment[] {
+  const { adults } = countTravellers(rows);
+  return rows.map((t) => ({ name: t.name ?? travellerLabel(t, adults), appointmentAt: t.appointmentAt }));
+}
+
+/**
+ * An appointment on or after the day the trip begins can't bring the visa in time; it can still be right if the trip
+ * moves (decided 19 Oct 2026). Checked when an appointment is saved, when travelling out moves, and at File ready
+ * (21 Oct 2026: moving the trip used to skip it). No departure yet, or no appointment, isn't checked.
+ */
+export function appointmentWarnings(departOn: string | null, travellers: NamedAppointment[]): Warning[] {
+  if (!departOn) return [];
+  return travellers.flatMap((t) => {
+    const on = t.appointmentAt && istToday(t.appointmentAt);
+    if (!on || on < departOn) return [];
+    return [
+      {
+        code: "APPOINTMENT_ON_OR_AFTER_DEPARTURE",
+        message: `${t.name}'s appointment (${dayLabel(on)}) is on or after the day the trip begins (${dayLabel(departOn)}).`,
+      },
+    ];
+  });
+}
+
+/**
+ * The passports collected from the embassy on or after the day the trip begins: the client would travel without them
+ * (21 Oct 2026). It can still be right if the trip moves, so it's a warning. No departure on file isn't checked.
+ */
+export function collectionWarnings(departOn: string | null, collectionOn: string): Warning[] {
+  if (!departOn || collectionOn < departOn) return [];
+  return [
+    {
+      code: "COLLECTION_ON_OR_AFTER_DEPARTURE",
+      message: `The expected collection date (${dayLabel(collectionOn)}) is on or after the day the trip begins (${dayLabel(departOn)}).`,
+    },
+  ];
 }
