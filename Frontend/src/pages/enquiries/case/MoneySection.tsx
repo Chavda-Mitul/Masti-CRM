@@ -35,20 +35,23 @@ export function MoneySection({ visaCase: c }: { visaCase: VisaCase }) {
   const q = c.quote
   const invoice = c.invoice
   const cancelled = invoice?.cancelled ?? null
+  // A delivered case (closed at the handover) keeps its invoices correctable, as an open one: a credit note, then the
+  // replacement from the reopened quote, or the additional invoice (0011 Decision 5).
+  const invoicesOpen = c.status === 'OPEN' || c.status === 'CLOSED'
   const canAct =
     !!me &&
-    c.status === 'OPEN' &&
+    invoicesOpen &&
     (QUOTE_STEPS.includes(c.stage.code) || !!cancelled) &&
     canActOnCase(me, { department: c.department.code, owner: c.owner })
   const canEdit = canAct && !liveInvoice(c)
-  // The one additional invoice (0011 Decision 7): at any step once the main invoice stands, while the case is open. A
-  // credit note cancels a wrong one, and its correction ("-B") is raised the same way, still 1 of 1.
+  // The one additional invoice (0011 Decision 7): at any step once the main invoice stands, while the case is open or
+  // delivered. A credit note cancels a wrong one, and its correction ("-B") is raised the same way, still 1 of 1.
   const additional = c.additionalInvoice
   const additionalCancelled = additional?.cancelled ?? null
-  const actsOnCase = !!me && c.status === 'OPEN' && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const actsOnCase = !!me && invoicesOpen && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // A cancelled case's invoices can still be cancelled with a credit note (0006 amendment 15); nothing is raised on it.
   // Only the Visa HOD or the Head may there, as it's a refund: the dialog tells anyone else to ask them.
-  const credits = !!me && (c.status === 'OPEN' || c.status === 'CANCELLED') && canActOnCase(me, { department: c.department.code, owner: c.owner })
+  const credits = !!me && (invoicesOpen || c.status === 'CANCELLED') && canActOnCase(me, { department: c.department.code, owner: c.owner })
   const canAdd = actsOnCase && !!liveInvoice(c) && (!additional || !!additionalCancelled)
   const canCancelAdditional = credits && !!additional && !additionalCancelled
   // An invoice a recall gave part of can't be cancelled whole (0011 Decision 5: never more than invoiced).

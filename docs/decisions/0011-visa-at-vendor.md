@@ -181,6 +181,10 @@ its appointment, with a collection date before the appointment):
 ### 5. The credit note
 
 - **Possible from the moment an invoice exists,** before or after dispatch (M36). It's never edited.
+- **After the handover too** (fixed 21 Oct 2026, from the visa test): the handover closes the case, and the closed
+  status used to refuse every invoice action although `INVOICED` lists Delivered. Now the step rule allows a closed
+  case (`closedToo`): its processor, the Visa HOD or the Head can cancel a wrong invoice with a credit note, raise the
+  replacement from the reopened quote, or raise the additional invoice. The case stays closed and Delivered.
 - **On a cancelled case too** (amended 17 Oct 2026, [0006](0006-visa-documents.md) amendment 15): no replacement follows
   there, so it's a refund, and only the Visa HOD or the Head may issue it (step rule `CREDITING`).
 - **Masti's answer (15 Oct 2026, through the project lead):** a wrong invoice is never changed; it's corrected with a
