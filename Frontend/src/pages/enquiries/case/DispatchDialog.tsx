@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { RequiredMark } from '../../../components/FormField'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { enquiryKeys, useDispatchCheck, useDispatchDocket } from '../queries'
@@ -76,7 +76,7 @@ export function DispatchDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : (
           <>

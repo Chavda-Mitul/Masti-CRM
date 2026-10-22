@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { FormField } from '../../../../components/FormField'
-import { errorBody, errorText } from '../../../../lib/apiErrors'
+import { errorBody, errorText, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useLetterheadSetting, useSaveLetterheadSetting } from '../queries'
 
@@ -41,7 +41,7 @@ export function PrintingCard({ canEdit }: { canEdit: boolean }) {
         Letters print on A4. The first page leaves this much blank at the top for the client’s letterhead; “Plain paper” on the
         print page leaves it out.
       </p>
-      {setting.isError ? (
+      {setting.isLoadingError || lostAccess(setting) ? (
         <div className="alert alert-bad">{errorText(setting.error)}</div>
       ) : canEdit ? (
         <form className="letters-printing-form" onSubmit={onSubmit} noValidate>

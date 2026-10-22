@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
 import { ConfirmDialog } from '../../../components/ConfirmDialog'
-import { errorText } from '../../../lib/apiErrors'
+import { RefreshFailed } from '../../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import '../../../styles/portals.css'
 import type { PressResult } from './labels'
@@ -62,9 +63,10 @@ export function PortalLoginsPage() {
         )}
       </div>
 
+      <RefreshFailed query={page} what="the portal logins" />
       {page.isPending ? (
         <p className="muted">Loading…</p>
-      ) : page.isError ? (
+      ) : page.isLoadingError || lostAccess(page) ? (
         <div className="alert alert-bad">{errorText(page.error)}</div>
       ) : (
         data && (

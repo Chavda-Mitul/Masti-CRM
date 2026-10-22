@@ -4,7 +4,8 @@ import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permiss
 import { useMe } from '../../../../auth/useAuth'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { LetterPaper } from '../../../../components/LetterPaper'
-import { errorText, isStale } from '../../../../lib/apiErrors'
+import { RefreshFailed } from '../../../../components/RefreshFailed'
+import { errorText, isStale, lostAccess } from '../../../../lib/apiErrors'
 import { formatDate } from '../../../../lib/format'
 import { useToast } from '../../../../lib/toast'
 import { useCoveringLetter, useRemoveWording, useUpdateCoveringLetter } from '../queries'
@@ -32,7 +33,7 @@ export function CoveringLetterPage() {
       </div>
     )
   }
-  if (letter.isError) {
+  if (letter.isLoadingError || lostAccess(letter)) {
     return (
       <div className="card pad" style={{ maxWidth: 560 }}>
         <Link to="/settings/masters/covering-letters" className="back-link">
@@ -45,11 +46,14 @@ export function CoveringLetterPage() {
   if (!letter.data) return <div className="muted">Loading…</div>
 
   return (
-    <LetterView
-      letter={letter.data}
-      canEdit={me ? canEditVisaMasters(me) : false}
-      onReload={async () => (await letter.refetch()).data}
-    />
+    <>
+      <RefreshFailed query={letter} what="this letter" />
+      <LetterView
+        letter={letter.data}
+        canEdit={me ? canEditVisaMasters(me) : false}
+        onReload={async () => (await letter.refetch()).data}
+      />
+    </>
   )
 }
 

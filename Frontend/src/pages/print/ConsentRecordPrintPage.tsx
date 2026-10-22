@@ -2,7 +2,7 @@ import { useEffect, type CSSProperties } from 'react'
 import { useParams } from 'react-router'
 import { useMe } from '../../auth/useAuth'
 import { ConsentWording } from '../../components/ConsentWording'
-import { errorText } from '../../lib/apiErrors'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import { formatDate, formatMobile, istParts, istToday } from '../../lib/format'
 import '../../styles/print.css'
 import { useConsentRecord } from '../clients/queries'
@@ -34,7 +34,7 @@ export function ConsentRecordPrintPage() {
   }, [record.data])
 
   if (record.isPending) return <p className="print-note">Loading…</p>
-  if (record.isError) return <p className="print-note">{errorText(record.error) ?? 'Couldn’t load the consent record.'}</p>
+  if (record.isLoadingError || lostAccess(record)) return <p className="print-note">{errorText(record.error) ?? 'Couldn’t load the consent record.'}</p>
 
   const r = record.data
   return (

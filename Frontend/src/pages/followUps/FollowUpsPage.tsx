@@ -2,7 +2,8 @@ import { Fragment, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { canActOnCase, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
-import { errorText } from '../../lib/apiErrors'
+import { RefreshFailed } from '../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import { departmentStyle } from '../../lib/departments'
 import { formatDateTime } from '../../lib/format'
 import '../../styles/enquiries.css'
@@ -101,10 +102,11 @@ export function FollowUpsPage() {
         ))}
       </div>
 
+      <RefreshFailed query={desk} what="the follow-ups" />
       <div className="card" style={{ overflow: 'hidden' }}>
         {desk.isPending ? (
           <div className="pad muted">Loading…</div>
-        ) : desk.isError ? (
+        ) : desk.isLoadingError || lostAccess(desk) ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(desk.error)}</div>
           </div>

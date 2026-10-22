@@ -222,6 +222,72 @@ describe("reassigning", () => {
   });
 });
 
+describe("the red dot on a case given to someone (0006 amendment 22)", () => {
+  const dots = async (agent: Agent) => {
+    const res = await agent.get("/api/enquiries/given-to-me");
+    expect(res.status).toBe(200);
+    return res.body.departments;
+  };
+  const seen = (agent: Agent, department: string) => agent.post("/api/enquiries/given-to-me/seen").send({ department });
+  const idOf = async (email: string) => (await prisma.user.findUniqueOrThrow({ where: { email } })).id;
+
+  async function setUp() {
+    const aarti = await visaStaff();
+    const c = await saveCase(aarti);
+    const neha = await visaStaff("Neha Joshi", "neha@masti.test");
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    const give = async (email: string) => {
+      const res = await hod.put(`/api/enquiries/${c.caseNo}/owner`).send({ ownerId: await idOf(email), updatedAt: await updatedAtOf(c.id) });
+      expect(res.status).toBe(200);
+    };
+    return { aarti, neha, hod, c, give };
+  }
+
+  it("shows on the department for whoever the HOD gave the case to, until they click that department", async () => {
+    const { aarti, neha, hod, c, give } = await setUp();
+    // A case you took yourself is no news.
+    expect(await dots(aarti)).toEqual({});
+
+    await give("neha@masti.test");
+    expect(await dots(neha)).toEqual({ VISA: 1 });
+    expect(await dots(aarti)).toEqual({});
+    expect(await dots(hod)).toEqual({});
+
+    // Another department's click leaves it; Visa's clears it, on record with the case.
+    expect((await seen(neha, "HOTELS")).status).toBe(204);
+    expect(await dots(neha)).toEqual({ VISA: 1 });
+    expect((await seen(neha, "visa")).status).toBe(204);
+    expect(await dots(neha)).toEqual({});
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "enquiry.assignment.seen" } });
+    expect(entry).toMatchObject({ actorId: await idOf("neha@masti.test"), after: { department: "VISA", caseNos: [c.caseNo] } });
+
+    // Clicking again with nothing new writes nothing.
+    expect((await seen(neha, "VISA")).status).toBe(204);
+    expect(await prisma.auditLog.count({ where: { action: "enquiry.assignment.seen" } })).toBe(1);
+    expect((await seen(neha, "no such!")).status).toBe(400);
+  });
+
+  it("moves with the case, and doesn't show when the HOD takes it themselves", async () => {
+    const { aarti, neha, hod, give } = await setUp();
+    await give("neha@masti.test");
+    await give("aarti@masti.test");
+    expect(await dots(neha)).toEqual({});
+    expect(await dots(aarti)).toEqual({ VISA: 1 });
+
+    await give("riya@masti.test");
+    expect(await dots(aarti)).toEqual({});
+    expect(await dots(hod)).toEqual({});
+  });
+
+  it("goes when the case is no longer theirs, e.g. sent back to To assign", async () => {
+    const { neha, c, give } = await setUp();
+    await give("neha@masti.test");
+    await prisma.enquiry.update({ where: { id: c.id }, data: { ownerId: null } });
+    expect(await dots(neha)).toEqual({});
+  });
+});
+
 describe("logging a call", () => {
   const outcome = async (code: string) => (await prisma.followUpOutcome.findUniqueOrThrow({ where: { code } })).id;
   const nextStep = async (code: string) => (await prisma.followUpNextStep.findUniqueOrThrow({ where: { code } })).id;

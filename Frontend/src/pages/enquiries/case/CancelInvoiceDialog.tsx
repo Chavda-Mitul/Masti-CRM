@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { isHodOf } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { RequiredMark } from '../../../components/FormField'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatRupees } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -91,7 +91,7 @@ export function CancelInvoiceDialog({ visaCase: c, invoiceNo, onClose }: { visaC
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : check.data.alreadyCancelled ? (
           <div className="alert alert-warn">

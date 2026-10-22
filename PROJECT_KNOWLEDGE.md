@@ -1870,6 +1870,7 @@ Masti CRM/
 - **M4 decided:** the intake person owns the case and does all follow-ups and document collection until maturity.
 - **Document storage: S3-compatible** (AWS S3 or R2; MinIO locally in `Backend/docker-compose.yml`), private, shared through short-lived pre-signed URLs. Golden rule 4 updated. Uploading scans comes after Step 2. M16 answered.
 - **Part 8, maturity:** "Mark documents complete" lists what is missing first. Matured cases wait under a **To assign** sidebar item (with a count, HODs and the Head only) that opens the enquiries list on a To assign tab, so no case sits idle without a processor (0006 *Amendment* 10–11). A matured case is due with the HOD the next open office day at 11:00 ⚠️ (`visa.assignCheck`, decided 16 Oct 2026), not late the moment it's handed over.
+- **A red dot for a case given to you** (decided 22 Oct 2026, project lead, beyond the demo, change request 15): when the HOD or the Head gives someone a case, a red dot shows beside that department in their sidebar until they click the department (0006 *Amendment* 22). Every department, not only Visa.
 
 **Decided 9 Oct 2026 (project lead), before Visa Step 2 (Documents).**
 - **Follow-ups belong to the person assigned to the case**, who sees only their own (as in other CRMs). The department's HOD sees all of the department's cases and follow-ups and can reassign them; the Head sees everything. This settles Q2/M4 for our side (still confirm with Vimal).

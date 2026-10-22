@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatRupees, parseRupees } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -81,7 +81,7 @@ export function AdditionalInvoiceDialog({ visaCase: c, onClose }: { visaCase: Vi
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : check.data.alreadyRaised ? (
           <div className="alert alert-warn">

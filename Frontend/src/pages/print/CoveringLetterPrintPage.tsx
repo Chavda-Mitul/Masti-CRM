@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useParams } from 'react-router'
 import { LetterTextPaper } from '../../components/LetterPaper'
-import { errorText } from '../../lib/apiErrors'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import '../../styles/print.css'
 import { useCoveringLetterPrint } from '../enquiries/queries'
 
@@ -31,7 +31,7 @@ export function CoveringLetterPrintPage() {
   }, [letter.data])
 
   if (letter.isPending) return <p className="print-note">Loading…</p>
-  if (letter.isError) return <p className="print-note">{errorText(letter.error) ?? 'Couldn’t load the covering letter.'}</p>
+  if (letter.isLoadingError || lostAccess(letter)) return <p className="print-note">{errorText(letter.error) ?? 'Couldn’t load the covering letter.'}</p>
 
   const p = letter.data
   const topMm = plain ? EDGE_MM : Math.max(p.letterheadMm, EDGE_MM)

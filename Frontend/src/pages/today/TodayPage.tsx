@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMe } from '../../auth/useAuth'
-import { errorText } from '../../lib/apiErrors'
+import { RefreshFailed } from '../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import '../../styles/today.css'
 import { BusinessLostCard, MoneyToCollectCard } from './ComesWithCards'
 import { DepartmentBarsCard } from './DepartmentBarsCard'
@@ -36,7 +37,7 @@ export function TodayPage() {
       </section>
 
       <div className="today-tiles">
-        {today.isError ? (
+        {today.isLoadingError || lostAccess(today) ? (
           <div className="alert alert-bad">{errorText(today.error)}</div>
         ) : (
           <>
@@ -49,7 +50,9 @@ export function TodayPage() {
         )}
       </div>
 
-      {!today.isError && (
+      {/* Below the tiles: they sit over the banner, and would hide it. */}
+      <RefreshFailed query={today} what="this page" />
+      {!(today.isLoadingError || lostAccess(today)) && (
         <div className="today-grid">
           <div className="today-col">
             <UpNextCard day={day} />

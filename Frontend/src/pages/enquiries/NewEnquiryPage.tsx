@@ -6,7 +6,7 @@ import { can, canSeeEnquiry } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { FormField, RequiredMark } from '../../components/FormField'
-import { applyServerIssues, errorText } from '../../lib/apiErrors'
+import { applyServerIssues, errorText, lostAccess } from '../../lib/apiErrors'
 import { DEPARTMENT_STYLE, departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
 import { formatMobile, istToday } from '../../lib/format'
 import { filtered, mobileChars } from '../../lib/inputFilters'
@@ -253,7 +253,7 @@ export function NewEnquiryPage() {
             Came in through
             <RequiredMark />
           </legend>
-          {sources.isError ? (
+          {sources.isLoadingError || lostAccess(sources) ? (
             <div className="alert alert-bad">{errorText(sources.error)}</div>
           ) : (
             <Controller
@@ -306,7 +306,7 @@ export function NewEnquiryPage() {
           </span>
         </div>
 
-        {offerings.isError && <div className="alert alert-bad">{errorText(offerings.error)}</div>}
+        {(offerings.isLoadingError || lostAccess(offerings)) && <div className="alert alert-bad">{errorText(offerings.error)}</div>}
         {offerings.data?.length === 0 && (
           <div className="alert alert-warn">No visa has a document checklist yet. Set one up in Settings → Masters → Document checklists.</div>
         )}

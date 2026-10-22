@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatRupees } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
 import { enquiryKeys, useInvoiceCheck, useRaiseInvoice } from '../queries'
@@ -67,7 +67,7 @@ export function RaiseInvoiceDialog({ visaCase: c, onClose }: { visaCase: VisaCas
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : blockers.length > 0 ? (
           <div className="alert alert-warn">

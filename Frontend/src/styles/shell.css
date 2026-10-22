@@ -121,6 +121,18 @@
 .nav.active .nav-badge {
   box-shadow: 0 0 0 2px #fff;
 }
+/* The red dot beside a department: a case given to you that you haven't seen yet. Clicking the department clears it. */
+.nav-new {
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  background: var(--bad);
+}
+.nav.active .nav-new {
+  box-shadow: 0 0 0 2px #fff;
+}
 
 .sidebar-spacer {
   flex: 1;

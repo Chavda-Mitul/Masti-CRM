@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router'
 import { can, isHodOf } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
-import { errorText } from '../../lib/apiErrors'
+import { RefreshFailed } from '../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import { DEPARTMENT_STYLE, departmentStyle } from '../../lib/departments'
 import { useToast } from '../../lib/toast'
 import '../../styles/notices.css'
@@ -89,11 +90,12 @@ export function NoticeBoardPage() {
         </div>
       </div>
 
+      <RefreshFailed query={notices} what="the notices" />
       <div className="notices-layout">
         <section className="card notice-board" aria-label="Notices">
           {notices.isPending ? (
             <p className="pad muted">Loading…</p>
-          ) : notices.isError ? (
+          ) : notices.isLoadingError || lostAccess(notices) ? (
             <div className="pad">
               <div className="alert alert-bad">{errorText(notices.error)}</div>
             </div>

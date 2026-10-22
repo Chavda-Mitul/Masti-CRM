@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { can, canBrowseClients, canEditClients, isHodOf, isHodOfAny } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
+import { RefreshFailed } from '../../components/RefreshFailed'
 import { ApiError } from '../../lib/api'
+import { lostAccess } from '../../lib/apiErrors'
 import { departmentStyle } from '../../lib/departments'
 import { formatDate, formatMobile, initials } from '../../lib/format'
 import { statusNote } from '../enquiries/status'
@@ -33,7 +35,7 @@ export function ClientDetailPage() {
   const canSeeDocuments = me ? isHodOfAny(me) : false
 
   if (client.isPending) return <div className="muted">Loading…</div>
-  if (client.isError) {
+  if (client.isLoadingError || lostAccess(client)) {
     const missing = client.error instanceof ApiError && client.error.status === 404
     return (
       <div className="card pad" style={{ maxWidth: 520 }}>
@@ -63,6 +65,7 @@ export function ClientDetailPage() {
         </Link>
       )}
 
+      <RefreshFailed query={client} what="this client" />
       <div className="card pad client-head">
         <span className="avatar avatar-lg">{c.name ? initials(c.name) : '?'}</span>
         <div className="client-head-text">

@@ -31,6 +31,18 @@
   background: #fff;
   box-shadow: var(--shadow-pop);
 }
+/* On screen the sheet sits in the middle, the Print bar along its top. Auto margins rather than align-items: center,
+   so a window narrower than A4 still scrolls to the sheet's left edge. Paper is placed by the @page rules, as before. */
+@media screen {
+  .letter-print > .print-toolbar,
+  .letter-print > .letter-sheet {
+    margin-inline: auto;
+  }
+  .letter-print > .print-toolbar {
+    width: 210mm;
+    max-width: 100%;
+  }
+}
 .letter-sheet .letter-paper {
   border: 0;
   border-radius: 0;
