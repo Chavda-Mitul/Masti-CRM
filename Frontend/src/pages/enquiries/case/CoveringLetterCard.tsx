@@ -7,7 +7,7 @@ import { LetterTextPaper } from '../../../components/LetterPaper'
 import { useLeaveGuard } from '../../../components/useLeaveGuard'
 import { errorText, issueText, lostAccess } from '../../../lib/apiErrors'
 import { formatDate, formatDateTime, istParts, istToday } from '../../../lib/format'
-import { marksIn, PURPOSE_MARK } from '../../../lib/letter'
+import { marksIn, notesIn, PURPOSE_MARK, STRAY_NOTE } from '../../../lib/letter'
 import { useToast } from '../../../lib/toast'
 import { useCoveringLetter, useMakeCoveringLetter, useWriteLetter } from '../queries'
 import type { CoveringLetterView, VisaCase } from '../types'
@@ -105,12 +105,17 @@ type Asking = { kind: 'pick'; formatId: number } | { kind: 'restart' } | null
 /** The mark's own words, as marksIn lists them. */
 const PURPOSE_WORDS = PURPOSE_MARK.slice(1, -1)
 
-/** What the AI last wrote: its letter, the edit before it (for Undo), and the personal details it dropped. */
+/**
+ * What the AI last wrote: its letter, the edit before it (for Undo), the personal details it dropped, and what it did
+ * with the notes (0019 amendment 5). Kept after edits, so deleting the note "Not done" asks for doesn't hide the rest.
+ */
 interface AiWritten {
   answer: string
   /** The edit Undo goes back to; null when the card showed the server's letter. */
   before: string | null
   removed: string[]
+  done: string[]
+  notDone: { note: string; why: string }[]
 }
 
 /**
@@ -153,11 +158,16 @@ function LetterDesk({
   // A change typed back to the letter as it was is no change: the card follows the server's letter again.
   const change = (text: string) => setEdited(text === base ? null : text)
   const marks = marksIn(letter)
+  const notes = notesIn(letter)
   const madeDay = fromMade ? istParts(fromMade.madeAt).date : null
   const busy = loading || make.isPending || write.isPending
   // The AI's letter while it's still as the AI wrote it: only then is Undo offered, so it never drops a hand edit.
   const aiShown = ai !== null && letter === ai.answer ? ai : null
   const otherMarks = marks.filter((m) => m !== PURPOSE_WORDS)
+  // The notes the AI left that are still in the letter, with its reasons; any other note is still to send it.
+  const notDone = ai ? ai.notDone.filter((n) => notes.includes(n.note)) : []
+  const notSent = notes.filter((n) => n !== STRAY_NOTE && !notDone.some((d) => d.note === n))
+  const stray = notes.includes(STRAY_NOTE)
 
   const pick = (id: number) => (dirty ? setAsking({ kind: 'pick', formatId: id }) : onPick(id))
   const restart = () => {
@@ -180,8 +190,8 @@ function LetterDesk({
   /** The AI rewrites the letter as it stands. Its letter is shown as an edit, and Undo goes back one step. */
   const onWrite = () =>
     write.mutate(letter, {
-      onSuccess: ({ letter: answer, removed }) => {
-        setAi({ answer, before: edited, removed })
+      onSuccess: ({ letter: answer, removed, done, notDone }) => {
+        setAi({ answer, before: edited, removed, done, notDone })
         change(answer)
       },
       onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'The AI couldn’t write it. Please try again.' }),
@@ -237,19 +247,38 @@ function LetterDesk({
           </button>
         </p>
       )}
-      {aiShown && aiShown.removed.length > 0 && (
+      {ai && ai.done.length > 0 && (
+        <p className="muted small covering-letter-made" role="status">
+          Done by the AI: {ai.done.join('; ')}.
+        </p>
+      )}
+      {notDone.length > 0 && (
         <div className="alert alert-warn covering-letter-missing" role="status">
-          Removed by the AI: {aiShown.removed.join('; ')}. Undo brings them back, or type them in with Edit the letter.
+          {notDone.map((n) => (
+            <div key={n.note}>
+              Not done: {n.note}: {n.why}
+            </div>
+          ))}
+          Delete {notDone.length === 1 ? 'it' : 'them'} before you make the letter.
         </div>
       )}
-      {marks.length > 0 && (
+      {ai && ai.removed.length > 0 && (
         <div className="alert alert-warn covering-letter-missing" role="status">
-          Still to fill in: {marks.join('; ')}.
+          Removed by the AI: {ai.removed.join('; ')}.{' '}
+          {aiShown ? 'Undo brings them back, or type them in with Edit the letter.' : 'Type them in with Edit the letter if the letter needs them.'}
+        </div>
+      )}
+      {(marks.length > 0 || notSent.length > 0 || stray) && (
+        <div className="alert alert-warn covering-letter-missing" role="status">
+          {marks.length > 0 && `Still to fill in: ${marks.join('; ')}.`}
           {marks.includes(PURPOSE_WORDS) && ' Write the whole letter with AI to fill in why they travel, or type it in.'}
           {otherMarks.length > 0 &&
             ` Type ${otherMarks.length === 1 ? 'it' : 'them'} in with Edit the letter${
               selected.missing.length > 0 && !fromMade ? `, or add ${otherMarks.length === 1 ? 'it' : 'them'} to the case or the client’s family list` : ''
             }.`}
+          {notSent.length > 0 &&
+            ` Notes for the AI: ${notSent.join('; ')}. Write the whole letter with AI to do ${notSent.length === 1 ? 'it' : 'them'}, or delete ${notSent.length === 1 ? 'it' : 'them'}.`}
+          {stray && ' A [[ or ]] is left over: delete it.'}
         </div>
       )}
       {made && <p className="muted small covering-letter-made">{madeLine(made)}</p>}
@@ -265,7 +294,7 @@ function LetterDesk({
       )}
 
       <div className="covering-letter-actions">
-        <button type="button" className="btn btn-sm btn-dark" onClick={onMake} disabled={marks.length > 0 || busy}>
+        <button type="button" className="btn btn-sm btn-dark" onClick={onMake} disabled={marks.length > 0 || notes.length > 0 || busy}>
           {make.isPending ? 'Making…' : made ? 'Make it again' : 'Make the letter'}
         </button>
         <button type="button" className="btn btn-sm" onClick={onWrite} disabled={busy}>

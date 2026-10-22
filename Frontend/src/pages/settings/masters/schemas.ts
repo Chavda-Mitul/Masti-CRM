@@ -399,6 +399,7 @@ export function wordingProblem(body: string): string | null {
   const purpose = text.match(/\{purpose\}/g)?.length ?? 0
   if (purpose > 1) return 'Use {purpose} only once: the AI or staff write why they travel there.'
   if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return 'Put {purpose} on a line of its own: the AI or staff write why they travel there.'
+  if (text.includes('[[') || text.includes(']]')) return "Notes for the AI go in a case's letter, not in the wording: take out the [[ and ]]."
   return null
 }
 

@@ -38,6 +38,12 @@
   color: var(--warn);
   background: var(--warn-bg);
 }
+/* A note to the AI in a case's letter ([[add a table of our plan]], 0019 amendment 5): blue, like a blank, and it wraps. */
+.letter-note {
+  white-space: normal;
+  font-family: inherit;
+  font-size: inherit;
+}
 .letter-table {
   width: 100%;
   border-collapse: collapse;
