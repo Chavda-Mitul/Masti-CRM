@@ -38,6 +38,14 @@
   padding: 0;
   font-size: 12pt;
 }
+/* Its tables (0019 amendment 3) at the text's size, with lines dark enough for paper. */
+.letter-sheet .letter-table {
+  font-size: inherit;
+}
+.letter-sheet .letter-table th,
+.letter-sheet .letter-table td {
+  border-color: var(--text-3);
+}
 /* The consent record (0022 part 3b): Masti's name at the top, the sections, then the wording, on the same A4 sheet. */
 .consent-record {
   display: flex;
@@ -134,5 +142,12 @@
     min-height: 0;
     padding: 0;
     box-shadow: none;
+  }
+  /* A table's row isn't split over two pages, and the line before a table stays on the table's page. */
+  .letter-sheet .letter-table tr {
+    break-inside: avoid;
+  }
+  .letter-sheet .letter-paper p:has(+ .letter-table) {
+    break-after: avoid;
   }
 }

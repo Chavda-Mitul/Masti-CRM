@@ -9,17 +9,12 @@ import {
   MARK_CLOSE,
   MARK_OPEN,
   PURPOSE_MARK,
-  MAX_LETTER_CELL_CHARS,
+  MAX_CASE_LETTER_CHARS,
   MAX_LETTER_CHARS,
-  MAX_LETTER_COLUMNS,
   MAX_LETTER_COUNTRIES,
-  MAX_LETTER_HEADING_CHARS,
-  MAX_LETTER_PART_CHARS,
-  MAX_LETTER_ROWS,
   marksIn,
   normaliseWording,
   wordingProblem,
-  type LetterText,
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
@@ -112,33 +107,25 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       expect(frontend.normaliseWording(body), body).toBe(normaliseWording(body));
     }
   });
-  it("finds a case letter's marks and limits it the same way (0019 amendment 1)", async () => {
+  it("finds a case letter's marks and limits it the same way (0019 amendments 1 and 3)", async () => {
     const frontend = (await import(frontendLetter)) as {
       MARK_OPEN: string;
       MARK_CLOSE: string;
       PURPOSE_MARK: string;
-      MAX_LETTER_PART_CHARS: number;
-      MAX_LETTER_COLUMNS: number;
-      MAX_LETTER_ROWS: number;
-      MAX_LETTER_HEADING_CHARS: number;
-      MAX_LETTER_CELL_CHARS: number;
-      marksIn(letter: LetterText): string[];
+      MAX_CASE_LETTER_CHARS: number;
+      marksIn(letter: string): string[];
     };
     expect([frontend.MARK_OPEN, frontend.MARK_CLOSE]).toEqual([MARK_OPEN, MARK_CLOSE]);
     expect(frontend.PURPOSE_MARK).toBe(PURPOSE_MARK);
-    expect(frontend.MAX_LETTER_PART_CHARS).toBe(MAX_LETTER_PART_CHARS);
-    expect(frontend.MAX_LETTER_COLUMNS).toBe(MAX_LETTER_COLUMNS);
-    expect(frontend.MAX_LETTER_ROWS).toBe(MAX_LETTER_ROWS);
-    expect(frontend.MAX_LETTER_HEADING_CHARS).toBe(MAX_LETTER_HEADING_CHARS);
-    expect(frontend.MAX_LETTER_CELL_CHARS).toBe(MAX_LETTER_CELL_CHARS);
-    const letters: LetterText[] = [
-      { top: "We stay at ⟦the hotel stay⟧ for ⟦the number of days⟧ days.", table: null, bottom: "" },
-      { top: "Hotel [Opera], Paris", table: { columns: ["Name", "⟦heading⟧"], rows: [["⟦Adult 2's name⟧", "x⟧"]] }, bottom: "⟦half" },
-      { top: "⟦ ⟧ and ⟦the hotel stay⟧ twice: ⟦the hotel stay⟧", table: null, bottom: "" },
-      { top: "⟦a\nb⟧", table: null, bottom: "" },
-      { top: "", table: null, bottom: "" },
+    expect(frontend.MAX_CASE_LETTER_CHARS).toBe(MAX_CASE_LETTER_CHARS);
+    const letters = [
+      "We stay at ⟦the hotel stay⟧ for ⟦the number of days⟧ days.",
+      "Hotel [Opera], Paris\n\nName | ⟦heading⟧\n⟦Adult 2's name⟧ | x⟧\n\n⟦half",
+      "⟦ ⟧ and ⟦the hotel stay⟧ twice: ⟦the hotel stay⟧",
+      "⟦a\nb⟧",
+      "",
     ];
-    for (const letter of letters) expect(frontend.marksIn(letter), JSON.stringify(letter)).toEqual(marksIn(letter));
+    for (const letter of letters) expect(frontend.marksIn(letter), letter).toEqual(marksIn(letter));
   });
 
   it("checks the visa timings and the warnings' values the same way (Settings → Visa)", async () => {

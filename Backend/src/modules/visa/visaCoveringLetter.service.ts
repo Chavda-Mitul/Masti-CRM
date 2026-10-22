@@ -5,7 +5,7 @@ import { audit } from "../../lib/audit";
 import { fromDbDate, istTimestamp, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError } from "../../lib/httpError";
 import { inForce } from "../coveringLetters/coveringLetter";
-import { marksIn, type LetterText } from "../coveringLetters/coveringLetters.schemas";
+import { marksIn } from "../coveringLetters/coveringLetters.schemas";
 import { draftLetter, type LetterFacts } from "../coveringLetters/fill";
 import { purposeAsk, tidyParagraph, type PurposeFacts } from "../coveringLetters/purpose";
 import type { Actor, UserWithDepartments } from "../users/user";
@@ -14,12 +14,13 @@ import type { MakeCoveringLetterInput } from "./visa.schemas";
 import { getVisaSettings } from "./visa.settings";
 import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 
-// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendment 1): the letters
-// that fit the case, one drafted from it, "Make the letter" at File preparation, and the print of the letter made.
+// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1 and 3): the
+// letters that fit the case, one drafted from it, "Make the letter" at File preparation, and the print of the letter made.
 // - A letter fits a case: active, the case's visa type, one of its countries, and one traveller or two or more, with a
 //   wording in use today. A visa type or country switched off since still fits, so open cases keep their letters.
-// - The draft writes the case's values in and marks what it lacks (⟦the hotel stay⟧). Staff may change any of the text,
-//   the table included, and type over the marks; "Make the letter" waits while a mark is left: 409 LETTER_INCOMPLETE.
+// - The draft writes the case's values in and marks what it lacks (⟦the hotel stay⟧). The letter is one text, its tables
+//   lines with | between the columns. Staff may change any of it and type over the marks; "Make the letter" waits while
+//   a mark is left: 409 LETTER_INCOMPLETE.
 // - Made at File preparation by the owner, the HOD or the Head; again as often as needed while there. The case keeps the
 //   letter's text as made, so a later print is the same letter (Decision 10), and the audit keeps each text made. Anyone
 //   who can open the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
@@ -142,8 +143,7 @@ function madeOf(visa: LetterVisa) {
     effectiveFrom: fromDbDate(version.effectiveFrom),
     madeAt: visa.coveringLetterMadeAt,
     madeBy: visa.coveringLetterMadeBy,
-    // Written by makeCoveringLetter only, in this shape (and a CHECK in the migration).
-    letter: visa.coveringLetterText as unknown as LetterText,
+    letter: visa.coveringLetterText,
   };
 }
 
@@ -211,7 +211,7 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
         coveringLetterVersionId: version.id,
         coveringLetterMadeAt: new Date(),
         coveringLetterMadeById: actor.user.id,
-        coveringLetterText: input.letter as unknown as Prisma.InputJsonValue,
+        coveringLetterText: input.letter,
       },
     });
     await audit(

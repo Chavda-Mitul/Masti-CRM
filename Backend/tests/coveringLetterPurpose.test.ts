@@ -98,6 +98,10 @@ describe("tidying the AI's answer", () => {
     expect(tidyParagraph('He called it "the city of light".', null)).toBe('He called it "the city of light".');
   });
 
+  it("turns a | into a /, as in every value the letter is given: two lines with a | would be a table (amendment 3)", () => {
+    expect(tidyParagraph("We will visit Paris | Nice | Lyon.", null)).toBe("We will visit Paris / Nice / Lyon.");
+  });
+
   it("turns a placeholder written with [ ] or { } into a mark, but not brackets the hotel stay itself has", () => {
     expect(tidyParagraph("We will meet [name of the company] in {city}.", null)).toBe("We will meet ⟦name of the company⟧ in ⟦city⟧.");
     expect(tidyParagraph("We will meet ⟦name of the company⟧.", null)).toBe("We will meet ⟦name of the company⟧.");

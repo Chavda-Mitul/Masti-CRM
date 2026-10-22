@@ -202,7 +202,8 @@
   File preparation, the letterhead space, "File ready" not needing it, and the wordings in Settings with their blanks.
 
 1. **A made letter is its text**, not a wording plus values: the text above the table, the table (its headings and
-   rows; null when the wording has no `{travellers}`), and the text below.
+   rows; null when the wording has no `{travellers}`), and the text below. *Since amendment 3 (22 Oct 2026) it's one
+   text, its tables typed as `|` lines.*
    - The case keeps it in `VisaCase.coveringLetterText` (renamed from `coveringLetterFill`), with the wording it started
      from, who made it and when. Every print is that text.
    - The text is free, but it doesn't break §7 rule 2 (no free text): it's a letter to an embassy, not a reason, an
@@ -214,7 +215,8 @@
      the letter.
    - The table starts as Name · Relation · Date of birth · Passport no., a row per traveller. `{travellers}` may be the
      first, last or only line.
-3. **Everything is editable** before "Make the letter":
+3. **Everything is editable** before "Make the letter" (*since amendment 3 there's no grid: tables are typed as `|`
+   lines, as many as a letter needs*):
    - the text above and below the table;
    - the table's headings and cells, with rows and columns added or removed (1–6 columns, at most 60 rows: a row per
      traveller a case can have), e.g. "Designation" for "Relation" on a business trip.
@@ -229,25 +231,28 @@
    - Leaving the page, reloading, picking another letter or "Start again" asks first ("Discard your changes?").
    - Print waits until the edits are made into the letter.
    - Once made, the card starts from the letter made, with its date. "Start again" drafts it fresh, dated today.
-6. **Make sends `{ formatId, versionId, letter }`.**
+6. **Make sends `{ formatId, versionId, letter }`** (*a string since amendment 3*).
    - `versionId` is the wording the text started from: today's draft, or the made letter's. It must be one of that
      letter's wordings whose day has come, and the letter must still fit the case.
    - **The audit keeps the text**, before and after (`visa.coveringLetter.make`). With free text, it's the only copy of
      an earlier letter once it's made again (golden rule 5).
-7. **Limits** (`coveringLetters.schemas.ts`, repeated in `Frontend/src/lib/letter.ts` with a drift test):
+7. **Limits** (`coveringLetters.schemas.ts`, repeated in `Frontend/src/lib/letter.ts` with a drift test; *replaced by
+   amendment 3's one limit, 60,000 characters*):
    - the text above and below the table: at most 8,000 characters each, with some text or a table;
    - a heading: at most 60 characters; a cell: at most 200; each on one line;
    - every row has one cell per column;
    - Windows line breaks become plain ones.
    - The 400 messages say which part is wrong ("The table's row 2, Passport no., is over 200 characters.").
-8. **The database:** migration `20261021200000_covering_letter_text`, hand-written.
+8. **The database:** migration `20261021200000_covering_letter_text`, hand-written (*since amendment 3 the column is
+   `TEXT`*).
    - It renames the column, so the four-together CHECK follows it. `prisma migrate diff` would drop the column and add a
      new one, which drops that CHECK.
    - A new CHECK keeps the text's shape (`top` and `bottom` strings, `table` an object or null) and bounds its size.
    - A dev database with letters made before this keeps them in the old shape: reset it, or make them again.
 
 **Screens:** the card draws the letter as it stands (`LetterTextPaper`, marks as chips), with Edit the letter (a dialog:
-the text boxes and the table grid), Start again, Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
+the text boxes and the table grid; *since amendment 3, one text box beside the letter as it will print*), Start again,
+Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
 **Tests:** `tests/visaCoveringLetter.test.ts` (19) and `tests/frontendRules.test.ts` (the marks and the limits).
 
 ## Amendment 2 (21 Oct 2026): "Write it with AI"
@@ -323,3 +328,56 @@ the text boxes and the table grid), Start again, Make the letter and Print. `use
      `{purpose}` to a wording in Settings.
 9. **Visa types Business (`BUSINESS`) and Visitor (`VISITOR`)** are seeded, so their instructions match. As for any
    visa type, a country needs an offering with a checklist before intake can use them.
+
+## Amendment 3 (22 Oct 2026): tables typed with `|`, and the letter as one text
+
+- **Why:** the project lead tried "Edit the letter" on 22 Oct 2026. Its table was a grid of boxes, so a letter could
+  have only the travellers' table, in that one place. The lead asked for tables typed as text, as many as a letter
+  needs, and for the grid to go ([change request 11](../change-requests.md), extended). Their next request, notes to
+  the AI written inside the letter, is a later amendment.
+- **Changes amendment 1's points 1, 3 and 6–8, and its Screens line.** The rest stands: a mark stops "Make the letter",
+  edits live on the card until the letter is made, and the audit keeps the text.
+
+1. **A made letter is one text.** `VisaCase.coveringLetterText` is `TEXT`, at most 60,000 characters
+   (`MAX_CASE_LETTER_CHARS`; the wordings keep their own 6,000). The longest draft, every traveller a case can have with
+   150-character names and nothing else known, is about 33,000. A real letter is 3,000–9,000.
+2. **The table rule** (`Frontend/src/lib/letter.ts`: the card, "Edit the letter", the print and Settings' preview):
+   - **two or more lines in a row that each hold a `|` make a table**, its first line the headings. One such line alone
+     stays text. A blank line or a line without `|` ends the table; the text above or below needs no blank line;
+   - cells are split at each `|` and trimmed. The table is as wide as its widest line, and shorter lines get empty
+     cells, so typed text is never dropped;
+   - a `|` at the start or the end of the lines goes when every line of the table has one (a Markdown table). It's
+     judged per table, so a row whose first cell was cleared doesn't shift left;
+   - a line of dashes, with or without colons (`---|:---:`), is skipped, but counts towards the two lines;
+   - a ⟦mark⟧ in a cell shows as a chip;
+   - two lines that hold a `|` are always a table: write `/` or `·` elsewhere, as the help says.
+3. **The draft** writes `{travellers}` as `|` lines: Name · Relation · Date of birth · Passport no., then a row per
+   traveller.
+   - A blank line sets them apart from the text above and below, so a `|` line of the wording's own next to them stays
+     a table of its own, as Settings shows it.
+   - **A `|` in any value the letter is given becomes `/`** (`noPipes`): the hotel stay, the client's name and
+     address, a relation's name and the AI's paragraph. The case itself isn't changed.
+4. **"Edit the letter" is one text box**, beside the letter drawn as it will print, live. Both are the same height and
+   scroll on their own; below 900 px the drawing goes under the box. The grid goes.
+   - A table copied from a page (ChatGPT's answer, Excel, Word) arrives as lines with tabs and pastes as `|` lines. A
+     Markdown table from ChatGPT's Copy button works as it is. Settings' wording box does the same.
+   - A change typed back to the letter as it was is no change: Print is offered again, and leaving doesn't ask.
+5. **Make sends `{ formatId, versionId, letter }`, with `letter` a string.**
+   - Windows line breaks and a lone `\r` become plain ones, and blank lines at the ends go.
+   - An empty letter is refused ("Write the letter."), and so is one over 60,000 characters ("This letter is too long:
+     keep it under 60,000 characters.").
+   - A mark still answers 409 `LETTER_INCOMPLETE`.
+6. **Print:** a table's row isn't split over two pages, the line before a table stays on its page, and tables print at
+   the text's size with darker lines.
+7. **The database:** migration `20261022120000_covering_letter_plain_text`, hand-written.
+   - A letter made in the old shape isn't converted. It's unmade instead: its text, wording, made-at and made-by are
+     emptied together, so any database migrates, a test database's last letter included. Staff make it again.
+   - The shape CHECK goes. The column becomes `TEXT` with `USING NULL`; without it, the JSON would become text that
+     passes the new CHECK and prints as `{"top":…`.
+   - A new CHECK keeps the text not blank (`~ '\S'`) and at most 60,000 characters. The four-together CHECK stays.
+
+**Tests:**
+- `tests/visaCoveringLetter.test.ts`, rewritten for one text;
+- `tests/letterText.test.ts`: the table rule, the paste, and the server's draft as the screen draws it;
+- `tests/frontendRules.test.ts`: the marks and the limit;
+- `tests/coveringLetterPurpose.test.ts`: a `|` in the AI's paragraph.

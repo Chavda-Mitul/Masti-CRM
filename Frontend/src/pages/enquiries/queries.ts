@@ -1,7 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
-import type { LetterText } from '../../lib/letter'
 import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
@@ -777,7 +776,7 @@ export function useCoveringLetter(caseNo: string, formatId: number | undefined, 
 export function useMakeCoveringLetter(caseNo: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { formatId: number; versionId: number; letter: LetterText }) =>
+    mutationFn: async (input: { formatId: number; versionId: number; letter: string }) =>
       (
         await api<{ letter: CoveringLetterView }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter`, {
           method: 'POST',
