@@ -199,6 +199,17 @@ Amended 21 Oct 2026 (project lead), with a leaver's work ([0002](0002-user-types
     whose passports are still to hand back, too. That's where a switched-off person's cases go. The HOD can give a
     cancelled case to someone while its passports are still to hand back; a finished case stays closed.
 
+Amended 22 Oct 2026 (project lead), beyond the demo ([change request 15](../change-requests.md)):
+
+22. **A red dot tells staff a case was given to them.** When the HOD or the Head gives a case to someone (Decision 6's
+    reassign, including from "To assign"), a red dot shows beside that department in the receiver's sidebar (Visa,
+    Holidays, Hotels…). Clicking the department clears it, for every case given there so far; the click is audited
+    with the case numbers. No dot when the HOD or the Head takes a case themselves, nor for a case someone took at
+    intake. A case given on to someone else, sent back to To assign, or finished no longer counts. A dot, not a count,
+    and nothing on the case rows themselves (decided with the project lead). The sidebar checks every minute, like its
+    other badges. Table `UnseenAssignment` (one row per case: who it was given to); `GET /api/enquiries/given-to-me`
+    and `POST /api/enquiries/given-to-me/seen`.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):

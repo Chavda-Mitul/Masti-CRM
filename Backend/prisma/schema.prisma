@@ -121,6 +121,7 @@ model User {
   portalLoginsAdded     PortalLogin[]           @relation("PortalLoginCreatedBy")
   portalLogins          PortalLoginUser[]       @relation("PortalLoginUsers")
   portalLoginUses       PortalLoginUse[]        @relation("PortalLoginUsedBy")
+  unseenAssignments     UnseenAssignment[]      @relation("UnseenAssignmentUser")
 
   @@index([type, isActive])
 }
@@ -1154,6 +1155,8 @@ model Enquiry {
   consentLinks    ConsentLink[]
   /// "Log in for me" pressed on this case (docs/decisions/0024-portal-logins.md component 3).
   portalLoginUses PortalLoginUse[]
+  /// Given to its owner by the HOD or the Head, and not seen yet (0006 amendment 22).
+  unseenBy        UnseenAssignment?
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -1232,6 +1235,19 @@ model FollowUp {
   by         User             @relation("FollowUpBy", fields: [byId], references: [id], onDelete: Restrict)
 
   @@index([enquiryId, createdAt])
+}
+
+/// A case the HOD or the Head gave to someone, who hasn't clicked its department in the sidebar since: the red dot there
+/// (docs/decisions/0006-visa-documents.md amendment 22). One row per case, for the person it was given to; giving it to
+/// someone else replaces it. Clicking the department deletes that person's rows of it.
+model UnseenAssignment {
+  enquiryId String   @id
+  userId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  enquiry   Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  user      User     @relation("UnseenAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------

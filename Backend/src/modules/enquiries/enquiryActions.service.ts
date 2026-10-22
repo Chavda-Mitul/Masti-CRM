@@ -11,6 +11,7 @@ import { dueOnOfficeDay, getVisaSettings } from "../visa/visa.settings";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
 import { assertNotInOpenDocket } from "../visa/visaDocket.service";
 import type { CancelInput, LogFollowUpInput, PostponeInput, ReassignInput, ResumeInput } from "./enquiries.schemas";
+import { markGiven } from "./unseenAssignments.service";
 import { assertCanActOnEnquiry, assertCanSeeEnquiry, heldAtOffice, toHandBack } from "./visibility";
 
 // Follow-ups, postpone, cancel, resume and reassign (docs/decisions/0006-visa-documents.md Decision 6). They live on the shared
@@ -252,7 +253,11 @@ export async function reassign(caseNo: string, input: ReassignInput, actor: Acto
     throw fieldError("ownerId", "The person who collected the documents can't process the file. Pick someone else.");
   }
   if (target.id === enquiry.ownerId) return { enquiry: { id: enquiry.id, caseNo: enquiry.caseNo, status: enquiry.status, updatedAt: enquiry.updatedAt } };
-  return save(enquiry, input.updatedAt, { ownerId: target.id }, "enquiry.reassign", actor);
+  // A red dot on the department in their sidebar until they click it (0006 amendment 22).
+  return save(enquiry, input.updatedAt, { ownerId: target.id }, "enquiry.reassign", actor, async (tx) => {
+    await markGiven(tx, enquiry.id, target.id, actor.user.id);
+    return {};
+  });
 }
 
 /**

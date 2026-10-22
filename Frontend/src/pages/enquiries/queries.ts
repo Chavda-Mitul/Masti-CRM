@@ -57,6 +57,8 @@ export const enquiryKeys = {
   list: (filters: EnquiryListFilters) => ['enquiries', 'list', filters] as const,
   /** Under lists(), so maturing and reassigning (which refresh the lists) refresh the sidebar's count too. */
   toAssign: ['enquiries', 'list', 'to-assign'] as const,
+  /** Under lists() too: the sidebar's red dots, cases given to me that I haven't seen. */
+  givenToMe: ['enquiries', 'list', 'given-to-me'] as const,
   desks: () => ['enquiries', 'follow-ups'] as const,
   desk: (bucket: FollowUpBucket, scope: FollowUpScope) => ['enquiries', 'follow-ups', bucket, scope] as const,
   /** Under desks(), so every case action that refreshes the desk refreshes the badge too. */
@@ -723,6 +725,30 @@ export function useToAssignCount(enabled: boolean) {
     queryKey: enquiryKeys.toAssign,
     queryFn: async () => (await api<{ count: number }>('/enquiries/to-assign')).count,
     refetchInterval: 60_000,
+  })
+}
+
+/** The sidebar's red dots: per department code, the cases the HOD or the Head gave me that I haven't seen (0006 amendment 22). */
+export function useGivenToMe() {
+  return useQuery({
+    queryKey: enquiryKeys.givenToMe,
+    queryFn: async () => (await api<{ departments: Record<string, number> }>('/enquiries/given-to-me')).departments,
+    refetchInterval: 60_000,
+  })
+}
+
+/** Clicking a department in the sidebar: its dot goes at once. */
+export function useSeeGivenToMe() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (department: string) => api<void>('/enquiries/given-to-me/seen', { method: 'POST', body: { department } }),
+    onMutate: (department) =>
+      queryClient.setQueryData<Record<string, number>>(enquiryKeys.givenToMe, (old) => {
+        if (!old) return old
+        const { [department]: _cleared, ...rest } = old
+        return rest
+      }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: enquiryKeys.givenToMe }),
   })
 }
 
