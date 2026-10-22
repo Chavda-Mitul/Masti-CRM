@@ -5,7 +5,7 @@ import { useMe } from '../../../auth/useAuth'
 import { ConfirmDialog } from '../../../components/ConfirmDialog'
 import { LetterTextPaper } from '../../../components/LetterPaper'
 import { useLeaveGuard } from '../../../components/useLeaveGuard'
-import { errorText, issueText } from '../../../lib/apiErrors'
+import { errorText, issueText, lostAccess } from '../../../lib/apiErrors'
 import { formatDate, formatDateTime, istParts, istToday } from '../../../lib/format'
 import { marksIn, PURPOSE_MARK } from '../../../lib/letter'
 import { useToast } from '../../../lib/toast'
@@ -34,7 +34,8 @@ export function CoveringLetterCard({ visaCase: c }: { visaCase: VisaCase }) {
   return (
     <section className="card pad covering-letter">
       <h2 className="h2">Covering letter</h2>
-      {letter.isError ? (
+      {/* A failed refresh keeps the letter on the card, with any edits not made yet (lib/apiErrors.ts lostAccess). */}
+      {letter.isLoadingError || lostAccess(letter) ? (
         <div className="alert alert-bad">{errorText(letter.error)}</div>
       ) : !view ? (
         <p className="muted small" style={{ margin: 0 }}>

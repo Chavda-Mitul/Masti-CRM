@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { lostAccess } from '../../../lib/apiErrors'
 import { istTime } from '../due'
 import { useCaseMessages } from '../queries'
 import type { CaseMessage, VisaCase } from '../types'
@@ -21,7 +22,8 @@ export function MessagesSection({ visaCase: c }: { visaCase: VisaCase }) {
 function Messages({ caseNo }: { caseNo: string }) {
   const messages = useCaseMessages(caseNo)
   if (messages.isPending) return <p className="muted small rail-note">Loading…</p>
-  if (messages.isError) return <p className="muted small rail-note">Couldn't load the messages.</p>
+  // A failed refresh keeps the list it showed (lib/apiErrors.ts lostAccess).
+  if (messages.isLoadingError || lostAccess(messages)) return <p className="muted small rail-note">Couldn't load the messages.</p>
   if (messages.data.length === 0) return <p className="muted small rail-note">Nothing sent yet.</p>
   return (
     <ul className="message-list">
