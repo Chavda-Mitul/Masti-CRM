@@ -24,6 +24,15 @@ export function isStale(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && errorCode(error) === 'STALE'
 }
 
+/**
+ * A refresh of a screen already loaded that says the user may no longer see it: 403 (someone else's now) or 404 (gone).
+ * Only this, or a first load that failed (isLoadingError), puts an error in the screen's place. Any other failed refresh
+ * keeps the screen as it was, unsaved work and all, and RefreshFailed says it may be out of date.
+ */
+export function lostAccess(query: { isRefetchError: boolean; error: unknown }): boolean {
+  return query.isRefetchError && query.error instanceof ApiError && (query.error.status === 403 || query.error.status === 404)
+}
+
 /** 409 DUPLICATE: a warning; saving again with confirmDuplicates: true goes ahead (useRetryGuard). */
 export function isDuplicateWarning(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && errorCode(error) === 'DUPLICATE'
