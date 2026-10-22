@@ -151,6 +151,11 @@ there's nothing to bring back. An e-visa case **waits at Step 6** after its deci
 follows an e-visa's decision). Step 7 is for paper visas and recalled files only; the database refuses "in transit" on
 an e-visa.
 
+**M39 (d) answered 22 Oct 2026 (Vimal):** an approved e-visa's PDF is saved, checked against the passport and sent to
+the client on WhatsApp; the case then moves to Step 8 · Delivered and closes. A refused one gets the "Refused" message
+and is closed after the call. Step 7 stays skipped. Not built yet: [change request 14](../change-requests.md), with its
+own record when it is.
+
 ### 5. Mark received
 
 **Decided 16 Oct 2026 (project lead):**
