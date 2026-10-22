@@ -886,6 +886,11 @@ This worked example follows the demo's Mehta family case (France Schengen touris
     CRM fills back, so names, passport numbers, dates of birth, addresses and phones never leave the server. Small
     unknown details go in general words; key facts (passport numbers, dates, the company or person visited) stay
     ⟦marks⟧. Undo, and a list of anything personal the AI dropped. About $0.0005–0.0014 a letter, 4–6 seconds.
+  - **Notes to the AI (0019 amendment 5, 22 Oct 2026, project lead):** staff write a request inside the letter
+    between `[[` and `]]` ("add a table of our plan", "make it shorter"), and Write the whole letter with AI does
+    it, changing anything it needs to and marking details it lacks. A note that isn't about the letter stays, with the
+    AI's reason, and Make waits until staff delete it. A name in a note is swapped like the rest, and the formats in
+    Settings can't hold notes.
 - **Saved file, kept as proof** ✅: the final file (application form, ITR, bank statement, passport scan…) is saved as **one PDF, linked under the case number** in Drive. "Every page as it went to the vendor, stored in your Drive; the CRM keeps the link." Masti already keeps a single scanned PDF like this today; the CRM links it to the case *(transcript, 7:18 PM)*.
 - The vendor comes from the approved list ✅.
 
@@ -1329,7 +1334,7 @@ This is the biggest technical unknown (§16.2).
 | **Visa portals** (VFS, China, e-visa…) and **airline/booking portals** (IndiGo…) | Click-to-login vault | ✅ Promised. The mechanism is unproven (browser extension?): spike it first. |
 | **IVS** visa-news feed (paid) | Daily visa updates → notice board and login popup | ❓ Subscription, cost, integration (Q24). Also written "IVF" or "IBS" in the sources. |
 | PAN verification | Fetch details from a PAN (like EasyLife/TBO) into bookings and vouchers | ❓ In scope? Which provider? (Q23). Listed in the PID's third-party costs. |
-| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. **21 Oct 2026 (project lead):** one way in, `src/lib/ai/` (`askAi`), one model for every use (`AI_MODEL`: Claude Haiku 5.5), every call and its cost recorded in `AiCall`, no spending limit (`docs/decisions/0023-ai.md`). The first use is the covering letter: since 22 Oct 2026 the whole letter (0019 amendment 4), its personal details kept on the server as placeholders, about $0.0005–0.0014 a letter (change request 11). |
+| **AI / LLM** | Enquiry fill-from-message/screenshot (Hindi/Gujarati/English), ticket screenshot parsing, holiday itineraries | ✅ Enquiry parsing (PID); ❓ ticket parsing (Q20). Assistive. Track the cost per call. **21 Oct 2026 (project lead):** one way in, `src/lib/ai/` (`askAi`), one model for every use (`AI_MODEL`: Claude Haiku 5.5), every call and its cost recorded in `AiCall`, no spending limit (`docs/decisions/0023-ai.md`). The first use is the covering letter: since 22 Oct 2026 the whole letter (0019 amendment 4), its personal details kept on the server as placeholders, about $0.0005–0.0014 a letter, and the notes staff write in it in `[[ ]]` (amendment 5) (change request 11). |
 | Passport MRZ / barcode | Visa form autofill | ❓ "If technology allows" (Q13) |
 | Accounting software (unnamed) | Store client codes; export/upload file | ❓ Name, format, phase (Q26) |
 | Weather API | Forecast for the next 10 days' travellers | ❓ Nice-to-have (Q25) |
