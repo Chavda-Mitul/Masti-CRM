@@ -18,6 +18,7 @@ import type {
   CancelInvoiceCheck,
   RecallCheck,
   AdditionalInvoiceCheck,
+  SendEvisaCheck,
   VisaOutcome,
   SubmitOnlineCheck,
   VendorReceivedCheck,
@@ -76,6 +77,7 @@ export const enquiryKeys = {
   additionalInvoiceCheck: (caseNo: string) => ['enquiries', 'additional-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
+  sendEvisaCheck: (caseNo: string) => ['enquiries', 'send-evisa-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
   /** The covering letter's card, per letter shown; all of a case's under one key, so a case action refreshes them. */
@@ -429,6 +431,20 @@ export function useSubmitOnlineCheck(caseNo: string) {
 /** "Submitted online" (0008 Decision 11): an e-visa moves to At vendor, with no docket. */
 export function useSubmitOnline(caseNo: string) {
   return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/submit-online`, { method: 'POST', body }))
+}
+
+/** What blocks "Send the e-visa" (0025, part 3), who gets which file, and whether the case closes or waits for the handover. */
+export function useSendEvisaCheck(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.sendEvisaCheck(caseNo),
+    queryFn: () => api<SendEvisaCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/send-evisa/check`),
+    staleTime: 0,
+  })
+}
+
+/** "Send the e-visa" (0025, part 3): each approved traveller's e-visa goes to the client; the case closes, or waits for the handover. */
+export function useSendEvisa(caseNo: string) {
+  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/send-evisa`, { method: 'POST', body }))
 }
 
 /** When a file the vendor got comes back due, and why then (0011 Decision 2). */

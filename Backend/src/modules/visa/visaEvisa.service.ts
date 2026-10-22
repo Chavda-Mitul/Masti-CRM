@@ -26,10 +26,13 @@ async function approvedTraveller(db: Db, enquiryId: string, travellerId: string)
     where: { enquiryId },
     select: {
       submittedOnlineAt: true,
+      evisaSentAt: true,
       travellers: { select: { id: true, position: true, isChild: true, name: true, outcome: true, stickerCheck: true } },
     },
   });
   if (!visa.submittedOnlineAt) throw conflict("This visa has a sticker, not an e-visa: it's checked when the passports come back.");
+  // What went to the client stays as it went (part 3).
+  if (visa.evisaSentAt) throw conflict("The e-visa has gone to the client: it can't change now.");
   const t = visa.travellers.find((x) => x.id === travellerId);
   if (!t) throw notFound("Traveller not found on this case.");
   const label = t.name ?? travellerLabel(t, countTravellers(visa.travellers).adults);

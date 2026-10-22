@@ -16,6 +16,7 @@ import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
 import { RecallDialog } from './RecallDialog'
+import { SendEvisaDialog } from './SendEvisaDialog'
 import { ShortfallDialog } from './ShortfallDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
@@ -53,6 +54,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
   if (c.stage.code === 'AT_VENDOR' && c.submission) return <span className="chip chip-info">{c.stage.statusLabel} · {c.submission.vendorFileNo}</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED' && c.vendorReceived) return <span className="chip chip-info">With vendor · papers checked</span>
   if (c.stage.code === 'AT_VENDOR' && c.docket?.status === 'DISPATCHED') return <span className="chip chip-info">Dispatched · {c.docket.docketNo}</span>
+  // An e-visa sent to the client, its passports still to hand back (0025, part 3).
+  if (c.stage.code === 'DECISION' && c.evisaSent) return <span className="chip chip-ok">E-visa sent</span>
   // The decision (0012 Decision 6) ⚠️: the step's seeded "Approved" would be wrong for a refusal.
   if (c.stage.code === 'DECISION' && c.decision) {
     const approved = c.travellers.filter((t) => t.decision?.outcome === 'APPROVED').length
@@ -97,6 +100,7 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [handing, setHanding] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
   const [settling, setSettling] = useState(false)
+  const [sendingEvisa, setSendingEvisa] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
   // Cancelled with its passports still out: only their way back works (0006 amendment 15).
   const winding = windingDown(c)
@@ -233,9 +237,22 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
       </>
     )
   }
+  // An e-visa's passports never left the office (0013 Decision 4): its approved travellers' PDFs go to the client
+  // instead (docs/decisions/0025-evisa-after-decision.md, part 3). Once sent, the passports we hold go back (part 4).
+  if (c.stage.code === 'DECISION' && c.submittedOnline) {
+    const approved = c.travellers.some((t) => t.decision?.outcome === 'APPROVED')
+    if (c.evisaSent || !approved || c.status !== 'OPEN' || !canAct) return null
+    return (
+      <>
+        <button type="button" className="btn btn-primary" onClick={() => setSendingEvisa(true)}>
+          Send the e-visa →
+        </button>
+        {sendingEvisa && <SendEvisaDialog visaCase={c} onClose={() => setSendingEvisa(false)} />}
+      </>
+    )
+  }
   // After a paper visa's decision, or at Passport back for a recalled file: "Passports on the way back" (0013 Decision
-  // 3). An e-visa's passports never left the office, so it waits at Decision with no button (Decision 4, M39).
-  if (c.stage.code === 'DECISION' && c.submittedOnline) return null
+  // 3).
   const returning = c.stage.code === 'DECISION' || (c.stage.code === 'PASSPORT_BACK' && !!c.recall)
   if (returning && !c.passportsBack && (c.status === 'OPEN' || winding) && canAct) {
     return (
@@ -367,12 +384,16 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
       <ol className="step-chips" aria-label="Case steps">
         {c.steps.map((s, i) => {
           const step = i + 1
-          // A recalled file never reached a decision (0011 Decision 6): that step was skipped, not done.
-          const skipped = !!c.recall && s.code === 'DECISION'
+          // A recalled file never reached a decision (0011 Decision 6): that step was skipped, not done. An e-visa's
+          // passports never left the office, so Passport back isn't needed (0013 Decision 4, 0025).
+          const recallSkip = !!c.recall && s.code === 'DECISION'
+          const evisaSkip = !!c.submittedOnline && s.code === 'PASSPORT_BACK'
+          const skipped = recallSkip || evisaSkip
           const state = skipped ? 'skipped' : step < c.stage.step ? 'done' : step === c.stage.step ? 'current' : ''
+          const why = recallSkip ? 'Skipped: the file was taken back' : evisaSkip ? 'Not needed: an e-visa’s passports never left the office' : undefined
           return (
             <li key={s.code}>
-              <span className={`step-chip ${state}`} aria-current={state === 'current' ? 'step' : undefined} title={skipped ? 'Skipped: the file was taken back' : undefined}>
+              <span className={`step-chip ${state}`} aria-current={state === 'current' ? 'step' : undefined} title={why}>
                 <span className="step-no">{state === 'done' ? '✓' : skipped ? '–' : step}</span>
                 {s.name}
               </span>

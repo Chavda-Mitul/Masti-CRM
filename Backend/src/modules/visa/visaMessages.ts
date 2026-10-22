@@ -1,11 +1,12 @@
 import type { DocumentRequirement, TravellerGroup, VisaOutcome } from "../../../generated/prisma/enums";
 import type { Db } from "../../config/prisma";
-import { dayLabel, istToday, timeLabel } from "../../lib/dates";
+import { dateLabel, dayLabel, istToday, timeLabel } from "../../lib/dates";
 import { rupeesText } from "../../lib/money";
 import { getCompanyDetails } from "../company/company.settings";
 import {
   VISA_APPROVED,
   VISA_CREDIT_NOTE,
+  VISA_EVISA_READY,
   VISA_HANDED_OVER,
   VISA_INVOICE,
   VISA_PARTLY_APPROVED,
@@ -185,6 +186,32 @@ export function fitList(items: string[], maxChars = LIST_MAX_CHARS): string {
     kept.push(item);
   }
   return kept.join("; ") + more(items.length - kept.length);
+}
+
+/**
+ * Message 19, "Your e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): one approved traveller's e-visa,
+ * with its PDF, in the transaction of "Send the e-visa". Once per traveller, as an e-visa is sent once.
+ */
+export async function queueEvisaMessage(
+  tx: Db,
+  enquiryId: string,
+  traveller: { id: string; name: string; visaNo: string; validFrom: string; validTo: string; fileId: string },
+) {
+  const basics = await visaMessageBasics(tx, enquiryId);
+  await queueMessage(tx, {
+    template: VISA_EVISA_READY,
+    enquiryId,
+    key: `${VISA_EVISA_READY}:${traveller.id}`,
+    clientId: basics.clientId,
+    attachmentId: traveller.fileId,
+    variables: {
+      ...basics.variables,
+      traveller_name: traveller.name,
+      evisa_no: traveller.visaNo,
+      valid_from: dateLabel(traveller.validFrom),
+      valid_to: dateLabel(traveller.validTo),
+    },
+  });
 }
 
 /** One line of an offering's checklist, as message 1 reads it. */

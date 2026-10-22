@@ -27,6 +27,7 @@ async function gather(db: Db, enquiryId: string) {
     select: {
       submittedAt: true,
       submittedOnlineAt: true,
+      evisaSentAt: true,
       decidedAt: true,
       passportsReceivedAt: true,
       departOn: true,
@@ -248,6 +249,8 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
   const check = (g: Gathered) => {
     // A recalled file reaches Passport back with no decision: there's nothing to correct.
     if (!g.decidedAt) throw conflict("This file was taken back before a decision: there's none to change.");
+    // An e-visa sent to the client stays as it went (docs/decisions/0025-evisa-after-decision.md, part 3).
+    if (g.evisaSentAt) throw conflict("The e-visa has gone to the client: the decision can't change now.");
     const t = g.travellers.find((x) => x.id === travellerId);
     if (!t) throw notFound("Traveller not found on this case.");
     const { who, number } = wording(g);

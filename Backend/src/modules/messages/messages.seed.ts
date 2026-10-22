@@ -64,6 +64,13 @@ export const CLIENT_DOCUMENTS_KEPT = "client.documents_kept";
 /** Message 18: a credit note is issued. Words only for now: no PDF. A suggestion beyond the demo (change request 13). */
 export const VISA_CREDIT_NOTE = "visa.credit_note";
 
+/**
+ * Message 19: an approved e-visa traveller's e-visa, with its PDF, one per traveller ("Send the e-visa",
+ * docs/decisions/0025-evisa-after-decision.md part 3). Ours, beyond the demo (change request 14); Masti approves its
+ * words with the others (M1).
+ */
+export const VISA_EVISA_READY = "visa.evisa_ready";
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
@@ -290,6 +297,19 @@ export const MESSAGE_TEMPLATES = [
       "We have issued credit note {{credit_note_no}} for ₹{{amount}} against invoice {{invoice_no}} ({{case_no}}).",
       "",
       "For any question, call us on {{office_phone}}.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_EVISA_READY,
+    name: "Your e-visa",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}.",
+      "",
+      "Please print it and keep it with the passport when you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),

@@ -7,9 +7,10 @@ import { heldShort } from "./shortfall";
 //   Decisions 2, 9 and 11). Fixed 21 Oct 2026: every Step 4 case said "Dispatch the docket".
 // - Step 5: the vendor confirms they got the file, then gives its file number, then the decision is awaited (0011
 //   Decisions 2–4). Fixed 21 Oct 2026: every Step 5 case said "Record the decision".
-// - Steps 6–7: the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5), an e-visa, whose
-//   passports never left the office (Decision 4), and a short return, held until the rest come in or the shortfall is
-//   cleared (Decision 5, amended).
+// - Steps 6–7: the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5), and a short return,
+//   held until the rest come in or the shortfall is cleared (Decision 5, amended).
+// - An e-visa at Decision: its PDFs go to the client, then the passports we hold go back
+//   (docs/decisions/0025-evisa-after-decision.md, parts 3 and 4).
 
 type CaseState = Pick<
   VisaCase,
@@ -17,6 +18,7 @@ type CaseState = Pick<
   | "vendorReceivedAt"
   | "submittedAt"
   | "submittedOnlineAt"
+  | "evisaSentAt"
   | "passportsInTransitAt"
   | "passportsReceivedAt"
   | "shortfallClearedAt"
@@ -36,8 +38,8 @@ export function visaNextStep(stage: Pick<DepartmentStage, "code" | "nextStepLabe
     if (!visa.vendorReceivedAt) return "Confirm vendor got it";
     if (!visa.submittedAt) return "Get the file number";
   }
-  // ⚠️ An e-visa waits at Decision until Masti says what follows it (M39).
-  if (stage.code === "DECISION" && visa.submittedOnlineAt) return "No passports to bring back (e-visa)";
+  // An e-visa's passports never left the office: it's sent, then any we hold go back (0025, parts 3 and 4).
+  if (stage.code === "DECISION" && visa.submittedOnlineAt) return visa.evisaSentAt ? "Hand back the passports" : "Send the e-visa";
   if (stage.code === "PASSPORT_BACK") {
     // Only a recalled file reaches Passport back before its passports are on the way.
     if (!visa.passportsInTransitAt) return "Passports on the way back";

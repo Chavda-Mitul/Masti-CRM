@@ -154,6 +154,7 @@ export const visaCaseInclude = {
       maturedBy: personSelect,
       fileReadyBy: personSelect,
       submittedOnlineBy: personSelect,
+      evisaSentBy: personSelect,
       vendorReceivedBy: personSelect,
       submittedBy: personSelect,
       embassy: { select: { id: true, name: true, city: true } },
@@ -590,6 +591,8 @@ export function toVisaCaseDto(
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
     /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
     submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
+    /** "Send the e-visa" (0025, part 3): who sent each approved traveller's e-visa to the client, and when. */
+    evisaSent: visa.evisaSentAt && { at: visa.evisaSentAt, by: visa.evisaSentBy },
     /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
     vendorReceived: visa.vendorReceivedAt && { at: visa.vendorReceivedAt, by: visa.vendorReceivedBy },
     /** "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy and the collection date. */

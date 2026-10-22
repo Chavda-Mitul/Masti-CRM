@@ -169,15 +169,18 @@ async function checkPhoto(db: Db, enquiryId: string, photoId: string) {
  * due time (handed back before dispatch, a cancelled case stays at its step: 0006 amendment 15); an open or postponed
  * case closes (its reason and resume date cleared), a cancelled one stays cancelled; and any job still booked for the
  * field boy is called off, with why. Returns whether it closed and what was called off, for the caller's audit. The
- * office handover and the delivery boy's at the door (0015 phase 5) both end here.
+ * office handover and the delivery boy's at the door (0015 phase 5) both end here, and so does an e-visa, whose case
+ * moves to Delivered from Decision (`evisa`, docs/decisions/0025-evisa-after-decision.md).
  */
 export async function deliverCase(
   tx: Db,
   locked: { id: string; departmentId: number; status: EnquiryStatus; stage: { code: string } },
   actor: Actor,
   why: string,
+  { evisa = false }: { evisa?: boolean } = {},
 ) {
-  const delivered = locked.stage.code === "PASSPORT_BACK" ? await visaStage(tx, locked.departmentId, "DELIVERED") : null;
+  const toDelivered = locked.stage.code === "PASSPORT_BACK" || (evisa && locked.stage.code === "DECISION");
+  const delivered = toDelivered ? await visaStage(tx, locked.departmentId, "DELIVERED") : null;
   const closes = locked.status === "OPEN" || locked.status === "POSTPONED";
   await tx.enquiry.update({
     where: { id: locked.id },

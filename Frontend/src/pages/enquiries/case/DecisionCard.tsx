@@ -24,9 +24,10 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const number = c.submittedOnline ? 'e-Visa' : 'Sticker'
   const canAct = !!me && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // At Decision, or at Passport back until the handover (amended 19 Oct 2026), to put a sticker that doesn't match right.
-  const canChange = canAct && (c.stage.code === 'DECISION' || c.stage.code === 'PASSPORT_BACK') && c.status === 'OPEN'
-  // An e-visa's PDF and its check (0025), at Decision on an open case.
-  const canEvisa = canAct && c.stage.code === 'DECISION' && c.status === 'OPEN'
+  // An e-visa sent to the client stays as it went (0025, part 3).
+  const canChange = canAct && (c.stage.code === 'DECISION' || c.stage.code === 'PASSPORT_BACK') && c.status === 'OPEN' && !c.evisaSent
+  // An e-visa's PDF and its check (0025), at Decision on an open case, until it's sent.
+  const canEvisa = canAct && c.stage.code === 'DECISION' && c.status === 'OPEN' && !c.evisaSent
   const traveller = c.travellers.find((t) => t.id === changing)
 
   return (
@@ -65,6 +66,16 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           )}
         </div>
       ))}
+      {/* "Send the e-visa" (0025, part 3): who sent the approved travellers' e-visas to the client, and when. */}
+      {c.evisaSent && (
+        <div className="kv">
+          <span>
+            Sent to the client · {dayTime(c.evisaSent.at)}
+            {c.evisaSent.by && ` · ${c.evisaSent.by.name}`}
+          </span>
+          <strong>On WhatsApp, with each e-visa</strong>
+        </div>
+      )}
       {/* A cancelled case's passports still come back, and it stays due until then (0006 amendment 15). */}
       {c.stage.code === 'DECISION' && (c.status === 'OPEN' || windingDown(c)) && c.dueAt && (
         <div className="kv">
@@ -72,8 +83,11 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
             {dayTime(c.dueAt)}
             {c.owner && ` · ${firstName(c.owner.name)}`}
           </span>
-          {/* An e-visa's passports never left the office (0008 Decision 11); what follows it waits on M39. */}
-          <strong>{c.submittedOnline ? 'Let the client know' : 'Check the passports are on their way back'}</strong>
+          {/* An e-visa's passports never left the office (0008 Decision 11): its PDFs go to the client, then any
+              passports we hold go back (0025, parts 3 and 4). */}
+          <strong>
+            {!c.submittedOnline ? 'Check the passports are on their way back' : c.evisaSent ? 'Hand back the passports' : 'Send the e-visa'}
+          </strong>
         </div>
       )}
       {traveller && <ChangeDecisionDialog visaCase={c} traveller={traveller} onClose={() => setChanging(null)} />}
