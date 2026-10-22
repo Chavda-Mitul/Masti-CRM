@@ -59,6 +59,9 @@ export function wordingProblem(body: string): string | null {
   const purpose = text.match(/\{purpose\}/g)?.length ?? 0;
   if (purpose > 1) return "Use {purpose} only once: the AI or staff write why they travel there.";
   if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return "Put {purpose} on a line of its own: the AI or staff write why they travel there.";
+  // A note would make every letter drafted from this wording wait for the AI: the wording stays a ready letter (0019
+  // amendment 5).
+  if (text.includes("[[") || text.includes("]]")) return "Notes for the AI go in a case's letter, not in the wording: take out the [[ and ]].";
   return null;
 }
 
@@ -156,11 +159,11 @@ export function mark(what: string): string {
 export const PURPOSE_MARK = mark("why they travel");
 
 /**
- * A value the CRM writes into a letter, each | made a /. Two lines that hold a | are a table (amendment 3), so a hotel
- * or an address with one would split a cell or start a table.
+ * A value the CRM writes into a letter (a hotel stay, a name), so it can't change the letter's own rules: a | becomes a
+ * / (two lines that hold one are a table, amendment 3), and a [[ or ]] a single bracket (a note, amendment 5).
  */
-export function noPipes(value: string): string {
-  return value.replaceAll("|", "/");
+export function letterValue(value: string): string {
+  return value.replaceAll("|", "/").replace(/\[{2,}/g, "[").replace(/\]{2,}/g, "]");
 }
 
 /** The marks still in a letter, in plain words and in order, each once. A ⟦ or ⟧ left on its own counts too. */
@@ -168,6 +171,37 @@ export function marksIn(letter: string): string[] {
   const found = new Set<string>();
   for (const [, words] of letter.matchAll(/⟦([^⟦⟧\n]*)⟧|[⟦⟧]/g)) found.add(words?.trim() || "a ⟦ or ⟧ left over");
   return [...found];
+}
+
+/**
+ * A note to the AI in a case's letter (amendment 5): [[…]] on one line. "Write the whole letter with AI" does it, or
+ * leaves it with a reason; "Make the letter" waits while one is left.
+ */
+export const NOTE = /\[\[[^\n]*?\]\]/g;
+/** What `notesIn` lists for a [[ or ]] on its own, an empty [[ ]], or a note split over two lines. */
+export const STRAY_NOTE = "a [[ or ]] left over";
+
+/** The notes still in a letter, exactly as written, brackets included, in order and each once; then STRAY_NOTE. */
+export function notesIn(letter: string): string[] {
+  const found = new Set<string>();
+  let stray = false;
+  for (const line of letter.split("\n")) {
+    const rest = line.replace(NOTE, (note) => {
+      if (note.slice(2, -2).trim()) found.add(note);
+      else stray = true;
+      return "";
+    });
+    if (rest.includes("[[") || rest.includes("]]")) stray = true;
+  }
+  return stray ? [...found, STRAY_NOTE] : [...found];
+}
+
+/**
+ * A line of a table: it holds a | outside any note (amendments 3 and 5), so a note never makes a line a table.
+ * Frontend/src/lib/letter.ts draws the tables with the same rule; tests/frontendRules.test.ts keeps the two alike.
+ */
+export function isTableLine(line: string): boolean {
+  return line.replace(NOTE, "").includes("|");
 }
 
 /** Windows line breaks become plain ones, and blank lines at the ends go. The draft and "Make the letter" both use it. */

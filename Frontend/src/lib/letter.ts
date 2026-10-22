@@ -1,10 +1,10 @@
-// A covering letter split into what the page draws (docs/decisions/0019-covering-letters.md, amendment 3): paragraphs of
-// lines, and tables typed as lines with | between the columns. components/LetterPaper.tsx draws both kinds of letter:
-// a wording in Settings (letterBlocks: its {blanks} are pieces, and {travellers} the table of travellers) and a case's
-// letter (textBlocks: plain text, where a ⟦mark⟧ is the only piece). Kept out of the component file so fast refresh keeps
-// working. It imports nothing, so Backend/tests can load it.
+// A covering letter split into what the page draws (docs/decisions/0019-covering-letters.md, amendments 3 and 5):
+// paragraphs of lines, and tables typed as lines with | between the columns. components/LetterPaper.tsx draws both kinds
+// of letter: a wording in Settings (letterBlocks: its {blanks} are pieces, and {travellers} the table of travellers) and
+// a case's letter (textBlocks: plain text, where a ⟦mark⟧ and a [[note]] to the AI are the only pieces). Kept out of the
+// component file so fast refresh keeps working. It imports nothing, so Backend/tests can load it.
 
-export type LetterPiece = { text: string } | { blank: string }
+export type LetterPiece = { text: string } | { blank: string } | { note: string }
 
 export type LetterBlock =
   | { kind: 'paragraph'; lines: LetterPiece[][] }
@@ -32,7 +32,30 @@ function piecesOf(line: string): LetterPiece[] {
 // Tables (amendment 3): two or more lines in a row that each hold a | make a table, and its first line is the headings.
 // ---------------------------------------------------------------------------------------------------------------------
 
-const isTableLine = (line: string) => line.includes('|')
+/** A note to the AI (amendment 5): [[…]] on one line. As Backend/src/modules/coveringLetters/coveringLetters.schemas.ts. */
+export const NOTE = /\[\[[^\n]*?\]\]/g
+
+/**
+ * A line of a table: it holds a | outside any note (amendments 3 and 5), so a note never makes a line a table. The
+ * backend's isTableLine is the same rule, which Backend/tests/frontendRules.test.ts keeps alike.
+ */
+export function isTableLine(line: string): boolean {
+  return line.replace(NOTE, '').includes('|')
+}
+
+/** A table's line split at each | outside a note, so a note in a cell is never cut. */
+function splitCells(line: string): string[] {
+  const notes = [...line.matchAll(NOTE)].map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length] as const)
+  const cells: string[] = []
+  let start = 0
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] !== '|' || notes.some(([from, to]) => i >= from && i < to)) continue
+    cells.push(line.slice(start, i).trim())
+    start = i + 1
+  }
+  cells.push(line.slice(start).trim())
+  return cells
+}
 
 /** The line under a Markdown table's headings: every cell dashes, perhaps with a colon at either end (`:---:`). */
 const isRuleLine = (cells: string[]) => cells.every((cell) => /^:?-+:?$/.test(cell))
@@ -50,7 +73,7 @@ export function tableCells(lines: string[]): string[][] {
   const rows = trimmed
     .map((line) => (lead ? line.slice(1) : line))
     .map((line) => (trail ? line.slice(0, -1) : line))
-    .map((line) => line.split('|').map((cell) => cell.trim()))
+    .map(splitCells)
     .filter((cells) => !isRuleLine(cells))
   if (rows.length === 0) return []
   const width = Math.max(...rows.map((cells) => cells.length))
@@ -113,9 +136,9 @@ export function tabsToPipes(text: string): string | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// A case's letter as staff edit it and make it (0019 amendments 1 and 3): one text, not a wording plus values. The marks
-// and the limit repeat Backend/src/modules/coveringLetters/coveringLetters.schemas.ts; Backend/tests/frontendRules.test.ts
-// keeps the two the same, and Backend/tests/letterText.test.ts checks the tables.
+// A case's letter as staff edit it and make it (0019 amendments 1, 3 and 5): one text, not a wording plus values. The
+// marks, the notes and the limit repeat Backend/src/modules/coveringLetters/coveringLetters.schemas.ts;
+// Backend/tests/frontendRules.test.ts keeps the two the same, and Backend/tests/letterText.test.ts checks the tables.
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** Where the case lacked a value, the draft writes ⟦the hotel stay⟧; "Make the letter" waits while any ⟦ or ⟧ is left. */
@@ -134,21 +157,42 @@ export function marksIn(letter: string): string[] {
   return [...found]
 }
 
-/** A line of a letter's text: its words, and each ⟦mark⟧ as a blank to show as a chip. */
+/** What `notesIn` lists for a [[ or ]] on its own, an empty [[ ]], or a note split over two lines. */
+export const STRAY_NOTE = 'a [[ or ]] left over'
+
+/** The notes to the AI still in a letter, exactly as written, brackets included, in order and each once; then STRAY_NOTE. */
+export function notesIn(letter: string): string[] {
+  const found = new Set<string>()
+  let stray = false
+  for (const line of letter.split('\n')) {
+    const rest = line.replace(NOTE, (note) => {
+      if (note.slice(2, -2).trim()) found.add(note)
+      else stray = true
+      return ''
+    })
+    if (rest.includes('[[') || rest.includes(']]')) stray = true
+  }
+  return stray ? [...found, STRAY_NOTE] : [...found]
+}
+
+/**
+ * A line of a letter's text: its words, each ⟦mark⟧ as a blank and each [[note]] as a note, to show as chips. One
+ * pattern finds both, so a mark inside a note stays part of the note.
+ */
 function markPieces(line: string): LetterPiece[] {
   const pieces: LetterPiece[] = []
   let at = 0
-  for (const match of line.matchAll(/⟦[^⟦⟧\n]*⟧/g)) {
+  for (const match of line.matchAll(/\[\[[^\n]*?\]\]|⟦[^⟦⟧\n]*⟧/g)) {
     const start = match.index ?? 0
     if (start > at) pieces.push({ text: line.slice(at, start) })
-    pieces.push({ blank: match[0] })
+    pieces.push(match[0].startsWith('[[') ? { note: match[0] } : { blank: match[0] })
     at = start + match[0].length
   }
   if (at < line.length) pieces.push({ text: line.slice(at) })
   return pieces
 }
 
-/** A case's letter, drawn as written: its paragraphs and its | tables, with no {blanks}; a ⟦mark⟧ is the only piece. */
+/** A case's letter, drawn as written: its paragraphs and its | tables, with no {blanks}; marks and notes are the pieces. */
 export function textBlocks(text: string): LetterBlock[] {
   return splitBlocks(text, markPieces)
 }

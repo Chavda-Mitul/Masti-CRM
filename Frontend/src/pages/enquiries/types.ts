@@ -901,3 +901,14 @@ export interface CoveringLetterPrint extends CoveringLetterMade {
   caseNo: string
   letterheadMm: number
 }
+
+/** POST …/covering-letter/write: the letter the AI wrote (0019 amendments 4 and 5). Nothing is saved. */
+export interface WrittenLetter {
+  letter: string
+  /** The personal details it dropped: "AARAV MEHTA's passport number". */
+  removed: string[]
+  /** The notes to the AI it did. */
+  done: string[]
+  /** The notes it left in the letter, with why. */
+  notDone: { note: string; why: string }[]
+}

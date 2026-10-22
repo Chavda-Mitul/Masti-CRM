@@ -209,11 +209,20 @@ describe("adding a covering letter", () => {
     expect(wordingProblem("Dear Sir,\r\n\r\n  {purpose}  \r\nThanks")).toBeNull();
     expect(wordingProblem("{purpose}\n{purpose}")).toBe("Use {purpose} only once: the AI or staff write why they travel there.");
     expect(wordingProblem("Why: {purpose}")).toBe("Put {purpose} on a line of its own: the AI or staff write why they travel there.");
+    // A note to the AI belongs in a case's letter (0019 amendment 5); single brackets are text.
+    const noNotes = "Notes for the AI go in a case's letter, not in the wording: take out the [[ and ]].";
+    expect(wordingProblem("Dear Sir, [[make it formal]]")).toBe(noNotes);
+    expect(wordingProblem("Half [[ a note")).toBe(noNotes);
+    expect(wordingProblem("Half a note ]]")).toBe(noNotes);
+    expect(wordingProblem("Hotel [Opera], Paris")).toBeNull();
 
     const hod = await visaHod();
     const res = await addLetter(hod, { body: "Passport {passport}" });
     expect(res.status).toBe(400);
     expect(res.body.issues.body[0]).toMatch(/\{passport\} isn't one of the blanks/);
+    const note = await addLetter(hod, { body: "Dear Sir,\n\n[[write why they travel]]" });
+    expect(note.status).toBe(400);
+    expect(note.body.issues.body[0]).toBe(noNotes);
   });
 
   it("keeps the wording within 6,000 characters, and the database does too", async () => {

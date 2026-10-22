@@ -1,5 +1,5 @@
 import { dateLabel, fullDate } from "../../lib/dates";
-import { mark } from "./coveringLetters.schemas";
+import { isTableLine, mark, NOTE } from "./coveringLetters.schemas";
 
 // Keeping a covering letter's personal details on Masti's server while the AI writes it (docs/decisions/
 // 0019-covering-letters.md amendment 4, docs/decisions/0023-ai.md). Before the letter goes, every detail of the case it
@@ -352,16 +352,19 @@ function choose(hits: Hit[]): Hit[] {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** A placeholder's name as it's compared: a retyped {T2 passport} or {t2_passport} is still {t2Passport}. */
-const keyOf = (name: string) => name.toLowerCase().replace(/[\s'’_-]/g, "");
-const PLACEHOLDER = /\{([^{}\n]{1,60})\}/g;
+export const keyOf = (name: string) => name.toLowerCase().replace(/[\s'’_-]/g, "");
+export const PLACEHOLDER = /\{([^{}\n]{1,60})\}/g;
 
-/** Two or more lines in a row that each hold a | are a table (amendment 3; Frontend/src/lib/letter.ts draws them). */
+/**
+ * Two or more lines in a row that each hold a | outside a note are a table (amendments 3 and 5; Frontend/src/lib/letter.ts
+ * draws them by the same rule).
+ */
 export function tableRuns(lines: string[]): [number, number][] {
   const runs: [number, number][] = [];
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i]!.includes("|")) continue;
+    if (!isTableLine(lines[i]!)) continue;
     let end = i + 1;
-    while (end < lines.length && lines[end]!.includes("|")) end++;
+    while (end < lines.length && isTableLine(lines[end]!)) end++;
     if (end - i >= 2) runs.push([i, end]);
     i = end - 1;
   }
@@ -420,11 +423,14 @@ export function swapLetter(letter: string, facts: PrivateFacts): Swap {
     return slot;
   };
   const swapText = (text: string, sent?: Set<string>) => {
+    // A detail inside a note (amendment 5) is swapped too, but isn't "sent" for Removed: a note done may drop it.
+    const notes = [...text.matchAll(NOTE)].map((m) => [m.index, m.index + m[0].length] as const);
     let out = "";
     let at = 0;
     for (const hit of choose(hitsIn(text, known, neutral))) {
       const slot = slotFor(hit.detail, text.slice(hit.start, hit.end));
-      if (sent && slot.personal) sent.add(slot.name);
+      const inNote = notes.some(([start, end]) => hit.start >= start && hit.end <= end);
+      if (sent && slot.personal && !inNote) sent.add(slot.name);
       out += `${text.slice(at, hit.start)}{${slot.name}}`;
       at = hit.end;
     }
@@ -446,6 +452,8 @@ export function swapLetter(letter: string, facts: PrivateFacts): Swap {
   const lines: string[] = [];
   let at = 0;
   for (const [start, end] of tableRuns(originalLines)) {
+    // A table holding a note goes as its lines: the AI writes it out to do the note, or to delete it (amendment 5).
+    if (originalLines.slice(start, end).some((line) => line.match(NOTE))) continue;
     lines.push(...swappedLines.slice(at, start));
     const table = { name: `table${tables.length + 1}`, lines: swappedLines.slice(start, end).join("\n"), original: originalLines.slice(start, end).join("\n") };
     tables.push(table);

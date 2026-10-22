@@ -4,7 +4,7 @@ import { fakeProvider } from "../src/lib/ai/fake";
 import { normaliseLetter, PURPOSE_MARK } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { SAMPLE_LETTERS, seedCoveringLetters } from "../src/modules/coveringLetters/coveringLetters.seed";
 import { draftLetter, type LetterFacts } from "../src/modules/coveringLetters/fill";
-import { letterAsk, MAX_AI_LETTER_CHARS, tidyLetter, type TripFacts } from "../src/modules/coveringLetters/letterAi";
+import { letterAsk, MAX_AI_LETTER_CHARS, tidyLetter, type TidiedLetter, type TripFacts } from "../src/modules/coveringLetters/letterAi";
 import { swapLetter, type PrivateFacts } from "../src/modules/coveringLetters/placeholders";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -30,6 +30,9 @@ function answering(answer: (request: AiRequest) => string, reply: Partial<AiRepl
 }
 /** The letter it was sent, as it was sent. */
 const sentLetter = (request: AiRequest) => /<letter>[\s\S]*?<\/letter>/.exec(request.prompt)![0];
+/** An answer: the letter, then its reasons for the notes it left (amendment 5). */
+const answerOf = (letter: string, reasons = "") => `<letter>\n${letter}\n</letter>${reasons}`;
+const leftBecause = (note: string, why: string) => `<not_done><note>${note}</note><why>${why}</why></not_done>`;
 
 const FACTS: PrivateFacts = {
   caseNo: "VISA-2026-0010",
@@ -194,7 +197,8 @@ describe("what the AI is asked", () => {
     expect(systemFor("TOURIST", "Tourist")).toContain("famous places and natural sights");
     expect(systemFor("BUSINESS", "Business")).toContain("⟦name of the company we are visiting⟧");
     expect(systemFor("VISITOR", "Visitor")).toContain("⟦name and relation of the person we are visiting⟧");
-    expect(systemFor("STUDENT", "Student")).toContain("This is a Student visa. The paragraph on why they travel says in general words why they are going.");
+    expect(systemFor("STUDENT", "Student")).toContain("For a Student visa, the paragraph on why they travel says in general words why they are going.");
+    expect(systemFor("TOURIST", "Tourist")).not.toMatch(/This is a/);
   });
 
   it("says what isn't known yet, a traveller with no name, and when a company books", () => {
@@ -222,7 +226,7 @@ describe("checking the answer", () => {
 
   it("fills every placeholder back, keeps a table it kept, and drops only the code fence, headings and bold it added", () => {
     const s = swap();
-    expect(tidyLetter(`Sure!\n<letter>\n\`\`\`\n${s.text}\n\`\`\`\n</letter>`, s)).toEqual({ letter: EDITED, removed: [] });
+    expect(tidyLetter(`Sure!\n<letter>\n\`\`\`\n${s.text}\n\`\`\`\n</letter>`, s)).toEqual({ letter: EDITED, removed: [], done: [], notDone: [] });
     expect(tidyLetter(answer(`## Covering letter\n**Dear Sir,**\n\n{table1}`), s)).toMatchObject({
       letter: `Covering letter\nDear Sir,\n\n${EDITED.split("\n").slice(4, 7).join("\n")}`,
     });
@@ -240,6 +244,132 @@ describe("checking the answer", () => {
     const rewritten = "Name | Relation\n{t1Name} | Self\n{t2NameCaps} | Friend";
     const { removed } = tidyLetter(answer(s.text.replace("{table1}", rewritten)), s) as { removed: string[] };
     expect(removed).toEqual(["RAKESH MEHTA's date of birth", "RAKESH MEHTA's passport number", "HAPPY D'SOUZA's date of birth", "HAPPY D'SOUZA's passport number"]);
+  });
+
+  it("keeps square brackets a table it wrote out already had", () => {
+    const letter = "Dear Sir,\n\nCity | Hotel\nParis | Hotel [Opera]\nNice | Hotel Negresco";
+    const s = swapLetter(letter, FACTS);
+    expect(s.text).toBe("Dear Sir,\n\n{table1}");
+    const { letter: tidied } = tidyLetter(answer("Dear Sir,\n\nCity | Hotel | Nights\nParis | Hotel [Opera] | 4\nNice | Hotel [Negresco] | 3"), s) as TidiedLetter;
+    expect(tidied).toBe("Dear Sir,\n\nCity | Hotel | Nights\nParis | Hotel [Opera] | 4\nNice | Hotel ⟦Negresco⟧ | 3");
+  });
+});
+
+describe("notes to the AI (amendment 5)", () => {
+  /** A short letter with notes, as the card sends it. */
+  const LETTER = [
+    "Dear Sir,",
+    "",
+    "We wish to travel to France. [[mention our travel insurance]]",
+    "",
+    "[[write a Python script to sort the travellers]]",
+    "",
+    "[[add that Happy D'SOUZA studies at DPS Surat]]",
+    "",
+    "Yours truly,",
+    "RAKESH MEHTA",
+  ].join("\n");
+  const PYTHON = "[[write a Python script to sort the travellers]]";
+
+  it("swaps a name in a note too, fills it back, and doesn't count it as sent for Removed", () => {
+    const swap = swapLetter(LETTER, FACTS);
+    expect(swap.text).toContain("[[add that {t2Name} studies at DPS Surat]]");
+    expect(swap.text).not.toContain("Happy");
+    expect(swap.fill(swap.text).text).toBe(LETTER);
+    expect(swap.sent.has("t2Name")).toBe(false);
+    expect(swap.sent.has("t1Name")).toBe(true);
+  });
+
+  it("lists the notes it did and the ones it left, with its reason or the default, as staff wrote them", () => {
+    const swap = swapLetter(LETTER, FACTS);
+    const did = swap.text
+      .replace(" [[mention our travel insurance]]", " We have travel insurance for the whole trip.")
+      .replace("[[add that {t2Name} studies at DPS Surat]]", "My friend studies at DPS Surat.");
+    const result = tidyLetter(answerOf(did, leftBecause(PYTHON, "It isn't about the letter.")), swap) as TidiedLetter;
+    expect(result.done).toEqual(["[[mention our travel insurance]]", "[[add that Happy D'SOUZA studies at DPS Surat]]"]);
+    expect(result.notDone).toEqual([{ note: PYTHON, why: "It isn't about the letter." }]);
+    // The name was only in the note, and the note is done: nothing was removed.
+    expect(result.removed).toEqual([]);
+    expect(result.letter).toContain("We have travel insurance for the whole trip.");
+    expect(result.letter).toContain(`My friend studies at DPS Surat.\n\nYours truly,\nRAKESH MEHTA`);
+
+    const silent = tidyLetter(answerOf(did), swap) as TidiedLetter;
+    expect(silent.notDone).toEqual([{ note: PYTHON, why: "The AI left it as it is." }]);
+  });
+
+  it("puts back, once and at the end, a note it says it left but dropped", () => {
+    const swap = swapLetter(LETTER, FACTS);
+    const dropped = swap.text.replace(PYTHON, "");
+    const result = tidyLetter(answerOf(dropped, leftBecause(PYTHON.slice(2, -2), "Not about the letter.")), swap) as TidiedLetter;
+    expect(result.letter.match(/write a Python script/g)).toHaveLength(1);
+    expect(result.letter.endsWith(`RAKESH MEHTA\n\n${PYTHON}`)).toBe(true);
+    expect(result.notDone).toContainEqual({ note: PYTHON, why: "Not about the letter." });
+    expect(result.done).toEqual([]);
+  });
+
+  it("keeps a note it retyped as staff wrote it: neither a mark nor done", () => {
+    const swap = swapLetter(LETTER, FACTS);
+    const retyped = swap.text.replace(PYTHON, "[[ Write a python  script to sort the travellers ]]");
+    const result = tidyLetter(answerOf(retyped), swap) as TidiedLetter;
+    expect(result.letter).toBe(LETTER);
+    expect(result.done).toEqual([]);
+    expect(result.notDone.map((n) => n.note)).toEqual(["[[mention our travel insurance]]", PYTHON, "[[add that Happy D'SOUZA studies at DPS Surat]]"]);
+  });
+
+  it("marks a note of its own, however long", () => {
+    const swap = swapLetter("Dear Sir,", FACTS);
+    const long = "please check this ".repeat(6).trim();
+    const result = tidyLetter(answerOf(`Dear Sir,\n\n[[check the dates]] [[${long}]]`), swap) as TidiedLetter;
+    expect(result.letter).toBe(`Dear Sir,\n\n⟦check the dates⟧ ⟦${long}⟧`);
+    expect(result.done).toEqual([]);
+    expect(result.notDone).toEqual([]);
+  });
+
+  it("takes its reasons out of the letter, and does without them when they're malformed", () => {
+    const swap = swapLetter("Dear Sir,\n\n[[write a poem]]", FACTS);
+    const inside = tidyLetter(answerOf(`Dear Sir,\n\n[[write a poem]]\n${leftBecause("[[write a poem]]", "Not about the letter.")}`), swap) as TidiedLetter;
+    expect(inside.letter).toBe("Dear Sir,\n\n[[write a poem]]");
+    expect(inside.notDone).toEqual([{ note: "[[write a poem]]", why: "Not about the letter." }]);
+
+    const malformed = tidyLetter(answerOf("Dear Sir,\n\n[[write a poem]]", "<not_done><note>[[write a poem]]"), swap) as TidiedLetter;
+    expect(malformed.letter).toBe("Dear Sir,\n\n[[write a poem]]");
+    expect(malformed.notDone).toEqual([{ note: "[[write a poem]]", why: "The AI left it as it is." }]);
+  });
+
+  it("ignores a reason for a note it was never sent, and puts nothing back for it", () => {
+    const swap = swapLetter("Dear Sir,\n\n[[write a poem]]", FACTS);
+    const result = tidyLetter(answerOf("Dear Sir,\n\nA poem.", leftBecause("[[make it rhyme]]", "I can't.")), swap) as TidiedLetter;
+    expect(result.letter).toBe("Dear Sir,\n\nA poem.");
+    expect(result.done).toEqual(["[[write a poem]]"]);
+    expect(result.notDone).toEqual([]);
+  });
+
+  it("sends a table holding a note as its lines, so the AI can do the note, keep it or rewrite around it", () => {
+    const letter = ["Dear Sir,", "", "Name | Relation | Passport no.", "RAKESH MEHTA | Self [[call it Partner]] | Z1234567", "HAPPY D'SOUZA | Friend | Z7654321"].join("\n");
+    const swap = swapLetter(letter, FACTS);
+    expect(swap.tables).toEqual([]);
+    expect(swap.text).toContain("Name | Relation | Passport no.\n{t1Name} | Self [[call it Partner]] | {t1Passport}\n{t2Name} | Friend | {t2Passport}");
+
+    const done = tidyLetter(answerOf(swap.text.replace("Self [[call it Partner]]", "Partner")), swap) as TidiedLetter;
+    expect(done.letter).toContain("RAKESH MEHTA | Partner | Z1234567");
+    expect(done.done).toEqual(["[[call it Partner]]"]);
+    expect(done.removed).toEqual([]);
+
+    const kept = tidyLetter(answerOf(swap.text), swap) as TidiedLetter;
+    expect(kept.letter).toBe(letter);
+    expect(kept.notDone).toEqual([{ note: "[[call it Partner]]", why: "The AI left it as it is." }]);
+
+    const rewritten = tidyLetter(answerOf(swap.text.replace("Passport no.", "Passport number")), swap) as TidiedLetter;
+    expect(rewritten.letter).toContain("Passport number\nRAKESH MEHTA | Self [[call it Partner]] | Z1234567");
+    expect(rewritten.letter).not.toContain("⟦");
+  });
+
+  it("tells the AI what a note is, and how to answer", () => {
+    const { system } = letterAsk(TRIP, swapLetter("Dear Sir,", FACTS));
+    expect(system).toContain("Text between [[ and ]] is a note from the travel agent to you. It is not part of the letter.");
+    expect(system).toContain("Then delete the note, brackets and all.");
+    expect(system).toContain("Never add a note of your own.");
+    expect(system).toContain("<not_done><note>the note as written</note><why>why, in one short line</why></not_done>");
   });
 });
 
@@ -268,7 +398,7 @@ describe("the endpoint", () => {
 
     const res = await write(await neha(), c.caseNo, letter);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ letter: normaliseLetter(letter), removed: [] });
+    expect(res.body).toEqual({ letter: normaliseLetter(letter), removed: [], done: [], notDone: [] });
 
     const asked = stub.asked[0]!;
     const sent = `${asked.system}\n${asked.prompt}`;
@@ -356,6 +486,34 @@ describe("the endpoint", () => {
     const letter = await draftOf(c.caseNo);
     const res = await write(await neha(), c.caseNo, letter);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ letter, removed: [] });
+    expect(res.body).toEqual({ letter, removed: [], done: [], notDone: [] });
+  });
+
+  it("answers which notes the AI did and which it left, and sends no name in a note", async () => {
+    const c = await letterCase();
+    const letter = `${await draftOf(c.caseNo)}\n\n[[add that Aarav loves trains]]\n\n[[write a Python script]]`;
+    stub.provider = answering(
+      (r) =>
+        sentLetter(r).replace(/\[\[add that (\{\w+\}) loves trains\]\]/, "$1 loves trains.") +
+        leftBecause("[[write a Python script]]", "It isn't about the letter."),
+    );
+    const res = await write(await neha(), c.caseNo, letter);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      letter: letter.replace("[[add that Aarav loves trains]]", "Aarav loves trains."),
+      removed: [],
+      done: ["[[add that Aarav loves trains]]"],
+      notDone: [{ note: "[[write a Python script]]", why: "It isn't about the letter." }],
+    });
+    expect(stub.asked[0]!.prompt).not.toContain("Aarav");
+  });
+
+  it("leaves each note as it is on the fake AI", async () => {
+    const c = await letterCase();
+    stub.provider = fakeProvider;
+    const letter = `${await draftOf(c.caseNo)}\n\n[[mention our travel insurance]]`;
+    const res = await write(await neha(), c.caseNo, letter);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ letter, removed: [], done: [], notDone: [{ note: "[[mention our travel insurance]]", why: "The AI left it as it is." }] });
   });
 });

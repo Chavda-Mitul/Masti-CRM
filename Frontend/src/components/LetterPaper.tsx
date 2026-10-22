@@ -29,10 +29,13 @@ export function LetterPaper({
   /** The rows {travellers} prints. Left out, it shows as a chip. */
   travellers?: readonly LetterTraveller[]
 }) {
+  // A wording holds no notes (Settings refuses them), so it has only words and blanks.
   const draw: DrawLine = (pieces) =>
     pieces.map((piece, k) =>
       'text' in piece ? (
         <Fragment key={k}>{piece.text}</Fragment>
+      ) : 'note' in piece ? (
+        <Fragment key={k}>{piece.note}</Fragment>
       ) : values?.[piece.blank] !== undefined ? (
         <Fragment key={k}>{values[piece.blank]}</Fragment>
       ) : (
@@ -43,14 +46,19 @@ export function LetterPaper({
 }
 
 /**
- * A case's letter as staff edit and make it (0019 amendments 1 and 3): its text, drawn as written, never read for
- * {blanks}. Lines with | between the columns are tables; a ⟦mark⟧ left where the case lacked a value shows as a chip.
+ * A case's letter as staff edit and make it (0019 amendments 1, 3 and 5): its text, drawn as written, never read for
+ * {blanks}. Lines with | between the columns are tables; a ⟦mark⟧ left where the case lacked a value, and a [[note]] to
+ * the AI, show as chips.
  */
 export function LetterTextPaper({ text }: { text: string }) {
   const draw: DrawLine = (pieces) =>
     pieces.map((piece, k) =>
       'text' in piece ? (
         <Fragment key={k}>{piece.text}</Fragment>
+      ) : 'note' in piece ? (
+        <span key={k} className="letter-blank letter-note">
+          {piece.note}
+        </span>
       ) : (
         <span key={k} className="letter-blank letter-mark">
           {piece.blank}
