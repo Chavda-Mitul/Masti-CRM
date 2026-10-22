@@ -25,6 +25,10 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
   return {
     name: "twilio",
     async send(message) {
+      // A template's document is part of the template itself, approved by Meta: our own link can't go with one.
+      if (message.template && message.attachment) {
+        throw new WhatsAppError("A message with a file goes with our own words: an approved template with a document comes later (M1).", false);
+      }
       try {
         const sent = await client.messages.create({
           from: `whatsapp:${settings.from}`,
@@ -33,6 +37,8 @@ export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvi
           ...(message.template
             ? { contentSid: message.template.id, contentVariables: JSON.stringify(message.template.variables) }
             : { body: message.body }),
+          // Twilio fetches the file from the link (with GET and HEAD) and sends it after the words.
+          ...(message.attachment ? { mediaUrl: [message.attachment.url] } : {}),
         });
         return { providerMessageId: sent.sid };
       } catch (error) {
@@ -81,6 +87,7 @@ const REASONS: Record<number, string> = {
   63007: "Twilio doesn't know the sending number. Check TWILIO_WHATSAPP_FROM, and that the sandbox is switched on in this Twilio account.",
   63015: "This phone hasn't joined the Twilio sandbox, or joined more than 3 days ago. Send the join message from it again.",
   63016: "It's more than 24 hours since this number last wrote to us, so WhatsApp only takes an approved template.",
+  63019: "Twilio couldn't fetch the attached file: the CRM's public address (PUBLIC_APP_URL) must be reachable from the internet.",
 };
 
 function failure(code: number | null, text: string | null): string {

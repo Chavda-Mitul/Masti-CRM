@@ -6,8 +6,8 @@ import { dayMonth } from './labels'
 
 /**
  * "Sent to the client" (demo screen 06, 0021): every WhatsApp the CRM sent about this case, oldest first, with where it
- * has got to; a failed one says why. Clicking a message shows its words, exactly as sent. It checks again by itself
- * while a message is on its way.
+ * has got to and the file it carried (0025); a failed one says why. Clicking a message shows its words, exactly as
+ * sent. It checks again by itself while a message is on its way.
  */
 export function MessagesSection({ visaCase: c }: { visaCase: VisaCase }) {
   return (
@@ -48,6 +48,7 @@ function MessageRow({ message: m }: { message: CaseMessage }) {
           </span>
         </span>
       </button>
+      {m.attachment && <p className="message-file muted small">File: {m.attachment.fileName}</p>}
       {m.status === 'FAILED' && m.error && <p className="message-error small">{m.error}</p>}
       {open && <p className="message-body">{m.body}</p>}
     </li>

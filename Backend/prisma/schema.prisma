@@ -1207,6 +1207,8 @@ model CaseFile {
   handover     VisaHandover?
   /// The field job this selfie proves (0015): set once he finishes it.
   fieldJob     FieldJob?          @relation("FieldJobSelfie")
+  /// WhatsApp messages that carried this file to the client (0025, part 2).
+  messages     OutboundMessage[]
 
   @@index([enquiryId, kind, uploadedAt])
   @@index([travellerId, uploadedAt])
@@ -1998,42 +2000,52 @@ model MessageTemplate {
 /// One message to a client, and the record of what they were told. Its id is also its pg-boss job's id.
 /// Checks in the migration: one that went (SENT, DELIVERED, READ) has sentAt, provider, providerMessageId and sentTo,
 /// plus deliveredAt or readAt for those two; a FAILED one has error and failedAt; sendingAt only while QUEUED;
-/// attempts never negative; no blank body; the number's format.
+/// attempts never negative; no blank body; the number's format; a file link's key and expiry together, and only with a
+/// file.
 model OutboundMessage {
-  id                String          @id @default(uuid())
-  templateId        Int
-  clientId          String
+  id                     String          @id @default(uuid())
+  templateId             Int
+  clientId               String
   /// The case it's about, when there is one.
-  enquiryId         String?
+  enquiryId              String?
   /// The client's main number when it was queued: who it is for.
-  toMobile          String
+  toMobile               String
   /// The values put into the template's placeholders.
-  variables         Json
+  variables              Json
   /// The words as rendered when it was queued.
-  body              String
+  body                   String
   /// "visa.documents_received:<enquiryId>": the same event never queues a second message.
-  idempotencyKey    String          @unique
-  status            MessageStatus   @default(QUEUED)
+  idempotencyKey         String          @unique
+  status                 MessageStatus   @default(QUEUED)
   /// Tries so far.
-  attempts          Int             @default(0)
+  attempts               Int             @default(0)
   /// Set while a try is with the provider. A try that never came back isn't repeated: the message may have gone.
-  sendingAt         DateTime?       @db.Timestamptz(3)
+  sendingAt              DateTime?       @db.Timestamptz(3)
   /// Who carried it ("twilio", "log") and their id for it, which delivery updates refer to.
-  provider          String?
-  providerMessageId String?
+  provider               String?
+  providerMessageId      String?
   /// The number it went to: outside production, always WHATSAPP_TEST_NUMBER.
-  sentTo            String?
+  sentTo                 String?
   /// Why the last try failed, or why it wasn't delivered, in plain words.
-  error             String?
-  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
-  sentAt            DateTime?       @db.Timestamptz(3)
-  deliveredAt       DateTime?       @db.Timestamptz(3)
-  readAt            DateTime?       @db.Timestamptz(3)
-  failedAt          DateTime?       @db.Timestamptz(3)
-  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
-  template          MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  client            Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  enquiry           Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  error                  String?
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  sentAt                 DateTime?       @db.Timestamptz(3)
+  deliveredAt            DateTime?       @db.Timestamptz(3)
+  readAt                 DateTime?       @db.Timestamptz(3)
+  failedAt               DateTime?       @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+  /// A file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): one of the case's files, which
+  /// the provider fetches through the CRM's own short-lived link (messageFiles.public.routes.ts). One per message, as
+  /// WhatsApp takes one.
+  attachmentId           String?
+  /// The SHA-256 of the file link's key, made afresh at each try (an earlier try's link stops working), and when the
+  /// link stops working.
+  attachmentKeyHash      String?         @unique
+  attachmentKeyExpiresAt DateTime?       @db.Timestamptz(3)
+  template               MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  client                 Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  enquiry                Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  attachment             CaseFile?       @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
 
   @@index([clientId, createdAt])
   @@index([enquiryId, createdAt])

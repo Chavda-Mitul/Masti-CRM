@@ -771,6 +771,8 @@ export interface CaseMessage {
   title: string
   /** Its words, exactly as sent. */
   body: string
+  /** The case's file it carried (0025, part 2): an e-visa's PDF. */
+  attachment: { fileName: string } | null
   status: MessageStatus
   /** Why it didn't go or wasn't delivered, in plain words. */
   error: string | null

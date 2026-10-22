@@ -2,11 +2,12 @@ import { normaliseMobile } from "../lib/contact";
 import { dayLabel, istTimestamp, istToday } from "../lib/dates";
 import { sendWhatsApp, whatsAppProvider, type WhatsAppMessage, type WhatsAppStatus } from "../lib/whatsapp";
 
-// npm run whatsapp:test -- 98250 41234 [template]
+// npm run whatsapp:test -- 98250 41234 [template | media <https link to a file>]
 // Sends one test WhatsApp through WHATSAPP_PROVIDER to check the set-up (docs/decisions/0020-whatsapp-sending.md). It
 // sends our own words, which WhatsApp delivers only within 24 hours of that phone's last message to us; "template" sends
-// Twilio's sandbox sample template instead, which goes at any time. A plain word, not --template: PowerShell's npm drops
-// flags after --. On a server: node dist/src/scripts/whatsappTest.js
+// Twilio's sandbox sample template instead, which goes at any time; "media" adds the file at that link, which the
+// provider fetches (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template: PowerShell's npm
+// drops flags after --. On a server: node dist/src/scripts/whatsappTest.js
 
 /** Twilio's sample template in every sandbox: "Your appointment is coming up on {{1}} at {{2}}". */
 const SANDBOX_TEMPLATE = "HXb5b62575e6e4ff6129ad7c8efe1f983e";
@@ -15,9 +16,19 @@ const WAIT_SECONDS = 30;
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
-  const isTemplate = (arg: string) => arg.replace(/^--/, "") === "template";
-  const useTemplate = args.some(isTemplate);
-  const to = normaliseMobile(args.filter((arg) => !isTemplate(arg)).join(" "));
+  const word = (arg: string) => arg.replace(/^--/, "");
+  const useTemplate = args.some((arg) => word(arg) === "template");
+  const mediaAt = args.findIndex((arg) => word(arg) === "media");
+  const mediaUrl = mediaAt >= 0 ? args[mediaAt + 1] : undefined;
+  if (mediaAt >= 0 && !mediaUrl?.startsWith("https://")) {
+    console.error("Give the file's https link after media: npm run whatsapp:test -- 98250 41234 media https://…/file.pdf");
+    return 1;
+  }
+  if (useTemplate && mediaUrl) {
+    console.error("Send a file with our own words, not with the template.");
+    return 1;
+  }
+  const to = normaliseMobile(args.filter((arg, i) => word(arg) !== "template" && (mediaAt < 0 || (i !== mediaAt && i !== mediaAt + 1))).join(" "));
   if (!to) {
     console.error("Give the mobile number to send to: npm run whatsapp:test -- 98250 41234");
     return 1;
@@ -36,7 +47,13 @@ async function main(): Promise<number> {
         body: `Your appointment is coming up on ${day} at ${time}`,
         template: { id: SANDBOX_TEMPLATE, variables: { "1": day, "2": time } },
       }
-    : { to, body: `Test message from Masti CRM, sent ${day} at ${time}. If you can read this, WhatsApp works.` };
+    : mediaUrl
+      ? {
+          to,
+          body: `Test file from Masti CRM, sent ${day} at ${time}. If a document comes with this, files work.`,
+          attachment: { url: mediaUrl, fileName: decodeURIComponent(new URL(mediaUrl).pathname.split("/").at(-1) || "file") },
+        }
+      : { to, body: `Test message from Masti CRM, sent ${day} at ${time}. If you can read this, WhatsApp works.` };
 
   const { providerMessageId } = await sendWhatsApp(message);
   if (!provider.checkStatus) {

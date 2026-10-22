@@ -1094,6 +1094,11 @@
   margin: 4px 0 0 18px;
   color: var(--bad);
 }
+/* The file a message carried (0025), under its line. */
+.message-file {
+  margin: 2px 0 0 18px;
+  overflow-wrap: anywhere;
+}
 .message-body {
   margin: 8px 0 0 18px;
   padding: 10px 12px;
