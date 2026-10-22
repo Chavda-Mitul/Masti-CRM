@@ -331,10 +331,15 @@ export interface CaseTraveller {
   appointmentAt: string | null
   /** Step 6 (0012): null until the decision is recorded */
   decision: TravellerDecision | null
-  /** An approved traveller's sticker, checked when the passports were received (0013 Decision 5); null until then */
+  /**
+   * An approved traveller's sticker, checked when the passports were received (0013 Decision 5); an e-visa's PDF, checked
+   * at Decision (0025). Null until checked.
+   */
   stickerCheck: StickerCheck | null
   /** The current refusal letter (0012 Decision 4), and how many were uploaded; only while the traveller is refused. */
   refusalLetter: (CaseFile & { copies: number }) | null
+  /** An e-visa's current PDF (0025), and how many were uploaded; only while the traveller is approved. */
+  evisa: (CaseFile & { copies: number }) | null
   documents: CaseDocument[]
   /** In or made */
   done: number
@@ -686,6 +691,8 @@ export interface VisaCase {
   finalFileCopies: number
   /** The largest PDF the server accepts (setting visa.finalFile). */
   finalFileMaxMb: number
+  /** The largest e-visa PDF the server accepts (0025): WhatsApp's limit, or the final file's if lower. */
+  evisaMaxMb: number
   /** The largest scan "Save scan" takes (setting clients.documents). */
   scanMaxMb: number
   /** The submission agent picked during File preparation (0007 Decision 7), or null. */

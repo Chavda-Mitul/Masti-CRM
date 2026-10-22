@@ -208,9 +208,8 @@ export const visaCaseInclude = {
               document: { select: { warnIfNoScan: true } },
             },
           },
-          /** The current refusal letter (0012 Decision 4): the newest upload. Older ones are counted, not loaded. */
-          refusalLetters: { orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
-          _count: { select: { refusalLetters: true } },
+          /** Refusal letters (0012 Decision 4) and e-visas (0025), newest first: the newest of each kind is current. */
+          files: { orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], include: { uploadedBy: personSelect } },
         },
       },
     },
@@ -250,6 +249,15 @@ export function fileSafeFamilyName(clientName: string | null) {
   return familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
 }
 
+/**
+ * The largest e-visa PDF taken (docs/decisions/0025-evisa-after-decision.md): WhatsApp's own limit on a file Twilio
+ * sends (Twilio gives 20 MB; part 2 sends the e-visa that way), with room to spare ⚠️, or the final file's limit
+ * (visa.finalFile.maxMb) when that's lower.
+ */
+export function evisaMaxMb(finalFileMaxMb: number) {
+  return Math.min(finalFileMaxMb, 16);
+}
+
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
@@ -264,13 +272,11 @@ export function travellersLabel(adults: number, children: number) {
 
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
 
-/**
- * A refused traveller's current refusal letter, and how many were uploaded. A traveller changed to Approved keeps their
- * letters, which aren't shown; changed back to Refused, they show again (0012 Decision 4).
- */
-function refusalLetterOf(t: TravellerRow) {
-  const file = t.refusalLetters[0];
-  if (t.outcome !== "REFUSED" || !file) return null;
+/** A traveller's current file of one kind, the newest upload, and how many of that kind were uploaded. */
+function currentFileOf(t: TravellerRow, kind: "REFUSAL_LETTER" | "EVISA") {
+  const all = t.files.filter((f) => f.kind === kind);
+  const file = all[0];
+  if (!file) return null;
   return {
     id: file.id,
     fileName: file.fileName,
@@ -278,8 +284,24 @@ function refusalLetterOf(t: TravellerRow) {
     pageCount: file.pageCount,
     uploadedAt: file.uploadedAt,
     uploadedBy: file.uploadedBy,
-    copies: t._count.refusalLetters,
+    copies: all.length,
   };
+}
+
+/**
+ * A refused traveller's current refusal letter, and how many were uploaded. A traveller changed to Approved keeps their
+ * letters, which aren't shown; changed back to Refused, they show again (0012 Decision 4).
+ */
+function refusalLetterOf(t: TravellerRow) {
+  return t.outcome === "REFUSED" ? currentFileOf(t, "REFUSAL_LETTER") : null;
+}
+
+/**
+ * An approved e-visa traveller's current e-visa, and how many were uploaded (docs/decisions/0025-evisa-after-decision.md).
+ * Kept, like a refusal letter, when the outcome changes; shown only while they're approved.
+ */
+function evisaOf(t: TravellerRow, isEvisa: boolean) {
+  return isEvisa && t.outcome === "APPROVED" ? currentFileOf(t, "EVISA") : null;
 }
 
 type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
@@ -551,6 +573,8 @@ export function toVisaCaseDto(
       : null,
     finalFileCopies: row._count.files,
     finalFileMaxMb,
+    /** The largest e-visa PDF taken (0025): the page checks it first. */
+    evisaMaxMb: evisaMaxMb(finalFileMaxMb),
     /** The largest scan "Save scan" takes (clients.documents.maxMb, 0016 Decision 5): the page checks it first. */
     scanMaxMb: clientSettings.documents.maxMb,
     /**
@@ -668,10 +692,15 @@ export function toVisaCaseDto(
           validFrom: t.validFrom && fromDbDate(t.validFrom),
           validTo: t.validTo && fromDbDate(t.validTo),
         },
-        /** An approved traveller's sticker, checked when the passports were received (0013 Decision 5); null until then. */
+        /**
+         * An approved traveller's sticker, checked when the passports were received (0013 Decision 5); an e-visa's PDF,
+         * checked at Decision (0025). Null until checked.
+         */
         stickerCheck: t.stickerCheck,
         /** The refusal letter (0012 Decision 4): the current upload, shown only while the traveller is refused. */
         refusalLetter: refusalLetterOf(t),
+        /** An e-visa's PDF (0025): the current upload, shown only while the traveller is approved. */
+        evisa: evisaOf(t, !!visa.submittedOnlineAt),
         documents: t.documents.map((d) => {
           const onFile = (t.memberId && scans.get(scanKey(t.memberId, d.documentId))) || null;
           return {
