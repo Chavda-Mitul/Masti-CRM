@@ -61,6 +61,21 @@ Google Maps link: no maps account, key or cost.
 
 ### 4. Proof: an OTP from the client, at both ends
 
+**Amended 22 Oct 2026** (project lead; [0021](0021-whatsapp-outbox.md) Amendment 6): the code goes on **WhatsApp** to
+the client's main number, with no email fallback.
+- **The message:** message 16 of `docs/whatsapp-visa-messages.md`, in Meta's fixed words: "482913 is your verification
+  code. This code expires in 10 minutes." The minutes are `field.otpMinutes`; Meta fixes the number when it approves
+  the message, so a change needs a new approval.
+- **No email needed:** booking either job no longer needs the client's email. The code's email below is gone
+  (`otpEmail.ts`).
+- **His phone shows where the message has got to:** "sending", "sent", "delivered", "read", or "couldn't send" with
+  why. It refreshes every 5 seconds while the code is on its way. A failed send no longer stops his press with an error:
+  he sends again after the wait, or uses Couldn't complete.
+- **The code is the client's alone:**
+  - Staff see the message on the case without it.
+  - A live server log hides it.
+  - The stored message forgets it once it has gone or won't go.
+
 **Amended 19 Oct 2026** (item 2 fixes; M46 to confirm): at the doorstep handover, picking a child as who receives the
 passports is a warning, as at the office (0014 Decision 3). His phone marks a child on the list, asks "Check before
 saving", and hands over once he confirms. The audit keeps it.

@@ -252,11 +252,50 @@ change it follows. The project lead decided two things on 22 Oct 2026:
   - `{{handover_time}}` is the handover's own time, "Sat 31 Oct, 12:10 pm" (`dayLabel` and the new `timeLabel`).
   - It goes for a cancelled case's hand-back before dispatch too.
 
+## Amendment 6 (22 Oct 2026): the door code, the vault and the credit note
+
+Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The project lead decided:
+- **Earlier (22 Oct):**
+  - The door code goes on WhatsApp only, with no email fallback.
+  - The credit note is words only.
+- **For this group (22 Oct):**
+  - One PR.
+  - The boy's phone shows where the code's message has got to.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 16 | `field.door_code` · Code at the door | the boy presses "Send the code" or "Send a new code" (`sendOtp`), at a pickup or a delivery | code |
+| 17 | `client.documents_kept` · We keep a copy | a scan is saved for the client (`saveClientScan`: the client page, or a case's checklist) | client, ever |
+| 18 | `visa.credit_note` · Credit note | a credit note is issued (`issueCreditNote`: a wrong invoice, a recall, a cancelled case's refund) | credit note |
+
+- **Message 16, the door code** ([0015](0015-field-staff-app.md) Decision 4, amended):
+  - **Queued with the code:** in the transaction that stores the code's hash, to the client's main number, keyed per
+    code sent.
+  - **The wording:** Meta's fixed words for a code, naming neither Masti nor the visit. `{{minutes}}` is
+    `field.otpMinutes`; Meta fixes the number when it approves the template.
+  - **No email any more:** the code's email (`otpEmail.ts`) and the rule that booking needs the client's email
+    (`CLIENT_EMAIL_MISSING`) are gone. `otpSentTo` keeps the number, shown masked "+91••••••1299".
+  - **The boy's phone:** `getMyStop` reads the message's status by its key: "sending", "sent", "delivered", "read", or
+    "couldn't send" with why. `useStop` refreshes every 5 seconds while it is on its way.
+- **Secrets, now one rule** (`lib/whatsapp/secrets.ts`): a placeholder listed in `SECRET_PLACEHOLDERS` (today `code`) is
+  the client's alone, as the consent link's secret already was.
+  - **The card:** `toMessageDto` hides its value, even while the message waits.
+  - **A settled message:** `withoutSecrets` forgets it once the message is sent, fails or is skipped.
+  - **The live log:** the sender gets the values as `secrets`, and `forTheLog` hides them when live; the list itself
+    is never logged.
+- **Message 17** ([0016](0016-client-documents.md) Decision 6): keyed per client, so later scans send nothing. Saved
+  from a case, it shows on that case's "Sent to the client" card. From the client page there is no case, so no card
+  shows it; it is still sent and audited.
+- **Message 18:** `{{credit_note_no}}`, `{{amount}}` (the credit note's total) and `{{invoice_no}}`, keyed per credit
+  note. A number retry rolls it back with the note. Change request 13.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- **The other visa messages:** groups A (1, 2, 3, 5), B (7, 8, 9) and C (10 to 15) are built, Amendments 3 to 5. Group
-  D (16, 17, 18) follows. Messages 7 and 18 go without their PDF for now, and e-visas get no decision message yet.
+- ~~**The other visa messages**~~: all built, groups A to D, Amendments 3 to 6. Messages 7 and 18 go without their PDF
+  for now.
+- **What follows an e-visa's decision** (M39 (d), answered 22 Oct 2026): change request 14. A refused e-visa is to get
+  the "Refused" message, and an approved one its PDF. Until it's built, e-visas get no decision message.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code
