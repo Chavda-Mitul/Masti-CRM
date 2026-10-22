@@ -1,7 +1,9 @@
 # 0014 · Visa Step 8: delivered
 
 - **Status:** decided (17 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: the office
-  handover (17 Oct 2026, component 1). A "Built" note is added under each part as its component lands.
+  handover (17 Oct 2026, component 1). A "Built" note is added under each part as its component lands. *A sent e-visa's
+  passports, held at our office since intake, are handed over the same way, from Decision (22 Oct 2026,
+  [0025](0025-evisa-after-decision.md) Decision 6).*
 - **Date:** 17 Oct 2026
 - **Scope:** handing the passports back to the client once they're in our stock (Step 7), and closing the file:
   - the client collects at our office

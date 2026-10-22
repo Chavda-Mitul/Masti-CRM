@@ -1,8 +1,8 @@
 # 0025 · E-visas after the decision
 
 - **Status:** decided 22 Oct 2026: Vimal said yes to M39 (d), and the project lead answered the details the same day.
-  Built in 5 parts, one at a time (Decision 1). Built: parts 1, 2 and 3 (22 Oct 2026). A "Built" note is added under
-  each part as it lands.
+  Built in 5 parts, one at a time (Decision 1). Built: parts 1, 2, 3 and 4 (22 Oct 2026). A "Built" note is added
+  under each part as it lands.
 - **Date:** 22 Oct 2026
 - **Scope:** what follows an e-visa's decision at Step 6, until the case closes:
   - each approved traveller's e-visa PDF, and its check against the passport
@@ -176,7 +176,42 @@ S3 pre-signed one.
   - Upload, the check and Change go once sent.
   - The step bar shows Step 7 as "–" ("Not needed: an e-visa's passports never left the office").
 
-### 6. Settings and seed data (golden rule 1)
+### 6. Handing back the passports we hold (part 4)
+
+- **An e-visa's passports never go to a vendor,** so booklets counted in at intake stay **held at our office** at Steps
+  5–6 too, not only before dispatch (0006 amendment 15).
+- **Once the e-visa is sent** (Decision 5), they go back as any passports in our stock (0014, 0015):
+  - at the desk, by any Visa staff with EDIT, who can open the case for it
+  - or with the delivery boy, at the door
+  - the count must match the intake, then the case is **Delivered** and closes, with message 15
+  - before it's sent: "Send the e-visa first: the passports go back after it."
+- **A cancelled e-visa** at Step 5 or 6 with passports held is "to hand back" like a case cancelled before dispatch: it
+  stays on its owner's Open list, due for it, and goes back at the office only, staying cancelled at its step.
+- **Paper files are unchanged:** at Steps 5–6 their passports are with the vendor and come back through Passport back
+  ("Passports are handed over from Passport back.").
+
+**Built 22 Oct 2026** (part 4):
+- **`visibility.ts`:**
+  - `HELD_AT_OFFICE` / `heldAtOffice` add an e-visa (`submittedOnlineAt`) at At vendor or Decision
+    (`EVISA_AFTER_SUBMISSION`), so `TO_HAND_BACK` and `UNFINISHED` follow
+  - `IN_STOCK` / `passportsInStock` add a sent e-visa at Decision, open or postponed, with passports held
+  - `caseLock.ts` and the cancel action load `submittedOnlineAt` and `evisaSentAt`
+- **The handover:**
+  - `HANDING_OVER` takes At vendor and Decision too
+  - `assertInStock` refuses a paper file there (unchanged words) and an unsent e-visa
+  - the stock is the intake count
+  - `deliverCase(…, { evisa })` moves a sent e-visa to Delivered at the office and at the door
+  - both audits record the real stages (the door's said Passport back → Delivered)
+- **The delivery boy:**
+  - booking takes a sent e-visa with passports held
+  - not a cancelled case: those go back at the office only
+  - his stop shows the intake count
+- **Screen:**
+  - **Hand back the passports →** in the header of a sent e-visa, for whoever may hand over
+  - its dialog offers the client collecting or "Our delivery boy"
+  - a cancelled case's dialog stays office only
+
+### 7. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |

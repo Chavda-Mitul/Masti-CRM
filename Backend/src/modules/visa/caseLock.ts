@@ -2,7 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { conflict, HttpError, notFound } from "../../lib/httpError";
 import { VISA_FLOW } from "../enquiries/enquiries.seed";
-import { assertCanActOnEnquiry, assertCanEditDepartment, assertCanSeeEnquiry, passportsInStock, PRE_DISPATCH } from "../enquiries/visibility";
+import { assertCanActOnEnquiry, assertCanEditDepartment, assertCanSeeEnquiry, EVISA_AFTER_SUBMISSION, passportsInStock, PRE_DISPATCH } from "../enquiries/visibility";
 import type { Actor, UserWithDepartments } from "../users/user";
 
 // Who may change a visa case, and at which step, for every Step 2, 3, 4 and 5 write (0006 amendment 12,
@@ -95,11 +95,12 @@ export const RECEIVING: StepRule = {
 /**
  * Step 8 (docs/decisions/0014-visa-delivered.md Decisions 5 and 7): the handover at the office, from Passport back, by
  * any Visa staff with EDIT (whoever is at the desk), whatever the case's status. Also Steps 1–4: a cancelled case's
- * passports held at our office are handed back there (0006 amendment 15, component 3); the handover's own checks say
- * when (visaHandover.service.ts assertInStock).
+ * passports held at our office are handed back there (0006 amendment 15, component 3); and Steps 5–6 for an e-visa,
+ * whose passports never leave our office (docs/decisions/0025-evisa-after-decision.md, part 4). The handover's own
+ * checks say when (visaHandover.service.ts assertInStock).
  */
 export const HANDING_OVER: StepRule = {
-  stages: [...PRE_DISPATCH, "PASSPORT_BACK"],
+  stages: [...PRE_DISPATCH, ...EVISA_AFTER_SUBMISSION, "PASSPORT_BACK"],
   anyStatus: true,
   anyEditor: true,
   wrongStage: "Passports are handed over from Passport back.",
@@ -153,7 +154,15 @@ const caseInclude = {
   department: { select: { code: true } },
   stage: true,
   visa: {
-    select: { enquiryId: true, passportsReceivedAt: true, bookletsCurrent: true, bookletsOld: true, handover: { select: { enquiryId: true } } },
+    select: {
+      enquiryId: true,
+      passportsReceivedAt: true,
+      bookletsCurrent: true,
+      bookletsOld: true,
+      submittedOnlineAt: true,
+      evisaSentAt: true,
+      handover: { select: { enquiryId: true } },
+    },
   },
 } satisfies Prisma.EnquiryInclude;
 
@@ -195,7 +204,15 @@ export async function findVisibleCase(caseNo: string, user: UserWithDepartments)
       department: { select: { code: true } },
       stage: { select: { code: true } },
       visa: {
-        select: { docketId: true, passportsReceivedAt: true, bookletsCurrent: true, bookletsOld: true, handover: { select: { enquiryId: true } } },
+        select: {
+          docketId: true,
+          passportsReceivedAt: true,
+          bookletsCurrent: true,
+          bookletsOld: true,
+          submittedOnlineAt: true,
+          evisaSentAt: true,
+          handover: { select: { enquiryId: true } },
+        },
       },
     },
   });

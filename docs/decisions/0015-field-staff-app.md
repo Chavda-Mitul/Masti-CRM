@@ -2,7 +2,9 @@
 
 - **Status:** decided and built (17 Oct 2026, project lead), one phase at a time (Decision 1): booking a pickup
   (phase 1); booking a delivery (phase 2); his run on his phone (phase 3); couldn't complete (phase 4a); the pickup at
-  the door (phase 4b); the doorstep handover (phase 5). Each part has its "Built" note.
+  the door (phase 4b); the doorstep handover (phase 5). Each part has its "Built" note. *A delivery can also be booked
+  for a sent e-visa whose passports we hold, counted against the intake (22 Oct 2026,
+  [0025](0025-evisa-after-decision.md) Decision 6).*
 - **Date:** 17 Oct 2026
 - **Scope:** the collection and delivery boy's jobs, attached to the visa flow at both ends:
   - **Step 2:** "Send collection boy": he picks the client's documents up from home

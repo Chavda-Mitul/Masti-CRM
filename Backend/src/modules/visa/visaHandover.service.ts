@@ -11,6 +11,7 @@ import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/wa
 import { deleteObject, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
+import { EVISA_AFTER_SUBMISSION, PRE_DISPATCH } from "../enquiries/visibility";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import type { EnquiryStatus } from "../../../generated/prisma/enums";
 import { assertNotHeldShort } from "./shortfall";
@@ -40,6 +41,8 @@ export async function gather(db: Db, enquiryId: string) {
       bookletsBackCurrent: true,
       bookletsBackOld: true,
       shortfallClearedAt: true,
+      submittedOnlineAt: true,
+      evisaSentAt: true,
       handover: { select: { enquiryId: true } },
       travellers: {
         orderBy: { position: "asc" },
@@ -53,9 +56,10 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
  * In our stock, and not handed over yet: received at Step 7 (and not held by a short return: the rest come in, or the
- * shortfall is cleared, first; 0013 Decision 5, amended 17 Oct 2026), or before dispatch, a cancelled case's passports
- * counted in at intake. Returns what our stock holds, which the count must match. The delivery boy's handover at the
- * door checks the same (0015 phase 5).
+ * shortfall is cleared, first; 0013 Decision 5, amended 17 Oct 2026); a cancelled case's passports counted in at
+ * intake, before dispatch, or an e-visa's at Steps 5–6; or a sent e-visa's, held at our office since intake
+ * (docs/decisions/0025-evisa-after-decision.md, part 4). Returns what our stock holds, which the count must match. The
+ * delivery boy's handover at the door checks the same (0015 phase 5).
  */
 export function assertInStock(g: Gathered, c: { status: string; stage: { code: string } }) {
   if (c.stage.code === "PASSPORT_BACK") {
@@ -64,8 +68,15 @@ export function assertInStock(g: Gathered, c: { status: string; stage: { code: s
     assertNotHeldShort({ ...g, travellerCount: g.travellers.length });
     return { current: g.bookletsBackCurrent!, old: g.bookletsBackOld! };
   }
+  // A paper file at Steps 5–6: its passports are with the vendor, and come back through Passport back.
+  if (EVISA_AFTER_SUBMISSION.includes(c.stage.code) && !g.submittedOnlineAt) throw conflict("Passports are handed over from Passport back.");
   if (g.handover) throw conflict("The passports are already handed over.");
-  if (c.status !== "CANCELLED") throw conflict("Only a cancelled case's passports are handed back before they go to the vendor.");
+  const evisa = EVISA_AFTER_SUBMISSION.includes(c.stage.code);
+  if (c.status !== "CANCELLED") {
+    if (!evisa) throw conflict("Only a cancelled case's passports are handed back before they go to the vendor.");
+    // An e-visa's passports go back once it has gone to the client (0025, part 4).
+    if (c.stage.code !== "DECISION" || !g.evisaSentAt) throw conflict("Send the e-visa first: the passports go back after it.");
+  }
   const stock = { current: g.bookletsCurrent ?? 0, old: g.bookletsOld ?? 0 };
   if (stock.current + stock.old === 0) throw conflict("No booklets were counted in for this case: there's nothing to hand back.");
   return stock;
@@ -191,7 +202,7 @@ export async function deliverCase(
     },
   });
   const fieldJobsCancelled = await cancelBookedFieldJobs(tx, { enquiryId: locked.id }, actor, why);
-  return { closes, fieldJobsCancelled };
+  return { closes, delivered: !!delivered, fieldJobsCancelled };
 }
 
 /**
@@ -217,9 +228,11 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     await checkPhoto(tx, enquiry.id, input.photoId);
     const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
 
-    const beforeDispatch = locked.stage.code !== "PASSPORT_BACK";
-    // Handed over here: a delivery booked for the boy is called off (0015).
-    const { closes, fieldJobsCancelled } = await deliverCase(tx, locked, actor, "handed over at the office");
+    const beforeDispatch = PRE_DISPATCH.includes(locked.stage.code);
+    // Handed over here: a delivery booked for the boy is called off (0015). A sent e-visa's case is Delivered (0025).
+    const { closes, delivered, fieldJobsCancelled } = await deliverCase(tx, locked, actor, "handed over at the office", {
+      evisa: !!g.evisaSentAt && locked.status !== "CANCELLED",
+    });
     const handover = await tx.visaHandover.create({
       data: {
         enquiryId: enquiry.id,
@@ -242,7 +255,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
         clientId: enquiry.clientId,
         before: { stage: locked.stage.code, status: locked.status, dueAt: locked.dueAt },
         after: {
-          stage: beforeDispatch ? locked.stage.code : "DELIVERED",
+          stage: delivered ? "DELIVERED" : locked.stage.code,
           ...(beforeDispatch ? { beforeDispatch: true } : {}),
           status: closes ? "CLOSED" : locked.status,
           mode: "OFFICE",

@@ -28,8 +28,9 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
   // A child picked as who collected: check, then hand over anyway.
   const guard = useWarningGuard()
   const stock = stockOf(c)
-  // Held at our office before dispatch: handed back at the desk (the delivery boy takes only received passports).
-  const backBeforeDispatch = heldAtOffice(c)
+  // A cancelled case's, held at our office: handed back at the desk only (0006 amendment 15). A sent e-visa's go out as
+  // any other: at the desk, or with the delivery boy (0025, part 4).
+  const backBeforeDispatch = heldAtOffice(c) && c.status === 'CANCELLED'
   const [current, setCurrent] = useState('')
   const [old, setOld] = useState('')
   const [who, setWho] = useState<string | null>(null)

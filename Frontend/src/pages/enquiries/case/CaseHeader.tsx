@@ -240,8 +240,20 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   // An e-visa's passports never left the office (0013 Decision 4): its approved travellers' PDFs go to the client
   // instead (docs/decisions/0025-evisa-after-decision.md, part 3). Once sent, the passports we hold go back (part 4).
   if (c.stage.code === 'DECISION' && c.submittedOnline) {
+    // Sent, its passports held at our office since intake: handed back by whoever is at the desk (part 4).
+    if (c.evisaSent) {
+      if (!me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
+      return (
+        <>
+          <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
+            Hand back the passports →
+          </button>
+          {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
+        </>
+      )
+    }
     const approved = c.travellers.some((t) => t.decision?.outcome === 'APPROVED')
-    if (c.evisaSent || !approved || c.status !== 'OPEN' || !canAct) return null
+    if (!approved || c.status !== 'OPEN' || !canAct) return null
     return (
       <>
         <button type="button" className="btn btn-primary" onClick={() => setSendingEvisa(true)}>
