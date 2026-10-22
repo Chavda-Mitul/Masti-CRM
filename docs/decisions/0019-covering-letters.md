@@ -266,13 +266,15 @@ Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
     a date of birth; the samples follow Masti's two letters; Business and Visitor visa types are added.
 - **Adds to Decision 4 and amendment 1.** The rest stands.
 
-1. **A `{purpose}` blank**, "Why they travel, written with AI".
+1. **A `{purpose}` blank**, "Why they travel, written with AI". *Since amendment 4 the AI writes it as part of the
+   whole letter, or staff type it, and its messages say "the AI or staff write why they travel there".*
    - Like `{travellers}`, at most once and alone on its line ("Use {purpose} only once: the AI writes one paragraph
      there."; "Put {purpose} on a line of its own: the AI writes a paragraph there."). Settings' blank picker inserts it
      on a line of its own.
    - The draft writes it as the mark `⟦why they travel⟧` (`PURPOSE_MARK`). It's not a gap in the case, so it's not in
      `missing`, but it is a mark: the letter isn't made until the AI writes the paragraph, or staff type one.
 2. **"Write it with AI"** on the card, at File preparation, for the owner, the Visa HOD and the Head (as Make).
+   *Replaced by amendment 4's "Write the whole letter with AI", as are points 3–6.*
    - It puts the paragraph where the mark is, or where the AI's last paragraph still stands unchanged; the other edits
      stay. "Write it again" does the same.
    - If the AI's paragraph was changed by hand, there's nowhere to put a new one: "Write it again" asks "Start again
@@ -380,4 +382,76 @@ Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
 - `tests/visaCoveringLetter.test.ts`, rewritten for one text;
 - `tests/letterText.test.ts`: the table rule, the paste, and the server's draft as the screen draws it;
 - `tests/frontendRules.test.ts`: the marks and the limit;
-- `tests/coveringLetterPurpose.test.ts`: a `|` in the AI's paragraph.
+- `tests/coveringLetterPurpose.test.ts`: a `|` in the AI's paragraph (since amendment 4, `tests/coveringLetterAi.test.ts`).
+
+## Amendment 4 (22 Oct 2026): "Write the whole letter with AI"
+
+- **Why:** the project lead chose on 22 Oct 2026 to have the AI write the whole letter, not one paragraph ([change
+  request 11](../change-requests.md), extended). The formats in Settings stay as its starting point, and as the fallback
+  for standard cases. The AI works with placeholders, so personal details stay on Masti's server. The lead's answers:
+  - the AI works on **the letter as it stands**, so staff's own changes are kept;
+  - **only the whole-letter button:** "Write it with AI" (amendment 2) goes;
+  - **small details** it doesn't know, such as the places they'll visit, go in **general words**. **Key facts** still get
+    a ⟦mark⟧: passport numbers, dates, and for a business or visitor visa the company or person visited. This came after
+    the lead saw ⟦the places I plan to visit⟧ on a letter whose hotel stay was just "Hotel 1".
+- **Replaces amendment 2's points 2–6.** Its `{purpose}` blank and the samples stand.
+
+1. **One button, "Write the whole letter with AI"**, at File preparation, for the owner, the Visa HOD and the Head (as
+   Make). It shows whatever the wording; a wording needs no `{purpose}` for it.
+2. **The request:** `POST /api/visa/cases/:caseNo/covering-letter/write` with `{ letter }`, the letter as it stands on
+   the card, answers `{ letter, removed }`. Nothing is saved or audited; the call is recorded in `AiCall`; an `AiError`
+   is the usual 503 `AI_FAILED`.
+3. **Placeholders keep personal details on the server** (`placeholders.ts`):
+   - **What's swapped:**
+     - every detail the case knows: each traveller's name and each word of it, passport number, date of birth and
+       expiry, mobile and addresses; the client's name, contact person, address, mobile, phones, email, PAN and GSTIN;
+       the case number;
+     - anything shaped like a passport number, a PAN, a GSTIN, an Aadhaar number, an Indian mobile or an email, even
+       typed by hand.
+   - **Named for what it is**, never for its value: `{t2Passport}`, `{clientMobile}`, `{number1}`. The letter's and the
+     trip's dates become `{date}`, `{departOn}` and `{returnOn}`, with their values in the key, so they can't drift.
+   - **One pass:** the longest matches that don't overlap are replaced at once.
+     - Edges are Unicode-aware, and a value isn't found inside an amount ("Rs 12,000").
+     - A single word of a name counts only in capitals or Title Case ("happy" in prose stays), and may carry -bhai, -ben,
+       -ji or a plural s.
+     - Dates are read in any format and swapped when they're a known date of birth or expiry.
+     - The city or area alone isn't swapped, only the whole address.
+   - **Filled back exactly as written:** each spelling has its own placeholder (`{t1NameTitle}`), and a placeholder the
+     AI retyped with other spaces or capitals still fills.
+   - **Tables go as one placeholder each** (`{table1}`), their lines in the key, so the AI needn't copy them and a
+     60-traveller letter stays fast.
+   - **Accepted risk:** a detail typed in a form the CRM doesn't know (an employer's name, say) goes as typed.
+4. **What the AI is told** (`letterAi.ts`, replacing `purpose.ts`):
+   - rewrite the whole letter for this trip and visa, keeping its parts in order and staff's changes;
+   - write ⟦why they travel⟧, by visa type: Tourist (the famous places, the cities the hotel stay names, else general
+     words), Business (⟦name of the company we are visiting⟧, the meetings in general words, colleagues by number),
+     Visitor (⟦name and relation of the person we are visiting⟧), any other in general words;
+   - small unknown details in general words, key facts as marks; never invent; keep every placeholder;
+   - answer with the whole letter between `<letter>` and `</letter>`.
+   - The trip goes as facts, the travellers by relation and adult or child, their names as placeholders. The key gives
+     each placeholder's meaning, never a personal value.
+5. **The answer is checked** (`tidyLetter`):
+   - exactly one letter; a code fence, a heading or bold it added goes;
+   - a `[placeholder]` or `{…}` it made up, and a passport number, mobile, email or PAN it can't know, become marks;
+   - the personal details it dropped are listed ("AARAV MEHTA's passport number");
+   - an empty, missing or too long letter is an error worth another try, recorded as `FAILED` (`askAi`'s `accept`).
+6. **Size and time:**
+   - a letter over 15,000 characters as sent (tables as placeholders) is refused before any call;
+   - 45 seconds a try, and one more try (use case `visa.coveringLetter.write`, effort `medium`, 8,000 tokens);
+   - tried on Haiku 5.5 on 22 Oct 2026 (a tourist family, a tourist alone, a business group, a visitor couple, 60
+     travellers, hand-typed details): 4–6 seconds and $0.0005–0.0014 a letter, nothing personal sent.
+7. **The card:**
+   - the AI's letter replaces the one shown, as an edit kept until Make;
+   - "Written by AI. It may have changed any part: read the whole letter before you make it.", with **Undo** while the
+     letter is still the AI's: back to the edit before it, or to the server's letter;
+   - Make, Start again, discarding and picking another letter clear Undo;
+   - "Removed by the AI: …" when it dropped a personal detail;
+   - the leave guard stays on while it writes.
+8. **The fake AI** (`AI_PROVIDER=fake`) gives the letter back as it was sent.
+
+**Tests:**
+- `tests/coveringLetterAi.test.ts` (20), replacing `coveringLetterPurpose.test.ts`:
+  - the round trip, over the samples and a hand-edited letter;
+  - privacy, also through the endpoint with hand-typed details;
+  - the instructions, the answer's checks and the endpoint;
+- `tests/ai.test.ts`: `accept`, the per-use time limit and the fake echo.
