@@ -48,6 +48,7 @@ export const portalFormSchema = z
     loginId: z.string().max(MAX_LOGIN_ID, `Keep the ID to ${MAX_LOGIN_ID} characters.`),
     changePassword: z.boolean(),
     password: z.string().max(MAX_PORTAL_PASSWORD, `Keep the password to ${MAX_PORTAL_PASSWORD} characters.`),
+    passwordSchedule: z.enum(PASSWORD_SCHEDULES, 'Pick how often the password changes.'),
     userIds: z.array(z.string()),
   })
   .superRefine((values, ctx) => {

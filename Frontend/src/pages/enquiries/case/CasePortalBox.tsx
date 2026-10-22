@@ -20,7 +20,8 @@ function canUseOnCase(me: User, c: VisaCase, portal: CasePortal): boolean {
 /**
  * The demo's dark box (screen 08; docs/decisions/0024-portal-logins.md component 3): the portal the case's visa opens,
  * with Log in for me, from step 3 until the case closes. With no portal saved for the visa, a note says so; the Head and
- * the Visa HOD get a link to the visa's settings page.
+ * the Visa HOD get a link to the visa's settings page. While the portal's password change is overdue, the box says it's
+ * locked and the button is greyed out (component 2); they get a link to Portal logins.
  */
 export function CasePortalBox({ visaCase: c, me }: { visaCase: VisaCase; me: User }) {
   const toast = useToast()
@@ -53,7 +54,19 @@ export function CasePortalBox({ visaCase: c, me }: { visaCase: VisaCase; me: Use
       <div className="application-portal">
         <div className="application-portal-text">
           <strong>{portal.name} — Masti master account</strong>
-          <span>Opens logged in for this case. Staff never see the ID or password.</span>
+          {portal.locked ? (
+            <span className="application-portal-locked">
+              Locked until the HOD changes its password.
+              {canEditVisaMasters(me) && (
+                <>
+                  {' '}
+                  <Link to="/settings/portals">Change it on Portal logins</Link>
+                </>
+              )}
+            </span>
+          ) : (
+            <span>Opens logged in for this case. Staff never see the ID or password.</span>
+          )}
         </div>
         {canUseOnCase(me, c, portal) && (
           <LogInForMeButton
@@ -61,6 +74,7 @@ export function CasePortalBox({ visaCase: c, me }: { visaCase: VisaCase; me: Use
             helperIds={portal.helperIds}
             caseNo={c.caseNo}
             className="btn btn-primary"
+            disabled={portal.locked}
             open={() => api<OpenedPress>(`/visa/cases/${encodeURIComponent(c.caseNo)}/portal/open`, { method: 'POST', body: {} })}
             onResult={onResult}
           />

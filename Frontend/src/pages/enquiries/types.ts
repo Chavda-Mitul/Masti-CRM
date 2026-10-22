@@ -636,6 +636,8 @@ export interface CasePortal {
   id: string
   name: string
   userIds: string[]
+  /** Its password change is overdue: nobody can use it until an HOD types a new one (component 2). */
+  locked: boolean
   helperIds: string[]
 }
 

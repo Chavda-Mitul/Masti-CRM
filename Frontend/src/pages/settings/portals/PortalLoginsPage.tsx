@@ -50,6 +50,10 @@ export function PortalLoginsPage() {
             Visa and airline accounts belong to the company. Staff press "Log in for me" and never see the ID or password, so
             when someone leaves, switching off their CRM login is enough.
           </p>
+          <p>
+            Passwords change on the schedule you set. On the due date the HOD is asked to reset; the account stays locked for
+            everyone until that's done.
+          </p>
         </div>
         {manages && data?.ready && (
           <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>

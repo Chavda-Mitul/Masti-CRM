@@ -1,4 +1,5 @@
 import type { Outcome } from '../../../lib/portalHelper'
+import type { PasswordSchedule } from './schemas'
 
 // Mirrors Backend/src/modules/portalLogins (portalLogin.ts toPortalLoginDto, portalLogins.service.ts listPortalLogins).
 
@@ -17,6 +18,12 @@ export interface Portal {
   status: 'ACTIVE' | 'REMOVED'
   users: PortalPerson[]
   passwordChangedAt: string
+  /** How often the password has to change (component 2). */
+  passwordSchedule: PasswordSchedule
+  /** The day it has to change by (YYYY-MM-DD), or null with no schedule. */
+  passwordDueOn: string | null
+  /** Overdue: nobody can use it until an HOD types a new password. canUse still says who could. */
+  locked: boolean
   createdAt: string
   updatedAt: string
   canUse: boolean
@@ -63,6 +70,7 @@ export interface PortalBody {
   idLabel?: string
   loginId?: string
   password?: string
+  passwordSchedule?: PasswordSchedule
   userIds?: string[]
   updatedAt?: string
 }
