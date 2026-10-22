@@ -99,18 +99,29 @@ export function travellerTab(t: CaseTraveller): { name: string; detail: string |
 /** The visa steps before the file goes to the vendor (Steps 1–4), as the server's PRE_DISPATCH. */
 export const PRE_DISPATCH = ['ENQUIRY', 'DOCUMENTS', 'FILE_PREPARATION', 'DISPATCH']
 
+/** The steps after an e-visa went in online (Steps 5–6), as the server's EVISA_AFTER_SUBMISSION. */
+export const EVISA_AFTER_SUBMISSION = ['AT_VENDOR', 'DECISION']
+
 /**
- * The passports are held at our office before dispatch: counted in at intake and not handed back, whatever the case's
- * status (docs/decisions/0006-visa-documents.md amendment 15, component 3). As the server's heldAtOffice.
+ * The passports are held at our office: counted in at intake and not handed back, whatever the case's status, before
+ * dispatch (docs/decisions/0006-visa-documents.md amendment 15, component 3), or an e-visa's at Steps 5–6, which never
+ * go to a vendor (0025, part 4). As the server's heldAtOffice.
  */
-export const heldAtOffice = (c: VisaCase) => PRE_DISPATCH.includes(c.stage.code) && !c.handover && (c.booklets.current ?? 0) + (c.booklets.old ?? 0) > 0
+export const heldAtOffice = (c: VisaCase) =>
+  !c.handover &&
+  (c.booklets.current ?? 0) + (c.booklets.old ?? 0) > 0 &&
+  (PRE_DISPATCH.includes(c.stage.code) || (!!c.submittedOnline && EVISA_AFTER_SUBMISSION.includes(c.stage.code)))
 
 /**
  * The passports are in our stock, to hand over at the desk: received at Step 7 and not yet handed over (0014 Decision
- * 5), or a cancelled case's held at our office before dispatch (0006 amendment 15).
+ * 5), a cancelled case's held at our office (0006 amendment 15), or a sent e-visa's (0025, part 4). As the server's.
  */
-export const passportsInStock = (c: VisaCase) =>
-  c.stage.code === 'PASSPORT_BACK' ? !!c.passportsReceived && !c.handover : c.status === 'CANCELLED' && heldAtOffice(c)
+export const passportsInStock = (c: VisaCase) => {
+  if (c.stage.code === 'PASSPORT_BACK') return !!c.passportsReceived && !c.handover
+  if (c.status === 'CANCELLED') return heldAtOffice(c)
+  const open = c.status === 'OPEN' || c.status === 'POSTPONED'
+  return open && c.stage.code === 'DECISION' && !!c.evisaSent && heldAtOffice(c)
+}
 
 /** What our stock holds, which a handover's count must match: the booklets received at Step 7, else the intake count. */
 export const stockOf = (c: VisaCase) => c.passportsReceived?.booklets ?? { current: c.booklets.current ?? 0, old: c.booklets.old ?? 0 }

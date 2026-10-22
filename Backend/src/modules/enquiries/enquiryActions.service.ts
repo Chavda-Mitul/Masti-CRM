@@ -25,6 +25,8 @@ const include = {
       maturedById: true,
       bookletsCurrent: true,
       bookletsOld: true,
+      // An e-visa's passports stay at our office after it went in online (0025, part 4).
+      submittedOnlineAt: true,
       docket: { select: { dispatchedAt: true } },
       handover: { select: { enquiryId: true } },
     },

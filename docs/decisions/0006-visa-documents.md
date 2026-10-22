@@ -53,7 +53,9 @@ stranded the client's passports (nothing could move again):
 15. **Cancelling doesn't end the passports' way back.** Cancel stays possible at every step (Decision 6), but a paper
     file that went to the vendor still comes back to the client, with the usual proof:
     - **"To hand back":** a case whose file was dispatched in a docket and whose passports aren't handed over yet.
-      An e-visa never is.
+      An e-visa never is. *Since 22 Oct 2026 an e-visa's passports counted in at intake are also "held at our office" at
+      Steps 5–6, as they never go to a vendor, so a cancelled one is handed back at the office there too
+      ([0025](0025-evisa-after-decision.md) Decision 6).*
     - **What still works on such a cancelled case:** "Take the file back" ([0011](0011-visa-at-vendor.md) Decision 6),
       "Passports on the way back" and its "Change" ([0013](0013-visa-passport-back.md) Decision 3, component 2), as
       on an open case. Mark received and the handover already worked whatever the status (0013 Decision 5,

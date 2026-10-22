@@ -4,6 +4,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { addDays, dayLabel, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, notFound } from "../../lib/httpError";
+import { EVISA_AFTER_SUBMISSION } from "../enquiries/visibility";
 import { blockedDays } from "../holidays/blockedDays";
 import { VISA_COLLECTION_VISIT, VISA_DELIVERY_VISIT } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
@@ -46,6 +47,8 @@ async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
           bookletsBackCurrent: true,
           bookletsBackOld: true,
           shortfallClearedAt: true,
+          submittedOnlineAt: true,
+          evisaSentAt: true,
           handover: { select: { enquiryId: true } },
           _count: { select: { travellers: true } },
         },
@@ -58,12 +61,21 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
  * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock, and not while a short
- * return holds them (0013 Decision 5, amended 17 Oct 2026).
+ * return holds them (0013 Decision 5, amended 17 Oct 2026). A sent e-visa's passports, held at our office since intake,
+ * go out the same way (docs/decisions/0025-evisa-after-decision.md, part 4); a cancelled case's go back at the office
+ * only (0006 amendment 15).
  */
-function assertCanBook(g: Gathered, kind: FieldJobKind) {
-  if (kind === "DELIVERY" && !g.visa?.passportsReceivedAt) throw conflict("Mark the passports received first.");
-  if (kind === "DELIVERY" && g.visa?.handover) throw conflict("The passports are already handed over.");
-  if (kind === "DELIVERY" && g.visa) assertNotHeldShort({ ...g.visa, travellerCount: g.visa._count.travellers });
+function assertCanBook(g: Gathered, kind: FieldJobKind, c: { status: string; stage: { code: string } }) {
+  const v = g.visa;
+  // A paper file at Steps 5–6: its passports are with the vendor, and come back through Passport back.
+  if (kind === "DELIVERY" && EVISA_AFTER_SUBMISSION.includes(c.stage.code) && !v?.submittedOnlineAt) {
+    throw conflict("Passports are handed over from Passport back.");
+  }
+  const evisaHeld =
+    !!v?.evisaSentAt && c.stage.code === "DECISION" && c.status !== "CANCELLED" && (v.bookletsCurrent ?? 0) + (v.bookletsOld ?? 0) > 0;
+  if (kind === "DELIVERY" && !v?.passportsReceivedAt && !evisaHeld) throw conflict("Mark the passports received first.");
+  if (kind === "DELIVERY" && v?.handover) throw conflict("The passports are already handed over.");
+  if (kind === "DELIVERY" && v) assertNotHeldShort({ ...v, travellerCount: v._count.travellers });
   if (g.fieldJobs.length > 0) throw conflict(kind === "PICKUP" ? "The collection boy is already booked for this case." : "The delivery boy is already booked for this case.");
 }
 
@@ -101,14 +113,14 @@ export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, act
   const rule = RULE[input.kind];
   const enquiry = await loadCase(caseNo, actor, rule);
   assertFresh(enquiry.updatedAt, input.updatedAt, "case");
-  assertCanBook(await gather(prisma, enquiry.id, input.kind), input.kind);
+  assertCanBook(await gather(prisma, enquiry.id, input.kind), input.kind, enquiry);
   await checkJob(prisma, input);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, rule);
     assertFresh(locked.updatedAt, input.updatedAt, "case");
     const g = await gather(tx, enquiry.id, input.kind);
-    assertCanBook(g, input.kind);
+    assertCanBook(g, input.kind, locked);
     const { boy, slot } = await checkJob(tx, input);
 
     // A postponed or cancelled case keeps its due time (a delivery can be booked for one; a pickup can't).

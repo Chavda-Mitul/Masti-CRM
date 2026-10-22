@@ -48,6 +48,10 @@ const stopSelect = {
         select: {
           bookletsBackCurrent: true,
           bookletsBackOld: true,
+          // An e-visa's passports never went to a vendor: our stock is what was counted in at intake (0025, part 4).
+          submittedOnlineAt: true,
+          bookletsCurrent: true,
+          bookletsOld: true,
           travellers: {
             orderBy: { position: "asc" },
             select: {
@@ -71,6 +75,16 @@ const stopSelect = {
 type StopRow = Prisma.FieldJobGetPayload<{ select: typeof stopSelect }>;
 
 /**
+ * The booklets a delivery hands over: those received back from the vendor (0013), or, for an e-visa, those counted in
+ * at intake, as its passports never left our office (docs/decisions/0025-evisa-after-decision.md, part 4).
+ */
+function deliveryStock(visa: NonNullable<StopRow["enquiry"]["visa"]>) {
+  if (visa.bookletsBackCurrent !== null && visa.bookletsBackOld !== null) return { current: visa.bookletsBackCurrent, old: visa.bookletsBackOld };
+  if (visa.submittedOnlineAt) return { current: visa.bookletsCurrent ?? 0, old: visa.bookletsOld ?? 0 };
+  return null;
+}
+
+/**
  * One stop as his phone shows it: the desk that raised it, the day and slot, the client's name, the case number, where
  * to go (the address, the Google Maps link), whom to call; for a delivery, the booklets in our stock he hands over; for
  * a pickup, the papers still pending on the case's checklist (by traveller, leaving out what we arrange ourselves); for
@@ -92,10 +106,7 @@ function toStop(j: StopRow) {
     address: j.address,
     mapLink: j.mapLink,
     mobile: j.mobile,
-    booklets:
-      j.kind === "DELIVERY" && visa && visa.bookletsBackCurrent !== null && visa.bookletsBackOld !== null
-        ? { current: visa.bookletsBackCurrent, old: visa.bookletsBackOld }
-        : null,
+    booklets: j.kind === "DELIVERY" && visa ? deliveryStock(visa) : null,
     pending:
       j.kind === "PICKUP" && visa
         ? visa.travellers.flatMap((t) => t.documents.map((d) => ({ document: d.name, traveller: t.name ?? travellerLabel(t, adults) })))
@@ -547,8 +558,10 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
         accuracyM: input.place.accuracy,
       },
     });
-    // After the job is done, so only other booked jobs are called off.
-    const { closes, fieldJobsCancelled } = await deliverCase(tx, enquiry, actor, "handed over at the door");
+    // After the job is done, so only other booked jobs are called off. A sent e-visa's case is Delivered too (0025).
+    const { closes, delivered, fieldJobsCancelled } = await deliverCase(tx, enquiry, actor, "handed over at the door", {
+      evisa: !!g.evisaSentAt && enquiry.status !== "CANCELLED",
+    });
     await tx.visaHandover.create({
       data: {
         enquiryId: enquiry.id,
@@ -570,9 +583,9 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
         entityType: "Enquiry",
         entityId: enquiry.id,
         clientId: enquiry.clientId,
-        before: { stage: "PASSPORT_BACK", status: enquiry.status, dueAt: enquiry.dueAt },
+        before: { stage: enquiry.stage.code, status: enquiry.status, dueAt: enquiry.dueAt },
         after: {
-          stage: "DELIVERED",
+          stage: delivered ? "DELIVERED" : enquiry.stage.code,
           status: closes ? "CLOSED" : enquiry.status,
           mode: "DELIVERY",
           booklets: input.booklets,
