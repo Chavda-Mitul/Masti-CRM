@@ -1,5 +1,5 @@
-import { Fragment } from 'react'
-import { letterBlocks, textBlocks, type LetterPiece, type LetterTable, type LetterText } from '../lib/letter'
+import { Fragment, type ReactNode } from 'react'
+import { letterBlocks, textBlocks, type LetterBlock, type LetterPiece } from '../lib/letter'
 import '../styles/letter.css'
 
 /** One row of the letter's table of travellers. */
@@ -10,10 +10,13 @@ export interface LetterTraveller {
   passportNo: string
 }
 
+/** Draws a line of pieces: its words, and each blank or mark as the paper shows it. */
+type DrawLine = (pieces: LetterPiece[]) => ReactNode
+
 /**
  * A covering letter drawn like the page it prints on (docs/decisions/0019-covering-letters.md; the demo's serif preview on
- * screen 08): paragraphs, line breaks and the table of travellers. A blank with a value prints the value; one without
- * shows as a chip, so Settings can show where each blank goes.
+ * screen 08): paragraphs, line breaks, tables typed with | (amendment 3) and the table of travellers. A blank with a value
+ * prints the value; one without shows as a chip, so Settings can show where each blank goes.
  */
 export function LetterPaper({
   body,
@@ -26,7 +29,38 @@ export function LetterPaper({
   /** The rows {travellers} prints. Left out, it shows as a chip. */
   travellers?: readonly LetterTraveller[]
 }) {
-  const blocks = letterBlocks(body)
+  const draw: DrawLine = (pieces) =>
+    pieces.map((piece, k) =>
+      'text' in piece ? (
+        <Fragment key={k}>{piece.text}</Fragment>
+      ) : values?.[piece.blank] !== undefined ? (
+        <Fragment key={k}>{values[piece.blank]}</Fragment>
+      ) : (
+        <span key={k} className="letter-blank">{`{${piece.blank}}`}</span>
+      ),
+    )
+  return <Paper blocks={letterBlocks(body)} draw={draw} travellers={travellers} />
+}
+
+/**
+ * A case's letter as staff edit and make it (0019 amendments 1 and 3): its text, drawn as written, never read for
+ * {blanks}. Lines with | between the columns are tables; a ⟦mark⟧ left where the case lacked a value shows as a chip.
+ */
+export function LetterTextPaper({ text }: { text: string }) {
+  const draw: DrawLine = (pieces) =>
+    pieces.map((piece, k) =>
+      'text' in piece ? (
+        <Fragment key={k}>{piece.text}</Fragment>
+      ) : (
+        <span key={k} className="letter-blank letter-mark">
+          {piece.blank}
+        </span>
+      ),
+    )
+  return <Paper blocks={textBlocks(text)} draw={draw} />
+}
+
+function Paper({ blocks, draw, travellers }: { blocks: LetterBlock[]; draw: DrawLine; travellers?: readonly LetterTraveller[] }) {
   if (blocks.length === 0) {
     return (
       <div className="letter-paper">
@@ -39,26 +73,46 @@ export function LetterPaper({
       {blocks.map((block, i) =>
         block.kind === 'travellers' ? (
           <TravellersTable key={i} travellers={travellers} />
+        ) : block.kind === 'table' ? (
+          <LetterTable key={i} head={block.head} rows={block.rows} draw={draw} />
         ) : (
           <p key={i}>
             {block.lines.map((line, j) => (
               <Fragment key={j}>
                 {j > 0 && <br />}
-                {line.map((piece, k) =>
-                  'text' in piece ? (
-                    <Fragment key={k}>{piece.text}</Fragment>
-                  ) : values?.[piece.blank] !== undefined ? (
-                    <Fragment key={k}>{values[piece.blank]}</Fragment>
-                  ) : (
-                    <span key={k} className="letter-blank">{`{${piece.blank}}`}</span>
-                  ),
-                )}
+                {draw(line)}
               </Fragment>
             ))}
           </p>
         ),
       )}
     </div>
+  )
+}
+
+/** A table typed with | between the columns: its first line as the headings, then its rows. */
+function LetterTable({ head, rows, draw }: { head: LetterPiece[][]; rows: LetterPiece[][][]; draw: DrawLine }) {
+  return (
+    <table className="letter-table">
+      <thead>
+        <tr>
+          {head.map((cell, c) => (
+            <th key={c}>{draw(cell)}</th>
+          ))}
+        </tr>
+      </thead>
+      {rows.length > 0 && (
+        <tbody>
+          {rows.map((cells, r) => (
+            <tr key={r}>
+              {cells.map((cell, c) => (
+                <td key={c}>{draw(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      )}
+    </table>
   )
 }
 
@@ -88,79 +142,6 @@ function TravellersTable({ travellers }: { travellers: readonly LetterTraveller[
             <td>{t.relation}</td>
             <td>{t.dateOfBirth}</td>
             <td>{t.passportNo}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-/**
- * A case's letter as staff edit and make it (0019 amendment 1): its text above the table, the table, the text below.
- * The text is drawn as written, never read for {blanks}; a ⟦mark⟧ left where the case lacked a value shows as a chip.
- */
-export function LetterTextPaper({ letter }: { letter: LetterText }) {
-  const top = textBlocks(letter.top)
-  const bottom = textBlocks(letter.bottom)
-  if (top.length === 0 && bottom.length === 0 && !letter.table) {
-    return (
-      <div className="letter-paper">
-        <p className="letter-empty">Nothing written yet.</p>
-      </div>
-    )
-  }
-  return (
-    <div className="letter-paper">
-      <TextParagraphs paragraphs={top} />
-      {letter.table && <LetterTableView table={letter.table} />}
-      <TextParagraphs paragraphs={bottom} />
-    </div>
-  )
-}
-
-function TextParagraphs({ paragraphs }: { paragraphs: LetterPiece[][][] }) {
-  return paragraphs.map((lines, i) => (
-    <p key={i}>
-      {lines.map((line, j) => (
-        <Fragment key={j}>
-          {j > 0 && <br />}
-          <Pieces line={line} />
-        </Fragment>
-      ))}
-    </p>
-  ))
-}
-
-function Pieces({ line }: { line: LetterPiece[] }) {
-  return line.map((piece, k) =>
-    'text' in piece ? (
-      <Fragment key={k}>{piece.text}</Fragment>
-    ) : (
-      <span key={k} className="letter-blank letter-mark">
-        {piece.blank}
-      </span>
-    ),
-  )
-}
-
-/** The table as staff left it: their headings, rows and columns. */
-function LetterTableView({ table }: { table: LetterTable }) {
-  const cell = (text: string) => <Pieces line={textBlocks(text)[0]?.[0] ?? []} />
-  return (
-    <table className="letter-table">
-      <thead>
-        <tr>
-          {table.columns.map((heading, c) => (
-            <th key={c}>{cell(heading)}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {table.rows.map((cells, r) => (
-          <tr key={r}>
-            {cells.map((text, c) => (
-              <td key={c}>{cell(text)}</td>
-            ))}
           </tr>
         ))}
       </tbody>

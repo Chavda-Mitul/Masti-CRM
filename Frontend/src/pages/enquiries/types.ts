@@ -1,6 +1,5 @@
 // API shapes for the enquiry screens. Mirrors Backend/src/modules/enquiries and Backend/src/modules/visa.
 
-import type { LetterText } from '../../lib/letter'
 import type { ScanType } from '../clients/scanFiles'
 
 export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
@@ -849,8 +848,8 @@ export interface CoveringLetterMade {
   effectiveFrom: string
   madeAt: string
   madeBy: { id: string; name: string } | null
-  /** The letter as made (0019 amendment 1): what every print shows. */
-  letter: LetterText
+  /** The letter as made (0019 amendments 1 and 3): what every print shows; its tables are | lines. */
+  letter: string
 }
 
 /** GET /api/visa/cases/:caseNo/covering-letter: the card's view. */
@@ -867,7 +866,7 @@ export interface CoveringLetterView {
     versionId: number
     effectiveFrom: string
     sample: boolean
-    draft: LetterText
+    draft: string
     missing: string[]
   } | null
   made: CoveringLetterMade | null

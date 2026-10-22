@@ -7,18 +7,18 @@ import { LetterTextPaper } from '../../../components/LetterPaper'
 import { useLeaveGuard } from '../../../components/useLeaveGuard'
 import { errorText, issueText } from '../../../lib/apiErrors'
 import { formatDate, formatDateTime, istParts, istToday } from '../../../lib/format'
-import { marksIn, PURPOSE_MARK, type LetterText } from '../../../lib/letter'
+import { marksIn, PURPOSE_MARK } from '../../../lib/letter'
 import { useToast } from '../../../lib/toast'
 import { useCoveringLetter, useMakeCoveringLetter, useWritePurpose } from '../queries'
 import type { CoveringLetterView, VisaCase } from '../types'
 import { CoveringLetterEditor } from './CoveringLetterEditor'
 
 /**
- * "Covering letter" (demo screen 08 ⚠️, docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1 and 2),
- * beside the saved file: the letters that fit the case, one drafted from it, and Make the letter. At File preparation the
- * processor, the HOD or the Head may have the AI write the paragraph on why they travel, change any of the text, the
- * table included, and type over the ⟦marks⟧ where the case lacked a value; the letter is made with that text. After that
- * anyone who can open the case prints the same letter.
+ * "Covering letter" (demo screen 08 ⚠️, docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1–3), beside
+ * the saved file: the letters that fit the case, one drafted from it, and Make the letter. At File preparation the
+ * processor, the HOD or the Head may have the AI write the paragraph on why they travel, change any of the text (its
+ * tables are lines with | between the columns), and type over the ⟦marks⟧ where the case lacked a value; the letter is
+ * made with that text. After that anyone who can open the case prints the same letter.
  */
 export function CoveringLetterCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -104,13 +104,8 @@ type Asking = { kind: 'pick'; formatId: number } | { kind: 'restart' } | { kind:
 /** The mark's own words, as marksIn lists them. */
 const PURPOSE_WORDS = PURPOSE_MARK.slice(1, -1)
 
-const holds = (letter: LetterText, text: string) => letter.top.includes(text) || letter.bottom.includes(text)
-
-/** The letter with `at` (in the text above or below the table) replaced by `by`, which is put in exactly as written. */
-function replaced(letter: LetterText, at: string, by: string): LetterText {
-  if (letter.top.includes(at)) return { ...letter, top: letter.top.replace(at, () => by) }
-  return { ...letter, bottom: letter.bottom.replace(at, () => by) }
-}
+/** The letter with `at` replaced by `by`, which is put in exactly as written (a $ in it is no pattern). */
+const replaced = (letter: string, at: string, by: string) => letter.replace(at, () => by)
 
 /**
  * One letter on the desk: drawn from the letter made when it's this one, else from today's draft; its paragraph on why
@@ -135,7 +130,7 @@ function LetterDesk({
   const write = useWritePurpose(caseNo)
   // Nothing is copied from the server into state: until someone edits, the card draws the server's letter, so a trip
   // saved on the case shows at once.
-  const [edited, setEdited] = useState<LetterText | null>(null)
+  const [edited, setEdited] = useState<string | null>(null)
   // "Start again": today's draft even though a letter was made.
   const [fresh, setFresh] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -147,15 +142,18 @@ function LetterDesk({
   const { made } = view
   const fromMade = !fresh && made?.formatId === selected.formatId ? made : null
   const versionId = fromMade ? fromMade.versionId : selected.versionId
-  const letter = edited ?? (fromMade ? fromMade.letter : selected.draft)
+  const base = fromMade ? fromMade.letter : selected.draft
+  const letter = edited ?? base
   const dirty = edited !== null
+  // A change typed back to the letter as it was is no change: the card follows the server's letter again.
+  const change = (text: string) => setEdited(text === base ? null : text)
   const marks = marksIn(letter)
   const madeDay = fromMade ? istParts(fromMade.madeAt).date : null
   const busy = loading || make.isPending || write.isPending
   // Where the AI's paragraph goes: the mark, or its last paragraph while unchanged. Neither (the paragraph was changed by
   // hand, or this is the letter made) means drafting afresh. A wording without {purpose} has no paragraph to write.
-  const target = holds(letter, PURPOSE_MARK) ? PURPOSE_MARK : aiText && holds(letter, aiText) ? aiText : null
-  const canWrite = target !== null || holds(selected.draft, PURPOSE_MARK)
+  const target = letter.includes(PURPOSE_MARK) ? PURPOSE_MARK : aiText && letter.includes(aiText) ? aiText : null
+  const canWrite = target !== null || selected.draft.includes(PURPOSE_MARK)
   const writtenByAi = aiText !== null && target === aiText
   const otherMarks = marks.filter((m) => m !== PURPOSE_WORDS)
 
@@ -218,7 +216,7 @@ function LetterDesk({
         ))}
       </select>
       <div className="covering-letter-preview" aria-label="Preview">
-        <LetterTextPaper letter={letter} />
+        <LetterTextPaper text={letter} />
       </div>
       <button type="button" className="btn-link covering-letter-whole" onClick={() => setWhole(true)}>
         See the whole letter
@@ -281,7 +279,7 @@ function LetterDesk({
         )}
       </div>
 
-      {editing && <CoveringLetterEditor letter={letter} onChange={setEdited} onClose={() => setEditing(false)} />}
+      {editing && <CoveringLetterEditor letter={letter} onChange={change} onClose={() => setEditing(false)} />}
       {whole && <WholeLetter name={selected.name} letter={letter} onClose={() => setWhole(false)} />}
       {asking?.kind === 'rewrite' && (
         <ConfirmDialog
@@ -325,12 +323,12 @@ function UnsavedLetterGuard() {
 }
 
 /** "See the whole letter": the letter as it stands, edits included. */
-function WholeLetter({ name, letter, onClose }: { name: string; letter: LetterText; onClose: () => void }) {
+function WholeLetter({ name, letter, onClose }: { name: string; letter: string; onClose: () => void }) {
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog covering-letter-dialog" role="dialog" aria-modal="true" aria-label={name} onClick={(e) => e.stopPropagation()}>
         <h2 className="h2">{name}</h2>
-        <LetterTextPaper letter={letter} />
+        <LetterTextPaper text={letter} />
         <div className="covering-letter-actions" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>
             Close
@@ -355,7 +353,7 @@ function MadeLetter({ caseNo, view, preparing }: { caseNo: string; view: Coverin
   return (
     <>
       <div className="covering-letter-preview" aria-label="The letter made">
-        <LetterTextPaper letter={made.letter} />
+        <LetterTextPaper text={made.letter} />
       </div>
       <button type="button" className="btn-link covering-letter-whole" onClick={() => setWhole(true)}>
         See the whole letter

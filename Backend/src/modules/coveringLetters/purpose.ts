@@ -1,6 +1,6 @@
 import type { ClientKind } from "../../../generated/prisma/enums";
 import { daysInclusive, fullDate } from "../../lib/dates";
-import { mark } from "./coveringLetters.schemas";
+import { mark, noPipes } from "./coveringLetters.schemas";
 
 // "Write it with AI": what the AI is asked for the covering letter's paragraph on why they travel
 // (docs/decisions/0019-covering-letters.md amendment 2, docs/decisions/0023-ai.md). No queries here, so the words sent
@@ -107,10 +107,11 @@ export function purposeAsk(facts: PurposeFacts): { system: string; prompt: strin
 /**
  * The AI's answer as one paragraph for the letter: list marks, Markdown and wrapping quotes go, lines are joined, and a
  * placeholder written as [..] or {..} becomes a ⟦mark⟧, so the letter isn't made until it's filled in. Brackets the hotel
- * stay itself holds ("Hotel [Opera], Paris") are left as they are. "" when nothing is left.
+ * stay itself holds ("Hotel [Opera], Paris") are left as they are. A | becomes a /, as in every value the letter is
+ * given (amendment 3). "" when nothing is left.
  */
 export function tidyParagraph(text: string, hotelStay: string | null): string {
-  let paragraph = text
+  let paragraph = noPipes(text)
     .replace(/\r\n?/g, "\n")
     .replace(/^\s*#+\s*/gm, "")
     .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "")
