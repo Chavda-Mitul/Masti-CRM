@@ -158,6 +158,64 @@ describe("fillLogin", () => {
     });
   });
 
+  describe("the portal's own show-password eye", () => {
+    /** Lets the helper's watch on the page see what changed. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const captchaPage = `
+      <form><input id="user"><input id="pass" type="password"><button type="button" id="eye">Show</button>
+      <img id="captchaImage" src="/captcha.png" alt="Code"><input id="code" name="txtCaptcha"><button>Login</button></form>`;
+
+    it("empties the password the moment the page shows it, keeps it a password box, and says so", async () => {
+      document.body.innerHTML = captchaPage;
+      $<HTMLButtonElement>("#eye").addEventListener("click", () => ($("#pass").type = "text"));
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      const seen = countEvents($("#pass"));
+
+      $<HTMLButtonElement>("#eye").click();
+      await settle();
+      expect($("#pass").value).toBe("");
+      expect($("#pass").type).toBe("password");
+      expect(seen).toContain("input");
+      expect(banner()).toBe("Masti CRM hid the password. Press Log in for me to try again.");
+      expect($("#user").value).toBe(LOGIN.loginId);
+    });
+
+    it("empties a text box the page swaps in with the password", async () => {
+      document.body.innerHTML = captchaPage;
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      const shown = document.createElement("input");
+      shown.id = "shown";
+      shown.value = $("#pass").value;
+      $("#pass").replaceWith(shown);
+      await settle();
+      expect($("#shown").value).toBe("");
+    });
+
+    it("leaves every other box alone", async () => {
+      document.body.innerHTML = `${captchaPage}<input id="other" type="password" value="not the portal's">`;
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      $("#other").type = "text";
+      $("#user").type = "email";
+      $("#code").value = "7K2P";
+      await settle();
+      expect($("#other").value).toBe("not the portal's");
+      expect($("#user").value).toBe(LOGIN.loginId);
+      expect($("#pass").value).toBe(LOGIN.password);
+      expect(banner()).toBe("Type the letters you see, then press Login.");
+    });
+
+    it("stops watching once the login form has gone", async () => {
+      document.body.innerHTML = captchaPage;
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      $<HTMLFormElement>("form").remove();
+      await settle();
+      document.body.innerHTML = `<input id="later" value="${LOGIN.password}">`;
+      await settle();
+      expect($("#later").value).toBe(LOGIN.password);
+    });
+  });
+
   it("waits for a login form drawn late, but not for ever", async () => {
     setTimeout(() => {
       document.body.innerHTML = `<form><input id="user"><input id="pass" type="password"><button>Login</button></form>`;
