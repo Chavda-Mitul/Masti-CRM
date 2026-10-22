@@ -14,6 +14,12 @@ export interface WhatsAppMessage {
    * {{placeholders}}, keyed as the template names them ("1", "2" or "client_name").
    */
   template?: { id: string; variables: Record<string, string> };
+  /**
+   * One file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): a link the provider fetches it
+   * from, which works for a short while only (its key is a secret), and the file's name. Only with our own words: an
+   * approved template with a document comes with Masti's templates (M1).
+   */
+  attachment?: { url: string; fileName: string };
   /** Values only the client may see (the door code, secrets.ts): a live log hides them. Never sent on. */
   secrets?: readonly string[];
 }

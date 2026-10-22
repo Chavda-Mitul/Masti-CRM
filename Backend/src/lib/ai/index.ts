@@ -5,7 +5,7 @@ import { logger } from "../logger";
 import { costMicroUsd } from "./prices";
 import { aiProvider } from "./provider";
 import { AiError, type AiReply } from "./types";
-import { AI_USE_CASES, type AiUseCaseCode } from "./useCases";
+import { AI_USE_CASES, type AiUseCase, type AiUseCaseCode } from "./useCases";
 
 // The only way the CRM uses AI (docs/decisions/0023-ai.md). Callers say what it's for and what to ask; AI_PROVIDER and
 // AI_MODEL in .env pick who answers, with which model. Every call is written down in AiCall with its tokens and cost,
@@ -25,11 +25,17 @@ export interface AiAsk {
   userId?: string;
   /** The case it's for, when there is one. */
   enquiryId?: string;
+  /**
+   * Whether the answer can be used: an AiError says why not, and the call is then recorded as failed, not as an answer
+   * (a letter that isn't one). Checked after the provider's own reasons (a refusal, a cut-off, nothing at all).
+   */
+  accept?: (text: string) => AiError | null;
 }
 
 /** Asks the AI once. Returns its answer, or throws an AiError in plain words; either way the call is recorded. */
 export async function askAi(ask: AiAsk): Promise<{ text: string; callId: string }> {
-  const { maxTokens, effort } = AI_USE_CASES[ask.useCase];
+  const useCase: AiUseCase = AI_USE_CASES[ask.useCase];
+  const { maxTokens, effort, timeoutMs, maxRetries } = useCase;
   const started = Date.now();
   let provider: string = env.AI_PROVIDER;
   let reply: AiReply;
@@ -37,7 +43,15 @@ export async function askAi(ask: AiAsk): Promise<{ text: string; callId: string 
     const chosen = aiProvider();
     if (!chosen) throw new AiError("AI isn't set up yet.", false);
     provider = chosen.name;
-    reply = await chosen.complete({ model: env.AI_MODEL, system: ask.system, prompt: ask.prompt, maxTokens, effort });
+    reply = await chosen.complete({
+      model: env.AI_MODEL,
+      system: ask.system,
+      prompt: ask.prompt,
+      maxTokens,
+      effort,
+      ...(timeoutMs !== undefined && { timeoutMs }),
+      ...(maxRetries !== undefined && { maxRetries }),
+    });
   } catch (error) {
     const failure =
       error instanceof AiError
@@ -63,6 +77,8 @@ export async function askAi(ask: AiAsk): Promise<{ text: string; callId: string 
     failure = new AiError("The AI's answer was cut off. Please try again.", true);
   } else if (!reply.text) {
     failure = new AiError("The AI gave an empty answer. Please try again.", true);
+  } else if (ask.accept) {
+    failure = ask.accept(reply.text);
   }
   if (failure) {
     await record(ask, { ...billed, status: reply.stopReason === "REFUSED" ? "REFUSED" : "FAILED", error: failure.message });

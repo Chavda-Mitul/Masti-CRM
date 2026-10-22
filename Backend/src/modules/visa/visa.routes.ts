@@ -38,9 +38,11 @@ import {
   updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
+  setEvisaCheckSchema,
   setRemindersSchema,
   saveSubmissionSchema,
   vendorReceivedSchema,
+  writeLetterSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
@@ -54,6 +56,7 @@ import * as filePrepService from "./visaFilePrep.service";
 import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as decisionService from "./visaDecision.service";
 import * as refusalLetterService from "./visaRefusalLetter.service";
+import * as evisaService from "./visaEvisa.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -61,6 +64,7 @@ import * as passportsBackService from "./visaPassportsBack.service";
 import * as handoverService from "./visaHandover.service";
 import * as fieldJobService from "./visaFieldJobs.service";
 import { listFieldStaff } from "../fieldJobs/fieldJobs.service";
+import * as portalService from "./visaPortal.service";
 import * as quoteService from "./visaQuote.service";
 import * as recallService from "./visaRecall.service";
 import * as stepsService from "./visaSteps.service";
@@ -88,6 +92,14 @@ router.post("/cases", visaEdit, async (req, res) => {
 
 router.get("/cases/:caseNo", visaView, async (req, res) => {
   res.json({ case: await visaService.getVisaCase(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+});
+
+/**
+ * "Log in for me" on the case (docs/decisions/0024-portal-logins.md component 3): a one-time ticket for the CRM helper.
+ * The service decides who may: the case's person, the HOD, the Head and the portal's list.
+ */
+router.post("/cases/:caseNo/portal/open", visaView, async (req, res) => {
+  res.status(201).json(await portalService.openCasePortal(caseNoParam.parse(req.params.caseNo), actorOf(req)));
 });
 
 /** The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first. */
@@ -198,11 +210,12 @@ router.post("/cases/:caseNo/covering-letter", visaEdit, async (req, res) => {
 });
 
 /**
- * "Write it with AI", at File preparation: the paragraph on why they travel, written from the trip's details (0019
- * amendment 2). The card puts it in the letter; nothing is saved. 503 AI_FAILED, in plain words, when the AI can't.
+ * "Write the whole letter with AI", at File preparation: the letter as it stands on the card, rewritten for the trip
+ * (0019 amendment 4), with what the AI dropped listed. Nothing is saved. 503 AI_FAILED, in plain words, when the AI can't.
  */
-router.post("/cases/:caseNo/covering-letter/purpose", visaEdit, async (req, res) => {
-  res.json(await coveringLetterService.writePurpose(caseNoParam.parse(req.params.caseNo), actorOf(req)));
+router.post("/cases/:caseNo/covering-letter/write", visaEdit, async (req, res) => {
+  const body = writeLetterSchema.parse(req.body);
+  res.json(await coveringLetterService.writeLetter(caseNoParam.parse(req.params.caseNo), body, actorOf(req)));
 });
 
 /** The letter made, to print: the same letter every time. Anyone who can open the case; 409 before one is made. */
@@ -488,6 +501,30 @@ router.post("/cases/:caseNo/travellers/:travellerId/refusal-letter", visaEdit, a
   const { maxBytes, tooBig } = await refusalLetterService.refusalLetterLimit(caseNo, travellerId, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await refusalLetterService.uploadRefusalLetter(caseNo, travellerId, bytes, actor) });
+});
+
+/**
+ * Upload an approved e-visa traveller's e-visa (docs/decisions/0025-evisa-after-decision.md, part 1): the PDF itself
+ * is the body, as for the refusal letter. At Decision, by whoever can act on the case. The case, the traveller and the
+ * size limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/travellers/:travellerId/evisa", visaEdit, async (req, res) => {
+  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+    throw new HttpError(415, "Upload the file as a PDF.");
+  }
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const travellerId = idParam.parse(req.params.travellerId);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await evisaService.evisaLimit(caseNo, travellerId, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await evisaService.uploadEvisa(caseNo, travellerId, bytes, actor) });
+});
+
+/** The e-visa checked against the passport (0025, part 1): Matches, Doesn't match, or null to undo. 409 on a newer PDF. */
+router.put("/cases/:caseNo/travellers/:travellerId/evisa-check", visaEdit, async (req, res) => {
+  const body = setEvisaCheckSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await evisaService.setEvisaCheck(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /**

@@ -5,6 +5,7 @@ import { formatDate } from '../../../lib/format'
 import type { VisaCase } from '../types'
 import { ChangeDecisionDialog } from './ChangeDecisionDialog'
 import { dayTime, firstName, weekdayDay, windingDown } from './labels'
+import { EvisaLine } from './EvisaLine'
 import { RefusalLetterLine } from './RefusalLetterLine'
 
 /**
@@ -12,7 +13,8 @@ import { RefusalLetterLine } from './RefusalLetterLine'
  * with the sticker (or e-visa) number and the dates it's valid, or Refused. While the case is at Step 6 it's due back to
  * check the passports are on their way (an e-visa: to let the client know), and whoever can act on the case can correct
  * a traveller's entry (Change, Decision 6), at Passport back too until the handover. A refused traveller's refusal letter is uploaded and opened on their row, at
- * any step and status once decided (Decision 4).
+ * any step and status once decided (Decision 4). An approved e-visa's PDF is uploaded and checked against the passport on
+ * its row (docs/decisions/0025-evisa-after-decision.md).
  */
 export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -23,6 +25,8 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const canAct = !!me && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // At Decision, or at Passport back until the handover (amended 19 Oct 2026), to put a sticker that doesn't match right.
   const canChange = canAct && (c.stage.code === 'DECISION' || c.stage.code === 'PASSPORT_BACK') && c.status === 'OPEN'
+  // An e-visa's PDF and its check (0025), at Decision on an open case.
+  const canEvisa = canAct && c.stage.code === 'DECISION' && c.status === 'OPEN'
   const traveller = c.travellers.find((t) => t.id === changing)
 
   return (
@@ -39,8 +43,11 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           {t.decision?.outcome === 'APPROVED' ? (
             <>
               <span className="chip chip-ok">Approved</span>
-              <span className="mono small">
-                {number} {t.decision.visaNo} · valid {formatDate(t.decision.validFrom)} – {formatDate(t.decision.validTo)}
+              <span className="decision-detail">
+                <span className="mono small">
+                  {number} {t.decision.visaNo} · valid {formatDate(t.decision.validFrom)} – {formatDate(t.decision.validTo)}
+                </span>
+                {c.submittedOnline && <EvisaLine visaCase={c} traveller={t} canAct={canEvisa} />}
               </span>
             </>
           ) : t.decision?.outcome === 'REFUSED' ? (

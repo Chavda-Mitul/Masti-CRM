@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react'
 import { Link, useParams } from 'react-router'
+import { RefreshFailed } from '../../../components/RefreshFailed'
 import { ApiError } from '../../../lib/api'
-import { errorText } from '../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../lib/apiErrors'
 import { departmentStyle } from '../../../lib/departments'
 import '../../../styles/case.css'
 import '../../../styles/handover.css'
@@ -41,7 +42,9 @@ export function VisaCasePage() {
   const visaCase = useVisaCase(caseNo)
 
   if (visaCase.isPending) return <div className="muted">Loading…</div>
-  if (visaCase.isError) {
+  // A refresh that fails later keeps the case on screen, with any unsaved work in its cards (RefreshFailed below). Only
+  // a first load that failed, or a refresh saying it's no longer theirs to see, shows the error instead.
+  if (visaCase.isLoadingError || lostAccess(visaCase)) {
     const status = visaCase.error instanceof ApiError ? visaCase.error.status : 0
     const title = status === 404 ? 'Case not found' : status === 403 ? 'This case is someone else’s' : 'Couldn’t load this case'
     return (
@@ -67,6 +70,7 @@ export function VisaCasePage() {
       <Link to={`/enquiries?department=${c.department.code}`} className="back-link">
         ‹ {style.label} enquiries
       </Link>
+      <RefreshFailed query={visaCase} what="this case" />
       <CaseHeader visaCase={c} />
       <div className="case-grid">
         <div className="case-col">

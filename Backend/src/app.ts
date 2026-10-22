@@ -18,6 +18,7 @@ import companyRoutes from "./modules/company/company.routes";
 import consentPublicRoutes from "./modules/consent/consent.public.routes";
 import consentRoutes from "./modules/consent/consent.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
+import messageFilesPublicRoutes from "./modules/messages/messageFiles.public.routes";
 import noticeRoutes from "./modules/notices/notices.routes";
 import portalHelperRoutes from "./modules/portalLogins/portalHelper.routes";
 import portalLoginRoutes from "./modules/portalLogins/portalLogins.routes";
@@ -43,6 +44,8 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 // The client's consent page (docs/decisions/0022-consent-form.md): no login, so its router has no requireAuth.
 app.use("/api/public/consent", consentPublicRoutes);
+// No login either: WhatsApp's provider fetches a message's file with the link's short-lived key (0025, part 2).
+app.use("/api/public/message-files", messageFilesPublicRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/clients", clientRoutes);

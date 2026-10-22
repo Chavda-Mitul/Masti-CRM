@@ -16,7 +16,8 @@ export function WhoUsedWhatCard({ uses }: { uses: PortalUse[] }) {
                 {use.user.name} · {use.portal.name}
               </span>
               <span className={needsLooking(use.outcome) ? 'who-used-when portal-warn' : 'who-used-when muted'}>
-                {usedWhen(use.at)} · {outcomeWords(use.outcome)}
+                {usedWhen(use.at)}
+                {use.caseNo && ` · ${use.caseNo}`} · {outcomeWords(use.outcome)}
               </span>
             </li>
           ))}

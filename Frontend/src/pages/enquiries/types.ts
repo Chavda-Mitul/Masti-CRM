@@ -331,10 +331,15 @@ export interface CaseTraveller {
   appointmentAt: string | null
   /** Step 6 (0012): null until the decision is recorded */
   decision: TravellerDecision | null
-  /** An approved traveller's sticker, checked when the passports were received (0013 Decision 5); null until then */
+  /**
+   * An approved traveller's sticker, checked when the passports were received (0013 Decision 5); an e-visa's PDF, checked
+   * at Decision (0025). Null until checked.
+   */
   stickerCheck: StickerCheck | null
   /** The current refusal letter (0012 Decision 4), and how many were uploaded; only while the traveller is refused. */
   refusalLetter: (CaseFile & { copies: number }) | null
+  /** An e-visa's current PDF (0025), and how many were uploaded; only while the traveller is approved. */
+  evisa: (CaseFile & { copies: number }) | null
   documents: CaseDocument[]
   /** In or made */
   done: number
@@ -631,6 +636,14 @@ export interface CaseReminders {
   nextAt: string | null
 }
 
+/** The portal a case's visa opens (0024 component 3): who's on its list, and the CRM helper's IDs. Never its ID or password. */
+export interface CasePortal {
+  id: string
+  name: string
+  userIds: string[]
+  helperIds: string[]
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -650,11 +663,15 @@ export interface VisaCase {
   fieldJobs: FieldJob[]
   source: { code: string; name: string }
   origin: EnquiryOrigin
+  /** The visa (country × type): its settings page is /settings/masters/checklists/:offeringId. */
+  offeringId: number
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }
   /** The visa's switches (0007 Decision 6), read live: what "File ready" asks for. */
   appointmentNeeded: boolean
   vendorNeeded: boolean
+  /** The portal its visa opens with Log in for me (0024 component 3); null when none is saved. */
+  portal: CasePortal | null
   adults: number
   children: number
   travelMonth: string
@@ -674,6 +691,8 @@ export interface VisaCase {
   finalFileCopies: number
   /** The largest PDF the server accepts (setting visa.finalFile). */
   finalFileMaxMb: number
+  /** The largest e-visa PDF the server accepts (0025): WhatsApp's limit, or the final file's if lower. */
+  evisaMaxMb: number
   /** The largest scan "Save scan" takes (setting clients.documents). */
   scanMaxMb: number
   /** The submission agent picked during File preparation (0007 Decision 7), or null. */
@@ -752,6 +771,8 @@ export interface CaseMessage {
   title: string
   /** Its words, exactly as sent. */
   body: string
+  /** The case's file it carried (0025, part 2): an e-visa's PDF. */
+  attachment: { fileName: string } | null
   status: MessageStatus
   /** Why it didn't go or wasn't delivered, in plain words. */
   error: string | null

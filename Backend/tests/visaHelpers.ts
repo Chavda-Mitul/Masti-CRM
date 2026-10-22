@@ -7,7 +7,7 @@ import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
 // Step 4 in visaDocket.test.ts, Steps 6 to 8 in visaRefusalLetter.test.ts, visaPassportsBack.test.ts and
-// visaHandover.test.ts).
+// visaHandover.test.ts, e-visas after the decision in visaEvisa.test.ts).
 
 export type Agent = Awaited<ReturnType<typeof loginAs>>;
 
@@ -272,6 +272,37 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
     ];
     const updatedAt = await updatedAtOf(processor, c.caseNo);
     expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt })).status).toBe(200);
+  }
+  return { c, processor, adult: a!.id, child: k!.id };
+}
+
+/**
+ * Mehta's file as an e-visa, Neha's (docs/decisions/0025-evisa-after-decision.md): France · Tourist with Vendor needed
+ * off, invoiced, Submitted online, then decided as `outcomes` says for Rakesh and Aarav (approved by default: e-Visa
+ * EV-2026/88213 and 88214, valid 20–60 days from today). `decided: false` leaves it At vendor.
+ */
+export async function evisaCase({ decided = true, outcomes = ["APPROVED", "APPROVED"] as ("APPROVED" | "REFUSED")[] } = {}) {
+  if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
+  const c = await dispatchCase();
+  const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
+  await prisma.visaOffering.update({ where: { id: offeringId }, data: { vendorNeeded: false } });
+  await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { vendorId: null } });
+  const processor = await loginAs("neha@masti.test");
+  await makeInvoiceable(processor, c, { clientName: "Rakesh Mehta" });
+  await raiseInvoice(processor, c.caseNo);
+  const ready = await updatedAtOf(processor, c.caseNo);
+  expect((await processor.post(`/api/visa/cases/${c.caseNo}/submit-online`).send({ updatedAt: ready })).status).toBe(200);
+
+  const [a, k] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+  await prisma.visaCaseTraveller.update({ where: { id: a!.id }, data: { name: "Rakesh Mehta" } });
+  await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
+  if (decided) {
+    const outcome = (travellerId: string, i: number) =>
+      outcomes[i] === "APPROVED"
+        ? { travellerId, outcome: "APPROVED", visaNo: `EV-2026/${88213 + i}`, validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) }
+        : { travellerId, outcome: "REFUSED" };
+    const updatedAt = await updatedAtOf(processor, c.caseNo);
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes: [outcome(a!.id, 0), outcome(k!.id, 1)], updatedAt })).status).toBe(200);
   }
   return { c, processor, adult: a!.id, child: k!.id };
 }

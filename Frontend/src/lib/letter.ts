@@ -121,7 +121,7 @@ export function tabsToPipes(text: string): string | null {
 /** Where the case lacked a value, the draft writes ⟦the hotel stay⟧; "Make the letter" waits while any ⟦ or ⟧ is left. */
 export const MARK_OPEN = '⟦'
 export const MARK_CLOSE = '⟧'
-/** Where {purpose} is in a draft: the paragraph "Write it with AI" writes, or staff type (0019 amendment 2). */
+/** Where {purpose} is in a draft: the paragraph on why they travel, which the AI or staff write (0019 amendments 2, 4). */
 export const PURPOSE_MARK = '⟦why they travel⟧'
 
 /** The longest letter a case keeps. */

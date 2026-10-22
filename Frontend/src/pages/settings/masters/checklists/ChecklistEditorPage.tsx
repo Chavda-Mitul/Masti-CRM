@@ -12,6 +12,7 @@ import { useToast } from '../../../../lib/toast'
 import { masterKeys, useChecklist, useMasterList, useOfferings, useReplaceChecklist, useSaveOffering } from '../queries'
 import { checklistFormSchema, MAX_CHECKLIST_ITEMS, type ChecklistFormValues, type ChecklistLineValues } from '../schemas'
 import type { Checklist, DocumentMaster, DocumentRequirement, TravellerGroup } from '../types'
+import { VisaPortalCard } from './VisaPortalCard'
 
 const REQUIREMENTS: { value: DocumentRequirement; label: string }[] = [
   { value: 'ORIGINAL', label: 'Original' },
@@ -205,6 +206,8 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
           )
         }}
       />
+
+      <VisaPortalCard offeringId={offeringId} portal={checklist.offering.portal} canEdit={canEdit} disabled={dirty} />
 
       {stale && (
         <div className="alert alert-warn stale-bar" role="alert">

@@ -219,8 +219,8 @@ describe("the database", () => {
       prisma.caseFile.create({
         data: { enquiryId: c.id, storageKey: `cases/${c.id}/x/${Math.random()}.pdf`, fileName: "x.pdf", sizeBytes: 1, pageCount: 1, uploadedById: neha.id, kind: "FINAL_FILE", ...data },
       });
-    await expect(file({ kind: "REFUSAL_LETTER" })).rejects.toThrow(/CaseFile_refusal_letter_traveller/);
-    await expect(file({ kind: "FINAL_FILE", travellerId: child })).rejects.toThrow(/CaseFile_refusal_letter_traveller/);
+    await expect(file({ kind: "REFUSAL_LETTER" })).rejects.toThrow(/CaseFile_traveller/);
+    await expect(file({ kind: "FINAL_FILE", travellerId: child })).rejects.toThrow(/CaseFile_traveller/);
     await file({ kind: "REFUSAL_LETTER", travellerId: child });
   });
 });

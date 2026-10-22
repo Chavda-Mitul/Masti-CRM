@@ -282,6 +282,20 @@ export function useUploadRefusalLetter(caseNo: string) {
   )
 }
 
+/** Uploads an approved traveller's e-visa (0025, one PDF). A newer upload becomes the current one and clears the check. */
+export function useUploadEvisa(caseNo: string) {
+  return useCaseAction<{ travellerId: string; file: File }>(caseNo, (base, { travellerId, file }) =>
+    uploadPdf(`${base}/travellers/${travellerId}/evisa`, file),
+  )
+}
+
+/** An e-visa checked against the passport (0025): Matches, Doesn't match, or null to undo. It names the PDF looked at. */
+export function useSetEvisaCheck(caseNo: string) {
+  return useCaseAction<{ travellerId: string; fileId: string; check: StickerCheck | null }>(caseNo, (base, { travellerId, ...body }) =>
+    api(`${base}/travellers/${travellerId}/evisa-check`, { method: 'PUT', body }),
+  )
+}
+
 /** Opens one of the case's files in a new tab, through a link that works for a few minutes. */
 export function useOpenCaseFile(caseNo: string) {
   const open = useOpenSignedLink()
@@ -796,13 +810,17 @@ export function useMakeCoveringLetter(caseNo: string) {
 }
 
 /**
- * "Write it with AI": the paragraph on why they travel, written from the trip alone (0019 amendment 2). Nothing is saved:
- * the card puts it in the letter. A failure is a 503 whose message says why (AI_FAILED).
+ * "Write the whole letter with AI" (0019 amendment 4): the letter as it stands on the card, rewritten for the trip, and
+ * the personal details the AI dropped. Nothing is saved: the card shows the letter. A failure is a 503 whose message
+ * says why (AI_FAILED).
  */
-export function useWritePurpose(caseNo: string) {
+export function useWriteLetter(caseNo: string) {
   return useMutation({
-    mutationFn: async () =>
-      api<{ paragraph: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/purpose`, { method: 'POST' }),
+    mutationFn: async (letter: string) =>
+      api<{ letter: string; removed: string[] }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/write`, {
+        method: 'POST',
+        body: { letter },
+      }),
   })
 }
 

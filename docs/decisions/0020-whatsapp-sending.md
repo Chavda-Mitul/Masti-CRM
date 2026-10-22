@@ -83,7 +83,9 @@ hours of the tester's last message to the sandbox.
 2. **Built 21 Oct 2026, `docs/decisions/0021-whatsapp-outbox.md`. The outbox:** `MessageTemplate` and `OutboundMessage` (0003 Decision 6), written in the same transaction as the
    change they report, and a background sender (pg-boss is the suggestion in §16.5) that retries without sending twice.
 3. **The visa messages at every step,** from the drafted texts (`docs/whatsapp-visa-messages.md`, waiting for Masti's
-   approval, M1). Messages 7 and 18 attach a PDF, so a message gets an attachment then.
+   approval, M1). Messages 7 and 18 attach a PDF, so a message gets an attachment then. *Attachments are built (22 Oct
+   2026, [0025](0025-evisa-after-decision.md) Decision 4): `WhatsAppMessage.attachment`, sent by Twilio as `mediaUrl`
+   from the CRM's own short-lived link.*
 4. **The consent "I agree" link** (message 4, filling the consent flag from 0006).
 5. **Delivered and read ticks:** Twilio's status webhook, checked with the Auth Token. It needs a public address
    (ngrok on a laptop).

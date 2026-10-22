@@ -1,7 +1,9 @@
 # 0021 · The WhatsApp outbox
 
 - **Status:** decided and built, step 2 of 0020's five (21 Oct 2026, project lead). The "Sent to the client" card on the
-  case comes next.
+  case comes next. *A message can carry one of its case's files since 22 Oct 2026: see
+  [0025](0025-evisa-after-decision.md) Decision 4 (`attachmentId`, a new link at each try, the
+  `/api/public/message-files` route).*
 - **Date:** 21 Oct 2026
 - **Scope:** how a message gets from a change in the CRM to the client. It is written down with the change, sent
   afterwards by a background job, tried again without ever going twice, and followed until it is delivered or read.

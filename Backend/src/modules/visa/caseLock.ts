@@ -60,6 +60,12 @@ export const DECIDED: StepRule = {
 };
 
 /**
+ * An approved e-visa's PDF and its check (docs/decisions/0025-evisa-after-decision.md): at Decision, on an open case.
+ * An e-visa never reaches Passport back.
+ */
+export const CHECKING_EVISA: StepRule = { stages: ["DECISION"], wrongStage: "The e-visa is added once the decision is recorded." };
+
+/**
  * Step 7 (docs/decisions/0013-visa-passport-back.md Decision 3): "Passports on the way back", from Decision, or at
  * Passport back for a recalled file; on a cancelled case too (0006 amendment 15).
  */

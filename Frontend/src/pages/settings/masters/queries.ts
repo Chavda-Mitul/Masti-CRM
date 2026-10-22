@@ -481,7 +481,9 @@ export function useSaveOffering() {
       body,
     }: {
       id?: number
-      body: { countryId: number; visaTypeId: number } | { isActive?: boolean; appointmentNeeded?: boolean; vendorNeeded?: boolean }
+      body:
+        | { countryId: number; visaTypeId: number }
+        | { isActive?: boolean; appointmentNeeded?: boolean; vendorNeeded?: boolean; portalLoginId?: string | null }
     }) =>
       (await api<{ offering: Offering }>(id ? `/masters/visa-offerings/${id}` : '/masters/visa-offerings', {
         method: id ? 'PATCH' : 'POST',

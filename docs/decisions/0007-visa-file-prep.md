@@ -186,8 +186,9 @@ traveller's booked appointment) and at File ready, with the passport check.
     as `FRA1MU20260648`). Anything else that isn't a capital or a digit is refused.
   - **Saved even when Appointment needed is off.** The switch only decides what "File ready" asks for and whether the
     page shows the column.
-  - **Not shown yet:** the portal box ("Log in for me") and the Read passport scan, Fill and Print buttons. They are
-    pending (Decision 2), so the page shows no dead buttons.
+  - **Not shown yet:** the Read passport scan, Fill and Print buttons. They are pending (Decision 2), so the page shows
+    no dead buttons. *The portal box with "Log in for me" is shown since 21 Oct 2026: `docs/decisions/0024-portal-logins.md`
+    component 3.*
 
 ### 6. The visa's switches: Appointment needed, Vendor needed
 

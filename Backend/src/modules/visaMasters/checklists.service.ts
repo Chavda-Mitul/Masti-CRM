@@ -6,7 +6,7 @@ import { badRequest, notFound } from "../../lib/httpError";
 import type { Actor } from "../users/user";
 import { assertCanEditVisaMasters } from "./access";
 import type { ReplaceChecklistInput } from "./visaMasters.schemas";
-import { countryLabel, offeringInclude, offeringLabel } from "./visaMasters.service";
+import { countryLabel, offeringInclude, offeringLabel, offeringPortal, offeringPortalInclude } from "./visaMasters.service";
 
 // A country × visa type checklist (docs/decisions/0005-system-masters.md §6).
 // Saved whole: one PUT replaces every line in a transaction, with optimistic locking on the offering's updatedAt.
@@ -42,7 +42,11 @@ const lineOf = (item: Pick<ItemRow, "documentId" | "requirement" | "appliesTo" |
 async function loadChecklist(offeringId: number) {
   const offering = await prisma.visaOffering.findUnique({
     where: { id: offeringId },
-    include: { ...offeringInclude, checklist: { include: itemInclude, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
+    include: {
+      ...offeringInclude,
+      ...offeringPortalInclude,
+      checklist: { include: itemInclude, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+    },
   });
   if (!offering) throw notFound("Visa offering not found.");
   return offering;
@@ -61,6 +65,8 @@ function toChecklistDto(offering: ChecklistRow) {
       isActive: offering.isActive,
       appointmentNeeded: offering.appointmentNeeded,
       vendorNeeded: offering.vendorNeeded,
+      /** The portal its cases open with Log in for me (0024 component 3). */
+      portal: offeringPortal(offering),
       updatedAt: offering.updatedAt,
     },
     items,

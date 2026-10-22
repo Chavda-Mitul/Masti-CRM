@@ -235,6 +235,9 @@ export const makeCoveringLetterSchema = z.object({
   letter: letterTextSchema,
 });
 
+/** "Write the whole letter with AI" (0019 amendment 4): the letter as it stands on the card. */
+export const writeLetterSchema = z.object({ letter: letterTextSchema });
+
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
 export const createVisaCaseSchema = z
   .object({
@@ -283,6 +286,7 @@ export type PassportsArriveSetting = z.infer<typeof passportsArriveSchema>;
 export type DocumentRemindersSetting = z.infer<typeof documentRemindersSchema>;
 export type CoveringLetterSetting = z.infer<typeof coveringLetterSettingSchema>;
 export type MakeCoveringLetterInput = z.infer<typeof makeCoveringLetterSchema>;
+export type WriteLetterInput = z.infer<typeof writeLetterSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;
@@ -582,6 +586,16 @@ export const changeDecisionSchema = z.object({
 });
 
 /**
+ * An approved e-visa traveller's e-visa checked against the passport and what was recorded at Step 6
+ * (docs/decisions/0025-evisa-after-decision.md): Matches, Doesn't match, or null to undo. It names the PDF that was
+ * looked at, so a newer upload is never marked unseen.
+ */
+export const setEvisaCheckSchema = z.object({
+  fileId: z.string().trim().min(1, "Open the e-visa and check it again.").max(64),
+  check: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullable(),
+});
+
+/**
  * "Passports on the way back" (docs/decisions/0013-visa-passport-back.md Decision 3): the day the vendor collected
  * them and the day they're expected at our office. The service checks both against today, the dispatch and the
  * office calendar.
@@ -710,6 +724,7 @@ export type ChangeFieldJobInput = z.infer<typeof changeFieldJobSchema>;
 export type BookFieldJobInput = z.infer<typeof bookFieldJobSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
+export type SetEvisaCheckInput = z.infer<typeof setEvisaCheckSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type RecallInput = z.infer<typeof recallSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;

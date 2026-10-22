@@ -771,6 +771,32 @@
   width: 1%;
   white-space: nowrap;
 }
+/* The visa's portal with Log in for me (0024 component 3): the demo's dark box (screen 08). */
+.application-portal {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-input);
+  background: var(--ink);
+  color: var(--on-fill);
+}
+.application-portal-text {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.application-portal-text strong {
+  font-size: 15px;
+}
+.application-portal-text span {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.application-portal-note {
+  margin: 0;
+}
 /* A not-needed paper fades, but its "Needed" button stays readable so it can be undone. */
 .checklist-row.off > :not(.row-action) {
   opacity: 0.45;
@@ -1068,6 +1094,11 @@
   margin: 4px 0 0 18px;
   color: var(--bad);
 }
+/* The file a message carried (0025), under its line. */
+.message-file {
+  margin: 2px 0 0 18px;
+  overflow-wrap: anywhere;
+}
 .message-body {
   margin: 8px 0 0 18px;
   padding: 10px 12px;
@@ -1304,6 +1335,23 @@ button.tick:focus-visible {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+/* An approved traveller's number and dates, and for an e-visa its PDF and check under them (0025). */
+.decision-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.evisa-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.evisa-mismatch {
+  flex-basis: 100%;
+  color: var(--bad);
 }
 
 /* Part 6: how documents arrive, booklets */

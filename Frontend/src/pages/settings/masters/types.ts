@@ -327,6 +327,8 @@ export interface Offering {
   /** What "File ready" asks for (0007 Decision 6): both on by default, off for e-visas. */
   appointmentNeeded: boolean
   vendorNeeded: boolean
+  /** The portal its cases open with Log in for me (0024 component 3); null when none is saved. */
+  portal: { id: string; name: string } | null
   checklistCount?: number
   updatedAt: string
 }
@@ -353,6 +355,8 @@ export interface Checklist {
     isActive: boolean
     appointmentNeeded: boolean
     vendorNeeded: boolean
+    /** The portal its cases open with Log in for me (0024 component 3). */
+    portal: { id: string; name: string } | null
     updatedAt: string
   }
   items: ChecklistItem[]

@@ -82,6 +82,16 @@ describe("choosing the provider", () => {
     });
     expect(forTheLog(message, false)).toEqual(words);
   });
+
+  it("log only: hides a file link's key from the log when live, and keeps it on a laptop (0025, part 2)", () => {
+    const url = "https://crm.masti.in/api/public/message-files/0b7e1c5e-0000-4000-8000-000000000001/VISA-2026-0041_Rakesh-Mehta_evisa.pdf?key=abcDEF123_-xyz";
+    const message = { to, body: "Your e-visa is attached.", attachment: { url, fileName: "VISA-2026-0041_Rakesh-Mehta_evisa.pdf" } };
+    expect(forTheLog(message, true)).toEqual({
+      ...message,
+      attachment: { ...message.attachment, url: url.replace("key=abcDEF123_-xyz", "key=…") },
+    });
+    expect(forTheLog(message, false)).toEqual(message);
+  });
 });
 
 describe("Twilio", () => {
@@ -96,6 +106,40 @@ describe("Twilio", () => {
       from: "whatsapp:+14155238886",
       to: "whatsapp:+919825041234",
       body: "All documents received.",
+    });
+  });
+
+  it("sends a file with our words: Twilio fetches it from the link it's given (0025, part 2)", async () => {
+    twilioMock.create.mockResolvedValue({ sid: "SM3" });
+    const url = "https://crm.masti.in/api/public/message-files/m1/VISA-2026-0041_Rakesh-Mehta_evisa.pdf?key=k";
+    await twilioProvider(settings).send({ to, body: "Your e-visa is attached.", attachment: { url, fileName: "VISA-2026-0041_Rakesh-Mehta_evisa.pdf" } });
+
+    expect(twilioMock.create).toHaveBeenCalledWith({
+      from: "whatsapp:+14155238886",
+      to: "whatsapp:+919825041234",
+      body: "Your e-visa is attached.",
+      mediaUrl: [url],
+    });
+  });
+
+  it("won't send a file with an approved template, and trying again won't help", async () => {
+    const error = await refusal(
+      twilioProvider(settings).send({
+        to,
+        body: "Dear Rakesh Mehta, …",
+        template: { id: "HX01", variables: { client_name: "Rakesh Mehta" } },
+        attachment: { url: "https://crm.masti.in/api/public/message-files/m1/x.pdf?key=k", fileName: "x.pdf" },
+      }),
+    );
+    expect(error).toMatchObject({ message: expect.stringContaining("goes with our own words"), retryable: false });
+    expect(twilioMock.create).not.toHaveBeenCalled();
+  });
+
+  it("explains a file Twilio couldn't fetch in plain words", async () => {
+    twilioMock.fetch.mockResolvedValue({ status: "failed", errorCode: 63019, errorMessage: "Media failed to download" });
+    expect(await twilioProvider(settings).checkStatus("SM3")).toEqual({
+      status: "FAILED",
+      error: "Twilio couldn't fetch the attached file: the CRM's public address (PUBLIC_APP_URL) must be reachable from the internet.",
     });
   });
 

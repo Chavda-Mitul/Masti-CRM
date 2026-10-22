@@ -889,10 +889,15 @@ model VisaOffering {
   updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
   country           Country             @relation(fields: [countryId], references: [id], onDelete: Restrict)
   visaType          VisaType            @relation(fields: [visaTypeId], references: [id], onDelete: Restrict)
+  /// The government portal staff open from this visa's cases with "Log in for me" (0024 component 3): one of the Visa
+  /// department's portals, picked on the visa's settings page. Null: none saved. Cleared when that portal is removed.
+  portalLoginId     String?
   checklist         VisaChecklistItem[]
   cases             VisaCase[]
+  portalLogin       PortalLogin?        @relation(fields: [portalLoginId], references: [id], onDelete: Restrict)
 
   @@unique([countryId, visaTypeId])
+  @@index([portalLoginId])
 }
 
 /// Every document a checklist can ask for. No department: insurance claim checklists reuse it later, and the client
@@ -1102,50 +1107,52 @@ model EnquiryReasonDepartment {
 }
 
 model Enquiry {
-  id             String            @id @default(uuid())
+  id              String            @id @default(uuid())
   /// VISA-2026-0001. Never changes once issued.
-  caseNo         String            @unique
-  departmentId   Int
-  clientId       String
-  sourceId       Int
-  origin         EnquiryOrigin     @default(STAFF)
+  caseNo          String            @unique
+  departmentId    Int
+  clientId        String
+  sourceId        Int
+  origin          EnquiryOrigin     @default(STAFF)
   /// A repeat request with the same key returns this enquiry instead of creating another.
-  idempotencyKey String?           @unique
-  stageId        Int
-  status         EnquiryStatus     @default(OPEN)
+  idempotencyKey  String?           @unique
+  stageId         Int
+  status          EnquiryStatus     @default(OPEN)
   /// "Whose job it is now". Null = not assigned yet (e.g. a future bot enquiry).
-  ownerId        String?
+  ownerId         String?
   /// When someone must next act on it: the list order, Today, the follow-up desk and "running late".
-  dueAt          DateTime?         @db.Timestamptz(3)
+  dueAt           DateTime?         @db.Timestamptz(3)
   /// Why it was postponed or cancelled. Checked in the migration: POSTPONED and CANCELLED need one.
-  reasonId       Int?
+  reasonId        Int?
   /// When a postponed enquiry comes back (POSTPONED needs one). dueAt is set to that day.
-  resumeOn       DateTime?         @db.Date
+  resumeOn        DateTime?         @db.Date
   /// Null when an integration created it.
-  createdById    String?
-  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  createdById     String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token for the case actions (follow-up, postpone, reassign, mature…).
-  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
-  department     Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  client         Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  source         EnquirySource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  stage          DepartmentStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  owner          User?             @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  createdBy      User?             @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  reason         EnquiryReason?    @relation(fields: [reasonId], references: [id], onDelete: Restrict)
-  visa           VisaCase?
-  followUps      FollowUp[]
-  files          CaseFile[]
-  invoices       Invoice[]
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+  department      Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  client          Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  source          EnquirySource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  stage           DepartmentStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner           User?             @relation("EnquiryOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy       User?             @relation("EnquiryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reason          EnquiryReason?    @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  visa            VisaCase?
+  followUps       FollowUp[]
+  files           CaseFile[]
+  invoices        Invoice[]
   /// The collection and delivery boy's jobs for it (0015).
-  fieldJobs      FieldJob[]
-  creditNotes    CreditNote[]
+  fieldJobs       FieldJob[]
+  creditNotes     CreditNote[]
   /// The client's messages about it (docs/decisions/0021-whatsapp-outbox.md).
-  messages       OutboundMessage[]
+  messages        OutboundMessage[]
   /// The AI calls made for it (docs/decisions/0023-ai.md).
-  aiCalls        AiCall[]
+  aiCalls         AiCall[]
   /// Consent links sent from it (docs/decisions/0022-consent-form.md).
-  consentLinks   ConsentLink[]
+  consentLinks    ConsentLink[]
+  /// "Log in for me" pressed on this case (docs/decisions/0024-portal-logins.md component 3).
+  portalLoginUses PortalLoginUse[]
 
   @@index([status, dueAt])
   @@index([departmentId, status, dueAt])
@@ -1168,6 +1175,9 @@ enum CaseFileKind {
   /// The field boy's selfie at the client's door (docs/decisions/0015-field-staff-app.md Decision 4): a photo, no page
   /// count. Linked to the job once he finishes it.
   FIELD_SELFIE
+  /// An approved e-visa traveller's e-visa, as the portal issued it (docs/decisions/0025-evisa-after-decision.md). Has a
+  /// traveller.
+  EVISA
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -1185,8 +1195,8 @@ model CaseFile {
   pageCount    Int?
   uploadedById String
   uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
-  /// The traveller a refusal letter is for (0012 Decision 4): set for REFUSAL_LETTER and only for it (checked in the
-  /// migration). The service keeps it to a traveller of the same case.
+  /// The traveller a refusal letter (0012 Decision 4) or an e-visa (0025) is for: set for REFUSAL_LETTER and EVISA and
+  /// only for them (checked in the migration). The service keeps it to a traveller of the same case.
   travellerId  String?
   enquiry      Enquiry            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   uploadedBy   User               @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
@@ -1197,6 +1207,8 @@ model CaseFile {
   handover     VisaHandover?
   /// The field job this selfie proves (0015): set once he finishes it.
   fieldJob     FieldJob?          @relation("FieldJobSelfie")
+  /// WhatsApp messages that carried this file to the client (0025, part 2).
+  messages     OutboundMessage[]
 
   @@index([enquiryId, kind, uploadedAt])
   @@index([travellerId, uploadedAt])
@@ -1371,7 +1383,8 @@ enum VisaOutcome {
 }
 
 /// An approved traveller's visa sticker, checked against the passport's name and the dates recorded at Step 6 when the
-/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5).
+/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). For an e-visa, its PDF checked against
+/// the passport and what was recorded at Step 6 (docs/decisions/0025-evisa-after-decision.md).
 enum StickerCheck {
   MATCHES
   MISMATCH
@@ -1400,16 +1413,17 @@ model VisaCaseTraveller {
   visaNo             String?
   validFrom          DateTime?          @db.Date
   validTo            DateTime?          @db.Date
-  /// Checked when the passports are received (0013 Decision 5): only an approved traveller has a sticker (checked in the
-  /// migration); null until then.
+  /// Checked when the passports are received (0013 Decision 5); an e-visa's, once its PDF is uploaded at Decision, and
+  /// cleared by a newer PDF (0025). Only an approved traveller has one (checked in the migration); null until checked.
   stickerCheck       StickerCheck?
   visaCase           VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member             ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents          VisaCaseDocument[]
   quoteLine          VisaQuoteLine?
   invoiceLines       InvoiceLine[]
-  /// Scanned refusal letters, newest current (0012 Decision 4); kept when the outcome changes.
-  refusalLetters     CaseFile[]
+  /// Scanned refusal letters (0012 Decision 4) and e-visas (0025), the newest of each kind current; kept when the
+  /// outcome changes.
+  files              CaseFile[]
   /// Handovers where this traveller collected the passports (0014 Decision 3).
   handoversCollected VisaHandover[]
 
@@ -1986,42 +2000,52 @@ model MessageTemplate {
 /// One message to a client, and the record of what they were told. Its id is also its pg-boss job's id.
 /// Checks in the migration: one that went (SENT, DELIVERED, READ) has sentAt, provider, providerMessageId and sentTo,
 /// plus deliveredAt or readAt for those two; a FAILED one has error and failedAt; sendingAt only while QUEUED;
-/// attempts never negative; no blank body; the number's format.
+/// attempts never negative; no blank body; the number's format; a file link's key and expiry together, and only with a
+/// file.
 model OutboundMessage {
-  id                String          @id @default(uuid())
-  templateId        Int
-  clientId          String
+  id                     String          @id @default(uuid())
+  templateId             Int
+  clientId               String
   /// The case it's about, when there is one.
-  enquiryId         String?
+  enquiryId              String?
   /// The client's main number when it was queued: who it is for.
-  toMobile          String
+  toMobile               String
   /// The values put into the template's placeholders.
-  variables         Json
+  variables              Json
   /// The words as rendered when it was queued.
-  body              String
+  body                   String
   /// "visa.documents_received:<enquiryId>": the same event never queues a second message.
-  idempotencyKey    String          @unique
-  status            MessageStatus   @default(QUEUED)
+  idempotencyKey         String          @unique
+  status                 MessageStatus   @default(QUEUED)
   /// Tries so far.
-  attempts          Int             @default(0)
+  attempts               Int             @default(0)
   /// Set while a try is with the provider. A try that never came back isn't repeated: the message may have gone.
-  sendingAt         DateTime?       @db.Timestamptz(3)
+  sendingAt              DateTime?       @db.Timestamptz(3)
   /// Who carried it ("twilio", "log") and their id for it, which delivery updates refer to.
-  provider          String?
-  providerMessageId String?
+  provider               String?
+  providerMessageId      String?
   /// The number it went to: outside production, always WHATSAPP_TEST_NUMBER.
-  sentTo            String?
+  sentTo                 String?
   /// Why the last try failed, or why it wasn't delivered, in plain words.
-  error             String?
-  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
-  sentAt            DateTime?       @db.Timestamptz(3)
-  deliveredAt       DateTime?       @db.Timestamptz(3)
-  readAt            DateTime?       @db.Timestamptz(3)
-  failedAt          DateTime?       @db.Timestamptz(3)
-  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
-  template          MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  client            Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  enquiry           Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  error                  String?
+  createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  sentAt                 DateTime?       @db.Timestamptz(3)
+  deliveredAt            DateTime?       @db.Timestamptz(3)
+  readAt                 DateTime?       @db.Timestamptz(3)
+  failedAt               DateTime?       @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @db.Timestamptz(3)
+  /// A file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): one of the case's files, which
+  /// the provider fetches through the CRM's own short-lived link (messageFiles.public.routes.ts). One per message, as
+  /// WhatsApp takes one.
+  attachmentId           String?
+  /// The SHA-256 of the file link's key, made afresh at each try (an earlier try's link stops working), and when the
+  /// link stops working.
+  attachmentKeyHash      String?         @unique
+  attachmentKeyExpiresAt DateTime?       @db.Timestamptz(3)
+  template               MessageTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  client                 Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  enquiry                Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  attachment             CaseFile?       @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
 
   @@index([clientId, createdAt])
   @@index([enquiryId, createdAt])
@@ -2130,6 +2154,8 @@ model PortalLogin {
   createdBy         User              @relation("PortalLoginCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   users             PortalLoginUser[]
   uses              PortalLoginUse[]
+  /// The visas whose cases open this portal (component 3).
+  visaOfferings     VisaOffering[]
 
   @@index([departmentId, status])
 }
@@ -2162,11 +2188,15 @@ model PortalLoginUse {
   redeemedIp      String?
   outcome         PortalLoginOutcome?
   outcomeAt       DateTime?           @db.Timestamptz(3)
+  /// The case it was pressed on (component 3); null when pressed on Settings → Portal logins.
+  enquiryId       String?
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   portalLogin     PortalLogin         @relation(fields: [portalLoginId], references: [id], onDelete: Restrict)
   user            User                @relation("PortalLoginUsedBy", fields: [userId], references: [id], onDelete: Restrict)
+  enquiry         Enquiry?            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
 
   @@index([portalLoginId, redeemedAt])
   @@index([redeemedAt])
   @@index([userId])
+  @@index([enquiryId])
 }

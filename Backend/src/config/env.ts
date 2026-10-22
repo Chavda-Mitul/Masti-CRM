@@ -11,7 +11,8 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default("http://localhost:5173"),
   // The address clients open links on, e.g. the consent form's (docs/decisions/0022-consent-form.md): Masti's own
   // https address in production. A phone can't open localhost: on a laptop, open the link there, or use the laptop's LAN
-  // address with `vite --host`.
+  // address with `vite --host`. WhatsApp's provider also fetches a message's file there (docs/decisions/0025-evisa-after-
+  // decision.md, part 2), so in production it must be reachable from the internet.
   PUBLIC_APP_URL: z.url("A full address, e.g. https://crm.example.com").default("http://localhost:5173"),
   // Set when running behind a reverse proxy (nginx etc.) so req.ip is the real client IP: the hop count ("1" for one
   // nginx) or a comma-separated list of the proxies' IPs/subnets. "false" when there is no proxy. "true" is refused.

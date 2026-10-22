@@ -96,13 +96,22 @@ describe("Anthropic", () => {
     // Someone is waiting, so 30 seconds and one more try.
     expect(sdk.options).toEqual([{ apiKey: "key", timeout: 30_000, maxRetries: 1 }]);
     // Exactly these: no temperature, top_p or top_k, and no half-written answer.
-    expect(sdk.create).toHaveBeenCalledWith({
-      model: "claude-haiku-5-5",
-      max_tokens: 1_000,
-      system: "You write one short paragraph.",
-      messages: [{ role: "user", content: "Two adults to France, 10–24 December." }],
-      output_config: { effort: "low" },
-    });
+    expect(sdk.create).toHaveBeenCalledWith(
+      {
+        model: "claude-haiku-5-5",
+        max_tokens: 1_000,
+        system: "You write one short paragraph.",
+        messages: [{ role: "user", content: "Two adults to France, 10–24 December." }],
+        output_config: { effort: "low" },
+      },
+      { timeout: 30_000, maxRetries: 1 },
+    );
+  });
+
+  it("gives a use case with a longer answer its own time limit and tries", async () => {
+    sdk.create.mockResolvedValue(message());
+    await anthropicProvider({ apiKey: "key" }).complete({ ...request, timeoutMs: 60_000, maxRetries: 0 });
+    expect(sdk.create).toHaveBeenCalledWith(expect.objectContaining({ model: "claude-haiku-5-5" }), { timeout: 60_000, maxRetries: 0 });
   });
 
   it("names the workspace with a user key, which belongs to none", async () => {
@@ -308,6 +317,30 @@ describe("askAi", () => {
     const call = await prisma.aiCall.findUniqueOrThrow({ where: { id: callId } });
     expect(call).toMatchObject({ provider: "fake", model: "fake", status: "OK", costMicroUsd: null });
     expect(call.inputTokens).toBeGreaterThan(0);
+  });
+
+  it("the fake AI gives a letter it's asked to write back as it was sent", async () => {
+    stub.provider = fakeProvider;
+    const { text } = await askAi({ useCase: "ai.test", system: "s", prompt: "The letter:\n<letter>\nDear Sir,\n{t1Name}\n</letter>" });
+    expect(text).toBe("<letter>\nDear Sir,\n{t1Name}\n</letter>");
+  });
+
+  it("passes a use case's own time limit and tries", async () => {
+    stub.provider = answering({ text: "<letter>Dear Sir,</letter>" });
+    await askAi({ useCase: "visa.coveringLetter.write", system: "s", prompt: "p" });
+    expect(stub.provider.complete).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 8_000, effort: "medium", timeoutMs: 45_000, maxRetries: 1 }));
+  });
+
+  it("an answer the caller can't use fails as the caller says, and is recorded as failed with its tokens", async () => {
+    stub.provider = answering({ text: "Here is your letter!" });
+    const error = await failureOf(
+      askAi({ useCase: "ai.test", system: "s", prompt: "p", accept: (text) => (text.includes("<letter>") ? null : new AiError("Not a letter.", true)) }),
+    );
+    expect(error).toMatchObject({ message: "Not a letter.", retryable: true });
+    expect(await prisma.aiCall.findFirstOrThrow()).toMatchObject({ status: "FAILED", error: "Not a letter.", inputTokens: 2_500, costMicroUsd: 750 });
+
+    stub.provider = answering({ text: "<letter>Dear Sir,</letter>" });
+    expect((await askAi({ useCase: "ai.test", system: "s", prompt: "p", accept: () => null })).text).toBe("<letter>Dear Sir,</letter>");
   });
 });
 
