@@ -20,6 +20,7 @@ import type { RaiseInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { fileSafeFamilyName, travellerLabel } from "./visaCase";
+import { queueInvoiceMessage } from "./visaMessages";
 
 // The visa tax invoice (docs/decisions/0009-visa-invoice.md): raised from the case's quote by its owner, the Visa HOD or
 // the Head, numbered in Masti's series, with a PDF in Masti's layout stored privately, and never edited (triggers in
@@ -405,6 +406,8 @@ export async function raiseInvoice(caseNo: string, input: RaiseInvoiceInput, act
             },
             tx,
           );
+          // Message 7, "Invoice" (docs/whatsapp-visa-messages.md), for this invoice; a retried number rolls it back too.
+          await queueInvoiceMessage(tx, enquiry.id, invoice);
         },
         // Making the PDF and storing it takes a moment; the case lock is held for it so no one changes the quote meanwhile.
         { timeout: 30_000 },

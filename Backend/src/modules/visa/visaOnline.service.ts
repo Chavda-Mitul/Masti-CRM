@@ -2,12 +2,15 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { conflict, HttpError } from "../../lib/httpError";
+import { VISA_APPLIED_ONLINE } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { DISPATCHING, findVisibleCase, loadCase, lockCase, visaStage } from "./caseLock";
 import type { SubmitOnlineInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { liveInvoiceNo, liveInvoicesArgs } from "./visaCase";
+import { visaMessageBasics } from "./visaMessages";
 import type { DispatchBlocker } from "./visaDispatch.service";
 
 // Visa Step 4 for e-visas (docs/decisions/0008-visa-docket-dispatch.md Decision 11): a visa whose "Vendor needed" is off
@@ -95,6 +98,15 @@ export async function submitOnline(caseNo: string, input: SubmitOnlineInput, act
       },
       tx,
     );
+    // Message 9, "Applied online" (docs/whatsapp-visa-messages.md): once, as a case goes online once.
+    const basics = await visaMessageBasics(tx, enquiry.id);
+    await queueMessage(tx, {
+      template: VISA_APPLIED_ONLINE,
+      enquiryId: enquiry.id,
+      key: `${VISA_APPLIED_ONLINE}:${enquiry.id}`,
+      clientId: basics.clientId,
+      variables: basics.variables,
+    });
   });
   return getVisaCaseById(enquiry.id);
 }

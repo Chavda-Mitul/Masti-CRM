@@ -189,11 +189,34 @@ Their other answers:
 
 Saving a visa case now queues message 1, so tests that count the queued messages count only the one they're about.
 
+## Amendment 4 (22 Oct 2026): the visa messages of Steps 4–5
+
+Group B of Amendment 3: messages 7, 8 and 9 of `docs/whatsapp-visa-messages.md`. Each is queued in the transaction of
+the change it follows, as in Amendment 3.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 7 | `visa.invoice` · Invoice | an invoice is raised: the main one or a corrected one (`raiseInvoice`), the additional one or its correction (`raiseAdditionalInvoice`) | invoice |
+| 8 | `visa.submitted` · File submitted | the file is first marked submitted at the embassy, at Step 5 (`saveSubmission`) | case |
+| 9 | `visa.applied_online` · Applied online | an e-visa is marked submitted online, at Step 4 (`submitOnline`) | case |
+
+- **Message 7:**
+  - `{{invoice_no}}` ("MVI00000001", "MVI00000001-A") and `{{amount}}`, the invoice's total as "6,000"
+    (`rupeesText`), filled by `queueInvoiceMessage`.
+  - Words only, as the project lead asked: staff send the PDF by hand.
+  - Keyed on the invoice's id. When another raise took the number first, the retry rolls the first attempt's message
+    back with it, so one goes.
+- **Message 8:**
+  - `{{embassy}}` is the embassy's name as Settings has it ("French embassy, Mumbai"). `{{expected_date}}` is the
+    collection date staff enter, as "Wed 4 Nov" (`dayLabel`).
+  - Only the first save sends it. A later change to the file number, the embassy or the date sends nothing.
+- **Message 9:** a case is submitted online once, and a second press is refused, so it goes once.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- **The other visa messages:** group A (1, 2, 3, 5) is built, Amendment 3. Groups B to D follow, one PR each. Messages 7
-  and 18 go without their PDF for now.
+- **The other visa messages:** group A (1, 2, 3, 5) is built, Amendment 3, and group B (7, 8, 9), Amendment 4. Groups
+  C and D follow, one PR each. Messages 7 and 18 go without their PDF for now.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code
