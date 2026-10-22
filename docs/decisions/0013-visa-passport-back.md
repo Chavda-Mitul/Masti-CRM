@@ -153,8 +153,9 @@ an e-visa.
 
 **M39 (d) answered 22 Oct 2026 (Vimal):** an approved e-visa's PDF is saved, checked against the passport and sent to
 the client on WhatsApp; the case then moves to Step 8 · Delivered and closes. A refused one gets the "Refused" message
-and is closed after the call. Step 7 stays skipped. Not built yet: [change request 14](../change-requests.md), with its
-own record when it is.
+and is closed after the call. Step 7 stays skipped. [Change request 14](../change-requests.md), being built under its own
+record, [0025](0025-evisa-after-decision.md) (the project lead's details, 22 Oct 2026: when everyone is refused, the case
+closes on its own; passports we hold are handed back first).
 
 ### 5. Mark received
 

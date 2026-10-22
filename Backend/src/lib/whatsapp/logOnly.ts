@@ -9,19 +9,23 @@ import type { WhatsAppMessage, WhatsAppProvider } from "./types";
 /** A link's part after "#" is its secret (the consent link, docs/decisions/0022-consent-form.md): "…/consent#…". */
 const hideLinkSecrets = (text: string) => text.replace(/(https?:\/\/[^\s#]+)#[A-Za-z0-9_-]+/g, "$1#…");
 
+/** A file link's key (docs/decisions/0025-evisa-after-decision.md, part 2): "…/message-files/…?key=…". */
+const hideFileKey = (url: string) => url.replace(/([?&]key=)[^&#]+/g, "$1…");
+
 /**
  * What the log keeps of a message. When live, no link's secret: reading the server log mustn't let anyone act for a
- * client. On a laptop the log is the only place to open the link, so it stays whole there.
+ * client, or open their file. On a laptop the log is the only place to open the link, so it stays whole there.
  */
 export function forTheLog(message: WhatsAppMessage, live = isProduction): WhatsAppMessage {
   if (!live) return message;
-  const { template } = message;
+  const { template, attachment } = message;
   return {
     ...message,
     body: hideLinkSecrets(message.body),
     ...(template
       ? { template: { ...template, variables: Object.fromEntries(Object.entries(template.variables).map(([name, value]) => [name, hideLinkSecrets(value)])) } }
       : {}),
+    ...(attachment ? { attachment: { ...attachment, url: hideFileKey(attachment.url) } } : {}),
   };
 }
 

@@ -1102,6 +1102,11 @@
   margin: 4px 0 0 18px;
   color: var(--bad);
 }
+/* The file a message carried (0025), under its line. */
+.message-file {
+  margin: 2px 0 0 18px;
+  overflow-wrap: anywhere;
+}
 .message-body {
   margin: 8px 0 0 18px;
   padding: 10px 12px;
@@ -1338,6 +1343,23 @@ button.tick:focus-visible {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+/* An approved traveller's number and dates, and for an e-visa its PDF and check under them (0025). */
+.decision-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.evisa-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.evisa-mismatch {
+  flex-basis: 100%;
+  color: var(--bad);
 }
 
 /* Part 6: how documents arrive, booklets */

@@ -72,13 +72,18 @@ function checkOne(field: string, name: string, number: string, o: Pick<ChangeDec
 /**
  * Once the passports are received (0013 Decision 5), an approved traveller's change carries the sticker check again,
  * Matches or Doesn't match, so a corrected number or date can be marked as matching (amended 19 Oct 2026). Before then,
- * and for a refused traveller, there's no sticker to check.
+ * and for a refused traveller, there's no sticker to check. An e-visa is checked on its row, beside its PDF (0025).
  */
 function checkSticker(g: Gathered, name: string, o: ChangeDecisionInput) {
   const checking = !!g.passportsReceivedAt && o.outcome === "APPROVED";
   if (checking && !o.stickerCheck) throw fieldError("decision", `Check ${name}'s sticker against the passport: Matches or Doesn't match.`);
   if (!checking && o.stickerCheck) {
-    throw fieldError("decision", g.passportsReceivedAt ? `${name} was refused: there's no sticker to check.` : "The sticker is checked once the passports are received.");
+    const why = g.passportsReceivedAt
+      ? `${name} was refused: there's no sticker to check.`
+      : g.submittedOnlineAt
+        ? "An e-visa is checked on its row, beside its PDF."
+        : "The sticker is checked once the passports are received.";
+    throw fieldError("decision", why);
   }
 }
 
@@ -230,7 +235,9 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
 /**
  * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision or at Passport
  * back until the handover (amended 19 Oct 2026): the outcome, or just the number or dates, and once the passports are
- * received an approved traveller's sticker check (checkSticker); a refused one's is cleared. In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
+ * received an approved traveller's sticker check (checkSticker); a refused one's is cleared. An e-visa's check (0025)
+ * stands while the entry stays as it was, and is cleared when it changes: the PDF must be looked at against it again.
+ * In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
  * audit (visa.decision.change, with the old and new values). It sends the case's updatedAt from when the dialog opened,
  * so a save after someone else's change is refused (409 STALE) instead of undoing it (amended 19 Oct 2026). The case's
  * step, due time and "recorded by" stay. A save that changes nothing writes nothing.
@@ -284,15 +291,20 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
       validTo: row.validTo && fromDbDate(row.validTo),
       stickerCheck: row.stickerCheck,
     };
-    const now = {
+    const entry = {
       outcome: input.outcome,
       visaNo: input.visaNo ?? null,
       validFrom: input.validFrom ?? null,
       validTo: input.validTo ?? null,
-      // Checked again once received; a refused traveller has none (the database's CHECK).
-      stickerCheck: g.passportsReceivedAt && input.outcome === "APPROVED" ? (input.stickerCheck ?? null) : null,
     };
-    const same = was.outcome === now.outcome && was.visaNo === now.visaNo && was.validFrom === now.validFrom && was.validTo === now.validTo;
+    const same = was.outcome === entry.outcome && was.visaNo === entry.visaNo && was.validFrom === entry.validFrom && was.validTo === entry.validTo;
+    const now = {
+      ...entry,
+      // Checked again once received; an e-visa's stands while its entry does (0025); a refused traveller has none (the
+      // database's CHECK).
+      stickerCheck:
+        g.passportsReceivedAt && input.outcome === "APPROVED" ? (input.stickerCheck ?? null) : g.submittedOnlineAt && same ? row.stickerCheck : null,
+    };
     if (same && was.stickerCheck === now.stickerCheck) return;
 
     await tx.visaCaseTraveller.update({

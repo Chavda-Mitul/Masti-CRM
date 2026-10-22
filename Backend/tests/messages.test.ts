@@ -536,6 +536,7 @@ describe("the case's messages (the Sent to the client card)", () => {
         id: message.id,
         title: "All documents received",
         body: BODY,
+        attachment: null,
         status: "DELIVERED",
         error: null,
         createdAt: message.createdAt.toISOString(),

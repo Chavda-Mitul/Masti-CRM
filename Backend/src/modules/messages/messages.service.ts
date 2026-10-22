@@ -7,10 +7,13 @@ import { QUEUES, queueJob } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } from "../../lib/whatsapp";
 import { maskConsentLinks } from "../consent/consentToken";
+import { newFileLink } from "./messageFiles";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
-// on WhatsApp, and a message never goes twice: a try that never came back is marked failed, not repeated.
+// on WhatsApp, and a message never goes twice: a try that never came back is marked failed, not repeated. A message can
+// carry one of its case's files, which the provider fetches through the CRM's own short-lived link
+// (docs/decisions/0025-evisa-after-decision.md, part 2; messageFiles.ts).
 
 /** A message that couldn't go within this long isn't sent at all: its news would be stale. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +40,11 @@ export interface NewMessage {
   variables: Record<string, string>;
   /** Another number than the client's main one: a traveller's own, for their consent link (0022). +91XXXXXXXXXX. */
   toMobile?: string;
+  /**
+   * One of this case's files, sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): an e-visa's
+   * PDF. The provider fetches it through the CRM's own short-lived link, made at each try.
+   */
+  attachmentId?: string;
 }
 
 /**
@@ -51,6 +59,11 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
   if (!template) {
     logger.error({ template: input.template, key: input.key }, "No wording for this WhatsApp message, so it wasn't written.");
     return;
+  }
+  if (input.attachmentId) {
+    // A client must never get another case's file: a wrong file is a bug in the caller, so the change stops.
+    const file = await tx.caseFile.findUnique({ where: { id: input.attachmentId }, select: { enquiryId: true } });
+    if (!file || !input.enquiryId || file.enquiryId !== input.enquiryId) throw new Error("The file to send with a WhatsApp message isn't this case's.");
   }
   const client = await tx.client.findUniqueOrThrow({ where: { id: input.clientId }, select: { mobile: true } });
   let filled: { body: string; variables: Record<string, string> } | null = null;
@@ -71,6 +84,7 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
         templateId: template.id,
         clientId: input.clientId,
         enquiryId: input.enquiryId ?? null,
+        attachmentId: input.attachmentId ?? null,
         toMobile: input.toMobile ?? client.mobile,
         ...(problem ? withoutSecrets(words) : words),
         idempotencyKey: input.key,
@@ -115,7 +129,7 @@ function withoutSecrets(message: { body: string; variables: Prisma.JsonValue }) 
 export async function deliverMessage(messageId: string, { lastTry }: { lastTry: boolean }): Promise<void> {
   const claimed = await claim(messageId);
   if (!claimed) return;
-  const { message, providerTemplateId, sendingAt } = claimed;
+  const { message, providerTemplateId, sendingAt, attachment } = claimed;
   const to = recipient(message.toMobile);
 
   let sent: { provider: string; providerMessageId: string };
@@ -124,6 +138,7 @@ export async function deliverMessage(messageId: string, { lastTry }: { lastTry: 
       to,
       body: message.body,
       ...(providerTemplateId ? { template: { id: providerTemplateId, variables: message.variables as Record<string, string> } } : {}),
+      ...(attachment ? { attachment } : {}),
     });
   } catch (err) {
     const error = err instanceof Error && err.message ? err.message : "The message couldn't be sent.";
@@ -150,13 +165,25 @@ function recipient(toMobile: string): string {
   return isProduction ? toMobile : (env.WHATSAPP_TEST_NUMBER ?? toMobile);
 }
 
-type Claimed = { message: OutboundMessage & { template: { code: string } }; providerTemplateId: string | null; sendingAt: Date };
+type Claimed = {
+  message: OutboundMessage & { template: { code: string } };
+  providerTemplateId: string | null;
+  sendingAt: Date;
+  /** The file's link for this try, and its name (0025, part 2). */
+  attachment: { url: string; fileName: string } | null;
+};
 
-/** Takes the message for one try, or settles it at once when it mustn't be tried. Null: there's nothing to send. */
+/**
+ * Takes the message for one try, or settles it at once when it mustn't be tried. Null: there's nothing to send. A
+ * message with a file gets a new link for this try, whose key only the provider is given; an earlier try's stops working.
+ */
 async function claim(messageId: string): Promise<Claimed | null> {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "OutboundMessage" WHERE "id" = ${messageId} FOR UPDATE`;
-    const message = await tx.outboundMessage.findUnique({ where: { id: messageId }, include: { template: true } });
+    const message = await tx.outboundMessage.findUnique({
+      where: { id: messageId },
+      include: { template: true, attachment: { select: { fileName: true } } },
+    });
     // Settled already: a repeated job never sends it again.
     if (!message || message.status !== "QUEUED") return null;
 
@@ -170,8 +197,17 @@ async function claim(messageId: string): Promise<Claimed | null> {
       await auditOutcome(tx, message, refusal);
       return null;
     }
-    await tx.outboundMessage.update({ where: { id: messageId }, data: { sendingAt: now, attempts: { increment: 1 } } });
-    return { message, providerTemplateId: message.template.providerTemplateId, sendingAt: now };
+    const link = message.attachment ? newFileLink(message.id, message.attachment.fileName, now) : null;
+    await tx.outboundMessage.update({
+      where: { id: messageId },
+      data: {
+        sendingAt: now,
+        attempts: { increment: 1 },
+        ...(link ? { attachmentKeyHash: link.keyHash, attachmentKeyExpiresAt: link.expiresAt } : {}),
+      },
+    });
+    const attachment = link && message.attachment ? { url: link.url, fileName: message.attachment.fileName } : null;
+    return { message, providerTemplateId: message.template.providerTemplateId, sendingAt: now, attachment };
   });
 }
 

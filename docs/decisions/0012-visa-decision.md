@@ -90,7 +90,9 @@ later. One letter per refused traveller; a newer upload becomes the current one 
 **Built 16 Oct 2026** (component 3, the refusal letter):
 - **Data** (migration `20261016120000_refusal_letters`): a case file of kind `REFUSAL_LETTER`, with
   `CaseFile.travellerId` (set for a refusal letter and only for it, a CHECK). The service keeps it to a traveller of the
-  same case.
+  same case. *Since 22 Oct 2026 an approved e-visa's PDF has a traveller too
+  ([0025](0025-evisa-after-decision.md)): the CHECK is now `CaseFile_traveller` (REFUSAL_LETTER and EVISA), and the
+  traveller's relation is `files`, the newest of each kind current.*
 - `POST /api/visa/cases/:caseNo/travellers/:travellerId/refusal-letter`, the PDF itself as the body (like the final
   file), for whoever can act on the case, at Decision, Passport back or Delivered, **whatever its status**. Refused with:
   - 409 before the decision ("A refusal letter is added once the decision is recorded."), or for a traveller who
