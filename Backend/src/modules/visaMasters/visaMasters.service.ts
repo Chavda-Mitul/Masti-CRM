@@ -2,7 +2,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { definedOnly, onlyChanged } from "../../lib/changes";
-import { badRequest, conflict, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
@@ -432,10 +432,23 @@ export const offeringInclude = {
 
 type OfferingRow = Prisma.VisaOfferingGetPayload<{ include: typeof offeringInclude }>;
 
+/**
+ * The portal a visa's cases open (0024 component 3), for reads outside transactions only: offeringInclude is also used
+ * inside them, where Prisma 7 + adapter-pg take one relation at most.
+ */
+export const offeringPortalInclude = {
+  portalLogin: { select: { id: true, name: true, status: true } },
+} satisfies Prisma.VisaOfferingInclude;
+
+/** The visa's portal as the screens show it; a removed one counts as none (removing clears the link anyway). */
+export function offeringPortal(o: { portalLogin?: { id: string; name: string; status: string } | null }) {
+  return o.portalLogin?.status === "ACTIVE" ? { id: o.portalLogin.id, name: o.portalLogin.name } : null;
+}
+
 /** "France (Schengen) · Tourist" */
 export const offeringLabel = (o: OfferingRow) => `${countryLabel(o.country)} · ${o.visaType.name}`;
 
-function toOfferingDto(o: OfferingRow & { _count?: { checklist: number } }) {
+function toOfferingDto(o: OfferingRow & { _count?: { checklist: number }; portalLogin?: { id: string; name: string; status: string } | null }) {
   return {
     id: o.id,
     label: offeringLabel(o),
@@ -444,6 +457,7 @@ function toOfferingDto(o: OfferingRow & { _count?: { checklist: number } }) {
     isActive: o.isActive,
     appointmentNeeded: o.appointmentNeeded,
     vendorNeeded: o.vendorNeeded,
+    portal: offeringPortal(o),
     ...(o._count ? { checklistCount: o._count.checklist } : {}),
     updatedAt: o.updatedAt,
   };
@@ -452,7 +466,7 @@ function toOfferingDto(o: OfferingRow & { _count?: { checklist: number } }) {
 export async function listOfferings(active?: boolean) {
   const rows = await prisma.visaOffering.findMany({
     where: activeFilter(active),
-    include: { ...offeringInclude, _count: { select: { checklist: true } } },
+    include: { ...offeringInclude, ...offeringPortalInclude, _count: { select: { checklist: true } } },
     orderBy: [{ country: { sortOrder: "asc" } }, { country: { name: "asc" } }, { visaType: { sortOrder: "asc" } }],
   });
   return rows.map(toOfferingDto);
@@ -515,6 +529,14 @@ export async function updateOffering(id: number, input: UpdateOfferingInput, act
   assertCanEditVisaMasters(actor.user);
   const before = await prisma.visaOffering.findUnique({ where: { id } });
   if (!before) throw notFound("Visa offering not found.");
+  // A visa's cases open one of the Visa department's portals that's still in use (0024 component 3).
+  if (input.portalLoginId) {
+    const portal = await prisma.portalLogin.findFirst({
+      where: { id: input.portalLoginId, status: "ACTIVE", department: { code: "VISA", isActive: true } },
+      select: { id: true },
+    });
+    if (!portal) throw fieldError("portalLoginId", "Pick one of the Visa department's portals.");
+  }
   const changes = onlyChanged(definedOnly(input), before);
   await saveChanges({
     before,
@@ -528,5 +550,5 @@ export async function updateOffering(id: number, input: UpdateOfferingInput, act
       return tx.visaOffering.update({ where: { id }, data: changes });
     },
   });
-  return toOfferingDto(await prisma.visaOffering.findUniqueOrThrow({ where: { id }, include: offeringInclude }));
+  return toOfferingDto(await prisma.visaOffering.findUniqueOrThrow({ where: { id }, include: { ...offeringInclude, ...offeringPortalInclude } }));
 }

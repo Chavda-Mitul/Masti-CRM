@@ -230,6 +230,19 @@ a.kv-line:hover {
   gap: 8px;
   margin-bottom: 16px;
 }
+/* The portal a visa's cases open with Log in for me (0024 component 3) */
+.visa-portal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.visa-portal-card p {
+  margin: 0;
+}
+.visa-portal-card .select {
+  max-width: 360px;
+}
 .checklist-tools {
   display: flex;
   align-items: center;

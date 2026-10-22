@@ -631,6 +631,14 @@ export interface CaseReminders {
   nextAt: string | null
 }
 
+/** The portal a case's visa opens (0024 component 3): who's on its list, and the CRM helper's IDs. Never its ID or password. */
+export interface CasePortal {
+  id: string
+  name: string
+  userIds: string[]
+  helperIds: string[]
+}
+
 export interface VisaCase {
   id: string
   caseNo: string
@@ -650,11 +658,15 @@ export interface VisaCase {
   fieldJobs: FieldJob[]
   source: { code: string; name: string }
   origin: EnquiryOrigin
+  /** The visa (country × type): its settings page is /settings/masters/checklists/:offeringId. */
+  offeringId: number
   country: { id: number; name: string; zone: string | null; label: string }
   visaType: { id: number; name: string }
   /** The visa's switches (0007 Decision 6), read live: what "File ready" asks for. */
   appointmentNeeded: boolean
   vendorNeeded: boolean
+  /** The portal its visa opens with Log in for me (0024 component 3); null when none is saved. */
+  portal: CasePortal | null
   adults: number
   children: number
   travelMonth: string

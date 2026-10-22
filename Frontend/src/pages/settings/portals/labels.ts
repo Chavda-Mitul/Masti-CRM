@@ -36,10 +36,15 @@ export interface PressResult {
   keep: boolean
 }
 
-export function pressResult(answer: HelperAnswer, portalName: string): PressResult {
+/** caseNo: pressed on a visa case (component 3), as the demo says "for case V-2041". */
+export function pressResult(answer: HelperAnswer, portalName: string, caseNo?: string): PressResult {
   switch (answer.outcome) {
     case 'SUBMITTED':
-      return { tone: 'ok', message: `Opened ${portalName} for you. The ID and password were never shown.`, keep: false }
+      return {
+        tone: 'ok',
+        message: `Opened ${portalName} ${caseNo ? `for case ${caseNo}` : 'for you'}. The ID and password were never shown.`,
+        keep: false,
+      }
     case 'WAITING_FOR_STAFF':
       return { tone: 'ok', message: `${portalName} is open. Type the letters you see there, then press Login.`, keep: false }
     case 'NO_LOGIN_BOXES':

@@ -9,6 +9,7 @@ import { useToast } from '../../../lib/toast'
 import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useUpdateApplication } from '../queries'
 import type { CaseTraveller, VisaCase } from '../types'
+import { CasePortalBox } from './CasePortalBox'
 import { travellerTab } from './labels'
 
 /** What the API keeps: capitals and digits, 4–40. Spaces are dropped and letters capitalised as you type. */
@@ -18,8 +19,9 @@ const cleanAckNo = (text: string) => text.replace(/\s+/g, '').toUpperCase()
 /**
  * "Apply on the government portal" (demo screen 08 ⚠️, 0007 Decision 5): each traveller's acknowledgement number and
  * appointment, typed in from the portal during file preparation by the processor, the HOD or the Head. The appointment
- * is asked for only when the visa's "Appointment needed" is on. "Log in for me" and the passport-scan and form buttons
- * are pending (0007 Decision 2), so they aren't shown.
+ * is asked for only when the visa's "Appointment needed" is on. Above them, the visa's portal with "Log in for me"
+ * (docs/decisions/0024-portal-logins.md component 3). The passport-scan and form buttons are pending (0007 Decision 2), so
+ * they aren't shown.
  */
 export function ApplicationCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -30,6 +32,7 @@ export function ApplicationCard({ visaCase: c }: { visaCase: VisaCase }) {
   return (
     <section className="card pad application">
       <h2 className="h2">Apply on the government portal</h2>
+      {me && <CasePortalBox visaCase={c} me={me} />}
       {editable && (
         <p className="muted small" style={{ margin: 0 }}>
           Type in each traveller’s acknowledgement number{c.appointmentNeeded && ' and appointment'} from the portal.
