@@ -76,4 +76,9 @@ export const VISA_SETTINGS_HELP: Record<keyof VisaTimingsFormValues | 'timings',
     ['Good to know', 'Age is counted on the travel date (today if there isn’t one yet). With no birth date saved, it isn’t checked.'],
     ['Example (18 years)', 'A 19-year-old added as a child gets a warning.'],
   ],
+  passportsArrive: [
+    ['What it’s for', 'When the decision is recorded, the client gets a WhatsApp message. It says about how long their passports take to reach our office.'],
+    ['Good to know', 'It goes to the client as it is, so use the time it usually takes. An e-visa gets no decision message yet.'],
+    ['Example (2 working days)', '“Your passports should reach our office in about 2 working days.”'],
+  ],
 }

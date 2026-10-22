@@ -10,6 +10,7 @@ import type { ChangeDecisionInput, RecordDecisionInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { travellerLabel } from "./visaCase";
+import { queueDecisionMessage } from "./visaMessages";
 
 // Visa Step 6, the decision (docs/decisions/0012-visa-decision.md). Once the file was submitted (at the embassy, or
 // online for an e-visa), "Record the decision" saves every traveller's outcome at once (Decision 6): Approved, with the
@@ -178,7 +179,8 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
     const who = checkOutcomes(g, input.outcomes);
     const confirmed = checkWarnings(await warnings(tx, g), input.confirmWarnings);
 
-    const dueAt = await dueOnOfficeDay((await getVisaSettings(tx)).passportsBackCheck, tx);
+    const settings = await getVisaSettings(tx);
+    const dueAt = await dueOnOfficeDay(settings.passportsBackCheck, tx);
     const decision = await visaStage(tx, locked.departmentId, "DECISION");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: decision.id, dueAt } });
     await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { decidedAt: new Date(), decidedById: actor.user.id } });
@@ -215,6 +217,12 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
       },
       tx,
     );
+    // Messages 10–12 (docs/whatsapp-visa-messages.md). Not for an e-visa yet: how its client gets the visa is still
+    // open with Masti (the draft's point 5).
+    if (!g.submittedOnlineAt) {
+      const decided = g.travellers.map((t) => ({ name: who(t), outcome: outcomes.get(t.id)!.outcome }));
+      await queueDecisionMessage(tx, enquiry.id, decided, settings.passportsArrive.workingDays);
+    }
   });
   return getVisaCaseById(enquiry.id);
 }

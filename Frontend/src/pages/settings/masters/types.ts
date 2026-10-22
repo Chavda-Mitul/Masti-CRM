@@ -163,6 +163,8 @@ export interface VisaSettings {
   passportValidity: { monthsAfterReturn: number }
   /** From this age a traveller counts as an adult, for the warnings (decided 19 Oct 2026). */
   childAge: { adultFrom: number }
+  /** About how many working days after the decision the passports reach our office, as messages 10–12 say (22 Oct 2026). */
+  passportsArrive: { workingDays: number }
 }
 
 /** 409 DUPLICATE from the holidays API. */

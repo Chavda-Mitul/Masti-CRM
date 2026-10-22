@@ -11,7 +11,7 @@ import { visaTimingsFormSchema, type VisaTimingsFormValues } from '../masters/sc
 import type { VisaSettings } from '../masters/types'
 import { type HelpLines, VISA_SETTINGS_HELP as HELP } from './help'
 
-type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passportValidity' | 'childAge'>
+type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passportValidity' | 'childAge' | 'passportsArrive'>
 
 /** Each check a case comes back due for, in the order a case meets them, with what its days count from. */
 const CHECKS: { key: TimingKey; what: string; from: string }[] = [
@@ -33,6 +33,7 @@ const formValues = (s: VisaSettings): VisaTimingsFormValues => ({
   collectionCheck: s.collectionCheck,
   passportValidity: s.passportValidity,
   childAge: s.childAge,
+  passportsArrive: s.passportsArrive,
 }) as VisaTimingsFormValues
 
 const days = (n: number) => `${n} office day${n === 1 ? '' : 's'}`
@@ -40,6 +41,8 @@ const days = (n: number) => `${n} office day${n === 1 ? '' : 's'}`
 const TIMINGS = 'When a case comes back due'
 const PASSPORT_VALIDITY = 'A passport must still run, after the trip comes back'
 const ADULT_FROM = 'A traveller counts as an adult from'
+const PASSPORTS_ARRIVE = 'Passports reach our office after the decision'
+const workingDays = (n: number) => `${n} working day${n === 1 ? '' : 's'}`
 
 /** The ⓘ next to a setting, with what it's for in plain words (help.ts). */
 function Help({ topic, lines }: { topic: string; lines: HelpLines }) {
@@ -59,8 +62,9 @@ function Help({ topic, lines }: { topic: string; lines: HelpLines }) {
 
 /**
  * Settings → Visa (decided 19 Oct 2026, item 2 fixes): when a visa case comes back due on its processor's desk after each
- * step ⚠️, and the two values the input warnings use ⚠️. They were editable only through the API; the Visa HOD or the
- * Head changes them here, Visa staff read them. A change applies to the next save that uses it, not to open cases.
+ * step ⚠️, the two values the input warnings use ⚠️, and the working days the decision message gives the client ⚠️
+ * (22 Oct 2026). They were editable only through the API; the Visa HOD or the Head changes them here, Visa staff read
+ * them. A change applies to the next save that uses it, not to open cases.
  */
 export function VisaSettingsPage() {
   const { data: me } = useMe()
@@ -198,6 +202,34 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
         </table>
       </section>
 
+      <section className="card pad master-card">
+        <h2 className="h2">Client messages</h2>
+        <p className="muted small">What the automatic WhatsApp messages tell the client. A change applies to the next message sent.</p>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Message</th>
+              <th>Set to</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>{PASSPORTS_ARRIVE}</strong> <Help topic={PASSPORTS_ARRIVE} lines={HELP.passportsArrive} />
+                <div className="muted small">in the decision message</div>
+              </td>
+              <td>
+                <div className="unit-input">
+                  <input className="input" type="number" min={1} max={30} style={{ width: 90 }} aria-label={`${PASSPORTS_ARRIVE}: working days`} {...register('passportsArrive.workingDays', { valueAsNumber: true })} />
+                  <span className="muted small">working days</span>
+                </div>
+                {errors.passportsArrive?.workingDays && <div className="field-error">{errors.passportsArrive.workingDays.message}</div>}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       {(serverIssue ?? (save.error && errorText(save.error))) && <div className="alert alert-bad">{serverIssue ?? errorText(save.error)}</div>}
       <div>
         <button type="submit" className="btn btn-primary" disabled={!formState.isDirty || save.isPending}>
@@ -251,6 +283,17 @@ function SettingsView({ settings: s }: { settings: VisaSettings }) {
               {ADULT_FROM} <Help topic={ADULT_FROM} lines={HELP.childAge} />
             </dt>
             <dd>{s.childAge.adultFrom} years old</dd>
+          </div>
+        </dl>
+      </section>
+      <section className="card pad master-card">
+        <h2 className="h2">Client messages</h2>
+        <dl className="kv-list">
+          <div>
+            <dt>
+              {PASSPORTS_ARRIVE} <Help topic={PASSPORTS_ARRIVE} lines={HELP.passportsArrive} />
+            </dt>
+            <dd>about {workingDays(s.passportsArrive.workingDays)}</dd>
           </div>
         </dl>
       </section>

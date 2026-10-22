@@ -15,6 +15,7 @@ import type { Actor } from "../users/user";
 import { countTravellers, travellerLabel } from "../visa/visaCase";
 import { advanceToDocuments } from "../visa/visaSteps.service";
 import { assertInStock, checkHandover, deliverCase, gather as gatherHandover, receiverWarnings } from "../visa/visaHandover.service";
+import { queueHandoverMessage } from "../visa/visaMessages";
 import type { FieldSettings, HandOverAtDoorInput, MarkDoneInput, MarkFailedInput } from "./field.schemas";
 import { getFieldSettings } from "./fieldJobs.settings";
 import { otpEmail } from "./otpEmail";
@@ -622,6 +623,8 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
       },
       tx,
     );
+    // Message 15 (docs/whatsapp-visa-messages.md), as for the office's handover.
+    await queueHandoverMessage(tx, enquiry.id, { booklets: input.booklets, receiver, at: now });
   });
   return getMyStop(actor.user.id, jobId);
 }

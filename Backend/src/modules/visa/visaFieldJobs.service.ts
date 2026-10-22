@@ -5,7 +5,7 @@ import { assertFresh } from "../../lib/changes";
 import { addDays, dayLabel, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
-import { VISA_COLLECTION_VISIT } from "../messages/messages.seed";
+import { VISA_COLLECTION_VISIT, VISA_DELIVERY_VISIT } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, HANDING_OVER, loadCase, lockCase, type StepRule } from "./caseLock";
@@ -163,26 +163,29 @@ export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, act
       },
       tx,
     );
-    if (input.kind === "PICKUP") await queueCollectionVisit(tx, enquiry.id, job, { boy: boy.name, day: input.day, slot: slot.name, address: input.address });
+    await queueFieldVisit(tx, enquiry.id, input.kind, job, { boy: boy.name, day: input.day, slot: slot.name, address: input.address });
   });
   return getVisaCaseById(enquiry.id);
 }
 
 /**
- * Message 5, "Collection visit booked" (docs/whatsapp-visa-messages.md): a pickup booked, or its boy, day, slot or
- * address changed. Keyed on the job's new updatedAt, so each change sends once; a cancel sends nothing (staff call).
+ * Message 5, "Collection visit booked", or message 14, "Delivery booked" (docs/whatsapp-visa-messages.md): a job booked,
+ * or its boy, day, slot or address changed. Keyed on the job's new updatedAt, so each change sends once; a cancel sends
+ * nothing (staff call).
  */
-async function queueCollectionVisit(
+async function queueFieldVisit(
   tx: Db,
   enquiryId: string,
+  kind: FieldJobKind,
   job: { id: string; updatedAt: Date },
   visit: { boy: string; day: string; slot: string; address: string },
 ) {
+  const template = kind === "PICKUP" ? VISA_COLLECTION_VISIT : VISA_DELIVERY_VISIT;
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
-    template: VISA_COLLECTION_VISIT,
+    template,
     enquiryId,
-    key: `${VISA_COLLECTION_VISIT}:${job.id}:${job.updatedAt.toISOString()}`,
+    key: `${template}:${job.id}:${job.updatedAt.toISOString()}`,
     clientId: basics.clientId,
     variables: { ...basics.variables, staff_name: visit.boy, visit_day: dayLabel(visit.day), visit_slot: visit.slot, address: visit.address },
   });
@@ -257,9 +260,7 @@ export async function changeFieldJob(caseNo: string, jobId: string, input: Chang
     );
     // The client hears of a new boy, day, slot or address; a map link alone is for the boy.
     const visitMoved = was.assigneeId !== now.assigneeId || moved || was.address !== now.address;
-    if (job.kind === "PICKUP" && visitMoved) {
-      await queueCollectionVisit(tx, enquiry.id, updated, { boy: boy.name, day: now.day, slot: slot.name, address: now.address });
-    }
+    if (visitMoved) await queueFieldVisit(tx, enquiry.id, job.kind, updated, { boy: boy.name, day: now.day, slot: slot.name, address: now.address });
   });
   return getVisaCaseById(enquiry.id);
 }

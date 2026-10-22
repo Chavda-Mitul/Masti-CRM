@@ -1,28 +1,34 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, addMonths, dayLabel, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { addDays, addMonths, dayLabel, istDateTimeToUtc, istToday, timeLabel, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import {
   VISA_APPLIED_ONLINE,
+  VISA_APPROVED,
   VISA_COLLECTION_VISIT,
+  VISA_DELIVERY_VISIT,
   VISA_DOCUMENT_LIST,
   VISA_DOCUMENT_REMINDER,
+  VISA_HANDED_OVER,
   VISA_INVOICE,
+  VISA_PARTLY_APPROVED,
+  VISA_PASSPORTS_BACK,
   VISA_PRICE,
+  VISA_REFUSED,
   VISA_SUBMITTED,
 } from "../src/modules/messages/messages.seed";
 import { DOCUMENT_REMINDERS_KEY } from "../src/modules/visa/visa.settings";
-import { fitList } from "../src/modules/visa/visaMessages";
+import { fitList, namesText, passportCountText } from "../src/modules/visa/visaMessages";
 import { sendDueReminders } from "../src/modules/visa/visaReminders.service";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
-// The visa messages of Steps 1–5 (docs/whatsapp-visa-messages.md; docs/decisions/0021-whatsapp-outbox.md amendments 3
-// and 4): 1 the document list, 2 the price, 3 the pending-documents reminder, 5 the collection visit, 7 the invoice,
-// 8 file submitted, 9 applied online. Each is queued with the change it follows; messages.test.ts covers how a queued
-// message is sent.
+// The visa messages (docs/whatsapp-visa-messages.md; docs/decisions/0021-whatsapp-outbox.md amendments 3 to 5): 1 the
+// document list, 2 the price, 3 the pending-documents reminder, 5 the collection visit, 7 the invoice, 8 file
+// submitted, 9 applied online, 10–12 the decision, 13 passports at our office, 14 the delivery visit, 15 handed over.
+// Each is queued with the change it follows; messages.test.ts covers how a queued message is sent.
 
 beforeEach(async () => {
   await resetDb();
@@ -33,9 +39,15 @@ beforeEach(async () => {
 
 /** The messages of one kind, oldest first. */
 const sent = (code: string) => prisma.outboundMessage.findMany({ where: { template: { code } }, orderBy: { createdAt: "asc" } });
-/** Masti's phone as Settings has it until the Head changes it. */
+/** Masti's phone and office address as Settings → Company has them until the Head changes them. */
 const PHONE = "+91-93777-57580";
+const OFFICE = "301, Maitri, Opp. Canara Bank, Nr. Panchratna Tower, L.H. Road, Varachha, Surat-395006, (Guj.) INDIA";
+/** The client's home, where the boy collects and delivers. */
+const HOME = "B-702, Raghuvir Residency, Vesu, Surat 395007";
+/** A small "JPEG": the server checks a photo's first bytes, not the picture. */
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
 const minutes = (n: number) => n * 60_000;
+const caseOf = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case;
 
 /** Saves the quote: the adult itemised, the child a lump sum, ₹500 service charge (₹6,000 in all with GST). */
 async function quote(agent: Agent, caseNo: string, serviceChargePaise = 50_000) {
@@ -189,61 +201,67 @@ describe("message 3, the pending-documents reminder", () => {
   });
 });
 
-describe("message 5, the collection visit", () => {
-  const ADDRESS = "B-702, Raghuvir Residency, Vesu, Surat 395007";
+// The field boy's visits (messages 5 and 14): booked for the first open office day after today, 4–6 pm, at the home.
 
-  /** Aarti's case with the client's email on file, and Ramesh the collection boy. */
-  async function setup() {
+/** The client's email on file (the door code goes there for now), and Ramesh the field boy. */
+async function fieldReady(clientId: string) {
+  await prisma.client.update({ where: { id: clientId }, data: { email: "rakesh@example.com" } });
+  return createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
+}
+const visitDay = () => nextOpenDay(addDays(istToday(), 1), { office: true });
+
+async function bookVisit(agent: Agent, caseNo: string, assigneeId: string, kind: "PICKUP" | "DELIVERY") {
+  const c = await caseOf(agent, caseNo);
+  const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "EVENING" } });
+  const day = await visitDay();
+  return agent.post(`/api/visa/cases/${caseNo}/field-jobs`).send({ kind, assigneeId, day, slotId: slot.id, address: HOME, updatedAt: c.updatedAt });
+}
+
+/** "Change" the case's booked visit: as it is, but for `body`. */
+async function changeVisit(agent: Agent, caseNo: string, body: object) {
+  const now = await caseOf(agent, caseNo);
+  const job = now.fieldJobs.find((j: { status: string }) => j.status === "BOOKED");
+  return agent.put(`/api/visa/cases/${caseNo}/field-jobs/${job.id}`).send({
+    assigneeId: job.assignee.id,
+    day: job.day,
+    slotId: job.slot.id,
+    address: job.address,
+    mapLink: job.mapLink,
+    updatedAt: now.updatedAt,
+    ...body,
+  });
+}
+
+async function cancelVisit(agent: Agent, caseNo: string) {
+  const now = await caseOf(agent, caseNo);
+  const job = now.fieldJobs.find((j: { status: string }) => j.status === "BOOKED");
+  return agent.post(`/api/visa/cases/${caseNo}/field-jobs/${job.id}/cancel`).send({ updatedAt: now.updatedAt });
+}
+
+describe("message 5, the collection visit", () => {
+  it("goes when the boy is booked, and again when the visit changes; not for a map link or a cancel", async () => {
     const aarti = await visaStaff();
     const c = await saveCase(aarti);
-    await prisma.client.update({ where: { id: c.client.id }, data: { email: "rakesh@example.com" } });
-    const ramesh = await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
-    return { aarti, c, ramesh };
-  }
-
-  async function book(agent: Agent, caseNo: string, assigneeId: string, kind = "PICKUP") {
-    const c = (await agent.get(`/api/visa/cases/${caseNo}`)).body.case;
-    const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "EVENING" } });
-    const day = await nextOpenDay(addDays(istToday(), 1), { office: true });
-    return agent.post(`/api/visa/cases/${caseNo}/field-jobs`).send({ kind, assigneeId, day, slotId: slot.id, address: ADDRESS, updatedAt: c.updatedAt });
-  }
-
-  it("goes when the boy is booked, and again when the visit changes; not for a map link or a cancel", async () => {
-    const { aarti, c, ramesh } = await setup();
-    expect((await book(aarti, c.caseNo, ramesh.id)).status).toBe(200);
-    const day = await nextOpenDay(addDays(istToday(), 1), { office: true });
+    const ramesh = await fieldReady(c.client.id);
+    expect((await bookVisit(aarti, c.caseNo, ramesh.id, "PICKUP")).status).toBe(200);
+    const day = await visitDay();
     const [first] = await sent(VISA_COLLECTION_VISIT);
-    expect(first!.body).toContain(`Our staff member Ramesh will come to collect the documents for ${c.caseNo} on ${dayLabel(day)}, 4–6 pm, at: ${ADDRESS}.`);
+    expect(first!.body).toContain(`Our staff member Ramesh will come to collect the documents for ${c.caseNo} on ${dayLabel(day)}, 4–6 pm, at: ${HOME}.`);
     expect(first!.body).toContain(`To change the time, call us on ${PHONE}.`);
 
-    const change = async (body: object) => {
-      const now = (await aarti.get(`/api/visa/cases/${c.caseNo}`)).body.case;
-      const job = now.fieldJobs.find((j: { status: string }) => j.status === "BOOKED");
-      return aarti.put(`/api/visa/cases/${c.caseNo}/field-jobs/${job.id}`).send({
-        assigneeId: job.assignee.id,
-        day: job.day,
-        slotId: job.slot.id,
-        address: job.address,
-        mapLink: job.mapLink,
-        updatedAt: now.updatedAt,
-        ...body,
-      });
-    };
     // A new slot: the client hears again.
     const morning = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "MORNING" } });
-    expect((await change({ slotId: morning.id })).status).toBe(200);
+    expect((await changeVisit(aarti, c.caseNo, { slotId: morning.id })).status).toBe(200);
     const after = await sent(VISA_COLLECTION_VISIT);
     expect(after).toHaveLength(2);
     expect(after[1]!.body).toContain(`on ${dayLabel(day)}, ${morning.name}, at:`);
 
     // A map link alone is for the boy.
-    expect((await change({ mapLink: "https://maps.app.goo.gl/abc123" })).status).toBe(200);
+    expect((await changeVisit(aarti, c.caseNo, { mapLink: "https://maps.app.goo.gl/abc123" })).status).toBe(200);
     expect(await sent(VISA_COLLECTION_VISIT)).toHaveLength(2);
 
     // A cancel sends nothing: staff call the client.
-    const now = (await aarti.get(`/api/visa/cases/${c.caseNo}`)).body.case;
-    const job = now.fieldJobs.find((j: { status: string }) => j.status === "BOOKED");
-    expect((await aarti.post(`/api/visa/cases/${c.caseNo}/field-jobs/${job.id}/cancel`).send({ updatedAt: now.updatedAt })).status).toBe(200);
+    expect((await cancelVisit(aarti, c.caseNo)).status).toBe(200);
     expect(await sent(VISA_COLLECTION_VISIT)).toHaveLength(2);
   });
 });
@@ -318,28 +336,189 @@ describe("message 8, file submitted", () => {
   });
 });
 
+/** Neha's e-visa at Docket & dispatch: Vendor needed off, no vendor, its invoice raised. */
+async function eVisa() {
+  await mastiReady();
+  const c = await dispatchCase();
+  const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
+  await prisma.visaOffering.update({ where: { id: offeringId }, data: { vendorNeeded: false } });
+  await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { vendorId: null } });
+  const neha = await loginAs("neha@masti.test");
+  await makeInvoiceable(neha, c);
+  expect((await raise(neha, c.caseNo)).status).toBe(200);
+  return { c, neha };
+}
+
+async function submitOnline(agent: Agent, caseNo: string) {
+  const { updatedAt } = await caseOf(agent, caseNo);
+  return agent.post(`/api/visa/cases/${caseNo}/submit-online`).send({ updatedAt });
+}
+
 describe("message 9, applied online", () => {
   it("goes when an e-visa is marked applied online; the refused second press sends nothing", async () => {
-    // Neha's e-visa at Docket & dispatch: Vendor needed off, its invoice raised.
-    await mastiReady();
-    const c = await dispatchCase();
-    const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
-    await prisma.visaOffering.update({ where: { id: offeringId }, data: { vendorNeeded: false } });
-    await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { vendorId: null } });
-    const neha = await loginAs("neha@masti.test");
-    await makeInvoiceable(neha, c);
-    expect((await raise(neha, c.caseNo)).status).toBe(200);
-
-    const press = async () => {
-      const { updatedAt } = (await neha.get(`/api/visa/cases/${c.caseNo}`)).body.case;
-      return neha.post(`/api/visa/cases/${c.caseNo}/submit-online`).send({ updatedAt });
-    };
-    expect((await press()).status).toBe(200);
+    const { c, neha } = await eVisa();
+    expect((await submitOnline(neha, c.caseNo)).status).toBe(200);
     const messages = await sent(VISA_APPLIED_ONLINE);
     expect(messages).toHaveLength(1);
     expect(messages[0]!.body).toContain(`We have applied online for your France tourist visa (${c.caseNo}). We will message you as soon as the result comes.`);
 
-    expect((await press()).status).toBe(409);
+    expect((await submitOnline(neha, c.caseNo)).status).toBe(409);
     expect(await sent(VISA_APPLIED_ONLINE)).toHaveLength(1);
+  });
+});
+
+describe("messages 10–12, the decision", () => {
+  type Outcome = "APPROVED" | "REFUSED";
+
+  /** "Record the decision": each traveller, in order, approved (with a sticker and dates covering the trip) or refused. */
+  async function decide(agent: Agent, caseNo: string, travellerIds: string[], outcomes: Outcome[]) {
+    const valid = { validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) };
+    const { updatedAt } = await caseOf(agent, caseNo);
+    return agent.post(`/api/visa/cases/${caseNo}/decision`).send({
+      outcomes: travellerIds.map((travellerId, i) =>
+        outcomes[i] === "APPROVED" ? { travellerId, outcome: "APPROVED", visaNo: `0182 447${i}`, ...valid } : { travellerId, outcome: "REFUSED" },
+      ),
+      updatedAt,
+    });
+  }
+  const decisionMessages = () => prisma.outboundMessage.count({ where: { template: { code: { in: [VISA_APPROVED, VISA_REFUSED, VISA_PARTLY_APPROVED] } } } });
+
+  it("sends Partly approved when some are approved and some refused, with the names and the working days", async () => {
+    const { c } = await decidedCase(); // Rakesh approved, Aarav refused
+    const messages = await sent(VISA_PARTLY_APPROVED);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.body).toContain(
+      `The embassy has decided on your France tourist visa (${c.caseNo}). Good news: it is approved for Rakesh Mehta. We are sorry that it was refused for Aarav Mehta.`,
+    );
+    expect(messages[0]!.body).toContain(
+      `Your passports should reach our office in about 2 working days, and we will message you when they arrive. Please call us on ${PHONE} to talk about the refusal.`,
+    );
+    expect(await decisionMessages()).toBe(1);
+  });
+
+  it("sends Visa approved when everyone is, with where to collect; a corrected decision sends nothing more", async () => {
+    const { c, processor, adult, child } = await decidedCase({ decided: false });
+    expect((await decide(processor, c.caseNo, [adult, child], ["APPROVED", "APPROVED"])).status).toBe(200);
+    const [m] = await sent(VISA_APPROVED);
+    expect(m!.body).toContain(`Congratulations! The France tourist visa is approved for Rakesh Mehta and Aarav Mehta (${c.caseNo}).`);
+    expect(m!.body).toContain(
+      `Your passports should reach our office in about 2 working days. We will then deliver them on our delivery schedule. If you need them sooner, you can collect them from our office at ${OFFICE} once they arrive.`,
+    );
+
+    // Aarav's entry corrected to Refused: staff call the client.
+    const { updatedAt } = await caseOf(processor, c.caseNo);
+    expect((await processor.put(`/api/visa/cases/${c.caseNo}/travellers/${child}/decision`).send({ outcome: "REFUSED", updatedAt })).status).toBe(200);
+    expect(await decisionMessages()).toBe(1);
+  });
+
+  it("sends Visa refused when everyone is; the working days follow the setting", async () => {
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    for (const workingDays of [0, 31, 1.5]) expect((await hod.put("/api/visa/settings").send({ passportsArrive: { workingDays } })).status).toBe(400);
+    expect((await hod.put("/api/visa/settings").send({ passportsArrive: { workingDays: 1 } })).status).toBe(200);
+    expect((await hod.get("/api/visa/settings")).body.settings.passportsArrive).toEqual({ workingDays: 1 });
+
+    const { c, processor, adult, child } = await decidedCase({ decided: false });
+    expect((await decide(processor, c.caseNo, [adult, child], ["REFUSED", "REFUSED"])).status).toBe(200);
+    const [m] = await sent(VISA_REFUSED);
+    expect(m!.body).toContain(`We are sorry to tell you that the embassy has refused the France tourist visa for Rakesh Mehta and Aarav Mehta (${c.caseNo}).`);
+    expect(m!.body).toContain(
+      `Your passports should reach our office in about 1 working day, and we will message you when they arrive. Please call us on ${PHONE}: we will explain the reason and what can be done next.`,
+    );
+  });
+
+  it("isn't sent for an e-visa yet (how its client gets the visa is still open)", async () => {
+    const { c, neha } = await eVisa();
+    expect((await submitOnline(neha, c.caseNo)).status).toBe(200);
+    const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
+    expect((await decide(neha, c.caseNo, travellers.map((t) => t.id), ["APPROVED", "APPROVED"])).status).toBe(200);
+    expect(await decisionMessages()).toBe(0);
+  });
+});
+
+describe("message 13, passports at our office", () => {
+  /** Mehta's decided file (Rakesh approved) on its way back, then counted in with `back` (2 + 0 went out). */
+  async function received(back: { current: number; old: number }) {
+    const d = await decidedCase();
+    const { c, processor } = d;
+    const expectedOn = await nextOpenDay(addDays(istToday(), 2), { office: true });
+    const decided = (await caseOf(processor, c.caseNo)).updatedAt;
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/passports-back`).send({ collectedOn: istToday(), expectedOn, updatedAt: decided })).status).toBe(200);
+    const inTransit = (await caseOf(processor, c.caseNo)).updatedAt;
+    const stickers = [{ travellerId: d.adult, check: "MATCHES" }];
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/passports-received`).send({ booklets: back, stickers, updatedAt: inTransit })).status).toBe(200);
+    return d;
+  }
+
+  it("goes when every passport is back, with where to collect them", async () => {
+    const { c } = await received({ current: 2, old: 0 });
+    const messages = await sent(VISA_PASSPORTS_BACK);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.body).toContain(`Your passports for ${c.caseNo} are back at our office.`);
+    expect(messages[0]!.body).toContain(`If you prefer, you can collect them from our office at ${OFFICE}.`);
+  });
+
+  it("waits while one is missing, sends nothing when it's cleared as lost, and goes once it turns up after all", async () => {
+    const { c, processor } = await received({ current: 1, old: 0 });
+    expect(await sent(VISA_PASSPORTS_BACK)).toHaveLength(0);
+
+    const reasonId = (await prisma.missingPassportReason.findUniqueOrThrow({ where: { code: "EMBASSY_KEPT" } })).id;
+    const short = await caseOf(processor, c.caseNo);
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/passports-received/clear`).send({ reasonId, updatedAt: short.updatedAt })).status).toBe(200);
+    expect(await sent(VISA_PASSPORTS_BACK)).toHaveLength(0);
+
+    const cleared = await caseOf(processor, c.caseNo);
+    const rest = await processor.post(`/api/visa/cases/${c.caseNo}/passports-received/rest`).send({ booklets: { current: 1, old: 0 }, updatedAt: cleared.updatedAt });
+    expect(rest.status).toBe(200);
+    expect(await sent(VISA_PASSPORTS_BACK)).toHaveLength(1);
+  });
+});
+
+describe("message 14, the delivery visit", () => {
+  it("goes when the delivery boy is booked, and again when the visit changes; not for a cancel", async () => {
+    const { c, processor } = await receivedCase();
+    const ramesh = await fieldReady(c.client.id);
+    expect((await bookVisit(processor, c.caseNo, ramesh.id, "DELIVERY")).status).toBe(200);
+    const [first] = await sent(VISA_DELIVERY_VISIT);
+    expect(first!.body).toContain(`Our staff member Ramesh will bring your passports for ${c.caseNo} on ${dayLabel(await visitDay())}, 4–6 pm, to: ${HOME}.`);
+    expect(first!.body).toContain("they will take a photo of the person receiving the passports.");
+    expect(first!.body).toContain(`To change the time, call us on ${PHONE}.`);
+
+    const morning = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "MORNING" } });
+    expect((await changeVisit(processor, c.caseNo, { slotId: morning.id })).status).toBe(200);
+    expect(await sent(VISA_DELIVERY_VISIT)).toHaveLength(2);
+    expect((await cancelVisit(processor, c.caseNo)).status).toBe(200);
+    expect(await sent(VISA_DELIVERY_VISIT)).toHaveLength(2);
+    expect(await sent(VISA_COLLECTION_VISIT)).toHaveLength(0);
+  });
+});
+
+describe("message 15, passports handed over", () => {
+  it("goes when the office hands them over: how many, to whom and when", async () => {
+    const { c, processor, adult } = await receivedCase();
+    const photo = (await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo;
+    const { updatedAt } = await caseOf(processor, c.caseNo);
+    const res = await processor
+      .post(`/api/visa/cases/${c.caseNo}/handover`)
+      .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: adult }, photoId: photo.id, updatedAt });
+    expect(res.status).toBe(200);
+
+    const { at } = await prisma.visaHandover.findUniqueOrThrow({ where: { enquiryId: c.id } });
+    const messages = await sent(VISA_HANDED_OVER);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.body).toContain(`We have handed over 2 passports for ${c.caseNo} to Rakesh Mehta on ${dayLabel(istToday(at))}, ${timeLabel(at)}.`);
+    expect(messages[0]!.body).toContain(`Thank you for choosing us. If anything is not right, please call us on ${PHONE}.`);
+  });
+
+  it("words the count, the names and the time as the client reads them", () => {
+    expect(passportCountText({ current: 2, old: 0 })).toBe("2 passports");
+    expect(passportCountText({ current: 4, old: 3 })).toBe("4 passports and 3 old passports");
+    expect(passportCountText({ current: 1, old: 1 })).toBe("1 passport and 1 old passport");
+    expect(passportCountText({ current: 0, old: 1 })).toBe("1 old passport");
+    expect(namesText(["Rakesh Mehta"])).toBe("Rakesh Mehta");
+    expect(namesText(["Rakesh Mehta", "Priya Mehta", "Aarav Mehta"])).toBe("Rakesh Mehta, Priya Mehta and Aarav Mehta");
+    // India is UTC+5:30.
+    expect(timeLabel(new Date("2026-10-31T06:40:00Z"))).toBe("12:10 pm");
+    expect(timeLabel(new Date("2026-10-31T03:35:00Z"))).toBe("9:05 am");
   });
 });
