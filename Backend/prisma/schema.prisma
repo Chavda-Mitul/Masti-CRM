@@ -1168,6 +1168,9 @@ enum CaseFileKind {
   /// The field boy's selfie at the client's door (docs/decisions/0015-field-staff-app.md Decision 4): a photo, no page
   /// count. Linked to the job once he finishes it.
   FIELD_SELFIE
+  /// An approved e-visa traveller's e-visa, as the portal issued it (docs/decisions/0025-evisa-after-decision.md). Has a
+  /// traveller.
+  EVISA
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -1185,8 +1188,8 @@ model CaseFile {
   pageCount    Int?
   uploadedById String
   uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
-  /// The traveller a refusal letter is for (0012 Decision 4): set for REFUSAL_LETTER and only for it (checked in the
-  /// migration). The service keeps it to a traveller of the same case.
+  /// The traveller a refusal letter (0012 Decision 4) or an e-visa (0025) is for: set for REFUSAL_LETTER and EVISA and
+  /// only for them (checked in the migration). The service keeps it to a traveller of the same case.
   travellerId  String?
   enquiry      Enquiry            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   uploadedBy   User               @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
@@ -1371,7 +1374,8 @@ enum VisaOutcome {
 }
 
 /// An approved traveller's visa sticker, checked against the passport's name and the dates recorded at Step 6 when the
-/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5).
+/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). For an e-visa, its PDF checked against
+/// the passport and what was recorded at Step 6 (docs/decisions/0025-evisa-after-decision.md).
 enum StickerCheck {
   MATCHES
   MISMATCH
@@ -1400,16 +1404,17 @@ model VisaCaseTraveller {
   visaNo             String?
   validFrom          DateTime?          @db.Date
   validTo            DateTime?          @db.Date
-  /// Checked when the passports are received (0013 Decision 5): only an approved traveller has a sticker (checked in the
-  /// migration); null until then.
+  /// Checked when the passports are received (0013 Decision 5); an e-visa's, once its PDF is uploaded at Decision, and
+  /// cleared by a newer PDF (0025). Only an approved traveller has one (checked in the migration); null until checked.
   stickerCheck       StickerCheck?
   visaCase           VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member             ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)
   documents          VisaCaseDocument[]
   quoteLine          VisaQuoteLine?
   invoiceLines       InvoiceLine[]
-  /// Scanned refusal letters, newest current (0012 Decision 4); kept when the outcome changes.
-  refusalLetters     CaseFile[]
+  /// Scanned refusal letters (0012 Decision 4) and e-visas (0025), the newest of each kind current; kept when the
+  /// outcome changes.
+  files              CaseFile[]
   /// Handovers where this traveller collected the passports (0014 Decision 3).
   handoversCollected VisaHandover[]
 

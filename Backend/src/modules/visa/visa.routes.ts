@@ -38,6 +38,7 @@ import {
   updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
+  setEvisaCheckSchema,
   setRemindersSchema,
   saveSubmissionSchema,
   vendorReceivedSchema,
@@ -55,6 +56,7 @@ import * as filePrepService from "./visaFilePrep.service";
 import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as decisionService from "./visaDecision.service";
 import * as refusalLetterService from "./visaRefusalLetter.service";
+import * as evisaService from "./visaEvisa.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -490,6 +492,30 @@ router.post("/cases/:caseNo/travellers/:travellerId/refusal-letter", visaEdit, a
   const { maxBytes, tooBig } = await refusalLetterService.refusalLetterLimit(caseNo, travellerId, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await refusalLetterService.uploadRefusalLetter(caseNo, travellerId, bytes, actor) });
+});
+
+/**
+ * Upload an approved e-visa traveller's e-visa (docs/decisions/0025-evisa-after-decision.md, part 1): the PDF itself
+ * is the body, as for the refusal letter. At Decision, by whoever can act on the case. The case, the traveller and the
+ * size limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/travellers/:travellerId/evisa", visaEdit, async (req, res) => {
+  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+    throw new HttpError(415, "Upload the file as a PDF.");
+  }
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const travellerId = idParam.parse(req.params.travellerId);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await evisaService.evisaLimit(caseNo, travellerId, actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await evisaService.uploadEvisa(caseNo, travellerId, bytes, actor) });
+});
+
+/** The e-visa checked against the passport (0025, part 1): Matches, Doesn't match, or null to undo. 409 on a newer PDF. */
+router.put("/cases/:caseNo/travellers/:travellerId/evisa-check", visaEdit, async (req, res) => {
+  const body = setEvisaCheckSchema.parse(req.body);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ case: await evisaService.setEvisaCheck(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /**

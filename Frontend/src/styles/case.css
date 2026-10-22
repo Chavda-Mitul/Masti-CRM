@@ -1305,6 +1305,23 @@ button.tick:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* An approved traveller's number and dates, and for an e-visa its PDF and check under them (0025). */
+.decision-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.evisa-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.evisa-mismatch {
+  flex-basis: 100%;
+  color: var(--bad);
+}
 
 /* Part 6: how documents arrive, booklets */
 .arrival-toggle {
