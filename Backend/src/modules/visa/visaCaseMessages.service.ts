@@ -13,7 +13,7 @@ export async function getCaseMessages(caseNo: string, user: UserWithDepartments)
   const rows = await prisma.outboundMessage.findMany({
     where: { enquiryId: id },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    include: { template: { select: { name: true } } },
+    include: { template: { select: { name: true } }, attachment: { select: { fileName: true } } },
   });
   return rows.map(toMessageDto);
 }
