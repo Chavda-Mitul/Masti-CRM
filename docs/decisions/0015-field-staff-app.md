@@ -43,7 +43,8 @@ planned in plan mode, built, tested, checked in the browser and committed before
 5. **Doorstep handover:** booklets (must match our stock), OTP, photo of the receiver, selfie, place and time →
    Delivered
 
-Collect-payment stops wait for Accounts; WhatsApp to the boy and the client waits for the WhatsApp work.
+Collect-payment stops wait for Accounts; WhatsApp to the boy waits for the WhatsApp work. The client hears of a booked
+or changed visit on WhatsApp (messages 5 and 14, `docs/decisions/0021-whatsapp-outbox.md` Amendments 3 and 5).
 
 ### 2. Booking: a day and a time slot
 
@@ -366,8 +367,8 @@ due now, to book again.
 ## Not in this record
 
 - **Collect-payment stops** (the demo's "Collect payment · ₹[amount] · cheque"): Accounts.
-- **WhatsApp:** the job reaching the boy's WhatsApp, and the client's messages; the OTP moves from email to SMS or
-  WhatsApp once connected (M2).
+- **WhatsApp:** the job reaching the boy's WhatsApp; the OTP moves from email to WhatsApp (the draft's message 16, the
+  next group). The client's messages about the visit and the handover are built (0021 Amendments 3 and 5).
 - **Routing or ordering stops** beyond day and slot.
 
 ## Still needed from Masti

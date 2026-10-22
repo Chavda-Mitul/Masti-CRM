@@ -191,7 +191,8 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
 ## Not in this record
 
 - **"Passports on the way back →"** (Step 6 → Step 7, with an expected arrival date): the Step 7 record.
-- **WhatsApp to the client** ("Congratulations!" / the "sorry" message): waits for the WhatsApp work.
+- ~~**WhatsApp to the client**~~ ("Congratulations!" / the "sorry" message): built, messages 10–12 in
+  `docs/decisions/0021-whatsapp-outbox.md` Amendment 5 (22 Oct 2026). None for an e-visa yet.
 - **Re-applying after a refusal:** a new enquiry, as today.
 
 ## Still needed from Masti
