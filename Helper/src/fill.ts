@@ -14,8 +14,9 @@ export interface FillLoginArgs {
  *
  * No per-portal setup: it finds the boxes the way a browser's password filling does. The login form is the one with
  * exactly one visible password box (a sign-up form has two); the ID box is the visible text box just before it (one
- * marked autocomplete="username" first). The password only ever goes into a password box. With letters to type (a
- * captcha) it fills both boxes and leaves the rest to the staff member; otherwise it presses the form's login button.
+ * marked autocomplete="username" first). The password only ever goes into a password box, and if the portal's own "show
+ * password" eye reveals it, it's emptied at once. With letters to type (a captcha) it fills both boxes and leaves the
+ * rest to the staff member; otherwise it presses the form's login button.
  *
  * @param allowedOrigins where this page may be: the portal's saved address (and its https version).
  * @param waitMs how long to wait for a page that draws its login form late.
@@ -120,14 +121,19 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     return submits.length === 1 ? submits[0]! : null;
   };
 
-  /** Types into a box so the page's own scripts (React, Angular…) notice, as if a person had. */
-  const type = (box: HTMLInputElement, value: string) => {
-    box.focus();
+  /** Sets a box's value so the page's own scripts (React, Angular…) notice. */
+  const setValue = (box: HTMLInputElement, value: string) => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (setter) setter.call(box, value);
     else box.value = value;
     box.dispatchEvent(new Event("input", { bubbles: true }));
     box.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  /** Types into a box as if a person had. */
+  const type = (box: HTMLInputElement, value: string) => {
+    box.focus();
+    setValue(box, value);
     box.blur();
   };
 
@@ -159,6 +165,25 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     (document.body ?? document.documentElement).append(host);
   };
 
+  /**
+   * A portal's own "show password" eye makes the box a text box, or swaps in a text box holding the password. Once the
+   * helper has typed it, any box but a password box (and the ID box) that holds it is emptied at once, before the page is
+   * drawn again, and the person presses Log in for me again. The watch ends when the login form has gone.
+   */
+  const guardPassword = (form: HTMLFormElement | null, idBox: HTMLInputElement, passwordBox: HTMLInputElement) => {
+    const loginForm: Element = form ?? passwordBox;
+    const observer = new MutationObserver(() => {
+      const shown = [...document.querySelectorAll("input")].filter((el) => el !== idBox && el.type !== "password" && el.value === login.password);
+      for (const box of shown) {
+        setValue(box, "");
+        if (box === passwordBox) box.type = "password";
+      }
+      if (shown.length > 0) showBanner("Masti CRM hid the password. Press Log in for me to try again.");
+      else if (!loginForm.isConnected) observer.disconnect();
+    });
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["type"] });
+  };
+
   try {
     if (!allowedOrigins.includes(location.origin)) return "ADDRESS_CHANGED";
 
@@ -175,6 +200,7 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     const { form, idBox, passwordBox } = found;
     type(idBox, login.loginId);
     type(passwordBox, login.password);
+    guardPassword(form, idBox, passwordBox);
 
     const captcha = findCaptcha(form ?? document, passwordBox, idBox);
     if (captcha) {

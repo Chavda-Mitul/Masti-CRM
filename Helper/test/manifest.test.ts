@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { crmAddressProblem, storeManifest } from "../scripts/storeManifest";
 import { turnOffPasswordSaving } from "../src/passwordSaving";
 
 // The helper asks Chrome for as little as it needs, and only the CRM's pages can talk to it.
@@ -34,6 +35,39 @@ describe("the manifest", () => {
     const example = readFileSync("../Backend/.env.example", "utf8");
     const ids = /^PORTAL_HELPER_IDS=(.*)$/m.exec(example)?.[1]?.split(",") ?? [];
     expect(ids).toContain(idOf(manifest.key));
+  });
+});
+
+describe("the Chrome Web Store build (component 4)", () => {
+  it("lets only Masti's CRM talk to it, drops the development key, and keeps everything else", () => {
+    const store = storeManifest(manifest, "https://crm.mastitravels.in");
+    expect(store).not.toHaveProperty("key");
+    expect(store.externally_connectable).toEqual({ matches: ["https://crm.mastitravels.in/*"] });
+    const { key: _key, externally_connectable: _connect, ...rest } = manifest;
+    const { externally_connectable: _storeConnect, ...storeRest } = store;
+    expect(storeRest).toEqual(rest);
+    // The development manifest itself is untouched.
+    expect(manifest.key).toBeTruthy();
+  });
+
+  it("takes only the CRM's own https address", () => {
+    for (const ok of ["https://crm.mastitravels.in", "https://crm.mastitravels.in/", "https://crm.mastitravels.in:8443"]) {
+      expect(crmAddressProblem(ok), ok).toBeNull();
+    }
+    const refused = [
+      "http://crm.mastitravels.in",
+      "https://localhost",
+      "https://portal.localhost",
+      "https://crm.mastitravels.in/login",
+      "https://crm.mastitravels.in/?from=office",
+      "https://agent:secret@crm.mastitravels.in",
+      "crm.mastitravels.in",
+      "",
+    ];
+    for (const bad of refused) {
+      expect(crmAddressProblem(bad), bad).not.toBeNull();
+      expect(() => storeManifest(manifest, bad), bad).toThrow();
+    }
   });
 });
 
