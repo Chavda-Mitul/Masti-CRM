@@ -203,7 +203,7 @@ Decided 22 Oct 2026 (project lead):
    lock (proposed with the plan, approved).
 
 Built:
-- **Data** (migration `20261022140000_portal_password_schedule`): `PortalLogin.passwordSchedule` (DAILY, WEEKLY, MONTHLY
+- **Data** (migration `20261022210000_portal_password_schedule`): `PortalLogin.passwordSchedule` (DAILY, WEEKLY, MONTHLY
   or NONE; monthly by default). Nothing else is stored: the due date is the India-time day of `passwordChangedAt` plus a
   day, 7 days or a month (31 Jan → 28 Feb), and the lock is "today is on or after it" (`passwordDueOn` and
   `isPasswordLocked` in `portalLogin.ts`).
