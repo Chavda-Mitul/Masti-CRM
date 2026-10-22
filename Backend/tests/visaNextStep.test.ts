@@ -81,7 +81,14 @@ async function eVisaDecided() {
   // Read first: a request awaited inside another's .send(...) breaks supertest.
   const seen = (await load(processor, c.caseNo)).updatedAt;
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/submit-online`).send({ updatedAt: seen })).status).toBe(200);
-  const outcomes = travellers.map((t) => ({ travellerId: t.id, outcome: "REFUSED" }));
+  // Approved: an e-visa where everyone is refused, with no passports held, closes at once (0025, part 5).
+  const outcomes = travellers.map((t, i) => ({
+    travellerId: t.id,
+    outcome: "APPROVED",
+    visaNo: `EV-2026/${77100 + i}`,
+    validFrom: addDays(istToday(), 20),
+    validTo: addDays(istToday(), 60),
+  }));
   const decidedAt = (await load(processor, c.caseNo)).updatedAt;
   expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt: decidedAt })).status).toBe(200);
   return { c, processor };

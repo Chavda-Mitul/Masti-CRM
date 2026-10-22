@@ -25,7 +25,8 @@ export const rowInclude = {
   visa: {
     include: {
       offering: { include: offeringInclude },
-      travellers: { select: { isChild: true } },
+      // The outcome: an e-visa where everyone was refused has nothing to send (visaNextStep).
+      travellers: { select: { isChild: true, outcome: true } },
       // Whether its passports are still to hand back (TO_HAND_BACK).
       docket: { select: { dispatchedAt: true } },
       handover: { select: { enquiryId: true } },

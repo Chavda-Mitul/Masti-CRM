@@ -6,7 +6,9 @@ import { getCompanyDetails } from "../company/company.settings";
 import {
   VISA_APPROVED,
   VISA_CREDIT_NOTE,
+  VISA_EVISA_PARTLY_APPROVED,
   VISA_EVISA_READY,
+  VISA_EVISA_REFUSED,
   VISA_HANDED_OVER,
   VISA_INVOICE,
   VISA_PARTLY_APPROVED,
@@ -109,13 +111,24 @@ export function workingDaysText(days: number): string {
 
 /**
  * Messages 10–12, the decision: "Visa approved" when every traveller is, "Visa refused" when every traveller is, else
- * "Partly approved". In the transaction that records it, once per case; a correction later sends nothing. The names are
- * in the case's order, as the decision dialog shows them.
+ * "Partly approved". An e-visa gets 20 or 21 instead, with no passport lines, and nothing when everyone is approved:
+ * message 19 brings each e-visa (docs/decisions/0025-evisa-after-decision.md part 5). In the transaction that records
+ * it, once per case; a correction later sends nothing. The names are in the case's order, as the decision dialog shows
+ * them.
  */
-export async function queueDecisionMessage(tx: Db, enquiryId: string, travellers: { name: string; outcome: VisaOutcome }[], workingDays: number) {
+export async function queueDecisionMessage(
+  tx: Db,
+  enquiryId: string,
+  travellers: { name: string; outcome: VisaOutcome }[],
+  workingDays: number,
+  { evisa = false }: { evisa?: boolean } = {},
+) {
   const approved = travellers.filter((t) => t.outcome === "APPROVED").map((t) => t.name);
   const refused = travellers.filter((t) => t.outcome === "REFUSED").map((t) => t.name);
-  const template = refused.length === 0 ? VISA_APPROVED : approved.length === 0 ? VISA_REFUSED : VISA_PARTLY_APPROVED;
+  if (evisa && refused.length === 0) return;
+  const allRefused = evisa ? VISA_EVISA_REFUSED : VISA_REFUSED;
+  const partly = evisa ? VISA_EVISA_PARTLY_APPROVED : VISA_PARTLY_APPROVED;
+  const template = refused.length === 0 ? VISA_APPROVED : approved.length === 0 ? allRefused : partly;
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
     template,

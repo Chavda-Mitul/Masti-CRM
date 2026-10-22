@@ -112,15 +112,25 @@ export const heldAtOffice = (c: VisaCase) =>
   (c.booklets.current ?? 0) + (c.booklets.old ?? 0) > 0 &&
   (PRE_DISPATCH.includes(c.stage.code) || (!!c.submittedOnline && EVISA_AFTER_SUBMISSION.includes(c.stage.code)))
 
+/** Every traveller was refused (0025, part 5): an e-visa then has nothing to send. */
+export const everyoneRefused = (c: VisaCase) => c.travellers.every((t) => t.decision?.outcome === 'REFUSED')
+
+/**
+ * A decided e-visa with nothing left to send: it was sent (0025, part 3), or everyone was refused (part 5). The
+ * passports we hold then go back. As the server's evisaDone.
+ */
+export const evisaDone = (c: VisaCase) => !!c.evisaSent || everyoneRefused(c)
+
 /**
  * The passports are in our stock, to hand over at the desk: received at Step 7 and not yet handed over (0014 Decision
- * 5), a cancelled case's held at our office (0006 amendment 15), or a sent e-visa's (0025, part 4). As the server's.
+ * 5), a cancelled case's held at our office (0006 amendment 15), or, held since intake, an e-visa's with nothing left to
+ * send (0025, parts 4–5). As the server's.
  */
 export const passportsInStock = (c: VisaCase) => {
   if (c.stage.code === 'PASSPORT_BACK') return !!c.passportsReceived && !c.handover
   if (c.status === 'CANCELLED') return heldAtOffice(c)
   const open = c.status === 'OPEN' || c.status === 'POSTPONED'
-  return open && c.stage.code === 'DECISION' && !!c.evisaSent && heldAtOffice(c)
+  return open && c.stage.code === 'DECISION' && evisaDone(c) && heldAtOffice(c)
 }
 
 /** What our stock holds, which a handover's count must match: the booklets received at Step 7, else the intake count. */

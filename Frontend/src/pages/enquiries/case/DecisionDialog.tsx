@@ -38,9 +38,11 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
       record.mutate(
         { outcomes, updatedAt: c.updatedAt, ...(confirmWarnings ? { confirmWarnings } : {}) },
         {
-          onSuccess: () => {
+          onSuccess: (saved) => {
             const approved = outcomes.filter((o) => o.outcome === 'APPROVED').length
-            toast({ tone: 'ok', message: `Decision recorded: ${approved} approved, ${outcomes.length - approved} refused.` })
+            // An e-visa with everyone refused and no passports held has nothing left to do (0025, part 5).
+            const closed = saved.status === 'CLOSED' ? ' The case is closed.' : ''
+            toast({ tone: 'ok', message: `Decision recorded: ${approved} approved, ${outcomes.length - approved} refused.${closed}` })
             onClose()
           },
           onError: (err) => {

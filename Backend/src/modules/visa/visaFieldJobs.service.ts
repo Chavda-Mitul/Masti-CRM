@@ -4,7 +4,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { addDays, dayLabel, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, notFound } from "../../lib/httpError";
-import { EVISA_AFTER_SUBMISSION } from "../enquiries/visibility";
+import { EVISA_AFTER_SUBMISSION, evisaDone } from "../enquiries/visibility";
 import { blockedDays } from "../holidays/blockedDays";
 import { VISA_COLLECTION_VISIT, VISA_DELIVERY_VISIT } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
@@ -50,7 +50,7 @@ async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
           submittedOnlineAt: true,
           evisaSentAt: true,
           handover: { select: { enquiryId: true } },
-          _count: { select: { travellers: true } },
+          travellers: { select: { outcome: true } },
         },
       },
     },
@@ -61,9 +61,10 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
  * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock, and not while a short
- * return holds them (0013 Decision 5, amended 17 Oct 2026). A sent e-visa's passports, held at our office since intake,
- * go out the same way (docs/decisions/0025-evisa-after-decision.md, part 4); a cancelled case's go back at the office
- * only (0006 amendment 15).
+ * return holds them (0013 Decision 5, amended 17 Oct 2026). Held at our office since intake, the passports of an e-visa
+ * with nothing left to send (sent, or everyone refused) go out the same way
+ * (docs/decisions/0025-evisa-after-decision.md, parts 4–5); a cancelled case's go back at the office only (0006
+ * amendment 15).
  */
 function assertCanBook(g: Gathered, kind: FieldJobKind, c: { status: string; stage: { code: string } }) {
   const v = g.visa;
@@ -72,10 +73,14 @@ function assertCanBook(g: Gathered, kind: FieldJobKind, c: { status: string; sta
     throw conflict("Passports are handed over from Passport back.");
   }
   const evisaHeld =
-    !!v?.evisaSentAt && c.stage.code === "DECISION" && c.status !== "CANCELLED" && (v.bookletsCurrent ?? 0) + (v.bookletsOld ?? 0) > 0;
+    !!v?.submittedOnlineAt &&
+    evisaDone(v) &&
+    c.stage.code === "DECISION" &&
+    c.status !== "CANCELLED" &&
+    (v.bookletsCurrent ?? 0) + (v.bookletsOld ?? 0) > 0;
   if (kind === "DELIVERY" && !v?.passportsReceivedAt && !evisaHeld) throw conflict("Mark the passports received first.");
   if (kind === "DELIVERY" && v?.handover) throw conflict("The passports are already handed over.");
-  if (kind === "DELIVERY" && v) assertNotHeldShort({ ...v, travellerCount: v._count.travellers });
+  if (kind === "DELIVERY" && v) assertNotHeldShort({ ...v, travellerCount: v.travellers.length });
   if (g.fieldJobs.length > 0) throw conflict(kind === "PICKUP" ? "The collection boy is already booked for this case." : "The delivery boy is already booked for this case.");
 }
 

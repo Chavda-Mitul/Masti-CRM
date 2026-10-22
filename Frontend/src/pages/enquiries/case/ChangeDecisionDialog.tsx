@@ -56,8 +56,10 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
           ...(confirmWarnings ? { confirmWarnings } : {}),
         },
         {
-          onSuccess: () => {
-            toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.` })
+          onSuccess: (saved) => {
+            // An e-visa this leaves with everyone refused, and no passports held, closes (0025, part 5).
+            const closed = saved.status === 'CLOSED' ? ' The case is closed.' : ''
+            toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.${closed}` })
             onClose()
           },
           onError: (err) => {

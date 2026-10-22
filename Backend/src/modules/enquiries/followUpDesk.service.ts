@@ -23,7 +23,7 @@ const DESK_LIMIT = 200;
 /** A list row plus each traveller's papers, for "8 of 11 documents pending" (whatFor). */
 export const withPapers = {
   ...rowInclude,
-  visa: { include: { ...rowInclude.visa.include, travellers: { select: { isChild: true, documents: { select: { status: true } } } } } },
+  visa: { include: { ...rowInclude.visa.include, travellers: { select: { isChild: true, outcome: true, documents: { select: { status: true } } } } } },
 } satisfies Prisma.EnquiryInclude;
 
 const deskInclude = {

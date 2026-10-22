@@ -201,7 +201,8 @@ describe("what is refused", () => {
     await resetDb();
     await seedVisaMasters(prisma);
     await seedEnquiryMasters(prisma);
-    const refused = await evisaCase({ outcomes: ["REFUSED", "REFUSED"] });
+    // With passports held it stays open, for their handover (with none, it closed at once: part 5).
+    const refused = await evisaCase({ outcomes: ["REFUSED", "REFUSED"], held: 2 });
     const none = await send(refused.processor, refused.c.caseNo);
     expect(none.status).toBe(409);
     expect(none.body.message).toBe("No one was approved: there's no e-visa to send.");

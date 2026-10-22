@@ -4,7 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { formatDate } from '../../../lib/format'
 import type { VisaCase } from '../types'
 import { ChangeDecisionDialog } from './ChangeDecisionDialog'
-import { dayTime, firstName, weekdayDay, windingDown } from './labels'
+import { dayTime, evisaDone, firstName, weekdayDay, windingDown } from './labels'
 import { EvisaLine } from './EvisaLine'
 import { RefusalLetterLine } from './RefusalLetterLine'
 
@@ -84,10 +84,8 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
             {c.owner && ` · ${firstName(c.owner.name)}`}
           </span>
           {/* An e-visa's passports never left the office (0008 Decision 11): its PDFs go to the client, then any
-              passports we hold go back (0025, parts 3 and 4). */}
-          <strong>
-            {!c.submittedOnline ? 'Check the passports are on their way back' : c.evisaSent ? 'Hand back the passports' : 'Send the e-visa'}
-          </strong>
+              passports we hold go back; with everyone refused there's nothing to send (0025, parts 3–5). */}
+          <strong>{!c.submittedOnline ? 'Check the passports are on their way back' : evisaDone(c) ? 'Hand back the passports' : 'Send the e-visa'}</strong>
         </div>
       )}
       {traveller && <ChangeDecisionDialog visaCase={c} traveller={traveller} onClose={() => setChanging(null)} />}
