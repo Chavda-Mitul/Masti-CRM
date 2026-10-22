@@ -9,6 +9,10 @@ export const MAX_ID_LABEL = 30
 export const MAX_LOGIN_ID = 200
 export const MAX_PORTAL_PASSWORD = 200
 
+/** How often a portal's password has to change (component 2); overdue, the portal locks. */
+export const PASSWORD_SCHEDULES = ['DAILY', 'WEEKLY', 'MONTHLY', 'NONE'] as const
+export type PasswordSchedule = (typeof PASSWORD_SCHEDULES)[number]
+
 /**
  * Why a login page address can't be saved, or null if it can: https, or http (some suppliers' portals have no https),
  * and never an ID or password inside the address.

@@ -1,4 +1,5 @@
-import type { Prisma } from "../../../generated/prisma/client";
+import type { PortalPasswordSchedule, Prisma } from "../../../generated/prisma/client";
+import { addDays, addMonths, istToday } from "../../lib/dates";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 
@@ -59,6 +60,36 @@ export function canUsePortalOnCase(
   return enquiry.ownerId === user.id && can(user, enquiry.department.code as DepartmentCode, "EDIT");
 }
 
+/** What the password's schedule is worked out from (component 2). */
+export type PasswordDates = { passwordSchedule: PortalPasswordSchedule; passwordChangedAt: Date };
+
+/**
+ * The date (India time, YYYY-MM-DD) the password has to change by: the day after the last change, 7 days after, or the
+ * same date the next month (31 Jan → 28 Feb). Null with no schedule.
+ */
+export function passwordDueOn(portal: PasswordDates): string | null {
+  const changedOn = istToday(portal.passwordChangedAt);
+  switch (portal.passwordSchedule) {
+    case "DAILY":
+      return addDays(changedOn, 1);
+    case "WEEKLY":
+      return addDays(changedOn, 7);
+    case "MONTHLY":
+      return addMonths(changedOn, 1);
+    case "NONE":
+      return null;
+  }
+}
+
+/**
+ * From the start of the due date the portal is locked for everyone, the Head included, until an HOD types a new password
+ * (demo screen 28: "the account stays locked for everyone until that's done").
+ */
+export function isPasswordLocked(portal: PasswordDates, now: Date = new Date()): boolean {
+  const dueOn = passwordDueOn(portal);
+  return dueOn !== null && istToday(now) >= dueOn;
+}
+
 /** "http://" addresses send the password unprotected; managers see a warning on the card. */
 export const isSecureAddress = (loginUrl: string) => loginUrl.startsWith("https://");
 
@@ -73,6 +104,10 @@ export function toPortalLoginDto(row: PortalLoginRow, user: UserWithDepartments)
     status: row.status,
     users: row.users.map((u) => u.user).sort((a, b) => a.name.localeCompare(b.name)),
     passwordChangedAt: row.passwordChangedAt,
+    passwordSchedule: row.passwordSchedule,
+    passwordDueOn: passwordDueOn(row),
+    /** Overdue: nobody can use it until an HOD types a new password. canUse still says who could. */
+    locked: isPasswordLocked(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canUse: row.status === "ACTIVE" && canUsePortal(user, row),
@@ -87,6 +122,7 @@ export function portalLoginSnapshot(p: {
   name: string;
   loginUrl: string;
   idLabel: string;
+  passwordSchedule: PortalPasswordSchedule;
   status: string;
   userIds: string[];
 }) {
@@ -95,6 +131,7 @@ export function portalLoginSnapshot(p: {
     name: p.name,
     loginUrl: p.loginUrl,
     idLabel: p.idLabel,
+    passwordSchedule: p.passwordSchedule,
     status: p.status,
     userIds: [...p.userIds].sort(),
   };

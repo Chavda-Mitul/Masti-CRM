@@ -122,7 +122,13 @@ describe("Log in for me on a case", () => {
   it("lets the person on the case log in though not on the portal's list, and keeps the case with the press", async () => {
     const { c, riya, portal, neha } = await caseWithPortal();
     const page = await neha.get(`/api/visa/cases/${c.caseNo}`);
-    expect(page.body.case.portal).toEqual({ id: portal.id, name: "France visa portal", userIds: [], helperIds: ["aaaabbbbccccddddeeeeffffgggghhhh"] });
+    expect(page.body.case.portal).toEqual({
+      id: portal.id,
+      name: "France visa portal",
+      userIds: [],
+      locked: false,
+      helperIds: ["aaaabbbbccccddddeeeeffffgggghhhh"],
+    });
     expect(page.text).not.toContain("Spring-Visa-2026!");
 
     const opened = await press(neha, c.caseNo);
@@ -172,6 +178,17 @@ describe("Log in for me on a case", () => {
     const notYet = await press(riya, early.caseNo);
     expect(notYet.status).toBe(409);
     expect(notYet.body.message).toMatch(/step 3/);
+  });
+
+  it("is locked on the case too while the portal's password change is overdue (component 2)", async () => {
+    const { c, riya, portal, neha } = await caseWithPortal();
+    await prisma.portalLogin.update({ where: { id: portal.id }, data: { passwordChangedAt: new Date(Date.now() - 40 * 86_400_000) } });
+    expect((await neha.get(`/api/visa/cases/${c.caseNo}`)).body.case.portal).toMatchObject({ id: portal.id, locked: true });
+    for (const agent of [neha, riya]) {
+      const res = await press(agent, c.caseNo);
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe("This portal is locked until the HOD changes its password.");
+    }
   });
 
   it("says so when the visa has no portal", async () => {
