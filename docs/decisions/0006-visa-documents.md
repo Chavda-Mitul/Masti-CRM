@@ -172,6 +172,10 @@ deferred "with messaging". WhatsApp and the job runner still aren't built:
     - **Worked out on each read, not stored.** 0003 planned `VisaCase.nextReminderAt`. With no sender, nothing would
       move a stored date on, so the card would show a past date. Only the case's switch is stored
       (`VisaCase.remindersOn`, default true). The WhatsApp job adds what it needs (e.g. when each one went out).
+    - **Sent since 22 Oct 2026** ([0021](0021-whatsapp-outbox.md) Amendment 3, message 3). A sweep every 15 minutes
+      queues each reminder whose planned time (the card's "Next") has come, once per planned day. Nothing is stored on
+      the case: the message itself, keyed per day, is the record. Only papers the client brings count; what we arrange
+      never does.
     - **The switch:** `PUT /api/visa/cases/:caseNo/reminders` `{ on }`. The owner, the Visa HOD or the Head, on an open
       case still collecting documents (the `COLLECTING` rule, like a tick, so no `updatedAt`). Audited as
       `visa.reminders.update` when it changes.
