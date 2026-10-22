@@ -1,6 +1,9 @@
 import type { DocumentRequirement, TravellerGroup } from "../../../generated/prisma/enums";
 import type { Db } from "../../config/prisma";
+import { rupeesText } from "../../lib/money";
 import { getCompanyDetails } from "../company/company.settings";
+import { VISA_INVOICE } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 
 // What every visa message says about its case (docs/whatsapp-visa-messages.md): {{client_name}}, {{visa}},
 // {{case_no}}, {{travellers}} and {{office_phone}}. Each step's message adds its own values to these
@@ -44,6 +47,21 @@ export async function visaMessageBasics(db: Db, enquiryId: string) {
       office_phone: (await getCompanyDetails(db)).phone,
     },
   };
+}
+
+/**
+ * Message 7, "Invoice": one for each invoice raised, the main, the additional or a corrected one, in its transaction.
+ * Words only for now (the project lead, 22 Oct 2026): staff send the PDF by hand.
+ */
+export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { id: string; invoiceNo: string; totalPaise: number }) {
+  const basics = await visaMessageBasics(tx, enquiryId);
+  await queueMessage(tx, {
+    template: VISA_INVOICE,
+    enquiryId,
+    key: `${VISA_INVOICE}:${invoice.id}`,
+    clientId: basics.clientId,
+    variables: { ...basics.variables, invoice_no: invoice.invoiceNo, amount: rupeesText(invoice.totalPaise) },
+  });
 }
 
 /** Room for a list inside one message: WhatsApp allows about 1,000 characters in all (the draft, 22 Oct 2026). */

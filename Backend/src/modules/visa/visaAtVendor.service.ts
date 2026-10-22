@@ -1,16 +1,19 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { addDays, fromDbDate, istToday, toDbDate } from "../../lib/dates";
+import { addDays, dayLabel, fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError } from "../../lib/httpError";
 import { checkWarnings, confirmedWarningsNote } from "../../lib/warnings";
 import { blockedDays } from "../holidays/blockedDays";
 import { longDay } from "../holidays/holiday";
+import { VISA_SUBMITTED } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, WITH_VENDOR } from "./caseLock";
 import { MAX_COLLECTION_DAYS_AHEAD, type SaveSubmissionInput, type VendorReceivedInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueBeforeOfficeDay, dueOnOfficeDay, getVisaSettings } from "./visa.settings";
+import { visaMessageBasics } from "./visaMessages";
 import { collectionWarnings } from "./visaWarnings";
 
 // Visa Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md). "Vendor got it, papers checked" (Decision 2) is
@@ -207,6 +210,17 @@ export async function saveSubmission(caseNo: string, input: SaveSubmissionInput,
       },
       tx,
     );
+    // Message 8, "File submitted" (docs/whatsapp-visa-messages.md): the first save only; a correction sends nothing.
+    if (!was) {
+      const basics = await visaMessageBasics(tx, enquiry.id);
+      await queueMessage(tx, {
+        template: VISA_SUBMITTED,
+        enquiryId: enquiry.id,
+        key: `${VISA_SUBMITTED}:${enquiry.id}`,
+        clientId: basics.clientId,
+        variables: { ...basics.variables, embassy: embassy.name, expected_date: dayLabel(now.collectionOn) },
+      });
+    }
   });
   return getVisaCaseById(enquiry.id);
 }

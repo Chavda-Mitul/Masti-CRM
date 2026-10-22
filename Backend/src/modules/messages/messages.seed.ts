@@ -25,6 +25,15 @@ export const VISA_DOCUMENT_REMINDER = "visa.document_reminder";
 /** Message 5: the collection boy is booked, or the visit changes. A suggestion beyond the demo (change request 12). */
 export const VISA_COLLECTION_VISIT = "visa.collection_visit";
 
+/** Message 7: an invoice is raised (the main, the additional or a corrected one). Words only for now: no PDF. */
+export const VISA_INVOICE = "visa.invoice";
+
+/** Message 8: the file is first marked submitted at the embassy (Step 5). */
+export const VISA_SUBMITTED = "visa.submitted";
+
+/** Message 9: an e-visa is marked applied online (Step 4). */
+export const VISA_APPLIED_ONLINE = "visa.applied_online";
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
@@ -103,6 +112,43 @@ export const MESSAGE_TEMPLATES = [
       "Please keep the documents and your phone ready. We will send you a code to tell our staff member at the door.",
       "",
       "To change the time, call us on {{office_phone}}.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_INVOICE,
+    name: "Invoice",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "Your invoice {{invoice_no}} for the {{visa}} ({{case_no}}) is ready. Amount: ₹{{amount}}.",
+      "",
+      "You can pay by bank transfer or at our office. Our bank details are on the invoice.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_SUBMITTED,
+    name: "File submitted",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "Your {{visa}} file ({{case_no}}) has been submitted to the {{embassy}}.",
+      "",
+      "We expect the result around {{expected_date}} and will message you as soon as we hear.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_APPLIED_ONLINE,
+    name: "Applied online",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "We have applied online for your {{visa}} ({{case_no}}). We will message you as soon as the result comes.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),
