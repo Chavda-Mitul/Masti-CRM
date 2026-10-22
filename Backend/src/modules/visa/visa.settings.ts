@@ -23,10 +23,12 @@ import {
   collectionCheckSchema,
   passportValiditySchema,
   childAgeSchema,
+  passportsArriveSchema,
   documentRemindersSchema,
   coveringLetterSettingSchema,
   type AwbSetting,
   type ChildAgeSetting,
+  type PassportsArriveSetting,
   type CoveringLetterSetting,
   type PassportValiditySetting,
   type CollectionCheckSetting,
@@ -74,6 +76,7 @@ export const AWB_KEY = "visa.awb";
 export const DOCKET_EMAIL_KEY = "visa.docketEmail";
 export const PASSPORT_VALIDITY_KEY = "visa.passportValidity";
 export const CHILD_AGE_KEY = "visa.childAge";
+export const PASSPORTS_ARRIVE_KEY = "visa.passportsArrive";
 export const DOCUMENT_REMINDERS_KEY = "visa.documentReminders";
 export const COVERING_LETTER_KEY = "visa.coveringLetter";
 
@@ -137,6 +140,9 @@ export const DEFAULT_PASSPORT_VALIDITY: PassportValiditySetting = { monthsAfterR
 
 /** ⚠️ Decided 19 Oct 2026 (M46): a traveller counts as an adult from 18, for the warnings only (staff still decide). */
 export const DEFAULT_CHILD_AGE: ChildAgeSetting = { adultFrom: 18 };
+
+/** ⚠️ The decision messages' "about 2 working days" (docs/whatsapp-visa-messages.md point 4), until Masti says. */
+export const DEFAULT_PASSPORTS_ARRIVE: PassportsArriveSetting = { workingDays: 2 };
 
 /** ⚠️ 0003 Decision 7 and the demo: "Every 2 days at 11:00 on WhatsApp, listing only what's still missing." */
 export const DEFAULT_DOCUMENT_REMINDERS: DocumentRemindersSetting = { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" };
@@ -214,7 +220,7 @@ export async function nextReminderAt(
 
 /** Current settings. A missing or invalid row falls back to the default. */
 export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
-  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, DISPATCH_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, DOCUMENT_REMINDERS_KEY, COVERING_LETTER_KEY];
+  const keys = [FIRST_FOLLOW_UP_KEY, FINAL_FILE_KEY, DOCKET_KEY, STICKER_KEY, INVOICE_KEY, CREDIT_NOTE_KEY, VENDOR_CONFIRM_KEY, ONLINE_CHECK_KEY, SUBMISSION_CHECK_KEY, RECALL_RETURN_KEY, PASSPORTS_BACK_CHECK_KEY, ARRIVAL_CHECK_KEY, ASSIGN_CHECK_KEY, DISPATCH_CHECK_KEY, HANDOVER_CHECK_KEY, HANDOVER_PHOTO_KEY, COLLECTION_CHECK_KEY, AWB_KEY, DOCKET_EMAIL_KEY, PASSPORT_VALIDITY_KEY, CHILD_AGE_KEY, PASSPORTS_ARRIVE_KEY, DOCUMENT_REMINDERS_KEY, COVERING_LETTER_KEY];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const value = (key: string) => rows.find((r) => r.key === key)?.value;
   const firstFollowUp = firstFollowUpSchema.safeParse(value(FIRST_FOLLOW_UP_KEY));
@@ -238,6 +244,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
   const docketEmail = docketEmailSettingSchema.safeParse(value(DOCKET_EMAIL_KEY));
   const passportValidity = passportValiditySchema.safeParse(value(PASSPORT_VALIDITY_KEY));
   const childAge = childAgeSchema.safeParse(value(CHILD_AGE_KEY));
+  const passportsArrive = passportsArriveSchema.safeParse(value(PASSPORTS_ARRIVE_KEY));
   const documentReminders = documentRemindersSchema.safeParse(value(DOCUMENT_REMINDERS_KEY));
   const coveringLetter = coveringLetterSettingSchema.safeParse(value(COVERING_LETTER_KEY));
   return {
@@ -262,7 +269,7 @@ export async function getVisaSettings(db: Db = prisma): Promise<VisaSettings> {
     docketEmail: docketEmail.success ? docketEmail.data : DEFAULT_DOCKET_EMAIL,
     passportValidity: passportValidity.success ? passportValidity.data : DEFAULT_PASSPORT_VALIDITY,
     childAge: childAge.success ? childAge.data : DEFAULT_CHILD_AGE,
-
+    passportsArrive: passportsArrive.success ? passportsArrive.data : DEFAULT_PASSPORTS_ARRIVE,
     documentReminders: documentReminders.success ? documentReminders.data : DEFAULT_DOCUMENT_REMINDERS,
     coveringLetter: coveringLetter.success ? coveringLetter.data : DEFAULT_COVERING_LETTER,
   };

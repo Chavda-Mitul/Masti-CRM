@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { istToday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { VISA_HANDED_OVER } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { receivedCase, type Agent } from "./visaHelpers";
@@ -155,6 +156,9 @@ describe("the handover at the door (phase 5)", () => {
       after: { mode: "DELIVERY", receiver: "Rakesh Mehta", fieldJobId: delivery.id, place: PLACE },
     });
     expect(await prisma.auditLog.count({ where: { action: "field.job.done", entityId: delivery.id } })).toBe(1);
+    // The client's WhatsApp, as at the office (message 15).
+    const [message] = await prisma.outboundMessage.findMany({ where: { template: { code: VISA_HANDED_OVER } } });
+    expect(message!.body).toContain(`We have handed over 2 passports for ${c.caseNo} to Rakesh Mehta on `);
 
     // The office sees the handover at the door, and can't hand over again.
     const seen = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;

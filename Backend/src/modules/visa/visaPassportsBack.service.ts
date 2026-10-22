@@ -17,6 +17,7 @@ import {
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { travellerLabel } from "./visaCase";
+import { queuePassportsBackMessage } from "./visaMessages";
 
 // Visa Step 7, passport back (docs/decisions/0013-visa-passport-back.md). "Passports on the way back" records the day
 // the vendor collected the passports and the day they're expected at our office (Decision 3), from Decision, or at
@@ -283,6 +284,10 @@ export async function receivePassports(caseNo: string, input: ReceivePassportsIn
       },
       tx,
     );
+    // Message 13 (docs/whatsapp-visa-messages.md) once every booklet that went out is back: a short return waits for the
+    // rest (receiveRest).
+    const missing = missingBooklets({ ...r, bookletsBackCurrent: input.booklets.current, bookletsBackOld: input.booklets.old, travellerCount: r.travellers.length });
+    if (missing.current + missing.old === 0) await queuePassportsBackMessage(tx, enquiry.id);
   });
   return getVisaCaseById(enquiry.id);
 }
@@ -371,6 +376,8 @@ export async function receiveRest(caseNo: string, input: ReceiveRestInput, actor
       },
       tx,
     );
+    // Message 13, now that every booklet is back (even after the shortfall was cleared).
+    if (stillMissing.current + stillMissing.old === 0) await queuePassportsBackMessage(tx, enquiry.id);
   });
   return getVisaCaseById(enquiry.id);
 }

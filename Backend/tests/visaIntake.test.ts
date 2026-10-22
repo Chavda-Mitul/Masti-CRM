@@ -369,6 +369,7 @@ describe("intake dropdowns and settings", () => {
       },
       passportValidity: { monthsAfterReturn: 6 },
       childAge: { adultFrom: 18 },
+      passportsArrive: { workingDays: 2 },
       documentReminders: { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" },
       coveringLetter: { letterheadMm: 45 },
     });

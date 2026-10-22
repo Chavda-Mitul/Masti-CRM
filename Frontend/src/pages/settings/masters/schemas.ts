@@ -148,7 +148,10 @@ const dayCount = z.number({ error: 'Enter a number.' }).int('Whole days only.').
 const timeOfDay = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour time, e.g. 11:00.')
 const officeDayTiming = z.object({ afterDays: dayCount, at: timeOfDay })
 
-/** The visa timings and the warnings' two values (Backend visa.schemas.ts visaSettingsSchema, the same limits). */
+/**
+ * The visa timings, the warnings' two values and the decision messages' working days (Backend visa.schemas.ts
+ * visaSettingsSchema, the same limits).
+ */
 export const visaTimingsFormSchema = z.object({
   firstFollowUp: officeDayTiming,
   vendorConfirm: officeDayTiming,
@@ -165,6 +168,7 @@ export const visaTimingsFormSchema = z.object({
     monthsAfterReturn: z.number({ error: 'Enter a number.' }).int('Whole months only.').min(0, '0 at least.').max(24, '24 at most.'),
   }),
   childAge: z.object({ adultFrom: z.number({ error: 'Enter an age.' }).int('A whole age.').min(1, '1 at least.').max(25, '25 at most.') }),
+  passportsArrive: z.object({ workingDays: z.number({ error: 'Enter a number.' }).int('Whole days only.').min(1, '1 at least.').max(30, '30 at most.') }),
 })
 
 export type VisaTimingsFormValues = z.infer<typeof visaTimingsFormSchema>

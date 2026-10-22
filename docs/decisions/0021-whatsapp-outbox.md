@@ -212,11 +212,51 @@ the change it follows, as in Amendment 3.
   - Only the first save sends it. A later change to the file number, the embassy or the date sends nothing.
 - **Message 9:** a case is submitted online once, and a second press is refused, so it goes once.
 
+## Amendment 5 (22 Oct 2026): the visa messages of Steps 6–8
+
+Group C of Amendment 3: messages 10 to 15 of `docs/whatsapp-visa-messages.md`, each queued in the transaction of the
+change it follows. The project lead decided two things on 22 Oct 2026:
+- **A short return:** message 13 waits until every passport is back.
+- **The office address:** messages 10 and 13 use the one in Settings → Company, as it is.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 10 | `visa.approved` · Visa approved | the decision is recorded (`recordDecision`) and every traveller is approved | case |
+| 11 | `visa.refused` · Visa refused | … every traveller is refused | case |
+| 12 | `visa.partly_approved` · Partly approved | … some are approved, some refused | case |
+| 13 | `visa.passports_back` · Passports at our office | every booklet that went out is back: at "Mark received" (`receivePassports`), or at "Received the rest" (`receiveRest`) once nothing is missing | case |
+| 14 | `visa.delivery_visit` · Delivery booked | a delivery is booked, or its boy, day, slot or address changes (`bookFieldJob`, `changeFieldJob`) | job and change |
+| 15 | `visa.handed_over` · Passports handed over | the passports are handed over at the office (`handOver`) or at the door (`handOverAtDoor`) | case |
+
+- **What every visa message knows:** `visaMessageBasics` also fills `{{office_address}}`, the address in Settings →
+  Company (the invoice's).
+- **Messages 10–12:**
+  - `queueDecisionMessage` picks the message by the outcomes. `{{approved_names}}` and `{{refused_names}}` are in the
+    case's order, as the decision dialog names them, joined "A, B and C".
+  - `{{working_days}}` is "2 working days", from a new setting, `visa.passportsArrive` ⚠️ (Settings → Visa → Client
+    messages; the draft's point 4, open with Masti). It carries its own noun, so "1 working day" reads right too; the
+    wording is "in about {{working_days}}".
+  - **Not for an e-visa yet:** how its client gets the visa is open (the draft's point 5).
+  - Correcting the decision later (`changeDecision`) sends nothing; staff call the client.
+- **Message 13:**
+  - A short return sends nothing until "Received the rest" makes up the count.
+  - When the shortfall is cleared (a passport won't come back), nothing goes, and staff call. If it turns up after all,
+    the message goes then.
+  - It goes for a recalled file too, and whatever the case's status: the passports are at our office.
+- **Message 14:**
+  - Message 5's rules, for a delivery: `queueFieldVisit` picks message 5 or 14 by the job's kind.
+  - A map link alone, a cancel, or a handover that calls the visit off sends nothing.
+- **Message 15:**
+  - `queueHandoverMessage` fills `{{passport_count}}` ("4 passports and 3 old passports", `passportCountText`) and
+    `{{receiver_name}}` (the traveller, or the name typed).
+  - `{{handover_time}}` is the handover's own time, "Sat 31 Oct, 12:10 pm" (`dayLabel` and the new `timeLabel`).
+  - It goes for a cancelled case's hand-back before dispatch too.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- **The other visa messages:** group A (1, 2, 3, 5) is built, Amendment 3, and group B (7, 8, 9), Amendment 4. Groups
-  C and D follow, one PR each. Messages 7 and 18 go without their PDF for now.
+- **The other visa messages:** groups A (1, 2, 3, 5), B (7, 8, 9) and C (10 to 15) are built, Amendments 3 to 5. Group
+  D (16, 17, 18) follows. Messages 7 and 18 go without their PDF for now, and e-visas get no decision message yet.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code

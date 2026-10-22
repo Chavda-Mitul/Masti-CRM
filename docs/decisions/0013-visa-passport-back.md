@@ -294,8 +294,9 @@ closed as Delivered with nobody asked to chase the fourth):
 
 ## Not in this record
 
-- **WhatsApp to the client** ("Passports are at our office"): waits for the WhatsApp work. The demo's "Delivery booked
-  for Sat 31 Oct" needs a delivery booking, which is Step 8.
+- ~~**WhatsApp to the client**~~ ("Passports are at our office"): built, message 13 in
+  `docs/decisions/0021-whatsapp-outbox.md` Amendment 5 (22 Oct 2026), once every passport is back. The demo's
+  "Delivery booked for Sat 31 Oct" is message 14, sent when Step 8 books the delivery.
 - **Booking the delivery or the client's visit, and the handover itself:** the Step 8 record.
 - **A list of every passport in our stock, across cases** (the demo's unused "Passports arriving back · mark received"
   attention list): not in the demo screens, so a change request if Masti wants it.
