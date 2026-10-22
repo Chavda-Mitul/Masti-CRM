@@ -6,6 +6,7 @@ import { logger } from "./lib/logger";
 import { deleteExpiredSessions } from "./modules/auth/session";
 import { seedConsentWording } from "./modules/consent/consent.seed";
 import { startMessages } from "./modules/messages/messages.worker";
+import { startVisaReminders } from "./modules/visa/visaReminders.worker";
 
 /** How often expired sessions are swept out of the database. */
 const SESSION_SWEEP_MS = 60 * 60 * 1000;
@@ -26,6 +27,8 @@ async function main() {
   // The job queue first (docs/decisions/0021-whatsapp-outbox.md): a save may queue a job, so requests wait for it.
   await startJobs();
   await startMessages();
+  // The visa pending-document reminders, every 15 minutes (message 3, 0021 amendment 3).
+  await startVisaReminders();
   // The consent form needs a wording: the draft, into a database with none (docs/decisions/0022-consent-form.md).
   await seedConsentWording(prisma);
 

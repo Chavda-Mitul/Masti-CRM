@@ -2,11 +2,16 @@ import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
 import { fieldError } from "../../lib/httpError";
+import { quoteTotals, rupeesText, type QuoteLineAmounts } from "../../lib/money";
+import { VISA_PRICE } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { INVOICED, loadCase, lockCase } from "./caseLock";
 import type { SaveQuoteInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
+import { getVisaSettings } from "./visa.settings";
 import { assertQuoteCanChange } from "./visaInvoice.service";
+import { visaMessageBasics } from "./visaMessages";
 
 // The quote on a visa case (docs/decisions/0009-visa-invoice.md Decision 2): every amount the invoice will print, per
 // traveller a lump sum or itemised, plus Masti's service charge. Money is in paise. Saved whole, by whoever can act on
@@ -35,6 +40,13 @@ type QuoteRow = {
     otherFeePaise?: number | null;
   }[];
 };
+
+/** A saved line's amounts, as the totals read them. */
+function amountsOf(line: SaveQuoteInput["lines"][number]): QuoteLineAmounts {
+  return line.form === "LUMP_SUM"
+    ? { form: line.form, lumpSumPaise: line.lumpSumPaise, embassyFeePaise: null, vfsFeePaise: null, otherFeePaise: null }
+    : { form: line.form, lumpSumPaise: null, embassyFeePaise: line.embassyFeePaise, vfsFeePaise: line.vfsFeePaise, otherFeePaise: line.otherFeePaise };
+}
 
 /** The quote as audited and compared: lines in a fixed order, every amount present (null when not used). */
 function snapshot(q: QuoteRow) {
@@ -116,6 +128,20 @@ export async function saveQuote(caseNo: string, input: SaveQuoteInput, actor: Ac
       },
       tx,
     );
+    // Message 2, "Your price": the first time the case has a price. A later change sends nothing; the invoice
+    // (message 7) carries the final amount.
+    if (!before) {
+      const { gstRatePercent } = (await getVisaSettings(tx)).invoice;
+      const { totalPaise } = quoteTotals(input.lines.map(amountsOf), input.serviceChargePaise, gstRatePercent);
+      const basics = await visaMessageBasics(tx, enquiry.id);
+      await queueMessage(tx, {
+        template: VISA_PRICE,
+        enquiryId: enquiry.id,
+        key: `${VISA_PRICE}:${enquiry.id}`,
+        clientId: basics.clientId,
+        variables: { ...basics.variables, total: rupeesText(totalPaise) },
+      });
+    }
   });
   return getVisaCaseById(enquiry.id);
 }

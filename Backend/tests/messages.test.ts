@@ -3,7 +3,7 @@ import { env } from "../src/config/env";
 import { boss, QUEUES, stopWorkers } from "../src/lib/jobs";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppStatus } from "../src/lib/whatsapp";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
+import { seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENT_LIST, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
 import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage } from "../src/modules/messages/messages.service";
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
@@ -60,10 +60,17 @@ afterEach(() => {
   env.WHATSAPP_TEST_NUMBER = undefined;
 });
 
+/** Saving a case queues message 1, the document list; these tests are about the outbox itself, so it goes. */
+async function dropDocumentList() {
+  await prisma.outboundMessage.deleteMany({ where: { template: { code: VISA_DOCUMENT_LIST } } });
+  await boss.deleteAllJobs();
+}
+
 /** A saved visa case's "All documents received" message, queued as mature() queues it. */
 async function queued(key = "test:1") {
   const staff = await visaStaff();
   const c = await saveCase(staff);
+  await dropDocumentList();
   await prisma.$transaction(async (tx) =>
     queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key, ...(await visaMessageBasics(tx, c.id)) }),
   );
@@ -103,6 +110,7 @@ describe("queueing", () => {
   it("leaves neither message nor job when the save rolls back", async () => {
     const staff = await visaStaff();
     const c = await saveCase(staff);
+    await dropDocumentList();
     await expect(
       prisma.$transaction(async (tx) => {
         await queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key: "k", ...(await visaMessageBasics(tx, c.id)) });
@@ -141,6 +149,7 @@ describe("queueing", () => {
     await prisma.messageTemplate.delete({ where: { code: VISA_DOCUMENTS_RECEIVED } });
     const staff = await visaStaff();
     const c = await saveCase(staff);
+    await dropDocumentList();
     await prisma.$transaction(async (tx) =>
       queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key: "k", ...(await visaMessageBasics(tx, c.id)) }),
     );
@@ -485,6 +494,7 @@ describe("the case's messages (the Sent to the client card)", () => {
   async function caseWithMessage() {
     const staff = await visaStaff();
     const c = await saveCase(staff);
+    await dropDocumentList();
     await prisma.$transaction(async (tx) =>
       queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key: `k:${c.id}`, ...(await visaMessageBasics(tx, c.id)) }),
     );
@@ -550,6 +560,7 @@ describe("the case's messages (the Sent to the client card)", () => {
   it("is empty for a case with no messages", async () => {
     const staff = await visaStaff();
     const c = await saveCase(staff);
+    await dropDocumentList();
     expect((await list(staff, c.caseNo)).body).toEqual({ messages: [] });
   });
 

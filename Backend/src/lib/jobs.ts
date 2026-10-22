@@ -14,6 +14,8 @@ export const QUEUES = {
   whatsappSendFailed: "whatsapp-send-failed",
   /** Asks the provider where a sent message has got to. */
   whatsappStatus: "whatsapp-status",
+  /** Every 15 minutes: queues the visa pending-document reminders that are due (message 3). */
+  visaDocumentReminders: "visa-document-reminders",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -33,6 +35,8 @@ const QUEUE_SETTINGS: [QueueName, QueueSettings][] = [
   ],
   // A check that fails is tried once more a minute later; the next check is queued by the last one.
   [QUEUES.whatsappStatus, { retryLimit: 1, retryDelay: 60, expireInSeconds: 60 }],
+  // A sweep that fails isn't tried again: the next one, 15 minutes later, catches up on whatever was due.
+  [QUEUES.visaDocumentReminders, { retryLimit: 0, expireInSeconds: 600 }],
 ];
 
 export const boss = new PgBoss({
