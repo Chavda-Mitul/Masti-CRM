@@ -11,7 +11,7 @@ const CHANNEL_LABEL: Record<ReminderChannel, string> = { WHATSAPP: 'WhatsApp', S
 /**
  * "Reminders" (demo screen 07, 0006 amendment 19): pending-document reminders to the client every few days, as set in
  * Settings → Masters. The owner, the Visa HOD or the Head switches them off for one case. Postponing or cancelling is
- * only on the case header (amendment 20). Nothing is sent until WhatsApp is connected.
+ * only on the case header (amendment 20). They go on WhatsApp (message 3, 0021 amendment 3); SMS isn't built yet.
  */
 export function RemindersCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -37,8 +37,8 @@ function ReminderLine({ visaCase: c }: { visaCase: VisaCase }) {
   if (!r.enabled) return <>Switched off for every case in Settings → Masters.</>
   if (!r.on) return <>Switched off for this case: the client gets no reminders.</>
   if (c.status === 'POSTPONED') return <>Paused while the case is postponed.</>
-  const pending = c.travellers.reduce((n, t) => n + t.pendingCount, 0)
-  if (pending === 0) return <>Nothing is missing, so no reminder is due.</>
+  // No next reminder: nothing the client brings is missing (what we arrange is never asked for).
+  if (!r.nextAt) return <>Nothing the client brings is missing, so no reminder is due.</>
   const every = r.everyDays === 1 ? 'day' : `${r.everyDays} days`
   return (
     <>
@@ -46,8 +46,8 @@ function ReminderLine({ visaCase: c }: { visaCase: VisaCase }) {
       <strong>
         {every} at {r.sendAt}
       </strong>{' '}
-      on {CHANNEL_LABEL[r.channel]}, listing only what’s still missing.{r.nextAt && ` Next: ${weekdayDay(r.nextAt)}.`}
-      <span className="muted small reminders-note">Sending starts once WhatsApp is connected.</span>
+      on {CHANNEL_LABEL[r.channel]}, listing only what’s still missing. Next: {weekdayDay(r.nextAt)}.
+      {r.channel === 'SMS' && <span className="muted small reminders-note">SMS isn’t connected yet, so nothing is sent.</span>}
     </>
   )
 }

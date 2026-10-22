@@ -14,6 +14,8 @@ import { requireMobile } from "../clients/client";
 import { currentScansOf } from "../clients/clientDocuments.service";
 import { getClientSettings } from "../clients/clients.settings";
 import { findOrCreateClientByMobile } from "../clients/clients.service";
+import { VISA_DOCUMENT_LIST } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
@@ -45,9 +47,10 @@ import {
   VENDOR_CONFIRM_KEY,
 } from "./visa.settings";
 import { remindersDue, toVisaCaseDto, travellersLabel, visaCaseInclude, type VisaCaseRow } from "./visaCase";
+import { documentListItems, fitList, visaMessageBasics } from "./visaMessages";
 
-// Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026).
-// Saving sends the client nothing yet: the document list (message 1) comes with the visa messages (0021).
+// Visa Step 1: intake (docs/decisions/0003-visa-intake.md, refreshed 9 Oct 2026). Saving sends the client the document
+// list on WhatsApp (message 1, docs/whatsapp-visa-messages.md; 0021 amendment 3).
 
 const VISA = "VISA";
 const FIRST_STAGE = "ENQUIRY";
@@ -248,6 +251,15 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
         },
         tx,
       );
+      // Message 1, "Document list": what to bring, queued with the save and sent after it.
+      const basics = await visaMessageBasics(tx, enquiry.id);
+      await queueMessage(tx, {
+        template: VISA_DOCUMENT_LIST,
+        enquiryId: enquiry.id,
+        key: `${VISA_DOCUMENT_LIST}:${enquiry.id}`,
+        clientId: basics.clientId,
+        variables: { ...basics.variables, document_list: fitList(documentListItems(checklist, input.children > 0)) },
+      });
       return { id: enquiry.id, clientCreated };
     });
 

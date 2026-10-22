@@ -4,6 +4,9 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+
+/** Message 6, "All documents received" (saving a case queues message 1 too). */
+const documentsReceived = { template: { code: "visa.documents_received" } };
 import { holdCaseLock, saveCase, untilWaitingOnLock, visaStaff, type Agent } from "./visaHelpers";
 
 // Visa Step 2 (docs/decisions/0006-visa-documents.md). Who may open a case is tested in enquiries.test.ts.
@@ -374,7 +377,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       // Nothing changed.
       expect(await load(staff, c.caseNo)).toMatchObject({ stage: { code: "DOCUMENTS" }, owner: { name: "Aarti Patel" }, maturedAt: null });
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
-      expect(await prisma.outboundMessage.count()).toBe(0);
+      expect(await prisma.outboundMessage.count({ where: documentsReceived })).toBe(0);
 
       // One paper short is still refused.
       const other = await freshCase(staff);
@@ -416,7 +419,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       });
 
       // The client's "All documents received" WhatsApp is queued with the move (0021); messages.test.ts sends it.
-      const messages = await prisma.outboundMessage.findMany({ include: { template: { select: { code: true } } } });
+      const messages = await prisma.outboundMessage.findMany({ where: documentsReceived, include: { template: { select: { code: true } } } });
       expect(messages).toHaveLength(1);
       expect(messages[0]).toMatchObject({
         status: "QUEUED",
@@ -446,7 +449,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(refused.status).toBe(409);
       expect(refused.body.message).toBe("The collection boy is still booked for this case. Cancel his pickup first.");
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(0);
-      expect(await prisma.outboundMessage.count()).toBe(0);
+      expect(await prisma.outboundMessage.count({ where: documentsReceived })).toBe(0);
 
       await prisma.fieldJob.update({ where: { id: job.id }, data: { status: "CANCELLED", cancelledAt: new Date(), cancelledById: aarti.id } });
       expect((await mature(staff, c, updatedAt)).status).toBe(200);
@@ -471,7 +474,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect((await mature(await loginAs("neha@masti.test"), c, updatedAt)).status).toBe(403);
       await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
       expect((await mature(await loginAs("meena@masti.test"), c, updatedAt)).status).toBe(403);
-      expect(await prisma.outboundMessage.count()).toBe(0);
+      expect(await prisma.outboundMessage.count({ where: documentsReceived })).toBe(0);
 
       await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
       const byHod = await mature(await loginAs("riya@masti.test"), c, updatedAt);
@@ -502,7 +505,7 @@ describe("Step 2 actions: naming travellers and ticking documents", () => {
       expect(again.body.message).toMatch(/moved past/);
       expect(await prisma.auditLog.count({ where: { action: "visa.mature" } })).toBe(1);
       // One message for the one move: a stale page or a second press queues none.
-      expect(await prisma.outboundMessage.count()).toBe(1);
+      expect(await prisma.outboundMessage.count({ where: documentsReceived })).toBe(1);
 
       const reason = async (code: string) => (await prisma.enquiryReason.findUniqueOrThrow({ where: { code } })).id;
       const held = await freshCase(staff);

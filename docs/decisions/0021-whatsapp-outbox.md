@@ -140,11 +140,60 @@ optional `toMobile`. Without it, a message goes to the client's main number, as 
 The card shows a consent message with its secret hidden (`/consent#…`), so nobody in the office can open the client's
 form and agree for them.
 
+## Amendment 3 (22 Oct 2026): the visa messages of Steps 1–2
+
+The project lead (22 Oct 2026) asked for the rest of `docs/whatsapp-visa-messages.md`, built step by step, one PR per
+group:
+- **A:** Steps 1–2, messages 1, 2, 3 and 5. This amendment.
+- **B:** messages 7, 8 and 9.
+- **C:** messages 10 to 15.
+- **D:** messages 16, 17 and 18.
+
+Their other answers:
+- **Invoice and credit note:** the messages (7, 18) go as words only for now, and staff send the PDF by hand.
+- **The door code (16):** goes on WhatsApp only.
+- **The file:** its 20 Oct review fixes are applied.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 1 | `visa.document_list` · Document list | a new visa case is saved (`createVisaEnquiry`) | case |
+| 2 | `visa.price` · Your price | the quote is saved for the first time (`saveQuote`) | case |
+| 3 | `visa.document_reminder` · Documents still pending | a planned reminder day and time is reached | case and planned day |
+| 5 | `visa.collection_visit` · Collection visit booked | a pickup is booked, or its boy, day, slot or address changes | job and change |
+
+- **What every visa message knows.** `visaMessageBasics` also fills `{{travellers}}` ("4 travellers") and
+  `{{office_phone}}` (Settings → Company).
+- **Long lists.** `fitList` cuts a list (messages 1 and 3) short at about 600 characters with "and 4 more (we will tell
+  you)", inside WhatsApp's limit of about 1,000 for a whole message.
+- **Message 1:**
+  - The offering's checklist, each paper once and numbered: "4. Photos, 35×45 mm, white background × 2 (original)".
+  - Not what we arrange (flights, hotels, insurance), and children's papers only when a child travels.
+- **Message 2:** the quote's total, with GST on the service charge (`quoteTotals`), as "₹6,000" (`rupeesText`). A
+  later change sends nothing, because the invoice carries the final amount.
+- **Message 3, the reminder:**
+  - **The sweep:** a pg-boss schedule, `visa-document-reminders`, every 15 minutes in India time (`startVisaReminders`;
+    not in tests, where pg-boss runs no schedules).
+  - **Due:** `sendDueReminders` queues one for each case whose planned time (`nextReminderAt`, the Reminders card's
+    "Next") came in the last 2 hours, keyed per planned day. A server down longer than that skips to the next planned
+    day.
+  - **Which cases:** the same rule as the card (`remindersDue`): on in Settings and on the case, open, at Enquiry or
+    Documents, with a paper the client brings still pending. Arranged items never count, so the card says "nothing
+    the client brings is missing" instead of a date that would never send.
+  - **`{{pending_list}}`:** "Bank statement, last 6 months (Rakesh); Birth certificate (Child 1)".
+  - **SMS:** the setting allows it, but it isn't built, so with SMS chosen nothing goes.
+- **Message 5:**
+  - The boy's name, "Mon 19 Oct" (`dayLabel`), the slot's name and the address. For a pickup only: the delivery is
+    message 14.
+  - Not for a map link alone, nor for a cancel (staff call the client).
+  - Keyed on the job's new `updatedAt`, so each change sends once.
+
+Saving a visa case now queues message 1, so tests that count the queued messages count only the one they're about.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- **The other visa messages** and the reminders (step 3), from `docs/whatsapp-visa-messages.md`. Messages 7 and 18
-  attach a PDF, so a message gets an attachment then.
+- **The other visa messages:** group A (1, 2, 3, 5) is built, Amendment 3. Groups B to D follow, one PR each. Messages 7
+  and 18 go without their PDF for now.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code

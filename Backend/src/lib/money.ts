@@ -1,6 +1,15 @@
 // Money is integer paise (docs/decisions/0009-visa-invoice.md Decision 2): amounts are never floating point, so a quote
 // and the invoice copied from it always add up to the same paisa.
 
+const WHOLE_RUPEES = new Intl.NumberFormat("en-IN");
+
+/** 1250000 → "12,500" and 1250050 → "12,500.50": rupees as a message says them, the paise only when there are some. */
+export function rupeesText(paise: number) {
+  const rest = paise % 100;
+  const whole = WHOLE_RUPEES.format((paise - rest) / 100);
+  return rest === 0 ? whole : `${whole}.${String(rest).padStart(2, "0")}`;
+}
+
 /** 18 → 1800 basis points. The rate setting allows at most 2 decimals. */
 export function rateBasisPoints(ratePercent: number) {
   return Math.round(ratePercent * 100);
