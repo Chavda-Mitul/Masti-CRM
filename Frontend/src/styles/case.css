@@ -797,6 +797,14 @@
 .application-portal-note {
   margin: 0;
 }
+/* Its password change is overdue: locked until an HOD types a new one (0024 component 2) */
+.application-portal-text .application-portal-locked {
+  color: var(--bad-bg);
+  font-weight: 600;
+}
+.application-portal-locked a {
+  color: var(--on-fill);
+}
 /* A not-needed paper fades, but its "Needed" button stays readable so it can be undone. */
 .checklist-row.off > :not(.row-action) {
   opacity: 0.45;

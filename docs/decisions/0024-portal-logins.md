@@ -1,8 +1,8 @@
 # 0024 · Portal logins: "Log in for me"
 
-- **Status:** a trial, decided 21 Oct 2026 by the project lead. Component 1 is built (PR #67); component 3, the button on
-  the visa case, is built on `feat/visa-case-portal`. The approach goes to Shivanshu for approval once the trial passes
-  (04 §C item 6, Q4). Components 2 and 4 follow, one at a time.
+- **Status:** a trial, decided 21 Oct 2026 by the project lead. Component 1 (PR #67) and component 3, the button on the
+  visa case (PR #86), are merged; component 2, scheduled password changes, is built on `feat/portal-password-schedule`.
+  The approach goes to Shivanshu for approval once the trial passes (04 §C item 6, Q4). Component 4 follows.
 - **Date:** 21 Oct 2026
 - **Scope:** Settings → Portal logins (demo screen 28, PROJECT_KNOWLEDGE §12.19): the company's accounts on visa, airline
   and supplier portals, which staff log in to without seeing the ID or password. Answers R3 and Q4.
@@ -90,14 +90,14 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 
 1. The page (`Frontend/src/lib/portalHelper.ts`) finds the helper with `chrome.runtime.sendMessage(<helper id>, ping)`.
    Chrome offers that only on the pages the helper lists. No helper → "Log in for me works only on the office computers."
-2. `POST /api/portal-logins/:id/open` (session) checks the person may use the portal from here. It makes a **ticket**:
-   32 random bytes, stored only as its sha256, valid for 30 seconds and once.
+2. `POST /api/portal-logins/:id/open` (session) checks the person may use the portal from here, and that it isn't locked
+   (component 2). It makes a **ticket**: 32 random bytes, stored only as its sha256, valid for 30 seconds and once.
 3. The page hands the ticket to the helper. The helper `POST`s it to `/api/portal-helper/redeem`, an API route
    without a session (like the client's consent page, 0022):
    - **Only the helper:** `Origin` must be `chrome-extension://<an id in PORTAL_HELPER_IDS>`; no web page can fake that.
    - **Rate-limited:** 20 failures per 15 minutes from one address.
    - **Everything is checked again:** the person is active, not on a temporary password and still allowed; the portal
-     is active; the office rule holds; this is the computer that pressed, or an office one.
+     is active and not locked; the office rule holds; this is the computer that pressed, or an office one.
    - **Spent atomically.** The answer is the address, ID and password, with `Cache-Control: no-store`.
    - **One answer for every dead ticket:** unknown, spent and expired tickets all get the same 410. A refusal spends
      the ticket and marks the press REFUSED.
@@ -184,7 +184,51 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 
   Each one's words showed on its card and in "Who used what", and the audit log held neither the ID nor the password.
 
-## Component 3: the button on the visa case (built 21 Oct 2026, branch `feat/visa-case-portal`)
+## Component 2: scheduled password changes, and "Locked" (built 22 Oct 2026, branch `feat/portal-password-schedule`)
+
+Demo screen 28: each card says when its password changes ("Changed monthly · next 12 Oct", "Changed weekly · next Mon").
+An overdue one is red, **Locked**, "Weekly change overdue — HOD to reset", with Log in for me greyed out, under "Passwords
+change on the schedule you set. On the due date the HOD is asked to reset; the account stays locked for everyone until
+that's done." Vimal, 30 Sep: policies "get rolled out but never applied", so the system has to make the HOD do it.
+
+Decided 22 Oct 2026 (project lead):
+1. **Schedules:** daily, weekly or monthly, or "No schedule". Monthly is picked first ("we change monthly"). Masti's
+   answer to M49 (d) sets each portal's.
+2. **The lock:** from the start of the due date (midnight, India time), for everyone, the Head included, until an HOD
+   types a new password. With Daily, that's every morning.
+3. **How the HOD is asked:** only the red card and the visa case's box; no Today line, WhatsApp or email.
+4. **The same password is refused** ("That's the same password. Change it on the portal first, then type the new one
+   here."). The CRM can't check the portal itself.
+5. **A locked portal's schedule changes only with a new password** in the same save, so "No schedule" can't lift the
+   lock (proposed with the plan, approved).
+
+Built:
+- **Data** (migration `20261022210000_portal_password_schedule`): `PortalLogin.passwordSchedule` (DAILY, WEEKLY, MONTHLY
+  or NONE; monthly by default). Nothing else is stored: the due date is the India-time day of `passwordChangedAt` plus a
+  day, 7 days or a month (31 Jan → 28 Feb), and the lock is "today is on or after it" (`passwordDueOn` and
+  `isPasswordLocked` in `portalLogin.ts`).
+- **Endpoints:**
+  - The portal's data carries `passwordSchedule`, `passwordDueOn` and `locked`; `canUse` still says who could press it.
+    The case's `portal` carries `locked`.
+  - Both presses get 409 `LOCKED` ("This portal is locked until the HOD changes its password.") and make no ticket.
+    A ticket made just before the lock is REFUSED at collection (`portalLogin.refuse`, reason `locked`).
+  - Adding takes `passwordSchedule`; changing it is audited before → after with the rest of the portal.
+  - A new password lifts the lock and restarts the schedule from that day. When the saved login can't be read (another
+    key), nothing is compared: the HOD typing both replaces it.
+- **Screens:**
+  - The cards' line: "Changed monthly · next 22 Nov", "Changed weekly · next Thu", "Changed daily · next tomorrow", "No
+    scheduled change · password saved 21 Oct", or, locked, "Monthly change overdue — HOD to reset" on a red card with the
+    Locked chip and a greyed-out Log in for me. The page has the demo's second paragraph.
+  - The drawer's "Password changes" (Daily / Weekly / Monthly / No schedule). A locked portal opens with "Locked since 22
+    Oct. Change the password on the portal itself, then type the new one here." and its password box ("Keep the saved
+    password" closes it).
+  - The visa case's box: "Locked until the HOD changes its password.", with "Change it on Portal logins" for the Head
+    and the Visa HOD.
+- **Tests:** `tests/portalSchedule.test.ts` (due dates and the India-time day edge; the default; locked for staff, the
+  HOD and the Head; refused at collection; the same password; the ID alone; schedule changes; No schedule; an unreadable
+  login replaced), one in `visaPortal.test.ts`, and `frontendRules` (the schedule list).
+
+## Component 3: the button on the visa case (built 21 Oct 2026, PR #86)
 
 Demo screen 08: in "Apply on the government portal", a dark card ("France visa portal — Masti master account. Opens
 logged in for this case. Staff never see the ID or password.") with **Log in for me**; the press logs the case
@@ -243,8 +287,8 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
 - **The password isn't 100% secret:**
   - Until the office PCs are locked down (component 4), someone technical could read a typed password with the
     browser's developer tools.
-  - Anyone who learned it could use it from home until it's changed (component 2): "office only" applies to the
-    button, not the portal.
+  - Anyone who learned it could use it from home until it's next changed (component 2 makes the HOD do that on
+    schedule): "office only" applies to the button, not the portal.
 
 ## For deployment (component 4, not built)
 

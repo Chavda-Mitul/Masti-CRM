@@ -18,7 +18,7 @@ import {
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
-import { PortalLoginOutcome } from "../generated/prisma/enums";
+import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
@@ -195,5 +195,11 @@ describe.skipIf(!frontendInstalled)("portal logins' copied rules match the backe
     expect([...page]).toEqual(database);
     expect([...helper]).toEqual(database);
     expect([...portalRules.HELPER_OUTCOMES]).toEqual(database.filter((o) => o !== "REFUSED"));
+  });
+
+  it("offers the database's password schedules in the drawer (component 2)", async () => {
+    const frontend = (await import(frontendPortalSchemas)) as typeof portalRules;
+    expect([...portalRules.PASSWORD_SCHEDULES]).toEqual(Object.values(PortalPasswordSchedule));
+    expect([...frontend.PASSWORD_SCHEDULES]).toEqual([...portalRules.PASSWORD_SCHEDULES]);
   });
 });

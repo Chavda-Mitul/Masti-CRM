@@ -17,6 +17,12 @@ export const MAX_PORTAL_PEOPLE = 100;
 export const HELPER_OUTCOMES = ["SUBMITTED", "WAITING_FOR_STAFF", "NO_LOGIN_BOXES", "ADDRESS_CHANGED", "DIDNT_OPEN", "FAILED"] as const;
 
 /**
+ * How often a portal's password has to change (component 2); overdue, the portal locks. Matches the Prisma enum
+ * PortalPasswordSchedule (tests/frontendRules.test.ts checks it, and the Frontend's list).
+ */
+export const PASSWORD_SCHEDULES = ["DAILY", "WEEKLY", "MONTHLY", "NONE"] as const;
+
+/**
  * Why a login page address can't be saved, or null if it can: https, or http (some suppliers' portals have no https),
  * and never an ID or password inside the address.
  */
@@ -54,6 +60,7 @@ const idLabel = z.string().trim().min(1, "Say what the portal calls the first bo
 const loginId = z.string().trim().min(1, "Type the portal's ID.").max(MAX_LOGIN_ID);
 const password = z.string().min(1, "Type the portal's password.").max(MAX_PORTAL_PASSWORD);
 const userIds = z.array(z.string().min(1).max(64)).max(MAX_PORTAL_PEOPLE);
+const passwordSchedule = z.enum(PASSWORD_SCHEDULES, "Pick how often the password changes.");
 
 export const createPortalLoginSchema = z.object({
   departmentCode,
@@ -62,6 +69,8 @@ export const createPortalLoginSchema = z.object({
   idLabel: idLabel.default("ID"),
   loginId,
   password,
+  /** Masti changes them monthly. */
+  passwordSchedule: passwordSchedule.default("MONTHLY"),
   /** Who may use it, besides the Head and the department's HOD. */
   userIds: userIds.default([]),
 });
@@ -73,6 +82,7 @@ export const updatePortalLoginSchema = z.object({
   idLabel: idLabel.optional(),
   loginId: loginId.optional(),
   password: password.optional(),
+  passwordSchedule: passwordSchedule.optional(),
   userIds: userIds.optional(),
   updatedAt: z.iso.datetime("Reload and try again."),
 });

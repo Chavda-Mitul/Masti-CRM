@@ -622,7 +622,7 @@ All intervals are configurable masters. The values below are demo samples (⚠�
 | Claim pending-document reminder | every 2 days |
 | Hotel hold expiring | 6 h before |
 | Web check-in list | 72 h before departure (Q21) |
-| Portal password rotation | per account: daily / weekly / monthly |
+| Portal password rotation | per account: daily / weekly / monthly, or none; monthly first. Built 22 Oct 2026 (0024 component 2): overdue locks the portal |
 | Annual policy expiry list | next 30 days; alert Vimal if not renewed |
 | Vendor receipt confirmation | the day after dispatch ("Tomorrow 11:00") |
 | Expected visa collection date | follow-up desk reminded a day before to check with the vendor |
@@ -1195,8 +1195,9 @@ This is the biggest technical unknown (§16.2).
   - **Office network:** it works only from the office IP list once Masti gives it (M19), the Head included; until then, from anywhere with a warning.
   - **Built:**
     - **Component 1** (PR #67): Settings → Portal logins, the helper, and "Who used what".
-    - **Component 3** (21 Oct, `feat/visa-case-portal`): the visa case's dark portal box with Log in for me. It works from step 3 until the case closes, for the case's person (even if not on the portal's list), the HOD and the Head. The press is logged with the case number. Each visa's portal is picked on its settings page ("Portal for this visa"). A visa with none shows "No portal saved for this visa. Ask your HOD to add it."
-  - **Next, one at a time:** 2 scheduled password changes and "Locked"; 4 the office-PC setup kit.
+    - **Component 3** (PR #86): the visa case's dark portal box with Log in for me. It works from step 3 until the case closes, for the case's person (even if not on the portal's list), the HOD and the Head. The press is logged with the case number. Each visa's portal is picked on its settings page ("Portal for this visa"). A visa with none shows "No portal saved for this visa. Ask your HOD to add it."
+    - **Component 2** (22 Oct, `feat/portal-password-schedule`; decided by the project lead the same day): each portal's password changes daily, weekly or monthly (monthly first), or has no schedule. From the start of the due date (India time) it's **Locked** for everyone, the Head included, until an HOD types a new password: a red card, "Weekly change overdue — HOD to reset", Log in for me greyed out, and the visa case's box says so. Nothing else asks the HOD (no Today line or messages). The saved password is refused as the new one, and a locked portal's schedule changes only with a new password.
+  - **Next:** 4 the office-PC setup kit.
   - **What it can't do (S13):** captchas and one-time codes need the person; logins with three boxes; single sign-on elsewhere; someone technical with the browser's tools until component 4.
   - **Research for 0024:** Masti's 61 bookmarks are mostly e-visa sites with no Masti account, so they aren't the list of company logins (M49). In the Internet Archive's copies since 2020, no login box was renamed and 2 logins moved address.
 
@@ -1307,7 +1308,7 @@ This is the biggest technical unknown (§16.2).
 | Vendor | type, location, countries/services, approval status, approved by |
 | Embassy (0005) | country, code (`FR-MUM`), name, city: a post where files are submitted |
 | Holiday / HolidayTarget (0005) | name, dates (range or weekly), status (active / removed), reference, added by; targets: all embassies / country / embassy / our office |
-| PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only. **Built 21 Oct 2026 as `PortalLogin`** (0024 component 1): department, name, login address, `idLabel`, sealed `secret` (null once removed), `passwordChangedAt`, status, added by; `PortalLoginUser` = allowed users. Rotation and locking come in component 2; the office rule is the office IP list for all portals |
+| PortalCredential | portal, URL, department, allowed users, encrypted secret, rotation frequency, next due, locked, office-only. **Built 21 Oct 2026 as `PortalLogin`** (0024 component 1): department, name, login address, `idLabel`, sealed `secret` (null once removed), `passwordChangedAt`, status, added by; `PortalLoginUser` = allowed users. Rotation: `passwordSchedule` (DAILY / WEEKLY / MONTHLY / NONE, component 2, 22 Oct 2026); the next due date and the lock are worked out from `passwordChangedAt`, not stored. The office rule is the office IP list for all portals |
 | PortalUsageLog | user, portal, at, case. **Built as `PortalLoginUse`** (0024): user, portal, opened/collected IPs and times, ticket hash and expiry, outcome. The case comes with component 3 |
 | Notice | department, category (airline / embassy / hotel / general), tag, title, body, author, source (IVS / staff / calendar), login-popup flag. **Built 19 Oct 2026** (0017 Decision 11): department, category, about (the tag), title, body, source (team / IVS), status (active / removed), posted by; holiday entries come from the calendar itself; the login-popup flag is `loginPopupAt` (when it was picked) and `loginPopupById` (who picked it; both or neither, 0017 Decision 12), with each user's `loginPopupSeenAt` |
 | MessageLog | template, recipient, channel (WhatsApp / SMS / email), payload, status, sent at, case |
@@ -1455,7 +1456,7 @@ Source: `04_Engineering_Constraints.md`. Neither the contract-based nor the clie
 
 | Risk | Why it matters | First step |
 |---|---|---|
-| **Click-to-login portal vault** | The core promise ("staff never see passwords"), on government and airline portals we don't control. Feasibility is unconfirmed. | Spike in weeks 1–2 on one visa portal and one airline portal. A likely approach: a managed browser extension that injects stored credentials, with server-side rotation and locking. Tell Shivanshu what *can't* be done before the client assumes it can. **21 Oct 2026:** trying our own Chrome helper; component 1 is built (`docs/decisions/0024-portal-logins.md`). It still waits for a real visa and airline portal (M49), and what it can't do goes to Shivanshu (S13). |
+| **Click-to-login portal vault** | The core promise ("staff never see passwords"), on government and airline portals we don't control. Feasibility is unconfirmed. | Spike in weeks 1–2 on one visa portal and one airline portal. A likely approach: a managed browser extension that injects stored credentials, with server-side rotation and locking. Tell Shivanshu what *can't* be done before the client assumes it can. **21 Oct 2026:** trying our own Chrome helper; components 1–3 are built (`docs/decisions/0024-portal-logins.md`). It still waits for a real visa and airline portal (M49), and what it can't do goes to Shivanshu (S13). |
 | **WhatsApp Business API** | Meta verification, the BSP account and template approval take days to weeks. Everything client-facing depends on it. | Pick a BSP in week 1, get Masti's Meta details, submit templates early. |
 | **AI parsing** (enquiries, holiday itineraries, ticket screenshots) | Accuracy, Gujarati/Hindi input, cost per call | Keep it assistive (staff confirm). Track the cost per call. |
 | **Holiday quote automation** | "Already discussed and built earlier" | Ask Shivanshu on day 1 what exists. |
@@ -1892,7 +1893,7 @@ Masti CRM/
 | 1 | Docket grouping: one docket per file, or one per vendor per day? One vendor email per docket, or one per day? **13 Oct:** one open docket per vendor ("Send on its own" for a single file), one email per docket at dispatch (0008); confirm with Vimal | Y→C | 1 |
 | 2 | ~~Follow-up team split~~ **Answered 8 Oct:** the assigned Visa employee follows up (confirm with Vimal) | C | 1 |
 | 3 | Collection boy's device: phone or tablet; web app or WhatsApp-only jobs? **17 Oct:** a phone website (`/tasks`, 0015); his sign-in works as office staff's until the device is confirmed; confirm with Vimal | Y→C | 1 |
-| 4 | Click-to-login: how it works, which portals it supports. **21 Oct:** our own Chrome helper, as a trial; component 1 is built (0024). Which portals it supports waits for M49 | Y | 1 |
+| 4 | Click-to-login: how it works, which portals it supports. **21 Oct:** our own Chrome helper, as a trial; components 1–3 are built (0024). Which portals it supports waits for M49 | Y | 1 |
 | 5 | ~~Reminder schedule~~ **Answered 8 Oct:** an admin setting, seeded 2 days / 11:00 | C | 1 |
 | 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** answered in 0009: any time after the quote, required before dispatch (0008) | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |

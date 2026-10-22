@@ -4,8 +4,9 @@ import { LogInForMeButton } from './LogInForMeButton'
 import type { Portal } from './types'
 
 /**
- * One portal, as on demo screen 28: its department, who may use it, the ID and password hidden, and Log in for me. The
- * Head and the department's HOD also edit or remove it, and see when its address isn't secure.
+ * One portal, as on demo screen 28: its department, who may use it, the ID and password hidden, when the password next
+ * changes, and Log in for me. Overdue, it's red and Locked, and the button is greyed out until an HOD types a new password
+ * (component 2). The Head and the department's HOD also edit or remove it, and see when its address isn't secure.
  */
 export function PortalCard({
   portal,
@@ -26,18 +27,22 @@ export function PortalCard({
   const style = departmentStyle(portal.department.code)
   const people = portal.users.map((u) => u.name).join(', ')
   return (
-    <section className="card pad portal-card" aria-label={portal.name}>
+    <section className={`card pad portal-card${portal.locked ? ' portal-card-locked' : ''}`} aria-label={portal.name}>
       <div className="portal-card-top">
         <span className="chip chip-sm" style={{ background: style.tint, color: style.text }}>
           {portal.department.name}
         </span>
-        {people && <span className="muted small portal-people-line">{people}</span>}
+        {portal.locked ? (
+          <span className="chip chip-sm chip-bad">Locked</span>
+        ) : (
+          people && <span className="muted small portal-people-line">{people}</span>
+        )}
       </div>
       <h2 className="h2">{portal.name}</h2>
       <p className="portal-secret">
         {portal.idLabel} •••••• · password hidden
       </p>
-      <p className="small portal-status">{passwordLine(portal.passwordChangedAt)}</p>
+      <p className="small portal-status">{passwordLine(portal)}</p>
       {portal.canEdit && portal.secureAddress === false && (
         <p className="small portal-warn">Not a secure (https) address: the portal sends the password unprotected.</p>
       )}
@@ -46,7 +51,7 @@ export function PortalCard({
           {result.message}
         </div>
       )}
-      {portal.canUse && <LogInForMeButton portal={portal} helperIds={helperIds} onResult={onResult} />}
+      {portal.canUse && <LogInForMeButton portal={portal} helperIds={helperIds} onResult={onResult} disabled={portal.locked} />}
       {portal.canEdit && (
         <div className="portal-card-actions">
           <button type="button" className="btn btn-sm" onClick={onEdit}>

@@ -6,15 +6,28 @@ import { PasswordInput } from '../../../components/PasswordInput'
 import { useDrawerGuard } from '../../../components/useDrawerGuard'
 import { applyServerIssues, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
+import { lockedNote, SCHEDULE_CHOICES } from './labels'
 import { usePortalPeople, useSavePortal } from './queries'
 import { portalFormSchema, type PortalFormValues } from './schemas'
 import type { Portal, PortalBody } from './types'
 
-const FIELDS = ['departmentCode', 'name', 'loginUrl', 'idLabel', 'loginId', 'password', 'userIds'] as const
+const FIELDS = ['departmentCode', 'name', 'loginUrl', 'idLabel', 'loginId', 'password', 'passwordSchedule', 'userIds'] as const
 
 function formDefaults(portal: Portal | null, departmentCode: string): PortalFormValues {
   if (!portal) {
-    return { departmentCode, name: '', loginUrl: '', idLabel: 'ID', changeId: true, loginId: '', changePassword: true, password: '', userIds: [] }
+    return {
+      departmentCode,
+      name: '',
+      loginUrl: '',
+      idLabel: 'ID',
+      changeId: true,
+      loginId: '',
+      changePassword: true,
+      password: '',
+      // Masti changes them monthly.
+      passwordSchedule: 'MONTHLY',
+      userIds: [],
+    }
   }
   return {
     departmentCode: portal.department.code,
@@ -23,8 +36,10 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
     idLabel: portal.idLabel,
     changeId: false,
     loginId: '',
-    changePassword: false,
+    // A locked portal is waiting for exactly this.
+    changePassword: portal.locked,
     password: '',
+    passwordSchedule: portal.passwordSchedule,
     userIds: portal.users.map((u) => u.id),
   }
 }
@@ -35,6 +50,7 @@ function toBody(values: PortalFormValues): PortalBody {
     name: values.name.trim(),
     loginUrl: values.loginUrl.trim(),
     idLabel: values.idLabel.trim(),
+    passwordSchedule: values.passwordSchedule,
     userIds: values.userIds,
     ...(values.changeId ? { loginId: values.loginId.trim() } : {}),
     ...(values.changePassword ? { password: values.password } : {}),
@@ -45,7 +61,8 @@ function toBody(values: PortalFormValues): PortalBody {
  * Add a portal to a department the person manages, or change one (docs/decisions/0024-portal-logins.md). A portal stays
  * in its department. When editing, the saved ID and password are never shown; "Change the ID" or "Change the password"
  * opens an empty box, so Chrome can't quietly fill in someone's own password. A save over someone else's change is
- * refused.
+ * refused. "Password changes" sets the schedule (component 2); a locked portal opens with its password box, since a new
+ * password is what unlocks it.
  */
 export function PortalDrawer({
   portal,
@@ -110,6 +127,11 @@ export function PortalDrawer({
           </div>
 
           <div className="pad drawer-body">
+            {portal?.locked && portal.passwordDueOn && (
+              <div className="alert alert-bad" role="status">
+                {lockedNote(portal.passwordDueOn)}
+              </div>
+            )}
             {isNew && departments.length > 1 && (
               <FormField label="Department" required error={errors.departmentCode?.message}>
                 <select className="select" {...register('departmentCode', { onChange: () => setValue('userIds', []) })}>
@@ -153,22 +175,39 @@ export function PortalDrawer({
             )}
 
             {changePassword ? (
-              <FormField label="The password" required error={errors.password?.message} hint="Staff never see it. It's locked away as soon as you save.">
-                <Controller
-                  control={control}
-                  name="password"
-                  render={({ field }) => (
-                    <PasswordInput
-                      name={field.name}
-                      value={field.value}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      autoComplete="new-password"
-                      aria-required="true"
-                    />
-                  )}
-                />
-              </FormField>
+              <>
+                <FormField label="The password" required error={errors.password?.message} hint="Staff never see it. It's locked away as soon as you save.">
+                  <Controller
+                    control={control}
+                    name="password"
+                    render={({ field }) => (
+                      <PasswordInput
+                        name={field.name}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        autoComplete="new-password"
+                        aria-required="true"
+                      />
+                    )}
+                  />
+                </FormField>
+                {!isNew && (
+                  <div className="portal-change">
+                    <span className="muted small">{portal.locked ? 'Without a new one it stays locked.' : ''}</span>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setValue('changePassword', false, { shouldDirty: true })
+                        setValue('password', '')
+                      }}
+                    >
+                      Keep the saved password
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="portal-change">
                 <span className="muted small">The saved password stays.</span>
@@ -177,6 +216,21 @@ export function PortalDrawer({
                 </button>
               </div>
             )}
+
+            <FormField
+              label="Password changes"
+              required
+              error={errors.passwordSchedule?.message}
+              hint="On the due date the portal locks for everyone until you type the new password here."
+            >
+              <select className="select" {...register('passwordSchedule')}>
+                {SCHEDULE_CHOICES.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
 
             <span className="lbl section-lbl">Who may use it</span>
             <p className="muted small portal-people-hint">The Head and the department's HOD always can.</p>

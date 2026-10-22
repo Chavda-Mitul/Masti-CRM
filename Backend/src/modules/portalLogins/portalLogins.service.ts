@@ -12,6 +12,7 @@ import type { Actor, UserWithDepartments } from "../users/user";
 import {
   canManagePortal,
   canUsePortal,
+  isPasswordLocked,
   portalLoginInclude,
   portalLoginSnapshot,
   secretLabel,
@@ -53,6 +54,17 @@ export function openPortalSecret(row: { id: string; secret: Uint8Array | null })
       logger.error({ portalLoginId: row.id }, "A portal login's secret can't be opened with PORTAL_VAULT_KEY");
       throw unreadable();
     }
+    throw err;
+  }
+}
+
+/** The saved login, or null when it can't be read (sealed under another key): an HOD typing both replaces it. */
+function readableSecret(row: { id: string; secret: Uint8Array | null }): PortalSecret | null {
+  if (!row.secret) return null;
+  try {
+    return openSecret<PortalSecret>(row.secret, secretLabel(row.id));
+  } catch (err) {
+    if (err instanceof SecretUnreadableError) return null;
     throw err;
   }
 }
@@ -162,11 +174,20 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
           idLabel: input.idLabel,
           secret,
           passwordChangedAt: new Date(),
+          passwordSchedule: input.passwordSchedule,
           createdById: actor.user.id,
         },
       });
       if (userIds.length > 0) await tx.portalLoginUser.createMany({ data: userIds.map((userId) => ({ portalLoginId: id, userId })) });
-      const after = portalLoginSnapshot({ departmentId: department.id, name: input.name, loginUrl: input.loginUrl, idLabel: input.idLabel, status: "ACTIVE", userIds });
+      const after = portalLoginSnapshot({
+        departmentId: department.id,
+        name: input.name,
+        loginUrl: input.loginUrl,
+        idLabel: input.idLabel,
+        passwordSchedule: input.passwordSchedule,
+        status: "ACTIVE",
+        userIds,
+      });
       await audit({ actorId: actor.user.id, action: "portalLogin.create", entityType: "PortalLogin", entityId: id, after, ip: actor.ip }, tx);
     })
     .catch(rethrowUnique(`There's already a portal called "${input.name}" in ${department.name}.`));
@@ -175,7 +196,8 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
 
 /**
  * The Head or the department's HOD changes a portal, from the version they opened (updatedAt). The ID and the password
- * change only when sent. Nothing changed: nothing written.
+ * change only when sent. Nothing changed: nothing written. A new password lifts the lock (component 2): it has to differ
+ * from the saved one, and a locked portal's schedule changes only with one.
  */
 export async function updatePortalLogin(id: string, input: UpdatePortalLoginInput, actor: Actor) {
   const before = await loadOr404(id);
@@ -185,7 +207,12 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
 
   const beforeUserIds = before.users.map((u) => u.user.id);
   const userIds = input.userIds === undefined ? beforeUserIds : await peopleOf(before.departmentId, input.userIds);
-  const fields = { name: input.name ?? before.name, loginUrl: input.loginUrl ?? before.loginUrl, idLabel: input.idLabel ?? before.idLabel };
+  const fields = {
+    name: input.name ?? before.name,
+    loginUrl: input.loginUrl ?? before.loginUrl,
+    idLabel: input.idLabel ?? before.idLabel,
+    passwordSchedule: input.passwordSchedule ?? before.passwordSchedule,
+  };
   const oldSnapshot = portalLoginSnapshot({ ...before, userIds: beforeUserIds });
   const newSnapshot = portalLoginSnapshot({ ...before, ...fields, userIds });
   const idChanged = input.loginId !== undefined;
@@ -194,13 +221,21 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
   if (!idChanged && !passwordChanged && JSON.stringify(oldSnapshot) === JSON.stringify(newSnapshot)) {
     return toPortalLoginDto(before, actor.user);
   }
+  // Otherwise "No schedule" would unlock it without the change it's waiting for.
+  if (fields.passwordSchedule !== before.passwordSchedule && !passwordChanged && isPasswordLocked(before)) {
+    throw fieldError("passwordSchedule", "Type the new password first: the portal is locked until then.");
+  }
 
   let secret: Uint8Array<ArrayBuffer> | undefined;
   if (idChanged || passwordChanged) {
     if (!vaultReady()) throw notSetUp();
     // Typing both needs nothing old: that's how an HOD replaces a login that can't be read.
-    const kept = idChanged && passwordChanged ? undefined : openPortalSecret(before);
-    secret = seal({ loginId: input.loginId ?? kept!.loginId, password: input.password ?? kept!.password }, id);
+    const saved = idChanged && passwordChanged ? readableSecret(before) : openPortalSecret(before);
+    // The CRM can't see whether the portal's password changed, but it can refuse the one it already has.
+    if (passwordChanged && saved?.password === input.password) {
+      throw fieldError("password", "That's the same password. Change it on the portal first, then type the new one here.");
+    }
+    secret = seal({ loginId: input.loginId ?? saved!.loginId, password: input.password ?? saved!.password }, id);
   }
   const now = new Date();
   await prisma
