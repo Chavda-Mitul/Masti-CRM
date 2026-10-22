@@ -15,7 +15,8 @@ export const MAX_LETTER_COUNTRIES = 50;
 /**
  * The {blanks} a wording may use, filled in from the case when the letter is made (docs/decisions/0019-covering-letters.md
  * Decision 4). {travellers} prints the table of travellers, so it sits on a line of its own. {purpose} is the paragraph
- * on why they travel, which "Write it with AI" writes (amendment 2): a paragraph too, on a line of its own.
+ * on why they travel, which the AI writes with the whole letter, or staff type (amendments 2 and 4): a paragraph too,
+ * on a line of its own.
  */
 export const LETTER_BLANKS = [
   "date",
@@ -56,8 +57,8 @@ export function wordingProblem(body: string): string | null {
   if (travellers > 1) return "Use {travellers} only once: it prints the table of travellers.";
   if (travellers === 1 && !/^[ \t]*\{travellers\}[ \t]*$/m.test(text)) return "Put {travellers} on a line of its own: it prints as a table.";
   const purpose = text.match(/\{purpose\}/g)?.length ?? 0;
-  if (purpose > 1) return "Use {purpose} only once: the AI writes one paragraph there.";
-  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return "Put {purpose} on a line of its own: the AI writes a paragraph there.";
+  if (purpose > 1) return "Use {purpose} only once: the AI or staff write why they travel there.";
+  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return "Put {purpose} on a line of its own: the AI or staff write why they travel there.";
   return null;
 }
 
@@ -123,8 +124,9 @@ export const addWordingSchema = z.object({
 export const removeWordingSchema = z.object({ updatedAt });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// A case's letter as staff edit it and make it (0019 amendment 1, 21 Oct 2026): its text, not a wording plus values.
-// Frontend/src/lib/letter.ts repeats the marks and the limits; tests/frontendRules.test.ts keeps the two the same.
+// A case's letter as staff edit it and make it (0019 amendments 1 and 3): one text, not a wording plus values. Its tables
+// are lines with | between the columns, drawn by Frontend/src/lib/letter.ts, which repeats the marks and the limit;
+// tests/frontendRules.test.ts keeps the two the same.
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
@@ -135,27 +137,11 @@ export const removeWordingSchema = z.object({ updatedAt });
 export const MARK_OPEN = "⟦";
 export const MARK_CLOSE = "⟧";
 
-/** The text above or below the table: a page or two. */
-export const MAX_LETTER_PART_CHARS = 8000;
-export const MAX_LETTER_COLUMNS = 6;
-/** A row for every traveller a case can have: MAX_ADULTS + MAX_CHILDREN (visa.schemas.ts, checked by a test). */
-export const MAX_LETTER_ROWS = 60;
-export const MAX_LETTER_HEADING_CHARS = 60;
-/** A cell holds a name, a relation, a date or a passport number: 200 leaves room for the longest name. */
-export const MAX_LETTER_CELL_CHARS = 200;
-
-export interface LetterTable {
-  columns: string[];
-  rows: string[][];
-}
-
-/** The letter: the text above the table, the table (where {travellers} was; null when the wording has none), the text below. */
-export interface LetterText {
-  top: string;
-  table: LetterTable | null;
-  /** Empty when there's no table: all the text is then on top. */
-  bottom: string;
-}
+/**
+ * The longest letter a case keeps (amendment 3). The longest draft, 60 travellers with 150-character names and nothing
+ * else known, is about 33,000 characters; a real letter is 3,000–9,000. Also a CHECK in the migration.
+ */
+export const MAX_CASE_LETTER_CHARS = 60000;
 
 /** "the hotel stay" → "⟦the hotel stay⟧". */
 export function mark(what: string): string {
@@ -163,74 +149,42 @@ export function mark(what: string): string {
 }
 
 /**
- * Where {purpose} is in a draft (amendment 2): the paragraph "Write it with AI" writes, or staff type. A mark like any
- * other, so the letter isn't made without it; not a gap in the case, so it isn't in the draft's `missing`.
+ * Where {purpose} is in a draft (amendments 2 and 4): the paragraph on why they travel, which the AI writes with the
+ * whole letter, or staff type. A mark like any other, so the letter isn't made without it; not a gap in the case, so
+ * it isn't in the draft's `missing`.
  */
 export const PURPOSE_MARK = mark("why they travel");
 
+/**
+ * A value the CRM writes into a letter, each | made a /. Two lines that hold a | are a table (amendment 3), so a hotel
+ * or an address with one would split a cell or start a table.
+ */
+export function noPipes(value: string): string {
+  return value.replaceAll("|", "/");
+}
+
 /** The marks still in a letter, in plain words and in order, each once. A ⟦ or ⟧ left on its own counts too. */
-export function marksIn(letter: LetterText): string[] {
-  const parts = [letter.top, ...(letter.table ? [...letter.table.columns, ...letter.table.rows.flat()] : []), letter.bottom];
+export function marksIn(letter: string): string[] {
   const found = new Set<string>();
-  for (const part of parts) {
-    for (const [, words] of part.matchAll(/⟦([^⟦⟧\n]*)⟧|[⟦⟧]/g)) found.add(words?.trim() || "a ⟦ or ⟧ left over");
-  }
+  for (const [, words] of letter.matchAll(/⟦([^⟦⟧\n]*)⟧|[⟦⟧]/g)) found.add(words?.trim() || "a ⟦ or ⟧ left over");
   return [...found];
 }
 
 /** Windows line breaks become plain ones, and blank lines at the ends go. The draft and "Make the letter" both use it. */
-export function normaliseLetterPart(text: string): string {
+export function normaliseLetter(text: string): string {
   return text.replace(/\r\n?/g, "\n").replace(/^\s*\n/, "").trimEnd();
 }
 
-/** A heading or a cell sits on one line. */
-function oneLine(text: string): string {
-  return text.replace(/\s*[\r\n]+\s*/g, " ").trim();
-}
-
-const letterPart = (where: string) =>
-  z
-    .string(`Send the text ${where} the table.`)
-    .transform(normaliseLetterPart)
-    .pipe(z.string().max(MAX_LETTER_PART_CHARS, `Keep the text ${where} the table under ${MAX_LETTER_PART_CHARS} characters.`));
-
-/** The letter "Make the letter" sends. The messages say which part is wrong, since they arrive under one field. */
+/** The letter "Make the letter" sends: its text as staff left it. */
 export const letterTextSchema = z
-  .object({
-    top: letterPart("above"),
-    table: z
-      .object({
-        columns: z.array(z.string().transform(oneLine)),
-        rows: z.array(z.array(z.string().transform(oneLine))),
-      })
-      .nullable(),
-    bottom: letterPart("below"),
-  })
-  .superRefine((letter, ctx) => {
-    const problem = (message: string) => ctx.addIssue({ code: "custom", message });
-    const { table } = letter;
-    if (!table) {
-      if (letter.bottom) problem("Without a table, all the text goes above it.");
-      if (!letter.top) problem("Write the letter.");
-      return;
-    }
-    const { columns, rows } = table;
-    if (!letter.top && !letter.bottom && rows.length === 0) problem("Write the letter.");
-    if (columns.length < 1 || columns.length > MAX_LETTER_COLUMNS) problem(`Give the table 1 to ${MAX_LETTER_COLUMNS} columns.`);
-    columns.forEach((heading, c) => {
-      if (!heading) problem(`Give the table's column ${c + 1} a heading.`);
-      else if (heading.length > MAX_LETTER_HEADING_CHARS) problem(`Keep the heading "${heading.slice(0, 20)}…" under ${MAX_LETTER_HEADING_CHARS} characters.`);
-    });
-    if (rows.length > MAX_LETTER_ROWS) problem(`Keep the table to ${MAX_LETTER_ROWS} rows.`);
-    rows.forEach((cells, r) => {
-      if (cells.length !== columns.length) problem(`The table's row ${r + 1} needs one cell for each column.`);
-      cells.forEach((cell, c) => {
-        if (cell.length > MAX_LETTER_CELL_CHARS) {
-          problem(`The table's row ${r + 1}, ${columns[c] || `column ${c + 1}`}, is over ${MAX_LETTER_CELL_CHARS} characters.`);
-        }
-      });
-    });
-  });
+  .string("Write the letter.")
+  .transform(normaliseLetter)
+  .pipe(
+    z
+      .string()
+      .min(1, "Write the letter.")
+      .max(MAX_CASE_LETTER_CHARS, `This letter is too long: keep it under ${MAX_CASE_LETTER_CHARS.toLocaleString("en-IN")} characters.`),
+  );
 
 export type CoveringLetterListQuery = z.infer<typeof coveringLetterListQuerySchema>;
 export type CreateCoveringLetterInput = z.infer<typeof createCoveringLetterSchema>;

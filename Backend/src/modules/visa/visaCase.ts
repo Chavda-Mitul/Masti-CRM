@@ -17,13 +17,14 @@ export const COLLECTING_STAGES = ["ENQUIRY", "DOCUMENTS"];
 
 /**
  * Whether the case would get a pending-document reminder now (0006 amendment 19): reminders on in Settings and on the
- * case, the case open and still collecting, and a paper still pending.
+ * case, the case open and still collecting, and a paper the client brings still pending (what we arrange is never
+ * asked for). The same rule as the sweep that sends them (visaReminders.service.ts).
  */
 export function remindersDue(row: VisaCaseRow, setting: DocumentRemindersSetting) {
   const visa = row.visa;
   if (!visa || !setting.enabled || !visa.remindersOn) return false;
   if (row.status !== "OPEN" || !COLLECTING_STAGES.includes(row.stage.code)) return false;
-  return visa.travellers.some((t) => t.documents.some((d) => d.status === "PENDING"));
+  return visa.travellers.some((t) => t.documents.some((d) => d.status === "PENDING" && d.requirement !== "ARRANGED_BY_US"));
 }
 
 /** The case page shows the latest follow-ups; older ones stay in the database and the audit log. */

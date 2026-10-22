@@ -1478,26 +1478,37 @@ button.tick:focus-visible {
   display: block;
   margin-top: 4px;
 }
-/* "Edit the letter" (0019 amendment 1): the case's letter as plain text, and its table as a grid of boxes. */
+/* "Edit the letter" (0019 amendments 1 and 3): the case's letter as one text, and beside it the letter as it will print.
+   Both sides are the same height and scroll on their own, so a long letter doesn't push the text box out of view. */
 .covering-letter-editor {
-  width: min(960px, calc(100% - 32px));
+  width: min(1240px, calc(100% - 32px));
+}
+.covering-letter-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
 }
 .covering-letter-text {
   font-family: var(--font-letter);
   font-size: 14px;
   line-height: 1.6;
 }
-.covering-letter-table-edit {
-  overflow-x: auto;
+.covering-letter-panes .covering-letter-text,
+.covering-letter-live {
+  height: min(62vh, 640px);
 }
-.covering-letter-table-edit .table {
-  min-width: 100%;
+.covering-letter-panes .covering-letter-text {
+  resize: none;
 }
-.covering-letter-table-edit .input {
-  min-width: 120px;
+.covering-letter-live {
+  overflow-y: auto;
 }
-.covering-letter-heading {
-  display: flex;
-  gap: 6px;
-  align-items: center;
+@media (max-width: 900px) {
+  .covering-letter-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .covering-letter-panes .covering-letter-text,
+  .covering-letter-live {
+    height: 40vh;
+  }
 }

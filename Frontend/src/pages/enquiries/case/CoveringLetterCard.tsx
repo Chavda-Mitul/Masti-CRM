@@ -7,18 +7,18 @@ import { LetterTextPaper } from '../../../components/LetterPaper'
 import { useLeaveGuard } from '../../../components/useLeaveGuard'
 import { errorText, issueText } from '../../../lib/apiErrors'
 import { formatDate, formatDateTime, istParts, istToday } from '../../../lib/format'
-import { marksIn, PURPOSE_MARK, type LetterText } from '../../../lib/letter'
+import { marksIn, PURPOSE_MARK } from '../../../lib/letter'
 import { useToast } from '../../../lib/toast'
-import { useCoveringLetter, useMakeCoveringLetter, useWritePurpose } from '../queries'
+import { useCoveringLetter, useMakeCoveringLetter, useWriteLetter } from '../queries'
 import type { CoveringLetterView, VisaCase } from '../types'
 import { CoveringLetterEditor } from './CoveringLetterEditor'
 
 /**
- * "Covering letter" (demo screen 08 ⚠️, docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1 and 2),
- * beside the saved file: the letters that fit the case, one drafted from it, and Make the letter. At File preparation the
- * processor, the HOD or the Head may have the AI write the paragraph on why they travel, change any of the text, the
- * table included, and type over the ⟦marks⟧ where the case lacked a value; the letter is made with that text. After that
- * anyone who can open the case prints the same letter.
+ * "Covering letter" (demo screen 08 ⚠️, docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1–4), beside
+ * the saved file: the letters that fit the case, one drafted from it, and Make the letter. At File preparation the
+ * processor, the HOD or the Head may have the AI write the whole letter, change any of the text (its tables are lines
+ * with | between the columns), and type over the ⟦marks⟧ where the case lacked a value; the letter is made with that
+ * text. After that anyone who can open the case prints the same letter.
  */
 export function CoveringLetterCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -99,23 +99,23 @@ function LetterMaker({
   return <LetterDesk key={selected.formatId} caseNo={caseNo} view={view} selected={selected} loading={loading} onPick={onPick} />
 }
 
-type Asking = { kind: 'pick'; formatId: number } | { kind: 'restart' } | { kind: 'rewrite' } | null
+type Asking = { kind: 'pick'; formatId: number } | { kind: 'restart' } | null
 
 /** The mark's own words, as marksIn lists them. */
 const PURPOSE_WORDS = PURPOSE_MARK.slice(1, -1)
 
-const holds = (letter: LetterText, text: string) => letter.top.includes(text) || letter.bottom.includes(text)
-
-/** The letter with `at` (in the text above or below the table) replaced by `by`, which is put in exactly as written. */
-function replaced(letter: LetterText, at: string, by: string): LetterText {
-  if (letter.top.includes(at)) return { ...letter, top: letter.top.replace(at, () => by) }
-  return { ...letter, bottom: letter.bottom.replace(at, () => by) }
+/** What the AI last wrote: its letter, the edit before it (for Undo), and the personal details it dropped. */
+interface AiWritten {
+  answer: string
+  /** The edit Undo goes back to; null when the card showed the server's letter. */
+  before: string | null
+  removed: string[]
 }
 
 /**
- * One letter on the desk: drawn from the letter made when it's this one, else from today's draft; its paragraph on why
- * they travel written by the AI; changed in "Edit the letter"; made with its text. The edits stay here until Make the
- * letter: leaving, reloading, picking another letter or starting again asks first.
+ * One letter on the desk: drawn from the letter made when it's this one, else from today's draft; written as a whole by
+ * the AI (0019 amendment 4); changed in "Edit the letter"; made with its text. The edits stay here until Make the letter:
+ * leaving, reloading, picking another letter or starting again asks first.
  */
 function LetterDesk({
   caseNo,
@@ -132,60 +132,64 @@ function LetterDesk({
 }) {
   const toast = useToast()
   const make = useMakeCoveringLetter(caseNo)
-  const write = useWritePurpose(caseNo)
+  const write = useWriteLetter(caseNo)
   // Nothing is copied from the server into state: until someone edits, the card draws the server's letter, so a trip
   // saved on the case shows at once.
-  const [edited, setEdited] = useState<LetterText | null>(null)
+  const [edited, setEdited] = useState<string | null>(null)
   // "Start again": today's draft even though a letter was made.
   const [fresh, setFresh] = useState(false)
   const [editing, setEditing] = useState(false)
   const [whole, setWhole] = useState(false)
   const [asking, setAsking] = useState<Asking>(null)
-  // The last paragraph the AI wrote: "Write it again" replaces it where it stands, while nobody has changed it.
-  const [aiText, setAiText] = useState<string | null>(null)
+  const [ai, setAi] = useState<AiWritten | null>(null)
 
   const { made } = view
   const fromMade = !fresh && made?.formatId === selected.formatId ? made : null
   const versionId = fromMade ? fromMade.versionId : selected.versionId
-  const letter = edited ?? (fromMade ? fromMade.letter : selected.draft)
+  const base = fromMade ? fromMade.letter : selected.draft
+  const letter = edited ?? base
   const dirty = edited !== null
+  // A change typed back to the letter as it was is no change: the card follows the server's letter again.
+  const change = (text: string) => setEdited(text === base ? null : text)
   const marks = marksIn(letter)
   const madeDay = fromMade ? istParts(fromMade.madeAt).date : null
   const busy = loading || make.isPending || write.isPending
-  // Where the AI's paragraph goes: the mark, or its last paragraph while unchanged. Neither (the paragraph was changed by
-  // hand, or this is the letter made) means drafting afresh. A wording without {purpose} has no paragraph to write.
-  const target = holds(letter, PURPOSE_MARK) ? PURPOSE_MARK : aiText && holds(letter, aiText) ? aiText : null
-  const canWrite = target !== null || holds(selected.draft, PURPOSE_MARK)
-  const writtenByAi = aiText !== null && target === aiText
+  // The AI's letter while it's still as the AI wrote it: only then is Undo offered, so it never drops a hand edit.
+  const aiShown = ai !== null && letter === ai.answer ? ai : null
   const otherMarks = marks.filter((m) => m !== PURPOSE_WORDS)
 
   const pick = (id: number) => (dirty ? setAsking({ kind: 'pick', formatId: id }) : onPick(id))
-  const restart = () => (dirty ? setAsking({ kind: 'restart' }) : setFresh(true))
+  const restart = () => {
+    if (dirty) {
+      setAsking({ kind: 'restart' })
+    } else {
+      setFresh(true)
+      setAi(null)
+    }
+  }
   const discard = () => {
     const was = asking
     setAsking(null)
     setEdited(null)
-    setAiText(null)
+    setAi(null)
     if (was?.kind === 'pick') onPick(was.formatId)
     else setFresh(true)
   }
 
-  /** Asks the AI, then puts its paragraph in place, or in a fresh draft when there's nowhere to put it. */
-  const runWrite = (afresh: boolean) =>
-    write.mutate(undefined, {
-      onSuccess: ({ paragraph }) => {
-        setEdited(afresh ? replaced(selected.draft, PURPOSE_MARK, paragraph) : replaced(letter, target!, paragraph))
-        if (afresh) setFresh(true)
-        setAiText(paragraph)
-        setAsking(null)
+  /** The AI rewrites the letter as it stands. Its letter is shown as an edit, and Undo goes back one step. */
+  const onWrite = () =>
+    write.mutate(letter, {
+      onSuccess: ({ letter: answer, removed }) => {
+        setAi({ answer, before: edited, removed })
+        change(answer)
       },
-      onError: (err) => {
-        setAsking(null)
-        toast({ tone: 'bad', message: errorText(err) ?? 'The AI couldn’t write it. Please try again.' })
-      },
+      onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'The AI couldn’t write it. Please try again.' }),
     })
-  // A paragraph changed by hand can't be found to replace: drafting afresh drops the edits, so that asks first.
-  const onWrite = () => (target === null && dirty ? setAsking({ kind: 'rewrite' }) : runWrite(target === null))
+  const undo = () => {
+    if (!aiShown) return
+    setEdited(aiShown.before)
+    setAi(null)
+  }
 
   const onMake = () =>
     make.mutate(
@@ -194,7 +198,7 @@ function LetterDesk({
         onSuccess: () => {
           setEdited(null)
           setFresh(false)
-          setAiText(null)
+          setAi(null)
           onPick(selected.formatId)
           toast({ tone: 'ok', message: 'Letter made. Print it on the client’s letterhead.' })
         },
@@ -218,21 +222,29 @@ function LetterDesk({
         ))}
       </select>
       <div className="covering-letter-preview" aria-label="Preview">
-        <LetterTextPaper letter={letter} />
+        <LetterTextPaper text={letter} />
       </div>
       <button type="button" className="btn-link covering-letter-whole" onClick={() => setWhole(true)}>
         See the whole letter
       </button>
 
-      {writtenByAi && (
+      {aiShown && (
         <p className="muted small covering-letter-made" role="status">
-          Written by AI from the trip’s details. Read it and change anything before you make the letter.
+          Written by AI. It may have changed any part: read the whole letter before you make it.{' '}
+          <button type="button" className="btn-link" onClick={undo} disabled={busy}>
+            Undo
+          </button>
         </p>
+      )}
+      {aiShown && aiShown.removed.length > 0 && (
+        <div className="alert alert-warn covering-letter-missing" role="status">
+          Removed by the AI: {aiShown.removed.join('; ')}. Undo brings them back, or type them in with Edit the letter.
+        </div>
       )}
       {marks.length > 0 && (
         <div className="alert alert-warn covering-letter-missing" role="status">
           Still to fill in: {marks.join('; ')}.
-          {marks.includes(PURPOSE_WORDS) && ' Use Write it with AI for why they travel, or type it in.'}
+          {marks.includes(PURPOSE_WORDS) && ' Write the whole letter with AI to fill in why they travel, or type it in.'}
           {otherMarks.length > 0 &&
             ` Type ${otherMarks.length === 1 ? 'it' : 'them'} in with Edit the letter${
               selected.missing.length > 0 && !fromMade ? `, or add ${otherMarks.length === 1 ? 'it' : 'them'} to the case or the client’s family list` : ''
@@ -245,7 +257,7 @@ function LetterDesk({
           This is the letter made on {formatDate(madeDay)}, dated that day. Start again for a fresh draft dated today.
         </p>
       )}
-      {dirty && (
+      {dirty && !aiShown && (
         <p className="muted small covering-letter-made" role="status">
           You’ve changed the letter. Make the letter to keep your changes and print them.
         </p>
@@ -255,11 +267,9 @@ function LetterDesk({
         <button type="button" className="btn btn-sm btn-dark" onClick={onMake} disabled={marks.length > 0 || busy}>
           {make.isPending ? 'Making…' : made ? 'Make it again' : 'Make the letter'}
         </button>
-        {canWrite && (
-          <button type="button" className="btn btn-sm" onClick={onWrite} disabled={busy}>
-            {write.isPending ? 'Writing…' : target === PURPOSE_MARK ? 'Write it with AI' : 'Write it again'}
-          </button>
-        )}
+        <button type="button" className="btn btn-sm" onClick={onWrite} disabled={busy}>
+          {write.isPending ? 'Writing…' : 'Write the whole letter with AI'}
+        </button>
         <button type="button" className="btn btn-sm" onClick={() => setEditing(true)} disabled={busy}>
           Edit the letter
         </button>
@@ -281,24 +291,9 @@ function LetterDesk({
         )}
       </div>
 
-      {editing && <CoveringLetterEditor letter={letter} onChange={setEdited} onClose={() => setEditing(false)} />}
+      {editing && <CoveringLetterEditor letter={letter} onChange={change} onClose={() => setEditing(false)} />}
       {whole && <WholeLetter name={selected.name} letter={letter} onClose={() => setWhole(false)} />}
-      {asking?.kind === 'rewrite' && (
-        <ConfirmDialog
-          title="Start again with a new paragraph?"
-          body="The AI’s paragraph was changed, so a new one can’t simply take its place. Your changes to the letter are dropped, and it is drafted again with the new paragraph."
-          confirmLabel="Write a new one"
-          danger
-          pending={write.isPending}
-          error={null}
-          // While it writes, the answer drops the edits whatever happens here, so the question stays until it comes.
-          onCancel={() => {
-            if (!write.isPending) setAsking(null)
-          }}
-          onConfirm={() => runWrite(true)}
-        />
-      )}
-      {(asking?.kind === 'pick' || asking?.kind === 'restart') && (
+      {asking && (
         <ConfirmDialog
           title="Discard your changes?"
           body={
@@ -314,23 +309,30 @@ function LetterDesk({
           onConfirm={discard}
         />
       )}
-      {dirty && <UnsavedLetterGuard />}
+      {/* While the AI writes, leaving would lose a paid answer: the guard is on then too. */}
+      {(dirty || write.isPending) && (
+        <UnsavedLetterGuard
+          message={
+            write.isPending ? 'The AI is still writing the letter.' : 'Your changes to the covering letter haven’t been made into the letter yet.'
+          }
+        />
+      )}
     </>
   )
 }
 
-/** Leaving the page or reloading with edits not made into the letter asks first. Mounted only while there are edits. */
-function UnsavedLetterGuard() {
-  return useLeaveGuard(true, 'Your changes to the covering letter haven’t been made into the letter yet.').dialog
+/** Leaving the page or reloading with edits not made into the letter, or while the AI writes, asks first. */
+function UnsavedLetterGuard({ message }: { message: string }) {
+  return useLeaveGuard(true, message).dialog
 }
 
 /** "See the whole letter": the letter as it stands, edits included. */
-function WholeLetter({ name, letter, onClose }: { name: string; letter: LetterText; onClose: () => void }) {
+function WholeLetter({ name, letter, onClose }: { name: string; letter: string; onClose: () => void }) {
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <div className="dialog covering-letter-dialog" role="dialog" aria-modal="true" aria-label={name} onClick={(e) => e.stopPropagation()}>
         <h2 className="h2">{name}</h2>
-        <LetterTextPaper letter={letter} />
+        <LetterTextPaper text={letter} />
         <div className="covering-letter-actions" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>
             Close
@@ -355,7 +357,7 @@ function MadeLetter({ caseNo, view, preparing }: { caseNo: string; view: Coverin
   return (
     <>
       <div className="covering-letter-preview" aria-label="The letter made">
-        <LetterTextPaper letter={made.letter} />
+        <LetterTextPaper text={made.letter} />
       </div>
       <button type="button" className="btn-link covering-letter-whole" onClick={() => setWhole(true)}>
         See the whole letter

@@ -55,7 +55,7 @@ export function CoveringLetterPrintPage() {
         </span>
       </div>
       <div className="letter-sheet" style={{ '--letter-top': `${topMm}mm`, '--letter-edge': `${EDGE_MM}mm`, '--letter-side': `${SIDE_MM}mm` } as CSSProperties}>
-        <LetterTextPaper letter={p.letter} />
+        <LetterTextPaper text={p.letter} />
       </div>
     </div>
   )

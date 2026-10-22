@@ -3,6 +3,7 @@
 .letter-paper {
   font-family: var(--font-letter);
   font-size: 14px;
+  font-weight: 400;
   line-height: 1.6;
   color: var(--ink);
   background: var(--surface);
@@ -51,6 +52,10 @@
 }
 .letter-table th {
   font-weight: 700;
+}
+/* A blank's chip may wrap inside a narrow cell rather than run out of it. */
+.letter-table .letter-blank {
+  white-space: normal;
 }
 .letter-table-blank {
   margin: 0 0 12px;

@@ -41,6 +41,7 @@ import {
   setRemindersSchema,
   saveSubmissionSchema,
   vendorReceivedSchema,
+  writeLetterSchema,
 } from "./visa.schemas";
 import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
@@ -207,11 +208,12 @@ router.post("/cases/:caseNo/covering-letter", visaEdit, async (req, res) => {
 });
 
 /**
- * "Write it with AI", at File preparation: the paragraph on why they travel, written from the trip's details (0019
- * amendment 2). The card puts it in the letter; nothing is saved. 503 AI_FAILED, in plain words, when the AI can't.
+ * "Write the whole letter with AI", at File preparation: the letter as it stands on the card, rewritten for the trip
+ * (0019 amendment 4), with what the AI dropped listed. Nothing is saved. 503 AI_FAILED, in plain words, when the AI can't.
  */
-router.post("/cases/:caseNo/covering-letter/purpose", visaEdit, async (req, res) => {
-  res.json(await coveringLetterService.writePurpose(caseNoParam.parse(req.params.caseNo), actorOf(req)));
+router.post("/cases/:caseNo/covering-letter/write", visaEdit, async (req, res) => {
+  const body = writeLetterSchema.parse(req.body);
+  res.json(await coveringLetterService.writeLetter(caseNoParam.parse(req.params.caseNo), body, actorOf(req)));
 });
 
 /** The letter made, to print: the same letter every time. Anyone who can open the case; 409 before one is made. */

@@ -202,11 +202,12 @@ describe("the \"I agree\" link (part 2)", () => {
     await save(staff, caseNo, traveller, form(traveller));
     const [message] = await consentMessages();
     const token = /consent#([A-Za-z0-9_-]+)/.exec(message!.body)![1]!;
-    const card = (await staff.get(`/api/visa/cases/${caseNo}/messages`)).body.messages;
-    expect(card).toHaveLength(1);
-    expect(card[0].title).toBe("Consent form (I agree)");
-    expect(card[0].body).toContain("/consent#…");
-    expect(card[0].body).not.toContain(token);
+    // The card also lists the case's document list (message 1); the consent message is the one with the link.
+    const card = (await staff.get(`/api/visa/cases/${caseNo}/messages`)).body.messages as { title: string; body: string }[];
+    const shown = card.filter((m) => m.title === "Consent form (I agree)");
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.body).toContain("/consent#…");
+    expect(shown[0]!.body).not.toContain(token);
   });
 
   it("can be sent again: the old link stops working and a new one goes", async () => {

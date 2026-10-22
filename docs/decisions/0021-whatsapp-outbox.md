@@ -140,11 +140,123 @@ optional `toMobile`. Without it, a message goes to the client's main number, as 
 The card shows a consent message with its secret hidden (`/consent#…`), so nobody in the office can open the client's
 form and agree for them.
 
+## Amendment 3 (22 Oct 2026): the visa messages of Steps 1–2
+
+The project lead (22 Oct 2026) asked for the rest of `docs/whatsapp-visa-messages.md`, built step by step, one PR per
+group:
+- **A:** Steps 1–2, messages 1, 2, 3 and 5. This amendment.
+- **B:** messages 7, 8 and 9.
+- **C:** messages 10 to 15.
+- **D:** messages 16, 17 and 18.
+
+Their other answers:
+- **Invoice and credit note:** the messages (7, 18) go as words only for now, and staff send the PDF by hand.
+- **The door code (16):** goes on WhatsApp only.
+- **The file:** its 20 Oct review fixes are applied.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 1 | `visa.document_list` · Document list | a new visa case is saved (`createVisaEnquiry`) | case |
+| 2 | `visa.price` · Your price | the quote is saved for the first time (`saveQuote`) | case |
+| 3 | `visa.document_reminder` · Documents still pending | a planned reminder day and time is reached | case and planned day |
+| 5 | `visa.collection_visit` · Collection visit booked | a pickup is booked, or its boy, day, slot or address changes | job and change |
+
+- **What every visa message knows.** `visaMessageBasics` also fills `{{travellers}}` ("4 travellers") and
+  `{{office_phone}}` (Settings → Company).
+- **Long lists.** `fitList` cuts a list (messages 1 and 3) short at about 600 characters with "and 4 more (we will tell
+  you)", inside WhatsApp's limit of about 1,000 for a whole message.
+- **Message 1:**
+  - The offering's checklist, each paper once and numbered: "4. Photos, 35×45 mm, white background × 2 (original)".
+  - Not what we arrange (flights, hotels, insurance), and children's papers only when a child travels.
+- **Message 2:** the quote's total, with GST on the service charge (`quoteTotals`), as "₹6,000" (`rupeesText`). A
+  later change sends nothing, because the invoice carries the final amount.
+- **Message 3, the reminder:**
+  - **The sweep:** a pg-boss schedule, `visa-document-reminders`, every 15 minutes in India time (`startVisaReminders`;
+    not in tests, where pg-boss runs no schedules).
+  - **Due:** `sendDueReminders` queues one for each case whose planned time (`nextReminderAt`, the Reminders card's
+    "Next") came in the last 2 hours, keyed per planned day. A server down longer than that skips to the next planned
+    day.
+  - **Which cases:** the same rule as the card (`remindersDue`): on in Settings and on the case, open, at Enquiry or
+    Documents, with a paper the client brings still pending. Arranged items never count, so the card says "nothing
+    the client brings is missing" instead of a date that would never send.
+  - **`{{pending_list}}`:** "Bank statement, last 6 months (Rakesh); Birth certificate (Child 1)".
+  - **SMS:** the setting allows it, but it isn't built, so with SMS chosen nothing goes.
+- **Message 5:**
+  - The boy's name, "Mon 19 Oct" (`dayLabel`), the slot's name and the address. For a pickup only: the delivery is
+    message 14.
+  - Not for a map link alone, nor for a cancel (staff call the client).
+  - Keyed on the job's new `updatedAt`, so each change sends once.
+
+Saving a visa case now queues message 1, so tests that count the queued messages count only the one they're about.
+
+## Amendment 4 (22 Oct 2026): the visa messages of Steps 4–5
+
+Group B of Amendment 3: messages 7, 8 and 9 of `docs/whatsapp-visa-messages.md`. Each is queued in the transaction of
+the change it follows, as in Amendment 3.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 7 | `visa.invoice` · Invoice | an invoice is raised: the main one or a corrected one (`raiseInvoice`), the additional one or its correction (`raiseAdditionalInvoice`) | invoice |
+| 8 | `visa.submitted` · File submitted | the file is first marked submitted at the embassy, at Step 5 (`saveSubmission`) | case |
+| 9 | `visa.applied_online` · Applied online | an e-visa is marked submitted online, at Step 4 (`submitOnline`) | case |
+
+- **Message 7:**
+  - `{{invoice_no}}` ("MVI00000001", "MVI00000001-A") and `{{amount}}`, the invoice's total as "6,000"
+    (`rupeesText`), filled by `queueInvoiceMessage`.
+  - Words only, as the project lead asked: staff send the PDF by hand.
+  - Keyed on the invoice's id. When another raise took the number first, the retry rolls the first attempt's message
+    back with it, so one goes.
+- **Message 8:**
+  - `{{embassy}}` is the embassy's name as Settings has it ("French embassy, Mumbai"). `{{expected_date}}` is the
+    collection date staff enter, as "Wed 4 Nov" (`dayLabel`).
+  - Only the first save sends it. A later change to the file number, the embassy or the date sends nothing.
+- **Message 9:** a case is submitted online once, and a second press is refused, so it goes once.
+
+## Amendment 5 (22 Oct 2026): the visa messages of Steps 6–8
+
+Group C of Amendment 3: messages 10 to 15 of `docs/whatsapp-visa-messages.md`, each queued in the transaction of the
+change it follows. The project lead decided two things on 22 Oct 2026:
+- **A short return:** message 13 waits until every passport is back.
+- **The office address:** messages 10 and 13 use the one in Settings → Company, as it is.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 10 | `visa.approved` · Visa approved | the decision is recorded (`recordDecision`) and every traveller is approved | case |
+| 11 | `visa.refused` · Visa refused | … every traveller is refused | case |
+| 12 | `visa.partly_approved` · Partly approved | … some are approved, some refused | case |
+| 13 | `visa.passports_back` · Passports at our office | every booklet that went out is back: at "Mark received" (`receivePassports`), or at "Received the rest" (`receiveRest`) once nothing is missing | case |
+| 14 | `visa.delivery_visit` · Delivery booked | a delivery is booked, or its boy, day, slot or address changes (`bookFieldJob`, `changeFieldJob`) | job and change |
+| 15 | `visa.handed_over` · Passports handed over | the passports are handed over at the office (`handOver`) or at the door (`handOverAtDoor`) | case |
+
+- **What every visa message knows:** `visaMessageBasics` also fills `{{office_address}}`, the address in Settings →
+  Company (the invoice's).
+- **Messages 10–12:**
+  - `queueDecisionMessage` picks the message by the outcomes. `{{approved_names}}` and `{{refused_names}}` are in the
+    case's order, as the decision dialog names them, joined "A, B and C".
+  - `{{working_days}}` is "2 working days", from a new setting, `visa.passportsArrive` ⚠️ (Settings → Visa → Client
+    messages; the draft's point 4, open with Masti). It carries its own noun, so "1 working day" reads right too; the
+    wording is "in about {{working_days}}".
+  - **Not for an e-visa yet:** how its client gets the visa is open (the draft's point 5).
+  - Correcting the decision later (`changeDecision`) sends nothing; staff call the client.
+- **Message 13:**
+  - A short return sends nothing until "Received the rest" makes up the count.
+  - When the shortfall is cleared (a passport won't come back), nothing goes, and staff call. If it turns up after all,
+    the message goes then.
+  - It goes for a recalled file too, and whatever the case's status: the passports are at our office.
+- **Message 14:**
+  - Message 5's rules, for a delivery: `queueFieldVisit` picks message 5 or 14 by the job's kind.
+  - A map link alone, a cancel, or a handover that calls the visit off sends nothing.
+- **Message 15:**
+  - `queueHandoverMessage` fills `{{passport_count}}` ("4 passports and 3 old passports", `passportCountText`) and
+    `{{receiver_name}}` (the traveller, or the name typed).
+  - `{{handover_time}}` is the handover's own time, "Sat 31 Oct, 12:10 pm" (`dayLabel` and the new `timeLabel`).
+  - It goes for a cancelled case's hand-back before dispatch too.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- **The other visa messages** and the reminders (step 3), from `docs/whatsapp-visa-messages.md`. Messages 7 and 18
-  attach a PDF, so a message gets an attachment then.
+- **The other visa messages:** groups A (1, 2, 3, 5), B (7, 8, 9) and C (10 to 15) are built, Amendments 3 to 5. Group
+  D (16, 17, 18) follows. Messages 7 and 18 go without their PDF for now, and e-visas get no decision message yet.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code

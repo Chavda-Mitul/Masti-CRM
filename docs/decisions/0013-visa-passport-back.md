@@ -151,6 +151,11 @@ there's nothing to bring back. An e-visa case **waits at Step 6** after its deci
 follows an e-visa's decision). Step 7 is for paper visas and recalled files only; the database refuses "in transit" on
 an e-visa.
 
+**M39 (d) answered 22 Oct 2026 (Vimal):** an approved e-visa's PDF is saved, checked against the passport and sent to
+the client on WhatsApp; the case then moves to Step 8 · Delivered and closes. A refused one gets the "Refused" message
+and is closed after the call. Step 7 stays skipped. Not built yet: [change request 14](../change-requests.md), with its
+own record when it is.
+
 ### 5. Mark received
 
 **Decided 16 Oct 2026 (project lead):**
@@ -294,8 +299,9 @@ closed as Delivered with nobody asked to chase the fourth):
 
 ## Not in this record
 
-- **WhatsApp to the client** ("Passports are at our office"): waits for the WhatsApp work. The demo's "Delivery booked
-  for Sat 31 Oct" needs a delivery booking, which is Step 8.
+- ~~**WhatsApp to the client**~~ ("Passports are at our office"): built, message 13 in
+  `docs/decisions/0021-whatsapp-outbox.md` Amendment 5 (22 Oct 2026), once every passport is back. The demo's
+  "Delivery booked for Sat 31 Oct" is message 14, sent when Step 8 books the delivery.
 - **Booking the delivery or the client's visit, and the handover itself:** the Step 8 record.
 - **A list of every passport in our stock, across cases** (the demo's unused "Passports arriving back · mark received"
   attention list): not in the demo screens, so a change request if Masti wants it.

@@ -2,14 +2,17 @@ import type { FieldJobKind } from "../../../generated/prisma/enums";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { addDays, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
+import { addDays, dayLabel, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
+import { VISA_COLLECTION_VISIT, VISA_DELIVERY_VISIT } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { COLLECTING, HANDING_OVER, loadCase, lockCase, type StepRule } from "./caseLock";
 import { assertNotHeldShort } from "./shortfall";
 import { MAX_COLLECTION_DAYS_AHEAD, type BookFieldJobInput, type ChangeFieldJobInput, type MatureCaseInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
+import { visaMessageBasics } from "./visaMessages";
 
 // The field staff app, the office side (docs/decisions/0015-field-staff-app.md): booking the collection boy to pick a
 // case's documents up at Steps 1–2 (phase 1), or the delivery boy to take its passports to the client once they're in
@@ -160,8 +163,32 @@ export async function bookFieldJob(caseNo: string, input: BookFieldJobInput, act
       },
       tx,
     );
+    await queueFieldVisit(tx, enquiry.id, input.kind, job, { boy: boy.name, day: input.day, slot: slot.name, address: input.address });
   });
   return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * Message 5, "Collection visit booked", or message 14, "Delivery booked" (docs/whatsapp-visa-messages.md): a job booked,
+ * or its boy, day, slot or address changed. Keyed on the job's new updatedAt, so each change sends once; a cancel sends
+ * nothing (staff call).
+ */
+async function queueFieldVisit(
+  tx: Db,
+  enquiryId: string,
+  kind: FieldJobKind,
+  job: { id: string; updatedAt: Date },
+  visit: { boy: string; day: string; slot: string; address: string },
+) {
+  const template = kind === "PICKUP" ? VISA_COLLECTION_VISIT : VISA_DELIVERY_VISIT;
+  const basics = await visaMessageBasics(tx, enquiryId);
+  await queueMessage(tx, {
+    template,
+    enquiryId,
+    key: `${template}:${job.id}:${job.updatedAt.toISOString()}`,
+    clientId: basics.clientId,
+    variables: { ...basics.variables, staff_name: visit.boy, visit_day: dayLabel(visit.day), visit_slot: visit.slot, address: visit.address },
+  });
 }
 
 /** The case's job, by id (404 for another case's), with what it was booked for. */
@@ -209,7 +236,7 @@ export async function changeFieldJob(caseNo: string, jobId: string, input: Chang
     const now = { assigneeId: boy.id, day: input.day, slotId: slot.id, address: input.address, mapLink: input.mapLink ?? null };
     if (JSON.stringify(was) === JSON.stringify(now)) return;
 
-    await tx.fieldJob.update({
+    const updated = await tx.fieldJob.update({
       where: { id: job.id },
       data: { assigneeId: now.assigneeId, day: toDbDate(now.day), slotId: now.slotId, address: now.address, mapLink: now.mapLink },
     });
@@ -231,6 +258,9 @@ export async function changeFieldJob(caseNo: string, jobId: string, input: Chang
       },
       tx,
     );
+    // The client hears of a new boy, day, slot or address; a map link alone is for the boy.
+    const visitMoved = was.assigneeId !== now.assigneeId || moved || was.address !== now.address;
+    if (visitMoved) await queueFieldVisit(tx, enquiry.id, job.kind, updated, { boy: boy.name, day: now.day, slot: slot.name, address: now.address });
   });
   return getVisaCaseById(enquiry.id);
 }

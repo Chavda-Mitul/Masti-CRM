@@ -15,6 +15,7 @@ import { renderInvoicePdf, type InvoiceImages, type InvoiceParty, type InvoiceVi
 import type { RaiseAdditionalInvoiceInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { fileSafeFamilyName } from "./visaCase";
+import { queueInvoiceMessage } from "./visaMessages";
 import { companyPrinted, companyView, notInEnglish, preparedByPrinted, type InvoiceBlocker } from "./visaInvoice.service";
 
 // The one additional invoice per file (docs/decisions/0011-visa-at-vendor.md Decision 7, golden rule 3): extra costs
@@ -233,6 +234,8 @@ export async function raiseAdditionalInvoice(caseNo: string, input: RaiseAdditio
           },
           tx,
         );
+        // Message 7, "Invoice" (docs/whatsapp-visa-messages.md): the additional invoice goes like the main one.
+        await queueInvoiceMessage(tx, enquiry.id, invoice);
       },
       // Making the PDF and storing it takes a moment; the case lock is held for it.
       { timeout: 30_000 },

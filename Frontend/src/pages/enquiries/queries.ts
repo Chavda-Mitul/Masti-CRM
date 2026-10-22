@@ -1,7 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadFile, uploadPdf } from '../../lib/api'
 import { isStale } from '../../lib/apiErrors'
-import type { LetterText } from '../../lib/letter'
 import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
@@ -777,7 +776,7 @@ export function useCoveringLetter(caseNo: string, formatId: number | undefined, 
 export function useMakeCoveringLetter(caseNo: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { formatId: number; versionId: number; letter: LetterText }) =>
+    mutationFn: async (input: { formatId: number; versionId: number; letter: string }) =>
       (
         await api<{ letter: CoveringLetterView }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter`, {
           method: 'POST',
@@ -797,13 +796,17 @@ export function useMakeCoveringLetter(caseNo: string) {
 }
 
 /**
- * "Write it with AI": the paragraph on why they travel, written from the trip alone (0019 amendment 2). Nothing is saved:
- * the card puts it in the letter. A failure is a 503 whose message says why (AI_FAILED).
+ * "Write the whole letter with AI" (0019 amendment 4): the letter as it stands on the card, rewritten for the trip, and
+ * the personal details the AI dropped. Nothing is saved: the card shows the letter. A failure is a 503 whose message
+ * says why (AI_FAILED).
  */
-export function useWritePurpose(caseNo: string) {
+export function useWriteLetter(caseNo: string) {
   return useMutation({
-    mutationFn: async () =>
-      api<{ paragraph: string }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/purpose`, { method: 'POST' }),
+    mutationFn: async (letter: string) =>
+      api<{ letter: string; removed: string[] }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/write`, {
+        method: 'POST',
+        body: { letter },
+      }),
   })
 }
 

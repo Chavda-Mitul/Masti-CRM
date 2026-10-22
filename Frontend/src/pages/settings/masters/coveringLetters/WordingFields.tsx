@@ -2,14 +2,15 @@ import { useRef } from 'react'
 import { useController, type UseFormReturn } from 'react-hook-form'
 import { FormField, RequiredMark } from '../../../../components/FormField'
 import { LetterPaper } from '../../../../components/LetterPaper'
+import { pasteTable } from '../../../../components/pasteTable'
 import { istToday } from '../../../../lib/format'
 import { LETTER_BLANKS, MAX_LETTER_CHARS, normaliseWording, wordingProblem, type WordingFormValues } from '../schemas'
 import { EXAMPLE_TRAVELLERS, EXAMPLE_VALUES } from './labels'
 
 /**
  * Writing a covering letter's wording (docs/decisions/0019-covering-letters.md): the text and its blanks (a click puts one
- * where the cursor is), the day it's used from, and a preview filled in with an example family. For a new letter's page
- * and "Change the wording".
+ * where the cursor is), the day it's used from, and a preview filled in with an example family. Lines with | between the
+ * columns are tables, as in a case's letter (amendment 3). For a new letter's page and "Change the wording".
  */
 export function WordingFields({ form }: { form: UseFormReturn<WordingFormValues> }) {
   const { field, fieldState } = useController({ control: form.control, name: 'body' })
@@ -57,6 +58,7 @@ export function WordingFields({ form }: { form: UseFormReturn<WordingFormValues>
             name={field.name}
             value={field.value}
             onChange={field.onChange}
+            onPaste={pasteTable(field.onChange)}
             onBlur={field.onBlur}
             className="input textarea wording-text"
             rows={18}
@@ -70,7 +72,8 @@ export function WordingFields({ form }: { form: UseFormReturn<WordingFormValues>
             <span className="hint wording-warn">{problem}</span>
           ) : (
             <span className="hint">
-              A blank line starts a new paragraph. {length} of {MAX_LETTER_CHARS} characters.
+              A blank line starts a new paragraph. Lines with | between the columns make a table, its first line the headings.{' '}
+              {length} of {MAX_LETTER_CHARS} characters.
             </span>
           )}
         </label>

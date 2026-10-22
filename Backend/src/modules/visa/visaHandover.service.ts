@@ -18,6 +18,7 @@ import type { HandOverInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import { queueHandoverMessage } from "./visaMessages";
 
 // Visa Step 8, delivered (docs/decisions/0014-visa-delivered.md). At the office (component 1): whoever is at the desk,
 // any Visa staff with EDIT, who can open a case while its passports are in our stock (Decision 5), counts the booklets
@@ -216,7 +217,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     const beforeDispatch = locked.stage.code !== "PASSPORT_BACK";
     // Handed over here: a delivery booked for the boy is called off (0015).
     const { closes, fieldJobsCancelled } = await deliverCase(tx, locked, actor, "handed over at the office");
-    await tx.visaHandover.create({
+    const handover = await tx.visaHandover.create({
       data: {
         enquiryId: enquiry.id,
         mode: "OFFICE",
@@ -253,6 +254,8 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
       },
       tx,
     );
+    // Message 15 (docs/whatsapp-visa-messages.md), a cancelled case's hand-back too.
+    await queueHandoverMessage(tx, enquiry.id, { booklets: input.booklets, receiver, at: handover.at });
   });
   return getVisaCaseById(enquiry.id);
 }

@@ -146,7 +146,8 @@ intake count, and stays at its step (amendment 15, component 3).
 
 - **Cross-sell leads** (the Step 8 card and "See cross-sell leads →"): the cross-sell module comes later; the button
   stays "Soon".
-- **WhatsApp to the client** ("Passports are at our office", "Delivered"): waits for the WhatsApp work.
+- ~~**WhatsApp to the client**~~ ("Passports are at our office", "Delivered"): built, messages 13 and 15 in
+  `docs/decisions/0021-whatsapp-outbox.md` Amendment 5 (22 Oct 2026).
 - **Collecting money at delivery** (the demo's "collect payment" stops): Accounts.
 - **The Step 2 pickup job** ("Send collection boy"): the field module, after component 3.
 

@@ -202,7 +202,8 @@
   File preparation, the letterhead space, "File ready" not needing it, and the wordings in Settings with their blanks.
 
 1. **A made letter is its text**, not a wording plus values: the text above the table, the table (its headings and
-   rows; null when the wording has no `{travellers}`), and the text below.
+   rows; null when the wording has no `{travellers}`), and the text below. *Since amendment 3 (22 Oct 2026) it's one
+   text, its tables typed as `|` lines.*
    - The case keeps it in `VisaCase.coveringLetterText` (renamed from `coveringLetterFill`), with the wording it started
      from, who made it and when. Every print is that text.
    - The text is free, but it doesn't break §7 rule 2 (no free text): it's a letter to an embassy, not a reason, an
@@ -214,7 +215,8 @@
      the letter.
    - The table starts as Name · Relation · Date of birth · Passport no., a row per traveller. `{travellers}` may be the
      first, last or only line.
-3. **Everything is editable** before "Make the letter":
+3. **Everything is editable** before "Make the letter" (*since amendment 3 there's no grid: tables are typed as `|`
+   lines, as many as a letter needs*):
    - the text above and below the table;
    - the table's headings and cells, with rows and columns added or removed (1–6 columns, at most 60 rows: a row per
      traveller a case can have), e.g. "Designation" for "Relation" on a business trip.
@@ -229,25 +231,28 @@
    - Leaving the page, reloading, picking another letter or "Start again" asks first ("Discard your changes?").
    - Print waits until the edits are made into the letter.
    - Once made, the card starts from the letter made, with its date. "Start again" drafts it fresh, dated today.
-6. **Make sends `{ formatId, versionId, letter }`.**
+6. **Make sends `{ formatId, versionId, letter }`** (*a string since amendment 3*).
    - `versionId` is the wording the text started from: today's draft, or the made letter's. It must be one of that
      letter's wordings whose day has come, and the letter must still fit the case.
    - **The audit keeps the text**, before and after (`visa.coveringLetter.make`). With free text, it's the only copy of
      an earlier letter once it's made again (golden rule 5).
-7. **Limits** (`coveringLetters.schemas.ts`, repeated in `Frontend/src/lib/letter.ts` with a drift test):
+7. **Limits** (`coveringLetters.schemas.ts`, repeated in `Frontend/src/lib/letter.ts` with a drift test; *replaced by
+   amendment 3's one limit, 60,000 characters*):
    - the text above and below the table: at most 8,000 characters each, with some text or a table;
    - a heading: at most 60 characters; a cell: at most 200; each on one line;
    - every row has one cell per column;
    - Windows line breaks become plain ones.
    - The 400 messages say which part is wrong ("The table's row 2, Passport no., is over 200 characters.").
-8. **The database:** migration `20261021200000_covering_letter_text`, hand-written.
+8. **The database:** migration `20261021200000_covering_letter_text`, hand-written (*since amendment 3 the column is
+   `TEXT`*).
    - It renames the column, so the four-together CHECK follows it. `prisma migrate diff` would drop the column and add a
      new one, which drops that CHECK.
    - A new CHECK keeps the text's shape (`top` and `bottom` strings, `table` an object or null) and bounds its size.
    - A dev database with letters made before this keeps them in the old shape: reset it, or make them again.
 
 **Screens:** the card draws the letter as it stands (`LetterTextPaper`, marks as chips), with Edit the letter (a dialog:
-the text boxes and the table grid), Start again, Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
+the text boxes and the table grid; *since amendment 3, one text box beside the letter as it will print*), Start again,
+Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
 **Tests:** `tests/visaCoveringLetter.test.ts` (19) and `tests/frontendRules.test.ts` (the marks and the limits).
 
 ## Amendment 2 (21 Oct 2026): "Write it with AI"
@@ -261,13 +266,15 @@ the text boxes and the table grid), Start again, Make the letter and Print. `use
     a date of birth; the samples follow Masti's two letters; Business and Visitor visa types are added.
 - **Adds to Decision 4 and amendment 1.** The rest stands.
 
-1. **A `{purpose}` blank**, "Why they travel, written with AI".
+1. **A `{purpose}` blank**, "Why they travel, written with AI". *Since amendment 4 the AI writes it as part of the
+   whole letter, or staff type it, and its messages say "the AI or staff write why they travel there".*
    - Like `{travellers}`, at most once and alone on its line ("Use {purpose} only once: the AI writes one paragraph
      there."; "Put {purpose} on a line of its own: the AI writes a paragraph there."). Settings' blank picker inserts it
      on a line of its own.
    - The draft writes it as the mark `⟦why they travel⟧` (`PURPOSE_MARK`). It's not a gap in the case, so it's not in
      `missing`, but it is a mark: the letter isn't made until the AI writes the paragraph, or staff type one.
 2. **"Write it with AI"** on the card, at File preparation, for the owner, the Visa HOD and the Head (as Make).
+   *Replaced by amendment 4's "Write the whole letter with AI", as are points 3–6.*
    - It puts the paragraph where the mark is, or where the AI's last paragraph still stands unchanged; the other edits
      stay. "Write it again" does the same.
    - If the AI's paragraph was changed by hand, there's nowhere to put a new one: "Write it again" asks "Start again
@@ -323,3 +330,128 @@ the text boxes and the table grid), Start again, Make the letter and Print. `use
      `{purpose}` to a wording in Settings.
 9. **Visa types Business (`BUSINESS`) and Visitor (`VISITOR`)** are seeded, so their instructions match. As for any
    visa type, a country needs an offering with a checklist before intake can use them.
+
+## Amendment 3 (22 Oct 2026): tables typed with `|`, and the letter as one text
+
+- **Why:** the project lead tried "Edit the letter" on 22 Oct 2026. Its table was a grid of boxes, so a letter could
+  have only the travellers' table, in that one place. The lead asked for tables typed as text, as many as a letter
+  needs, and for the grid to go ([change request 11](../change-requests.md), extended). Their next request, notes to
+  the AI written inside the letter, is a later amendment.
+- **Changes amendment 1's points 1, 3 and 6–8, and its Screens line.** The rest stands: a mark stops "Make the letter",
+  edits live on the card until the letter is made, and the audit keeps the text.
+
+1. **A made letter is one text.** `VisaCase.coveringLetterText` is `TEXT`, at most 60,000 characters
+   (`MAX_CASE_LETTER_CHARS`; the wordings keep their own 6,000). The longest draft, every traveller a case can have with
+   150-character names and nothing else known, is about 33,000. A real letter is 3,000–9,000.
+2. **The table rule** (`Frontend/src/lib/letter.ts`: the card, "Edit the letter", the print and Settings' preview):
+   - **two or more lines in a row that each hold a `|` make a table**, its first line the headings. One such line alone
+     stays text. A blank line or a line without `|` ends the table; the text above or below needs no blank line;
+   - cells are split at each `|` and trimmed. The table is as wide as its widest line, and shorter lines get empty
+     cells, so typed text is never dropped;
+   - a `|` at the start or the end of the lines goes when every line of the table has one (a Markdown table). It's
+     judged per table, so a row whose first cell was cleared doesn't shift left;
+   - a line of dashes, with or without colons (`---|:---:`), is skipped, but counts towards the two lines;
+   - a ⟦mark⟧ in a cell shows as a chip;
+   - two lines that hold a `|` are always a table: write `/` or `·` elsewhere, as the help says.
+3. **The draft** writes `{travellers}` as `|` lines: Name · Relation · Date of birth · Passport no., then a row per
+   traveller.
+   - A blank line sets them apart from the text above and below, so a `|` line of the wording's own next to them stays
+     a table of its own, as Settings shows it.
+   - **A `|` in any value the letter is given becomes `/`** (`noPipes`): the hotel stay, the client's name and
+     address, a relation's name and the AI's paragraph. The case itself isn't changed.
+4. **"Edit the letter" is one text box**, beside the letter drawn as it will print, live. Both are the same height and
+   scroll on their own; below 900 px the drawing goes under the box. The grid goes.
+   - A table copied from a page (ChatGPT's answer, Excel, Word) arrives as lines with tabs and pastes as `|` lines. A
+     Markdown table from ChatGPT's Copy button works as it is. Settings' wording box does the same.
+   - A change typed back to the letter as it was is no change: Print is offered again, and leaving doesn't ask.
+5. **Make sends `{ formatId, versionId, letter }`, with `letter` a string.**
+   - Windows line breaks and a lone `\r` become plain ones, and blank lines at the ends go.
+   - An empty letter is refused ("Write the letter."), and so is one over 60,000 characters ("This letter is too long:
+     keep it under 60,000 characters.").
+   - A mark still answers 409 `LETTER_INCOMPLETE`.
+6. **Print:** a table's row isn't split over two pages, the line before a table stays on its page, and tables print at
+   the text's size with darker lines.
+7. **The database:** migration `20261022120000_covering_letter_plain_text`, hand-written.
+   - A letter made in the old shape isn't converted. It's unmade instead: its text, wording, made-at and made-by are
+     emptied together, so any database migrates, a test database's last letter included. Staff make it again.
+   - The shape CHECK goes. The column becomes `TEXT` with `USING NULL`; without it, the JSON would become text that
+     passes the new CHECK and prints as `{"top":…`.
+   - A new CHECK keeps the text not blank (`~ '\S'`) and at most 60,000 characters. The four-together CHECK stays.
+
+**Tests:**
+- `tests/visaCoveringLetter.test.ts`, rewritten for one text;
+- `tests/letterText.test.ts`: the table rule, the paste, and the server's draft as the screen draws it;
+- `tests/frontendRules.test.ts`: the marks and the limit;
+- `tests/coveringLetterPurpose.test.ts`: a `|` in the AI's paragraph (since amendment 4, `tests/coveringLetterAi.test.ts`).
+
+## Amendment 4 (22 Oct 2026): "Write the whole letter with AI"
+
+- **Why:** the project lead chose on 22 Oct 2026 to have the AI write the whole letter, not one paragraph ([change
+  request 11](../change-requests.md), extended). The formats in Settings stay as its starting point, and as the fallback
+  for standard cases. The AI works with placeholders, so personal details stay on Masti's server. The lead's answers:
+  - the AI works on **the letter as it stands**, so staff's own changes are kept;
+  - **only the whole-letter button:** "Write it with AI" (amendment 2) goes;
+  - **small details** it doesn't know, such as the places they'll visit, go in **general words**. **Key facts** still get
+    a ⟦mark⟧: passport numbers, dates, and for a business or visitor visa the company or person visited. This came after
+    the lead saw ⟦the places I plan to visit⟧ on a letter whose hotel stay was just "Hotel 1".
+- **Replaces amendment 2's points 2–6.** Its `{purpose}` blank and the samples stand.
+
+1. **One button, "Write the whole letter with AI"**, at File preparation, for the owner, the Visa HOD and the Head (as
+   Make). It shows whatever the wording; a wording needs no `{purpose}` for it.
+2. **The request:** `POST /api/visa/cases/:caseNo/covering-letter/write` with `{ letter }`, the letter as it stands on
+   the card, answers `{ letter, removed }`. Nothing is saved or audited; the call is recorded in `AiCall`; an `AiError`
+   is the usual 503 `AI_FAILED`.
+3. **Placeholders keep personal details on the server** (`placeholders.ts`):
+   - **What's swapped:**
+     - every detail the case knows: each traveller's name and each word of it, passport number, date of birth and
+       expiry, mobile and addresses; the client's name, contact person, address, mobile, phones, email, PAN and GSTIN;
+       the case number;
+     - anything shaped like a passport number, a PAN, a GSTIN, an Aadhaar number, an Indian mobile or an email, even
+       typed by hand.
+   - **Named for what it is**, never for its value: `{t2Passport}`, `{clientMobile}`, `{number1}`. The letter's and the
+     trip's dates become `{date}`, `{departOn}` and `{returnOn}`, with their values in the key, so they can't drift.
+   - **One pass:** the longest matches that don't overlap are replaced at once.
+     - Edges are Unicode-aware, and a value isn't found inside an amount ("Rs 12,000").
+     - A single word of a name counts only in capitals or Title Case ("happy" in prose stays), and may carry -bhai, -ben,
+       -ji or a plural s.
+     - Dates are read in any format and swapped when they're a known date of birth or expiry.
+     - The city or area alone isn't swapped, only the whole address.
+   - **Filled back exactly as written:** each spelling has its own placeholder (`{t1NameTitle}`), and a placeholder the
+     AI retyped with other spaces or capitals still fills.
+   - **Tables go as one placeholder each** (`{table1}`), their lines in the key, so the AI needn't copy them and a
+     60-traveller letter stays fast.
+   - **Accepted risk:** a detail typed in a form the CRM doesn't know (an employer's name, say) goes as typed.
+4. **What the AI is told** (`letterAi.ts`, replacing `purpose.ts`):
+   - rewrite the whole letter for this trip and visa, keeping its parts in order and staff's changes;
+   - write ⟦why they travel⟧, by visa type: Tourist (the famous places, the cities the hotel stay names, else general
+     words), Business (⟦name of the company we are visiting⟧, the meetings in general words, colleagues by number),
+     Visitor (⟦name and relation of the person we are visiting⟧), any other in general words;
+   - small unknown details in general words, key facts as marks; never invent; keep every placeholder;
+   - answer with the whole letter between `<letter>` and `</letter>`.
+   - The trip goes as facts, the travellers by relation and adult or child, their names as placeholders. The key gives
+     each placeholder's meaning, never a personal value.
+5. **The answer is checked** (`tidyLetter`):
+   - exactly one letter; a code fence, a heading or bold it added goes;
+   - a `[placeholder]` or `{…}` it made up, and a passport number, mobile, email or PAN it can't know, become marks;
+   - the personal details it dropped are listed ("AARAV MEHTA's passport number");
+   - an empty, missing or too long letter is an error worth another try, recorded as `FAILED` (`askAi`'s `accept`).
+6. **Size and time:**
+   - a letter over 15,000 characters as sent (tables as placeholders) is refused before any call;
+   - 45 seconds a try, and one more try (use case `visa.coveringLetter.write`, effort `medium`, 8,000 tokens);
+   - tried on Haiku 5.5 on 22 Oct 2026 (a tourist family, a tourist alone, a business group, a visitor couple, 60
+     travellers, hand-typed details): 4–6 seconds and $0.0005–0.0014 a letter, nothing personal sent.
+7. **The card:**
+   - the AI's letter replaces the one shown, as an edit kept until Make;
+   - "Written by AI. It may have changed any part: read the whole letter before you make it.", with **Undo** while the
+     letter is still the AI's: back to the edit before it, or to the server's letter;
+   - Make, Start again, discarding and picking another letter clear Undo;
+   - "Removed by the AI: …" when it dropped a personal detail;
+   - the leave guard stays on while it writes.
+8. **The fake AI** (`AI_PROVIDER=fake`) gives the letter back as it was sent.
+
+**Tests:**
+- `tests/coveringLetterAi.test.ts` (20), replacing `coveringLetterPurpose.test.ts`:
+  - the round trip, over the samples and a hand-edited letter;
+  - privacy, also through the endpoint with hand-typed details;
+  - the instructions, the answer's checks and the endpoint;
+- `tests/ai.test.ts`: `accept`, the per-use time limit and the fake echo.

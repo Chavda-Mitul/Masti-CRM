@@ -63,6 +63,15 @@ export function dayLabel(value: string): string {
   return `${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
+const TIME_LABEL = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+
+/** An instant's time in India, "12:10 pm" or "9:05 am", for messages. */
+export function timeLabel(at: Date): string {
+  const found = TIME_LABEL.formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) => found.find((p) => p.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")} ${part("dayPeriod").toLowerCase()}`;
+}
+
 const DATE_LABEL = new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /** "2027-01-01" → "1 Jan 2027", for messages about a date that may be years away (a passport's expiry). */
