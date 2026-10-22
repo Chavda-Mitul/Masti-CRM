@@ -207,8 +207,8 @@ describe("adding a covering letter", () => {
     expect(wordingProblem("{travellers}\n{travellers}")).toMatch(/only once/);
     expect(wordingProblem("The travellers: {travellers}")).toBe("Put {travellers} on a line of its own: it prints as a table.");
     expect(wordingProblem("Dear Sir,\r\n\r\n  {purpose}  \r\nThanks")).toBeNull();
-    expect(wordingProblem("{purpose}\n{purpose}")).toBe("Use {purpose} only once: the AI writes one paragraph there.");
-    expect(wordingProblem("Why: {purpose}")).toBe("Put {purpose} on a line of its own: the AI writes a paragraph there.");
+    expect(wordingProblem("{purpose}\n{purpose}")).toBe("Use {purpose} only once: the AI or staff write why they travel there.");
+    expect(wordingProblem("Why: {purpose}")).toBe("Put {purpose} on a line of its own: the AI or staff write why they travel there.");
 
     const hod = await visaHod();
     const res = await addLetter(hod, { body: "Passport {passport}" });
@@ -510,7 +510,7 @@ describe("the sample letters", () => {
       expect(wordingProblem(f.versions[0]!.body), f.name).toBeNull();
     }
     expect(formats.map((f) => f.party)).toEqual(["SEVERAL", "ONE", "SEVERAL", "SEVERAL"]);
-    // Every sample has the paragraph "Write it with AI" writes (0019 amendment 2); the last is for Business.
+    // Every sample has {purpose}, the paragraph on why they travel (0019 amendments 2 and 4); the last is for Business.
     for (const f of formats) expect(f.versions[0]!.body, f.name).toMatch(/^\{purpose\}$/m);
     const types = await prisma.visaType.findMany({ where: { id: { in: formats.map((f) => f.visaTypeId) } } });
     expect(formats.map((f) => types.find((v) => v.id === f.visaTypeId)!.code)).toEqual(["TOURIST", "TOURIST", "TOURIST", "BUSINESS"]);

@@ -4,7 +4,7 @@ import { istToday, toDbDate } from "../../lib/dates";
 
 // Sample covering letters (docs/decisions/0019-covering-letters.md Decision 7, amendment 2) until the Visa HOD replaces
 // them with Masti's own (M13). Their wording follows the two letters Masti sent on 21 Oct 2026 (a France tourist and a
-// France business letter), with {purpose} where "Write it with AI" writes why they travel: three tourist letters on the
+// France business letter), with {purpose} where the AI or staff write why they travel: three tourist letters on the
 // seeded France (Schengen) and China visas, and a business one for France. Their names say "(sample)" and their wording
 // has no author ("set up with the system"), so the screens flag them. Added only while there are no covering letters at
 // all: re-seeding never adds them again.

@@ -7,10 +7,11 @@ import { conflict, fieldError, HttpError } from "../../lib/httpError";
 import { inForce } from "../coveringLetters/coveringLetter";
 import { marksIn } from "../coveringLetters/coveringLetters.schemas";
 import { draftLetter, type LetterFacts } from "../coveringLetters/fill";
-import { purposeAsk, tidyParagraph, type PurposeFacts } from "../coveringLetters/purpose";
+import { letterAsk, MAX_AI_LETTER_CHARS, tidyLetter, type TripFacts } from "../coveringLetters/letterAi";
+import { swapLetter, type PrivateFacts } from "../coveringLetters/placeholders";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { findVisibleCase, loadCase, lockCase, PREPARING } from "./caseLock";
-import type { MakeCoveringLetterInput } from "./visa.schemas";
+import type { MakeCoveringLetterInput, WriteLetterInput } from "./visa.schemas";
 import { getVisaSettings } from "./visa.settings";
 import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 
@@ -24,8 +25,8 @@ import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 // - Made at File preparation by the owner, the HOD or the Head; again as often as needed while there. The case keeps the
 //   letter's text as made, so a later print is the same letter (Decision 10), and the audit keeps each text made. Anyone
 //   who can open the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
-// - "Write it with AI" (amendment 2) writes the paragraph on why they travel from the trip alone, for the card to put in
-//   the letter. It saves nothing on the case; the AI call is recorded in AiCall (docs/decisions/0023-ai.md).
+// - "Write the whole letter with AI" (amendment 4) rewrites the letter as it stands, with every personal detail as a
+//   placeholder the CRM fills back. It saves nothing on the case; the AI call is recorded in AiCall (0023).
 
 const personSelect = { select: { id: true, name: true } } as const;
 
@@ -33,7 +34,23 @@ const letterCaseSelect = {
   id: true,
   caseNo: true,
   clientId: true,
-  client: { select: { name: true, kind: true, addressLine: true, area: true, city: true, pincode: true } },
+  client: {
+    select: {
+      name: true,
+      kind: true,
+      addressLine: true,
+      area: true,
+      city: true,
+      pincode: true,
+      // For the AI's placeholders: never sent, only swapped out (amendment 4).
+      contactPerson: true,
+      mobile: true,
+      email: true,
+      pan: true,
+      gstin: true,
+      phones: { select: { mobile: true } },
+    },
+  },
   visa: {
     select: {
       departOn: true,
@@ -49,7 +66,18 @@ const letterCaseSelect = {
           position: true,
           isChild: true,
           name: true,
-          member: { select: { name: true, dateOfBirth: true, passportNumber: true, relation: { select: { name: true } } } },
+          member: {
+            select: {
+              name: true,
+              dateOfBirth: true,
+              passportNumber: true,
+              relation: { select: { name: true } },
+              passportExpiry: true,
+              mobile: true,
+              residentialAddress: true,
+              officeAddress: true,
+            },
+          },
         },
       },
       coveringLetterMadeAt: true,
@@ -93,10 +121,10 @@ function factsOf(row: LetterCaseRow, visa: LetterVisa): LetterFacts {
 }
 
 /**
- * What the AI may know for the paragraph on why they travel (amendment 2): the trip, never a name, a passport number, a
- * date of birth or an address. Built from the case on its own, not from the letter's facts, which hold all of those.
+ * What the AI may know about the trip (amendment 4): never a name, a passport number, a date of birth or an address.
+ * Built from the case on its own, not from the letter's facts, which hold all of those.
  */
-function purposeFactsOf(row: LetterCaseRow, visa: LetterVisa): PurposeFacts {
+function tripFactsOf(row: LetterCaseRow, visa: LetterVisa): TripFacts {
   return {
     country: visa.offering.country.name,
     visaType: { code: visa.offering.visaType.code, name: visa.offering.visaType.name },
@@ -104,6 +132,44 @@ function purposeFactsOf(row: LetterCaseRow, visa: LetterVisa): PurposeFacts {
     travellers: visa.travellers.map((t) => ({ relation: t.member?.relation.name ?? null, isChild: t.isChild })),
     trip: { departOn: visa.departOn && fromDbDate(visa.departOn), returnOn: visa.returnOn && fromDbDate(visa.returnOn) },
     hotelStay: visa.hotelStay,
+  };
+}
+
+/** Every personal detail of the case a letter may hold, for the placeholders that keep them on the server (amendment 4). */
+function privateFactsOf(row: LetterCaseRow, visa: LetterVisa): PrivateFacts {
+  const { client } = row;
+  const { adults } = countTravellers(visa.travellers);
+  const day = (date: Date | null | undefined) => (date ? fromDbDate(date) : null);
+  return {
+    caseNo: row.caseNo,
+    client: {
+      name: client.name,
+      contactPerson: client.contactPerson,
+      address: clientAddress(client),
+      addressLine: client.addressLine,
+      pincode: client.pincode,
+      mobile: client.mobile,
+      phones: client.phones.map((p) => p.mobile),
+      email: client.email,
+      pan: client.pan,
+      gstin: client.gstin,
+    },
+    travellers: visa.travellers.map((t) => ({
+      name: t.member?.name ?? t.name,
+      label: travellerLabel(t, adults),
+      passportNumber: t.member?.passportNumber ?? null,
+      dateOfBirth: day(t.member?.dateOfBirth),
+      passportExpiry: day(t.member?.passportExpiry),
+      mobile: t.member?.mobile ?? null,
+      homeAddress: t.member?.residentialAddress ?? null,
+      officeAddress: t.member?.officeAddress ?? null,
+    })),
+    dates: {
+      today: istToday(),
+      madeOn: visa.coveringLetterMadeAt ? istToday(visa.coveringLetterMadeAt) : null,
+      departOn: day(visa.departOn),
+      returnOn: day(visa.returnOn),
+    },
   };
 }
 
@@ -241,20 +307,35 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
 }
 
 /**
- * "Write it with AI" (amendment 2), at File preparation, for the owner, the HOD or the Head: the paragraph on why they
- * travel, from the trip alone, with a ⟦mark⟧ for what the AI can't know. Nothing is saved on the case: the card puts the
- * paragraph in the letter, and staff read it before making the letter. The call is never inside a transaction (it can
- * take seconds), and an AiError reaches the client as 503 AI_FAILED (middleware/error.ts).
+ * "Write the whole letter with AI" (amendment 4), at File preparation, for the owner, the HOD or the Head: the letter as
+ * it stands on the card, rewritten for the trip. Every personal detail and table goes as a placeholder and is filled
+ * back; what the AI dropped is listed. Nothing is saved on the case: the card shows the letter, and staff read it before
+ * making it. The call is never inside a transaction (it can take a while), and an AiError reaches the client as 503
+ * AI_FAILED (middleware/error.ts).
  */
-export async function writePurpose(caseNo: string, actor: Actor) {
+export async function writeLetter(caseNo: string, input: WriteLetterInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, PREPARING);
   const { row, visa } = await loadLetterCase(enquiry.id);
-  const facts = purposeFactsOf(row, visa);
-  const { system, prompt } = purposeAsk(facts);
-  const { text } = await askAi({ useCase: "visa.coveringLetter.purpose", system, prompt, userId: actor.user.id, enquiryId: enquiry.id });
-  const paragraph = tidyParagraph(text, facts.hotelStay);
-  if (!paragraph) throw new AiError("The AI gave an empty answer. Please try again.", true);
-  return { paragraph };
+  const swap = swapLetter(input.letter, privateFactsOf(row, visa));
+  // Too long to rewrite in time: refused before any call, and trying again wouldn't help.
+  if (swap.text.length > MAX_AI_LETTER_CHARS) {
+    throw new AiError("This letter is too long for the AI to write. Shorten it, or change it by hand.", false);
+  }
+  const { system, prompt } = letterAsk(tripFactsOf(row, visa), swap);
+  const { text } = await askAi({
+    useCase: "visa.coveringLetter.write",
+    system,
+    prompt,
+    userId: actor.user.id,
+    enquiryId: enquiry.id,
+    accept: (answer) => {
+      const tidied = tidyLetter(answer, swap);
+      return "error" in tidied ? tidied.error : null;
+    },
+  });
+  const tidied = tidyLetter(text, swap);
+  if ("error" in tidied) throw tidied.error;
+  return tidied;
 }
 
 /**

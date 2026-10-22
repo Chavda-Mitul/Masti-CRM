@@ -34,13 +34,17 @@ export function anthropicProvider(settings: AnthropicSettings): AiProvider {
       try {
         // No temperature, top_p or top_k, and no half-written answer to continue: Haiku 5.5 refuses them. Its thinking
         // stays at the default, and the effort sets how much of it there is.
-        message = await client.messages.create({
-          model: request.model,
-          max_tokens: request.maxTokens,
-          system: request.system,
-          messages: [{ role: "user", content: request.prompt }],
-          output_config: { effort: request.effort },
-        });
+        message = await client.messages.create(
+          {
+            model: request.model,
+            max_tokens: request.maxTokens,
+            system: request.system,
+            messages: [{ role: "user", content: request.prompt }],
+            output_config: { effort: request.effort },
+          },
+          // A use case with a longer answer sets its own (a whole covering letter); else the client's above.
+          { timeout: request.timeoutMs ?? TIMEOUT_MS, maxRetries: request.maxRetries ?? MAX_RETRIES },
+        );
       } catch (error) {
         throw errorFor(error);
       }

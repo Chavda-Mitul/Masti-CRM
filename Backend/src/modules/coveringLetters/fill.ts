@@ -81,7 +81,7 @@ export function draftLetter(body: string, facts: LetterFacts, day: string): { le
     },
     entry: () => valueOr(trip.entryType && ENTRY_WORD[trip.entryType], "the entry type"),
     hotel: () => valueOr(trip.hotelStay, "the hotel stay"),
-    // Not a gap in the case: "Write it with AI" writes it, or staff type it (amendment 2).
+    // Not a gap in the case: the AI writes it with the whole letter, or staff type it (amendments 2 and 4).
     purpose: () => PURPOSE_MARK,
     // The table itself is drawn below; a {travellers} inside a sentence is refused when the wording is saved.
     travellers: () => "",

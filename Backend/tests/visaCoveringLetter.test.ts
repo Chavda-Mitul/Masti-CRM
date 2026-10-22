@@ -24,7 +24,7 @@ beforeEach(async () => {
 const FAMILY = "Schengen · tourist · family (sample)";
 const ONE_PERSON = "Schengen · tourist · one person (sample)";
 const HEADINGS = "Name | Relation | Date of birth | Passport no.";
-/** What "Write it with AI" or staff put where {purpose} was. */
+/** What the AI or staff put where {purpose} was. */
 const PURPOSE = "We wish to see the famous places of France and spend time together as a family.";
 
 const neha = () => loginAs("neha@masti.test");
