@@ -18,7 +18,7 @@ export const coverage = (letter: Pick<CoveringLetterSummary, 'visaType' | 'count
 
 /**
  * A new letter's wording starts as the frame every covering letter has, for the HOD to fill in: shaped like Masti's own
- * letters, with {purpose} where "Write it with AI" writes why they travel (0019 amendment 2).
+ * letters, with {purpose} where the AI or staff write why they travel (0019 amendments 2 and 4).
  */
 export const STARTING_WORDING = `{date}
 

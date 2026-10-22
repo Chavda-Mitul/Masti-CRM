@@ -235,6 +235,9 @@ export const makeCoveringLetterSchema = z.object({
   letter: letterTextSchema,
 });
 
+/** "Write the whole letter with AI" (0019 amendment 4): the letter as it stands on the card. */
+export const writeLetterSchema = z.object({ letter: letterTextSchema });
+
 /** "Save enquiry" on the New enquiry form. The mobile is normalised by the service (same message as the clients module). */
 export const createVisaCaseSchema = z
   .object({
@@ -283,6 +286,7 @@ export type PassportsArriveSetting = z.infer<typeof passportsArriveSchema>;
 export type DocumentRemindersSetting = z.infer<typeof documentRemindersSchema>;
 export type CoveringLetterSetting = z.infer<typeof coveringLetterSettingSchema>;
 export type MakeCoveringLetterInput = z.infer<typeof makeCoveringLetterSchema>;
+export type WriteLetterInput = z.infer<typeof writeLetterSchema>;
 export type VisaSettings = z.infer<typeof visaSettingsSchema>;
 export type UpdateVisaSettingsInput = z.infer<typeof updateVisaSettingsSchema>;
 export type CreateVisaCaseInput = z.infer<typeof createVisaCaseSchema>;

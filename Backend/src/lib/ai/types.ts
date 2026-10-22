@@ -14,6 +14,9 @@ export interface AiRequest {
   /** The most the answer may use, its thinking included. */
   maxTokens: number;
   effort: AiEffort;
+  /** How long one try may take, and how many more tries; left out, the provider's own (30 seconds, one more try). */
+  timeoutMs?: number;
+  maxRetries?: number;
 }
 
 /** Why the AI stopped, in the CRM's words: the same for every provider. */

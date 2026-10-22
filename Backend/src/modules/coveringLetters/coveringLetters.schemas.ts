@@ -15,7 +15,8 @@ export const MAX_LETTER_COUNTRIES = 50;
 /**
  * The {blanks} a wording may use, filled in from the case when the letter is made (docs/decisions/0019-covering-letters.md
  * Decision 4). {travellers} prints the table of travellers, so it sits on a line of its own. {purpose} is the paragraph
- * on why they travel, which "Write it with AI" writes (amendment 2): a paragraph too, on a line of its own.
+ * on why they travel, which the AI writes with the whole letter, or staff type (amendments 2 and 4): a paragraph too,
+ * on a line of its own.
  */
 export const LETTER_BLANKS = [
   "date",
@@ -56,8 +57,8 @@ export function wordingProblem(body: string): string | null {
   if (travellers > 1) return "Use {travellers} only once: it prints the table of travellers.";
   if (travellers === 1 && !/^[ \t]*\{travellers\}[ \t]*$/m.test(text)) return "Put {travellers} on a line of its own: it prints as a table.";
   const purpose = text.match(/\{purpose\}/g)?.length ?? 0;
-  if (purpose > 1) return "Use {purpose} only once: the AI writes one paragraph there.";
-  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return "Put {purpose} on a line of its own: the AI writes a paragraph there.";
+  if (purpose > 1) return "Use {purpose} only once: the AI or staff write why they travel there.";
+  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return "Put {purpose} on a line of its own: the AI or staff write why they travel there.";
   return null;
 }
 
@@ -148,8 +149,9 @@ export function mark(what: string): string {
 }
 
 /**
- * Where {purpose} is in a draft (amendment 2): the paragraph "Write it with AI" writes, or staff type. A mark like any
- * other, so the letter isn't made without it; not a gap in the case, so it isn't in the draft's `missing`.
+ * Where {purpose} is in a draft (amendments 2 and 4): the paragraph on why they travel, which the AI writes with the
+ * whole letter, or staff type. A mark like any other, so the letter isn't made without it; not a gap in the case, so
+ * it isn't in the draft's `missing`.
  */
 export const PURPOSE_MARK = mark("why they travel");
 

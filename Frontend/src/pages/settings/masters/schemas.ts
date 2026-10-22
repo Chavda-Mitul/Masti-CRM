@@ -372,7 +372,7 @@ export const LETTER_BLANKS = [
   { token: 'hotel', label: 'The hotel stay', example: 'Hotel Lutetia, Paris' },
   {
     token: 'purpose',
-    label: 'Why they travel, written with AI, on a line of its own',
+    label: 'Why they travel, written by the AI or by hand, on a line of its own',
     example:
       'We wish to see the famous places and natural beauty of France, including Paris, and to spend time together as a family. We will return to India at the end of our trip.',
   },
@@ -397,8 +397,8 @@ export function wordingProblem(body: string): string | null {
   if (travellers > 1) return 'Use {travellers} only once: it prints the table of travellers.'
   if (travellers === 1 && !/^[ \t]*\{travellers\}[ \t]*$/m.test(text)) return 'Put {travellers} on a line of its own: it prints as a table.'
   const purpose = text.match(/\{purpose\}/g)?.length ?? 0
-  if (purpose > 1) return 'Use {purpose} only once: the AI writes one paragraph there.'
-  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return 'Put {purpose} on a line of its own: the AI writes a paragraph there.'
+  if (purpose > 1) return 'Use {purpose} only once: the AI or staff write why they travel there.'
+  if (purpose === 1 && !/^[ \t]*\{purpose\}[ \t]*$/m.test(text)) return 'Put {purpose} on a line of its own: the AI or staff write why they travel there.'
   return null
 }
 
