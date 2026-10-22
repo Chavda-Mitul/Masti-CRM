@@ -75,6 +75,15 @@ export const followUpDeskQuerySchema = z.object({
   scope: z.enum(FOLLOW_UP_SCOPES).default("MINE"),
 });
 
+/** Clicking a department in the sidebar clears its red dot (0006 amendment 22). */
+export const unseenAssignmentsSeenSchema = z.object({
+  department: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z_]{2,30}$/),
+});
+
 export type PostponeInput = z.infer<typeof postponeSchema>;
 export type CancelInput = z.infer<typeof cancelSchema>;
 export type ResumeInput = z.infer<typeof resumeSchema>;

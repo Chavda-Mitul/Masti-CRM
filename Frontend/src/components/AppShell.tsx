@@ -3,7 +3,7 @@ import { can, canBrowseClients, isHodOfAny, isVisaTeam } from '../auth/permissio
 import { roleSummary, useLogout, useMe } from '../auth/useAuth'
 import { DEPARTMENT_STYLE, SELLING_DEPARTMENTS } from '../lib/departments'
 import { initials } from '../lib/format'
-import { useFollowUpBadge, useToAssignCount } from '../pages/enquiries/queries'
+import { useFollowUpBadge, useGivenToMe, useSeeGivenToMe, useToAssignCount } from '../pages/enquiries/queries'
 import { LoginPopup } from '../pages/notices/LoginPopup'
 import { ErrorBoundary } from './ErrorBoundary'
 import { NavIcon } from './NavIcon'
@@ -17,6 +17,8 @@ export function AppShell() {
   const badge = useFollowUpBadge()
   const assigns = !!user && isHodOfAny(user)
   const toAssign = useToAssignCount(assigns)
+  const givenToMe = useGivenToMe()
+  const seeGivenToMe = useSeeGivenToMe()
 
   if (!user) return null
 
@@ -67,14 +69,24 @@ export function AppShell() {
               </span>
             )
           }
+          // A red dot while a case the HOD or the Head gave you is unseen; clicking the department clears it.
+          const given = givenToMe.data?.[code] ?? 0
           return (
             <Link
               key={code}
               to={`/enquiries?department=${code}`}
               className={`nav nav-sub${onEnquiries && department === code ? ' active' : ''}`}
+              onClick={() => given > 0 && seeGivenToMe.mutate(code)}
             >
               <span className="dot" style={{ background: style.solid }} />
               {style.label}
+              {given > 0 && (
+                <span
+                  className="nav-new"
+                  title={`${given} new ${given === 1 ? 'case' : 'cases'} given to you`}
+                  aria-label={`${given} new ${given === 1 ? 'case' : 'cases'} given to you`}
+                />
+              )}
             </Link>
           )
         })}
