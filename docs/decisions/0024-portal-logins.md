@@ -1,8 +1,9 @@
 # 0024 · Portal logins: "Log in for me"
 
-- **Status:** a trial, decided 21 Oct 2026 by the project lead. Component 1 (PR #67) and component 3, the button on the
-  visa case (PR #86), are merged; component 2, scheduled password changes, is built on `feat/portal-password-schedule`.
-  The approach goes to Shivanshu for approval once the trial passes (04 §C item 6, Q4). Component 4 follows.
+- **Status:** a trial, decided 21 Oct 2026 by the project lead. Components 1 (PR #67), 2, scheduled password changes
+  (PR #91), and 3, the button on the visa case (PR #86), are merged; component 4, the office-PC kit, is built on
+  `feat/office-pc-kit`, with blanks for Masti's answers. The approach goes to Shivanshu for approval once the trial
+  passes (04 §C item 6, Q4).
 - **Date:** 21 Oct 2026
 - **Scope:** Settings → Portal logins (demo screen 28, PROJECT_KNOWLEDGE §12.19): the company's accounts on visa, airline
   and supplier portals, which staff log in to without seeing the ID or password. Answers R3 and Q4.
@@ -184,7 +185,7 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 
   Each one's words showed on its card and in "Who used what", and the audit log held neither the ID nor the password.
 
-## Component 2: scheduled password changes, and "Locked" (built 22 Oct 2026, branch `feat/portal-password-schedule`)
+## Component 2: scheduled password changes, and "Locked" (built 22 Oct 2026, PR #91)
 
 Demo screen 28: each card says when its password changes ("Changed monthly · next 12 Oct", "Changed weekly · next Mon").
 An overdue one is red, **Locked**, "Weekly change overdue — HOD to reset", with Log in for me greyed out, under "Passwords
@@ -285,20 +286,61 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
   - an ID page followed by a password page.
 - **Shared accounts:** a portal that logs out one person when another logs in with the same account will do so.
 - **The password isn't 100% secret:**
-  - Until the office PCs are locked down (component 4), someone technical could read a typed password with the
-    browser's developer tools.
+  - Until an office PC has the kit (component 4), someone technical could read a typed password with the browser's
+    developer tools or another extension. With it, those are off. Someone with administrator rights on the PC can still
+    undo the rules, so staff mustn't have them (M50).
+  - A portal that copies the password into ordinary text on the page (not a box) isn't covered by the eye guard.
   - Anyone who learned it could use it from home until it's next changed (component 2 makes the HOD do that on
     schedule): "office only" applies to the button, not the portal.
 
-## For deployment (component 4, not built)
+## Component 4: the office-PC kit (built 22 Oct 2026, branch `feat/office-pc-kit`)
 
-- **Installing:** on Windows, Chrome force-installs a self-hosted extension only on managed machines (joined to a domain,
-  or enrolled in Chrome Browser Cloud Management). An unlisted Chrome Web Store listing, under Masti's own account,
-  avoids that.
-- **Production manifest:** it needs Masti's CRM address in `externally_connectable`, and its own ID in
-  `PORTAL_HELPER_IDS`.
-- **Chrome policies on the office PCs:** `ExtensionInstallForcelist`, `DeveloperToolsAvailability` and
-  `PasswordManagerEnabled=false`.
+What makes the helper safe on Masti's office PCs: staff can't remove it, can't read a typed password, and Chrome can't
+save one.
+
+Decided 22 Oct 2026 (project lead):
+1. **Build it now, with blanks** for what Masti hasn't told us: the CRM's address, the helper's Chrome Web Store ID, and
+   the office PCs (M50, M51). Chrome only: Edge if M50 says so.
+2. **A portal's own "show password" eye** could reveal the typed password, most of all on captcha pages, where the form
+   stays open. So the helper guards against it.
+3. **Other extensions** (some exist just to show passwords) could read it. So the office PCs block every other extension,
+   with an allow list for the ones Masti needs.
+
+Found 22 Oct 2026 in Chromium's policy definitions:
+- On Windows PCs that aren't in a domain (or enrolled in Chrome Enterprise Core), Chrome force-installs only Chrome Web
+  Store extensions. Hence an unlisted listing under Masti's own account.
+- `DeveloperToolsAvailability` 2 turns off DevTools everywhere (and "View page source"). Since Chrome 128,
+  `ExtensionDeveloperModeSettings` 1 turns off the extensions page's developer mode. `URLBlocklist` `javascript://*`
+  stops typed `javascript:` links and bookmarklets.
+- The Chrome Web Store refuses a manifest with a `key` and gives the extension its own ID.
+
+Built:
+- **The eye guard** (`Helper/src/fill.ts`):
+  - once the helper has typed the password, any box but a password box (and the ID box) that holds it is emptied at
+    once, before the page is drawn again: the eye switching the box to text, or a page swapping in a text box;
+  - the box goes back to a password box, and the banner says "Masti CRM hid the password. Press Log in for me to try
+    again.";
+  - the watch ends when the login form has gone.
+
+  Pretend portal: `show-password.html`.
+- **The Chrome Web Store build:** `npm run build:store -- --crm https://<Masti's CRM address>` writes
+  `Helper/dist-store/`. Its manifest has no development key, and only the CRM's own https address may talk to the
+  helper. Any other address is refused.
+- **`Helper/office-pc/Set-ChromeRules.ps1`** sets Chrome's machine-wide rules on one PC:
+  - `ExtensionInstallForcelist` gets the helper from the store;
+  - `DeveloperToolsAvailability` 2, `ExtensionDeveloperModeSettings` 1, `PasswordManagerEnabled` 0;
+  - `URLBlocklist` gets `javascript://*`;
+  - `ExtensionInstallBlocklist` gets `*`, and `ExtensionInstallAllowlist` the helper and `-AllowExtensions`.
+
+  It adds to existing lists, `-Remove` takes back only what it set, and `-WhatIf` changes nothing.
+- **`Helper/office-pc/README.md`**, the guide for Masti's IT person: publish the helper unlisted, set
+  `PORTAL_HELPER_IDS` on the server, run the script on each PC, check it, update or undo. The blanks are marked ⚠️.
+- **Tests:** Helper 36 (+4 the eye guard, +2 the store build).
+- **Checked:**
+  - In Chrome, the built `fillLogin` on a copy of the pretend eye page: after the press, the page's "Show password"
+    left an empty password box and the banner.
+  - The script was checked with PowerShell's parser and `-WhatIf` only; it was never applied on our PC, since it
+    changes Windows settings.
 
 ## Still open
 
@@ -306,7 +348,8 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
   - what its first box is called;
   - whether it asks for letters or a code, and to whose phone or email;
   - whether two people can be logged in at once.
-- **M50:** the office PCs: Windows edition, who looks after them, the browser, and whether people use personal Google
-  accounts in Chrome.
+- **M50:** the office PCs: Windows edition, who looks after them, the browser, whether people use personal Google
+  accounts in Chrome, and which other extensions staff need.
+- **M51:** Masti's Google account for the Chrome Web Store (a one-time US$5 fee), and a privacy policy page.
 - **M19:** the office internet addresses.
 - **A8/A9:** the accounts themselves, handed over securely.

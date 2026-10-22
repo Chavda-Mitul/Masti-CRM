@@ -29,8 +29,19 @@ would hand a portal's password to whoever clicked it. Remove the helper and the 
 Chrome profile for testing if you'd rather keep it.
 
 The CRM pages that may talk to the helper are listed under `externally_connectable` in `manifest.json`: `localhost`,
-`127.0.0.1` and `portal.localhost` for development. Masti's own CRM address is added before go-live, along with the
-office PCs' setup.
+`127.0.0.1` and `portal.localhost` for development. The build for the office PCs lets only Masti's own CRM address talk
+to it (below).
+
+## For the office PCs
+
+```
+npm run build:store -- --crm https://<Masti's CRM address>
+```
+
+This writes `dist-store/`, the helper as it's uploaded to the Chrome Web Store: the CRM at that address is the only page
+that may talk to it, and the development key is left out, because the store gives the helper its own ID. The office PCs
+install it from there. [office-pc/README.md](office-pc/README.md) is the whole setup for Masti's IT person, with
+`office-pc/Set-ChromeRules.ps1`, which sets each PC's Chrome rules.
 
 ## Try it on pretend portals
 
@@ -51,7 +62,8 @@ npm run typecheck
 ```
 
 `test/fill.test.ts` checks the box-finding on many kinds of login page, and `test/fillReact.test.tsx` on a React form.
-`test/logIn.test.ts` covers a whole press with stand-ins for Chrome, and `test/manifest.test.ts` the permissions.
+`test/logIn.test.ts` covers a whole press with stand-ins for Chrome, and `test/manifest.test.ts` the permissions and the
+Chrome Web Store build.
 
 ## Files
 
@@ -62,3 +74,6 @@ npm run typecheck
 | `src/fill.ts` | `fillLogin`, which runs inside the portal's page. It is sent there as text, so it must stand alone |
 | `src/passwordSaving.ts` | Switches off Chrome's "Save password?" offer |
 | `src/protocol.ts` | The messages between the CRM page and the helper |
+| `scripts/storeManifest.ts` | The manifest made fit for the Chrome Web Store, for the CRM's address (Node runs it as it is) |
+| `scripts/build-store.mjs` | `npm run build:store`: writes `dist-store/` |
+| `office-pc/` | The office PCs' Chrome rules (`Set-ChromeRules.ps1`) and the setup guide |
