@@ -1,8 +1,8 @@
 # 0025 · E-visas after the decision
 
 - **Status:** decided 22 Oct 2026: Vimal said yes to M39 (d), and the project lead answered the details the same day.
-  Built in 5 parts, one at a time (Decision 1). Built: parts 1 and 2 (22 Oct 2026). A "Built" note is added under each
-  part as it lands.
+  Built in 5 parts, one at a time (Decision 1). Built: parts 1, 2 and 3 (22 Oct 2026). A "Built" note is added under
+  each part as it lands.
 - **Date:** 22 Oct 2026
 - **Scope:** what follows an e-visa's decision at Step 6, until the case closes:
   - each approved traveller's e-visa PDF, and its check against the passport
@@ -140,17 +140,56 @@ S3 pre-signed one.
 - **Not tried end to end on a laptop:** Twilio can't reach the CRM's own link here. Its first real run is on Masti's
   server (or through a tunnel). The tests cover the link itself: GET, HEAD, the headers and the key.
 
-### 5. Settings and seed data (golden rule 1)
+### 5. "Send the e-visa" (part 3)
+
+- **When:** at Decision, on an open case, by whoever can act on it, once every approved traveller's PDF is uploaded and
+  marked **Matches** (a mismatch blocks it, the lead's decision 1). Refused travellers need nothing here (part 5).
+- **What goes:** message 19, **"Your e-visa"** ⚠️ (our draft, for M1), one per approved traveller, each carrying their
+  current PDF (Decision 4):
+  > Dear {{client_name}}, Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is
+  > attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}. Please print it and keep it with the passport when
+  > you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away. – Masti Tours &
+  > Travels
+- **Then:**
+  - **No passports held** (no booklets counted at intake, the usual e-visa): the case moves to **Delivered** and
+    **closes**, with no due time.
+  - **Passports held:** it stays at Decision, open, due for the handover (`visa.handoverCheck`, the next open office day
+    at 11:00 ⚠️); part 4 builds that handover.
+- **Afterwards nothing that went can change:** the PDF uploads, their checks and Change are refused.
+
+**Built 22 Oct 2026** (part 3):
+- **Data** (migration `20261022220000_evisa_sent`): `VisaCase.evisaSentAt` and `evisaSentById`. CHECKs: set together,
+  and only on an e-visa.
+- `GET /api/visa/cases/:caseNo/send-evisa/check` returns `{ blockers, travellers: [{ name, fileName }], held, closes,
+  dueAt }`. Each blocker names one approved traveller: "Upload Rakesh Mehta's e-visa.", "Check Rakesh Mehta's e-visa
+  against the passport.", "Rakesh Mehta's e-visa doesn't match the passport: get it corrected first."
+- `POST /api/visa/cases/:caseNo/send-evisa` with `{ updatedAt }`, under the case lock (`CHECKING_EVISA`). Refused with
+  409: `SEND_BLOCKED { blockers }`, already sent, no one approved, a paper visa, a stale page (`STALE`). It sets who
+  and when, queues the messages (keyed per traveller), closes the case through `deliverCase` (which now moves an e-visa
+  to Delivered from Decision) or sets the handover's due time, and audits `visa.evisa.sent`.
+- **Next step** in the lists: "Send the e-visa", then "Hand back the passports" once sent with passports held.
+- **Screen:**
+  - **Send the e-visa →** in the header; its dialog lists each traveller with their file, and says whether the case
+    closes or waits for the handover.
+  - The chip reads "E-visa sent" while it waits.
+  - The Decision card says "Sent to the client · <when> · <who>", and its due line says what's next.
+  - Upload, the check and Change go once sent.
+  - The step bar shows Step 7 as "–" ("Not needed: an e-visa's passports never left the office").
+
+### 6. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
 | The e-visa PDF limit | 16 MB ⚠️ (under WhatsApp's 20 MB), or `visa.finalFile.maxMb` when lower |
 | The e-visa PDF's name | `<case no>_<traveller>_evisa.pdf` ⚠️ |
 | How long a message's file link works | 30 minutes ⚠️ (`FILE_LINK_MINUTES`; Twilio fetches the file within seconds) |
+| Message 19, "Your e-visa" | our draft ⚠️ (M1) |
+| When a sent e-visa with passports held is due | `visa.handoverCheck`, the next open office day at 11:00 ⚠️ |
 | The words on the card | ours ⚠️ |
 
 ## Still needed
 
 - **Shivanshu:** is change request 14 paid?
-- **Masti (M1):** the wording of the new WhatsApp messages (parts 3 and 5), with the other visa messages.
+- **Masti (M1):** the wording of the new WhatsApp messages (message 19 from part 3, and part 5's), with the other visa
+  messages.
 - **Masti (M39 a–c):** the e-visa and Step 5 timings, still open.

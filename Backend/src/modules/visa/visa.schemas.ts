@@ -467,9 +467,13 @@ export const takeOutOfDocketSchema = matureCaseSchema;
 /** "Submitted online" (Decision 11), for an e-visa: sends the case's updatedAt, like "Add to docket". */
 export const submitOnlineSchema = matureCaseSchema;
 
+/** "Send the e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): sends the case's updatedAt, likewise. */
+export const sendEvisaSchema = matureCaseSchema;
+
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
 export type SubmitOnlineInput = z.infer<typeof submitOnlineSchema>;
+export type SendEvisaInput = z.infer<typeof sendEvisaSchema>;
 
 // ---------------------------------------------------------------------------
 // Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md)

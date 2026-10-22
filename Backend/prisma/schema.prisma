@@ -102,6 +102,7 @@ model User {
   visaCasesDecided      VisaCase[]              @relation("VisaCaseDecidedBy")
   visaCasesInTransit    VisaCase[]              @relation("VisaCasePassportsInTransitBy")
   visaCasesReceivedBack VisaCase[]              @relation("VisaCasePassportsReceivedBy")
+  visaEvisasSent        VisaCase[]              @relation("VisaCaseEvisaSentBy")
   visaShortfallsCleared VisaCase[]              @relation("VisaCaseShortfallClearedBy")
   visaHandovers         VisaHandover[]          @relation("VisaHandoverBy")
   caseFilesUploaded     CaseFile[]              @relation("CaseFileUploadedBy")
@@ -1331,6 +1332,10 @@ model VisaCase {
   passportsReceivedById   String?
   bookletsBackCurrent     Int?                   @db.SmallInt
   bookletsBackOld         Int?                   @db.SmallInt
+  /// "Send the e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): each approved traveller's e-visa went to
+  /// the client on WhatsApp, by whom and when. Both set together, and only on an e-visa (checked in the migration).
+  evisaSentAt             DateTime?              @db.Timestamptz(3)
+  evisaSentById           String?
   /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
   /// missing-passport-reasons list. All three set together, only once received (checked in the migration).
   shortfallClearedAt      DateTime?              @db.Timestamptz(3)
@@ -1355,6 +1360,7 @@ model VisaCase {
   decidedBy               User?                  @relation("VisaCaseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
   passportsInTransitBy    User?                  @relation("VisaCasePassportsInTransitBy", fields: [passportsInTransitById], references: [id], onDelete: Restrict)
   passportsReceivedBy     User?                  @relation("VisaCasePassportsReceivedBy", fields: [passportsReceivedById], references: [id], onDelete: Restrict)
+  evisaSentBy             User?                  @relation("VisaCaseEvisaSentBy", fields: [evisaSentById], references: [id], onDelete: Restrict)
   recallReason            RecallReason?          @relation(fields: [recallReasonId], references: [id], onDelete: Restrict)
   shortfallClearedBy      User?                  @relation("VisaCaseShortfallClearedBy", fields: [shortfallClearedById], references: [id], onDelete: Restrict)
   shortfallReason         MissingPassportReason? @relation(fields: [shortfallReasonId], references: [id], onDelete: Restrict)

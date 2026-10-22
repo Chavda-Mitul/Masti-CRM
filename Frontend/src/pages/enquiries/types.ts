@@ -439,6 +439,23 @@ export interface SubmitOnlineCheck {
   dueAt: string
 }
 
+/**
+ * GET /api/visa/cases/:caseNo/send-evisa/check (0025, part 3): what blocks "Send the e-visa", who gets a message with
+ * which file, and what happens to the case.
+ */
+export interface SendEvisaCheck {
+  /** One line per approved traveller who isn't ready: no PDF, not checked, or doesn't match. */
+  blockers: { kind: 'NO_PDF' | 'NOT_CHECKED' | 'MISMATCH'; travellerId: string; label: string }[]
+  /** Each approved traveller, who gets one WhatsApp with their PDF. */
+  travellers: { name: string; fileName: string | null }[]
+  /** Booklets counted in at intake, which we hold. */
+  held: number
+  /** No passports held: the case moves to Delivered and closes. */
+  closes: boolean
+  /** With passports held: when it's due for the handover ⚠️. */
+  dueAt: string | null
+}
+
 /** GET /api/visa/cases/:caseNo/vendor-received/check (0011 Decision 2): when the file comes back due, and why then. */
 export interface VendorReceivedCheck {
   dueAt: string
@@ -706,6 +723,8 @@ export interface VisaCase {
   openDocket: { docketNo: string; caseCount: number } | null
   /** An e-visa's "Submitted online" (0008 Decision 11): who and when, instead of a docket. */
   submittedOnline: { at: string; by: PersonRef | null } | null
+  /** "Send the e-visa" (0025, part 3): who sent the approved travellers' e-visas to the client, and when. */
+  evisaSent: { at: string; by: PersonRef | null } | null
   /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
   vendorReceived: { at: string; by: PersonRef | null } | null
   /** "Submitted at the embassy" (0011 Decisions 3 and 4): the vendor's file number, the embassy and the collection date. */

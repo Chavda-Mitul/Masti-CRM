@@ -52,6 +52,13 @@ export const VISA_DELIVERY_VISIT = "visa.delivery_visit";
 /** Message 15: the passports are handed over, at the office or at the door (Step 8). */
 export const VISA_HANDED_OVER = "visa.handed_over";
 
+/**
+ * Message 19: an approved e-visa traveller's e-visa, with its PDF, one per traveller ("Send the e-visa",
+ * docs/decisions/0025-evisa-after-decision.md part 3). Ours, beyond the demo (change request 14); Masti approves its
+ * words with the others (M1).
+ */
+export const VISA_EVISA_READY = "visa.evisa_ready";
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
@@ -247,6 +254,19 @@ export const MESSAGE_TEMPLATES = [
       "We have handed over {{passport_count}} for {{case_no}} to {{receiver_name}} on {{handover_time}}.",
       "",
       "Thank you for choosing us. If anything is not right, please call us on {{office_phone}}.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_EVISA_READY,
+    name: "Your e-visa",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}.",
+      "",
+      "Please print it and keep it with the passport when you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),
