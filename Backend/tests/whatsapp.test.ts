@@ -72,6 +72,17 @@ describe("choosing the provider", () => {
     expect(forTheLog(message, false)).toEqual(message);
   });
 
+  it("log only: hides the door code from the log when live, and keeps it on a laptop; the list of secrets is never logged", () => {
+    const words = { to, body: "482915 is your verification code.\n\nThis code expires in 10 minutes.", template: { id: "HX02", variables: { code: "482915", minutes: "10" } } };
+    const message = { ...words, secrets: ["482915"] };
+    expect(forTheLog(message, true)).toEqual({
+      to,
+      body: "•••••• is your verification code.\n\nThis code expires in 10 minutes.",
+      template: { id: "HX02", variables: { code: "••••••", minutes: "10" } },
+    });
+    expect(forTheLog(message, false)).toEqual(words);
+  });
+
   it("log only: hides a file link's key from the log when live, and keeps it on a laptop (0025, part 2)", () => {
     const url = "https://crm.masti.in/api/public/message-files/0b7e1c5e-0000-4000-8000-000000000001/VISA-2026-0041_Rakesh-Mehta_evisa.pdf?key=abcDEF123_-xyz";
     const message = { to, body: "Your e-visa is attached.", attachment: { url, fileName: "VISA-2026-0041_Rakesh-Mehta_evisa.pdf" } };

@@ -1,16 +1,17 @@
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Prisma } from "../../../generated/prisma/client";
+import type { MessageStatus } from "../../../generated/prisma/enums";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { dayLabel, fromDbDate, istToday, toDbDate } from "../../lib/dates";
-import { sendEmail } from "../../lib/email";
-import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, notFound } from "../../lib/httpError";
 import { checkWarnings, confirmedWarningsNote } from "../../lib/warnings";
 import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { MB } from "../../lib/pdf";
 import { deleteObject, putObject } from "../../lib/storage";
-import { getCompanyDetails } from "../company/company.settings";
+import { FIELD_DOOR_CODE } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { countTravellers, travellerLabel } from "../visa/visaCase";
 import { advanceToDocuments } from "../visa/visaSteps.service";
@@ -18,11 +19,10 @@ import { assertInStock, checkHandover, deliverCase, gather as gatherHandover, re
 import { queueHandoverMessage } from "../visa/visaMessages";
 import type { FieldSettings, HandOverAtDoorInput, MarkDoneInput, MarkFailedInput } from "./field.schemas";
 import { getFieldSettings } from "./fieldJobs.settings";
-import { otpEmail } from "./otpEmail";
 
 // The field staff app, the boy's own side (docs/decisions/0015-field-staff-app.md): his run for a day (phase 3), one of
 // his stops, and what he records there (phase 4): "Couldn't complete", with a reason from the list and the place his
-// phone gave (Decision 5); or, at the door (Decision 4), the client's one-time code by email, the booklets he counted
+// phone gave (Decision 5); or, at the door (Decision 4), the client's one-time code on WhatsApp, the booklets he counted
 // and his selfie with the place: "Picked up" at a pickup (phase 4), the handover at a delivery, with a photo of the
 // person receiving (phase 5). Only his own stops; he records only booked ones on today's run (past days are read-only,
 // decided 17 Oct 2026). The office's side is in visa/visaFieldJobs.service.ts.
@@ -132,24 +132,30 @@ export async function listMyJobs(userId: string, asked: string | undefined) {
   };
 }
 
-/** "h•••@example.com": enough for the client to know where to look, not the whole address. */
-const maskEmail = (email: string) => {
-  const at = email.indexOf("@");
-  return at > 0 ? `${email[0]}•••${email.slice(at)}` : "•••";
-};
+/** "+91••••••1299": enough for the client to know which phone, not the whole number. */
+const maskMobile = (mobile: string) => (mobile.length > 7 ? `${mobile.slice(0, 3)}${"•".repeat(mobile.length - 7)}${mobile.slice(-4)}` : "•••");
+
+/** The code's WhatsApp message (message 16): one per code sent. */
+const codeMessageKey = (jobId: string, sentAt: Date) => `${FIELD_DOOR_CODE}:${jobId}:${sentAt.toISOString()}`;
 
 /**
  * Where the client's code stands, as his phone shows it: where it went (masked), until when it works, when he may send
- * another, and when the client confirmed it. Null until one is sent.
+ * another, when the client confirmed it, and where its WhatsApp has got to (decided 22 Oct 2026: it goes a few seconds
+ * after his press, so a failure shows here, with why). Null until one is sent.
  */
-function otpState(j: { otpSentAt: Date | null; otpSentTo: string | null; otpExpiresAt: Date | null; otpConfirmedAt: Date | null }, settings: FieldSettings) {
+function otpState(
+  j: { otpSentAt: Date | null; otpSentTo: string | null; otpExpiresAt: Date | null; otpConfirmedAt: Date | null },
+  settings: FieldSettings,
+  message: { status: MessageStatus; error: string | null } | null,
+) {
   if (!j.otpSentAt || !j.otpSentTo || !j.otpExpiresAt) return null;
   return {
-    sentTo: maskEmail(j.otpSentTo),
+    sentTo: maskMobile(j.otpSentTo),
     sentAt: j.otpSentAt,
     expiresAt: j.otpExpiresAt,
     resendAt: new Date(j.otpSentAt.getTime() + settings.otpResendSeconds * 1000),
     confirmedAt: j.otpConfirmedAt,
+    message,
   };
 }
 
@@ -160,7 +166,10 @@ export async function getMyStop(userId: string, jobId: string) {
     select: { ...stopSelect, otpSentAt: true, otpSentTo: true, otpExpiresAt: true, otpConfirmedAt: true },
   });
   if (!row) throw notFound("Stop not found.");
-  return { stop: toStop(row), otp: otpState(row, await getFieldSettings()), today: istToday() };
+  const message = row.otpSentAt
+    ? await prisma.outboundMessage.findUnique({ where: { idempotencyKey: codeMessageKey(jobId, row.otpSentAt) }, select: { status: true, error: true } })
+    : null;
+  return { stop: toStop(row), otp: otpState(row, await getFieldSettings(), message), today: istToday() };
 }
 
 /** The reasons his phone offers for "Couldn't complete" (Decision 5): the ones switched on, in the list's order. */
@@ -218,7 +227,7 @@ export async function lockMyJob(tx: Db, jobId: string, actor: Actor) {
           stageId: true,
           departmentId: true,
           stage: { select: { code: true } },
-          client: { select: { name: true, email: true } },
+          client: { select: { name: true, mobile: true } },
         },
       },
     },
@@ -272,63 +281,41 @@ export async function markFailed(jobId: string, input: MarkFailedInput, actor: A
 /** Only a hash of the code is kept: sha256 of the job and the code. */
 const hashCode = (jobId: string, code: string) => createHash("sha256").update(`${jobId}:${code}`).digest("hex");
 const sameHash = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-const firstWord = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 /**
- * "Send the code" (Decision 4): a new 6-digit code to the client's email as it is now, working for the setting's
- * minutes (field.otpMinutes ⚠️), a new one only after field.otpResendSeconds ⚠️, never once the client has confirmed.
- * The code (its hash only) is stored first, under the job's lock; the email goes outside any transaction (the mail
- * server can be slow). If it doesn't go, this code is cleared again, so no code the client never saw stays live, and
- * he's told why (502). Audited either way (field.otp.send).
+ * "Send the code" (Decision 4, amended 22 Oct 2026): a new 6-digit code to the client's WhatsApp, their main number,
+ * working for the setting's minutes (field.otpMinutes ⚠️), a new one only after field.otpResendSeconds ⚠️, never once
+ * the client has confirmed. In one transaction under the job's lock: the code (its hash only), message 16 queued
+ * (docs/whatsapp-visa-messages.md; the outbox keeps the code from staff, secrets.ts), and the audit (field.otp.send).
+ * The message goes a few seconds later; his phone shows where it has got to, and why when it couldn't go.
  */
 export async function sendOtp(jobId: string, actor: Actor) {
   const settings = await getFieldSettings();
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + settings.otpMinutes * 60_000);
-  const job = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const locked = await lockMyJob(tx, jobId, actor);
     if (locked.otpConfirmedAt) throw conflict("The client has already confirmed with the code.");
     const readyAt = locked.otpSentAt ? locked.otpSentAt.getTime() + settings.otpResendSeconds * 1000 : 0;
     if (readyAt > now.getTime()) throw conflict(`Wait ${Math.ceil((readyAt - now.getTime()) / 1000)} seconds, then send a new code.`);
-    const email = locked.enquiry.client.email;
-    if (!email) {
-      throw new HttpError(409, "The client has no email on file, so the code can't go. Call the office.", { code: "CLIENT_EMAIL_MISSING" });
-    }
+    const { mobile } = locked.enquiry.client;
     await tx.fieldJob.update({
       where: { id: jobId },
-      data: { otpHash: hashCode(jobId, code), otpSentAt: now, otpSentTo: email, otpExpiresAt: expiresAt, otpTries: 0 },
+      data: { otpHash: hashCode(jobId, code), otpSentAt: now, otpSentTo: mobile, otpExpiresAt: expiresAt, otpTries: 0 },
     });
-    return { ...locked, email };
-  });
-
-  const company = await getCompanyDetails();
-  const entry = { actorId: actor.user.id, action: "field.otp.send", entityType: "FieldJob", entityId: jobId, clientId: job.enquiry.clientId, ip: actor.ip };
-  try {
-    await sendEmail(
-      otpEmail({
-        to: job.email,
-        client: firstWord(job.enquiry.client.name),
-        boy: firstWord(actor.user.name),
-        company: { name: company.name, phone: company.phone || null, email: company.email },
-        caseNo: job.enquiry.caseNo,
-        kind: job.kind,
-        code,
-        minutes: settings.otpMinutes,
-      }),
+    await audit(
+      { actorId: actor.user.id, action: "field.otp.send", entityType: "FieldJob", entityId: jobId, clientId: locked.enquiry.clientId, after: { to: mobile, expiresAt }, ip: actor.ip },
+      tx,
     );
-  } catch (err) {
-    const reason = (err instanceof Error ? err.message : String(err)).slice(0, 500);
-    logger.error({ err, jobId }, "The client's one-time code couldn't be sent.");
-    // Only this send's code is cleared: one sent after it stays.
-    await prisma.fieldJob.updateMany({
-      where: { id: jobId, otpSentAt: now, otpConfirmedAt: null },
-      data: { otpHash: null, otpSentAt: null, otpSentTo: null, otpExpiresAt: null, otpTries: 0 },
+    await queueMessage(tx, {
+      template: FIELD_DOOR_CODE,
+      clientId: locked.enquiry.clientId,
+      enquiryId: locked.enquiry.id,
+      key: codeMessageKey(jobId, now),
+      variables: { code, minutes: String(settings.otpMinutes) },
     });
-    await audit({ ...entry, after: { sent: false, to: job.email, error: reason } });
-    throw new HttpError(502, `Couldn't send the code: ${reason}`);
-  }
-  await audit({ ...entry, after: { sent: true, to: job.email, expiresAt } });
+  });
   return getMyStop(actor.user.id, jobId);
 }
 

@@ -10,7 +10,7 @@ import type { OtpState } from './types'
 
 /**
  * At a pickup (docs/decisions/0015-field-staff-app.md Decision 4; demo screen 14's steps): the booklets he counts, the
- * client's one-time code (sent to their email; they read it out), and his selfie at the door with the place and time.
+ * client's one-time code (sent to their WhatsApp; they read it out), and his selfie at the door with the place and time.
  * "Finish pickup" waits for all three, then records it and takes him back to his run. No code, no pickup: without it
  * he uses Couldn't complete (decided 17 Oct 2026).
  */

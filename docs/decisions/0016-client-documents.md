@@ -2,7 +2,7 @@
 
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
-  (17 Oct 2026, component 2). The WhatsApp message (Decision 6) waits for the WhatsApp outbox.
+  (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6).
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -49,7 +49,7 @@ before the next starts:
 2. **The vault in Step 2** (Decision 5): saving a scan from a paper on the checklist, "On file", opening the copy on
    file from the case
 
-The WhatsApp message (Decision 6) is recorded now and sent once the WhatsApp outbox exists.
+The WhatsApp message (Decision 6) was recorded first and is sent since 22 Oct 2026 (0021 Amendment 6).
 
 ### 2. What goes in: every paper in the document master
 
@@ -215,8 +215,9 @@ doesn't change and there's no "I agree" step.
 - **The wording** ⚠️ (ours; it becomes a template for Meta's approval): "Hello {name} ji, we keep a secure copy of your
   family's documents at Masti, so you won't need to bring them again for your next trip. Only our senior team can
   open them."
-- **Not sent yet:** like every client message, it goes out once the WhatsApp outbox is built. The outbox sends it when
-  a client's first scan is saved; nothing is stored for it now.
+- ~~**Not sent yet**~~: sent since 22 Oct 2026, message 17 in `docs/decisions/0021-whatsapp-outbox.md` Amendment 6.
+  It goes the first time a scan is saved for the client, from the client page or from a case's checklist, once ever.
+  The wording is the draft's in `docs/whatsapp-visa-messages.md`, for Masti's approval.
 
 ### 7. The "Scan not saved" warning
 
