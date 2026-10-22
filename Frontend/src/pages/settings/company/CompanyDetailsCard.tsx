@@ -3,7 +3,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
-import { applyServerIssues, errorBody, errorText } from '../../../lib/apiErrors'
+import { applyServerIssues, errorBody, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { compact } from '../../clients/schemas'
@@ -31,7 +31,7 @@ export function CompanyDetailsCard() {
       <h2 className="h2">Company details &amp; invoice</h2>
       {view.isPending ? (
         <p className="muted">Loading…</p>
-      ) : view.isError ? (
+      ) : view.isLoadingError || lostAccess(view) ? (
         <div className="alert alert-bad">{errorText(view.error)}</div>
       ) : (
         <>
@@ -157,7 +157,7 @@ const FIELDS = ['name', 'address', 'phone', 'phone2', 'email', 'website', 'pan',
 function DetailsForm({ details }: { details: CompanyDetails }) {
   const options = useClientOptions()
   if (options.isPending) return <p className="muted">Loading…</p>
-  if (options.isError) return <div className="alert alert-bad">{errorText(options.error)}</div>
+  if (options.isLoadingError || lostAccess(options)) return <div className="alert alert-bad">{errorText(options.error)}</div>
   return <DetailsFormFields details={details} states={options.data.states} />
 }
 

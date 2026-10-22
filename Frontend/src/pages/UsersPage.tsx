@@ -4,9 +4,11 @@ import { Link } from 'react-router'
 import type { Department, User, UserDepartment, UserType } from '../auth/types'
 import { ME_KEY, useMe } from '../auth/useAuth'
 import { api, ApiError } from '../lib/api'
+import { lostAccess } from '../lib/apiErrors'
 import { departmentStyle } from '../lib/departments'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FormAlert } from '../components/FormField'
+import { RefreshFailed } from '../components/RefreshFailed'
 import { SecretOnceDialog } from '../components/SecretOnceDialog'
 import { useDrawerGuard } from '../components/useDrawerGuard'
 import { formatDateTime, formatMobile, initials } from '../lib/format'
@@ -167,6 +169,7 @@ export function UsersPage() {
         </button>
       </div>
 
+      <RefreshFailed query={users} what="the list" />
       <div className="card card-fill" style={{ overflow: 'hidden' }}>
         <div className="pad" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14 }}>
           <h2 className="h2">Everyone who can log in</h2>
@@ -177,7 +180,7 @@ export function UsersPage() {
 
         {users.isPending ? (
           <div className="pad muted card-fill-empty">Loading…</div>
-        ) : users.isError ? (
+        ) : users.isLoadingError || lostAccess(users) ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(users.error)}</div>
           </div>

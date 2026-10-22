@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
-import { errorText } from '../../../../lib/apiErrors'
+import { RefreshFailed } from '../../../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useMasterList, useOfferings, useSaveOffering } from '../queries'
 import type { Offering } from '../types'
@@ -59,10 +60,11 @@ export function ChecklistsPage() {
         )}
       </div>
 
+      <RefreshFailed query={offerings} what="the list" />
       <section className="card card-fill" style={{ overflow: 'hidden' }}>
         {offerings.isPending ? (
           <div className="pad muted card-fill-empty">Loading…</div>
-        ) : offerings.isError ? (
+        ) : offerings.isLoadingError || lostAccess(offerings) ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(offerings.error)}</div>
           </div>

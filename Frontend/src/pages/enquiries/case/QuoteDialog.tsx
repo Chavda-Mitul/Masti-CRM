@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RequiredMark } from '../../../components/FormField'
-import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
+import { errorBody, errorText, isStale, lostAccess } from '../../../lib/apiErrors'
 import { formatRupees, gstPaise, parseRupees, rupeesInput } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -219,7 +219,7 @@ export function QuoteDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onCl
             </div>
           </section>
 
-          {speeds.isError && <div className="alert alert-bad">{errorText(speeds.error)}</div>}
+          {(speeds.isLoadingError || lostAccess(speeds)) && <div className="alert alert-bad">{errorText(speeds.error)}</div>}
           {serverMessage && <div className="alert alert-bad">{serverMessage}</div>}
         </div>
 

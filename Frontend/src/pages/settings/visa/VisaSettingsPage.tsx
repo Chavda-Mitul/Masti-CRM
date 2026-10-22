@@ -3,8 +3,9 @@ import { Controller, useForm } from 'react-hook-form'
 import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { InfoButton } from '../../../components/InfoButton'
+import { RefreshFailed } from '../../../components/RefreshFailed'
 import { TimePicker } from '../../../components/TimePicker'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useSaveVisaSettings, useVisaSettings } from '../masters/queries'
 import { visaTimingsFormSchema, type VisaTimingsFormValues } from '../masters/schemas'
@@ -72,8 +73,13 @@ export function VisaSettingsPage() {
   const canEdit = !!me && canEditVisaMasters(me)
 
   if (settings.isPending) return <p className="muted">Loading…</p>
-  if (settings.isError) return <div className="alert alert-bad">{errorText(settings.error)}</div>
-  return canEdit ? <SettingsForm settings={settings.data} /> : <SettingsView settings={settings.data} />
+  if (settings.isLoadingError || lostAccess(settings)) return <div className="alert alert-bad">{errorText(settings.error)}</div>
+  return (
+    <>
+      <RefreshFailed query={settings} what="the settings" />
+      {canEdit ? <SettingsForm settings={settings.data} /> : <SettingsView settings={settings.data} />}
+    </>
+  )
 }
 
 function SettingsForm({ settings }: { settings: VisaSettings }) {

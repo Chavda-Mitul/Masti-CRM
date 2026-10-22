@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { isHodOf } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { RequiredMark } from '../../../components/FormField'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatMobile, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useAssignees, useReassignCase } from '../queries'
@@ -109,7 +109,7 @@ function ReassignDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose:
           </select>
           {fieldError && <span className="field-error">{fieldError}</span>}
         </label>
-        {assignees.isError && <div className="alert alert-bad">{errorText(assignees.error)}</div>}
+        {(assignees.isLoadingError || lostAccess(assignees)) && <div className="alert alert-bad">{errorText(assignees.error)}</div>}
         {message && <div className="alert alert-bad">{message}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>

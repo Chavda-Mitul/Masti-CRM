@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { canEditHolidays } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
-import { errorText } from '../../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useHolidays, useHolidayTargets, useRemoveHoliday } from '../queries'
 import type { Holiday, HolidayFilter } from '../types'
@@ -90,7 +90,7 @@ export function HolidayCalendarCard() {
 
       {holidays.isPending ? (
         <div className="pad muted">Loading…</div>
-      ) : holidays.isError ? (
+      ) : holidays.isLoadingError || lostAccess(holidays) ? (
         <div className="pad">
           <div className="alert alert-bad">{errorText(holidays.error)}</div>
         </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import { errorText } from '../../lib/apiErrors'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import '../../styles/print.css'
 import { DocketSticker } from '../enquiries/case/DocketSticker'
 import { useDocketSticker } from '../enquiries/queries'
@@ -37,7 +37,7 @@ export function StickerPrintPage() {
   }, [autoprint])
 
   if (sticker.isPending) return <p className="print-note">Loading…</p>
-  if (sticker.isError) return <p className="print-note">{errorText(sticker.error) ?? 'Couldn’t load the sticker.'}</p>
+  if (sticker.isLoadingError || lostAccess(sticker)) return <p className="print-note">{errorText(sticker.error) ?? 'Couldn’t load the sticker.'}</p>
 
   const { widthMm, heightMm } = sticker.data.size
   return (

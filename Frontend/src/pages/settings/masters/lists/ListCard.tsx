@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { errorText } from '../../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 
 /** The card around one master list: title, count, "Add" button, and loading / error / empty states. */
 export function ListCard({
@@ -18,7 +18,7 @@ export function ListCard({
   addLabel: string
   canEdit: boolean
   onAdd: () => void
-  query: { isPending: boolean; isError: boolean; error: unknown }
+  query: { isPending: boolean; isLoadingError: boolean; isRefetchError: boolean; error: unknown }
   empty: string
   toolbar?: ReactNode
   children: ReactNode
@@ -41,7 +41,7 @@ export function ListCard({
       </div>
       {query.isPending ? (
         <div className="pad muted card-fill-empty">Loading…</div>
-      ) : query.isError ? (
+      ) : query.isLoadingError || lostAccess(query) ? (
         <div className="pad">
           <div className="alert alert-bad">{errorText(query.error)}</div>
         </div>

@@ -1,4 +1,4 @@
-import { errorText } from '../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useVendorReceived, useVendorReceivedCheck } from '../queries'
 import type { VisaCase } from '../types'
@@ -39,7 +39,7 @@ export function VendorReceivedDialog({ visaCase: c, onClose }: { visaCase: VisaC
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : (
           <p className="muted small" style={{ margin: 0 }}>

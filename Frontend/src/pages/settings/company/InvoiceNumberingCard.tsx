@@ -3,7 +3,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useSaveVisaInvoiceSetting, useVisaInvoiceSetting } from '../masters/queries'
 import { invoiceSettingFormSchema, type InvoiceSettingFormValues } from '../masters/schemas'
@@ -27,7 +27,7 @@ export function InvoiceNumberingCard() {
       <h2 className="h2">Invoice numbering &amp; GST</h2>
       {setting.isPending ? (
         <p className="muted">Loading…</p>
-      ) : setting.isError ? (
+      ) : setting.isLoadingError || lostAccess(setting) ? (
         <div className="alert alert-bad">{errorText(setting.error)}</div>
       ) : canEdit ? (
         <SettingForm setting={setting.data} />

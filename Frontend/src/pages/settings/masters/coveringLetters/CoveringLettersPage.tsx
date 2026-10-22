@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
-import { errorText } from '../../../../lib/apiErrors'
+import { RefreshFailed } from '../../../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 import { formatDate } from '../../../../lib/format'
 import { useToast } from '../../../../lib/toast'
 import { useCoveringLetters, useUpdateCoveringLetter } from '../queries'
@@ -55,6 +56,7 @@ export function CoveringLettersPage() {
         )}
       </div>
 
+      <RefreshFailed query={letters} what="the list" />
       <section className="card card-fill" style={{ overflow: 'hidden' }}>
         {switchedOff > 0 && (
           <div className="pad letters-tools">
@@ -66,7 +68,7 @@ export function CoveringLettersPage() {
         )}
         {letters.isPending ? (
           <div className="pad muted card-fill-empty">Loading…</div>
-        ) : letters.isError ? (
+        ) : letters.isLoadingError || lostAccess(letters) ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(letters.error)}</div>
           </div>
