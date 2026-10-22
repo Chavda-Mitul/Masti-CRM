@@ -1,8 +1,7 @@
 # 0025 · E-visas after the decision
 
 - **Status:** decided 22 Oct 2026: Vimal said yes to M39 (d), and the project lead answered the details the same day.
-  Built in 5 parts, one at a time (Decision 1). Built: parts 1, 2, 3 and 4 (22 Oct 2026). A "Built" note is added
-  under each part as it lands.
+  Built in 5 parts, one at a time (Decision 1): all five built (22 Oct 2026). A "Built" note is under each part.
 - **Date:** 22 Oct 2026
 - **Scope:** what follows an e-visa's decision at Step 6, until the case closes:
   - each approved traveller's e-visa PDF, and its check against the passport
@@ -211,7 +210,53 @@ S3 pre-signed one.
   - its dialog offers the client collecting or "Our delivery boy"
   - a cancelled case's dialog stays office only
 
-### 7. Settings and seed data (golden rule 1)
+### 7. Refused e-visas (part 5)
+
+- **The decision's message** (the lead's decision 4, and the part 5 row of Decision 1): messages 11 and 12 say the
+  passports come back from the embassy, which an e-visa's never went to. An e-visa gets its own, our drafts ⚠️ for M1:
+  - **Message 20, "E-visa refused"**, when everyone is refused:
+    > Dear {{client_name}}, We are sorry to tell you that the {{visa}} has been refused for {{refused_names}}
+    > ({{case_no}}). Please call us on {{office_phone}}: we will explain the reason and what can be done next. – Masti
+    > Tours & Travels
+  - **Message 21, "E-visa partly approved"**, when some are:
+    > Dear {{client_name}}, The decision on your {{visa}} ({{case_no}}) has come. Good news: it is approved for
+    > {{approved_names}}, and we will send the e-visa here shortly. We are sorry that it was refused for
+    > {{refused_names}}. Please call us on {{office_phone}} to talk about the refusal. – Masti Tours & Travels
+  - **Everyone approved:** none at the decision; message 19 brings each e-visa when it's sent (Decision 5).
+- **Everyone refused** leaves nothing to send:
+  - **No passports held:** the case moves to **Delivered** and **closes** at once, as a sent e-visa with none held
+    (Decision 5).
+  - **Before that, a warning** (the warn-then-confirm of `lib/warnings.ts`): "Everyone is refused and we hold no
+    passports: saving closes the case, and a closed case can't be changed." Staff press Save anyway; the audit keeps
+    it.
+  - **Passports held:** no warning. It stays at Decision, open, due for the handover (`visa.handoverCheck` ⚠️), and the
+    next step is "Hand back the passports". They go back as in Decision 6, at the desk or with the delivery boy.
+- **Change** follows the same rule: a change that leaves an unsent e-visa with everyone refused closes it after the same
+  warning, or makes it due to hand the passports back (its due time stays). A correction still sends no message.
+- **The header chip** of a closed e-visa where everyone was refused, and nothing was handed over, reads "Refused ·
+  closed" (red), not the step's "Delivered".
+
+**Built 22 Oct 2026** (part 5):
+- **Messages** (`messages.seed.ts`): `visa.evisa_refused` (20) and `visa.evisa_partly_approved` (21).
+  `queueDecisionMessage(…, { evisa })` picks them, and sends nothing for an e-visa with everyone approved.
+- **`visibility.ts`:** `EVISA_DONE` / `evisaDone`: sent, or every traveller refused. Part 4's checks use it instead of
+  "sent":
+  - `IN_STOCK` / `passportsInStock`
+  - the handover's `assertInStock`
+  - `deliverCase`'s `evisa` option at the office and at the door
+  - the delivery booking, and the next step in the lists
+  - the case loaders, `caseLock.ts` and the lists load each traveller's outcome
+- **`visaDecision.service.ts`:**
+  - the warning `CASE_CLOSES`, before and under the case lock
+  - `recordDecision` closes through `deliverCase(…, { evisa: true })`, or sets the due time from `visa.handoverCheck`;
+    its audit has the real stage and status
+  - `changeDecision` closes the same way, its audit noting `caseClosed`
+- **Screen:**
+  - the header's "Hand back the passports →" and the Decision card's due line use `evisaDone`
+  - the "Refused · closed" chip
+  - after saving, the dialogs' message adds "The case is closed."
+
+### 8. Settings and seed data (golden rule 1)
 
 | What | Seeded with |
 | --- | --- |
@@ -219,12 +264,13 @@ S3 pre-signed one.
 | The e-visa PDF's name | `<case no>_<traveller>_evisa.pdf` ⚠️ |
 | How long a message's file link works | 30 minutes ⚠️ (`FILE_LINK_MINUTES`; Twilio fetches the file within seconds) |
 | Message 19, "Your e-visa" | our draft ⚠️ (M1) |
-| When a sent e-visa with passports held is due | `visa.handoverCheck`, the next open office day at 11:00 ⚠️ |
+| Messages 20 and 21, "E-visa refused" and "E-visa partly approved" | our drafts ⚠️ (M1) |
+| When a sent e-visa with passports held is due, or one where everyone is refused | `visa.handoverCheck`, the next open office day at 11:00 ⚠️ |
 | The words on the card | ours ⚠️ |
 
 ## Still needed
 
 - **Shivanshu:** is change request 14 paid?
-- **Masti (M1):** the wording of the new WhatsApp messages (message 19 from part 3, and part 5's), with the other visa
-  messages.
+- **Masti (M1):** the wording of the new WhatsApp messages (19 from part 3, 20 and 21 from part 5), with the other
+  visa messages.
 - **Masti (M39 a–c):** the e-visa and Step 5 timings, still open.

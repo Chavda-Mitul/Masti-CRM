@@ -238,7 +238,9 @@ change it follows. The project lead decided two things on 22 Oct 2026:
   - `{{working_days}}` is "2 working days", from a new setting, `visa.passportsArrive` ⚠️ (Settings → Visa → Client
     messages; the draft's point 4, open with Masti). It carries its own noun, so "1 working day" reads right too; the
     wording is "in about {{working_days}}".
-  - **Not for an e-visa yet:** how its client gets the visa is open (the draft's point 5).
+  - ~~**Not for an e-visa yet**~~: since 22 Oct 2026 an e-visa gets message 20 (everyone refused) or 21 (some
+    refused), without the passport lines, and nothing when everyone is approved: message 19 brings each e-visa
+    ([0025](0025-evisa-after-decision.md) Decisions 5 and 7).
   - Correcting the decision later (`changeDecision`) sends nothing; staff call the client.
 - **Message 13:**
   - A short return sends nothing until "Received the rest" makes up the count.
@@ -296,8 +298,8 @@ Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The projec
 - ~~The "Sent to the client" card~~: built, Amendment 1.
 - ~~**The other visa messages**~~: all built, groups A to D, Amendments 3 to 6. Messages 7 and 18 go without their PDF
   for now.
-- **What follows an e-visa's decision** (M39 (d), answered 22 Oct 2026): change request 14. A refused e-visa is to get
-  the "Refused" message, and an approved one its PDF. Until it's built, e-visas get no decision message.
+- ~~**What follows an e-visa's decision**~~ (M39 (d), answered 22 Oct 2026): built, change request 14
+  ([0025](0025-evisa-after-decision.md)): message 19 with each e-visa's PDF, and messages 20 and 21 for refusals.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
 - **Twilio's status webhook:** optional, since the checks above work without it.
 - **Editing the wording in Settings.** When it comes, it must allow only the placeholders the code fills. One the code

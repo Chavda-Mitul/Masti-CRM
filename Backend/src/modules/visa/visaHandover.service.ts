@@ -11,7 +11,7 @@ import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/wa
 import { deleteObject, putObject } from "../../lib/storage";
 import type { Actor } from "../users/user";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
-import { EVISA_AFTER_SUBMISSION, PRE_DISPATCH } from "../enquiries/visibility";
+import { EVISA_AFTER_SUBMISSION, evisaDone, PRE_DISPATCH } from "../enquiries/visibility";
 import { HANDING_OVER, loadCase, lockCase, visaStage } from "./caseLock";
 import type { EnquiryStatus } from "../../../generated/prisma/enums";
 import { assertNotHeldShort } from "./shortfall";
@@ -46,7 +46,7 @@ export async function gather(db: Db, enquiryId: string) {
       handover: { select: { enquiryId: true } },
       travellers: {
         orderBy: { position: "asc" },
-        select: { id: true, position: true, isChild: true, name: true, member: { select: { dateOfBirth: true } } },
+        select: { id: true, position: true, isChild: true, name: true, outcome: true, member: { select: { dateOfBirth: true } } },
       },
     },
   });
@@ -57,9 +57,9 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 /**
  * In our stock, and not handed over yet: received at Step 7 (and not held by a short return: the rest come in, or the
  * shortfall is cleared, first; 0013 Decision 5, amended 17 Oct 2026); a cancelled case's passports counted in at
- * intake, before dispatch, or an e-visa's at Steps 5–6; or a sent e-visa's, held at our office since intake
- * (docs/decisions/0025-evisa-after-decision.md, part 4). Returns what our stock holds, which the count must match. The
- * delivery boy's handover at the door checks the same (0015 phase 5).
+ * intake, before dispatch, or an e-visa's at Steps 5–6; or, held at our office since intake, an e-visa's with nothing
+ * left to send: sent, or everyone refused (docs/decisions/0025-evisa-after-decision.md, parts 4–5). Returns what our
+ * stock holds, which the count must match. The delivery boy's handover at the door checks the same (0015 phase 5).
  */
 export function assertInStock(g: Gathered, c: { status: string; stage: { code: string } }) {
   if (c.stage.code === "PASSPORT_BACK") {
@@ -74,8 +74,8 @@ export function assertInStock(g: Gathered, c: { status: string; stage: { code: s
   const evisa = EVISA_AFTER_SUBMISSION.includes(c.stage.code);
   if (c.status !== "CANCELLED") {
     if (!evisa) throw conflict("Only a cancelled case's passports are handed back before they go to the vendor.");
-    // An e-visa's passports go back once it has gone to the client (0025, part 4).
-    if (c.stage.code !== "DECISION" || !g.evisaSentAt) throw conflict("Send the e-visa first: the passports go back after it.");
+    // An e-visa's passports go back once nothing is left to send: it went to the client, or everyone was refused (0025).
+    if (c.stage.code !== "DECISION" || !evisaDone(g)) throw conflict("Send the e-visa first: the passports go back after it.");
   }
   const stock = { current: g.bookletsCurrent ?? 0, old: g.bookletsOld ?? 0 };
   if (stock.current + stock.old === 0) throw conflict("No booklets were counted in for this case: there's nothing to hand back.");
@@ -229,9 +229,10 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
 
     const beforeDispatch = PRE_DISPATCH.includes(locked.stage.code);
-    // Handed over here: a delivery booked for the boy is called off (0015). A sent e-visa's case is Delivered (0025).
+    // Handed over here: a delivery booked for the boy is called off (0015). An e-visa's case with nothing left to send
+    // is Delivered (0025).
     const { closes, delivered, fieldJobsCancelled } = await deliverCase(tx, locked, actor, "handed over at the office", {
-      evisa: !!g.evisaSentAt && locked.status !== "CANCELLED",
+      evisa: !!g.submittedOnlineAt && evisaDone(g) && locked.status !== "CANCELLED",
     });
     const handover = await tx.visaHandover.create({
       data: {

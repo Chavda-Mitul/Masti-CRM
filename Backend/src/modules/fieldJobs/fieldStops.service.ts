@@ -10,6 +10,7 @@ import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { MB } from "../../lib/pdf";
 import { deleteObject, putObject } from "../../lib/storage";
+import { evisaDone } from "../enquiries/visibility";
 import { FIELD_DOOR_CODE } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
@@ -558,9 +559,10 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
         accuracyM: input.place.accuracy,
       },
     });
-    // After the job is done, so only other booked jobs are called off. A sent e-visa's case is Delivered too (0025).
+    // After the job is done, so only other booked jobs are called off. An e-visa's case with nothing left to send is
+    // Delivered too (0025).
     const { closes, delivered, fieldJobsCancelled } = await deliverCase(tx, enquiry, actor, "handed over at the door", {
-      evisa: !!g.evisaSentAt && enquiry.status !== "CANCELLED",
+      evisa: !!g.submittedOnlineAt && evisaDone(g) && enquiry.status !== "CANCELLED",
     });
     await tx.visaHandover.create({
       data: {

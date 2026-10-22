@@ -279,9 +279,15 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
 /**
  * Mehta's file as an e-visa, Neha's (docs/decisions/0025-evisa-after-decision.md): France · Tourist with Vendor needed
  * off, invoiced, Submitted online, then decided as `outcomes` says for Rakesh and Aarav (approved by default: e-Visa
- * EV-2026/88213 and 88214, valid 20–60 days from today). `decided: false` leaves it At vendor.
+ * EV-2026/88213 and 88214, valid 20–60 days from today). `decided: false` leaves it At vendor. `held` booklets are
+ * counted in at intake, passports we hold; with none, everyone refused closes the case, confirmed past its warning
+ * (part 5).
  */
-export async function evisaCase({ decided = true, outcomes = ["APPROVED", "APPROVED"] as ("APPROVED" | "REFUSED")[] } = {}) {
+export async function evisaCase({
+  decided = true,
+  outcomes = ["APPROVED", "APPROVED"] as ("APPROVED" | "REFUSED")[],
+  held = 0,
+}: { decided?: boolean; outcomes?: ("APPROVED" | "REFUSED")[]; held?: number } = {}) {
   if (!(await prisma.user.findUnique({ where: { email: "vimal@masti.test" } }))) await mastiReady();
   const c = await dispatchCase();
   const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
@@ -296,13 +302,16 @@ export async function evisaCase({ decided = true, outcomes = ["APPROVED", "APPRO
   const [a, k] = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
   await prisma.visaCaseTraveller.update({ where: { id: a!.id }, data: { name: "Rakesh Mehta" } });
   await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
+  if (held > 0) await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { bookletsCurrent: held, bookletsOld: 0 } });
   if (decided) {
     const outcome = (travellerId: string, i: number) =>
       outcomes[i] === "APPROVED"
         ? { travellerId, outcome: "APPROVED", visaNo: `EV-2026/${88213 + i}`, validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) }
         : { travellerId, outcome: "REFUSED" };
     const updatedAt = await updatedAtOf(processor, c.caseNo);
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes: [outcome(a!.id, 0), outcome(k!.id, 1)], updatedAt })).status).toBe(200);
+    const closes = held === 0 && outcomes.every((o) => o === "REFUSED");
+    const body = { outcomes: [outcome(a!.id, 0), outcome(k!.id, 1)], updatedAt, ...(closes ? { confirmWarnings: true } : {}) };
+    expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send(body)).status).toBe(200);
   }
   return { c, processor, adult: a!.id, child: k!.id };
 }
