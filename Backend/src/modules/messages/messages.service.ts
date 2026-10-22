@@ -6,6 +6,7 @@ import { audit } from "../../lib/audit";
 import { QUEUES, queueJob } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } from "../../lib/whatsapp";
+import { hideSecrets, secretValues } from "../../lib/whatsapp/secrets";
 import { maskConsentLinks } from "../consent/consentToken";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
@@ -97,14 +98,17 @@ export function fill(template: string, values: Record<string, string>) {
 }
 
 /**
- * The words and values a settled message keeps: a consent link's secret is the client's alone, and once the message has
- * gone, or won't go, nothing needs it (docs/decisions/0022-consent-form.md). Only a queued message holds it, for its try.
+ * The words and values a settled message keeps: a consent link's secret and the door code are the client's alone, and
+ * once the message has gone, or won't go, nothing needs them (docs/decisions/0022-consent-form.md, amendment 6 here).
+ * Only a queued message holds them, for its try.
  */
 function withoutSecrets(message: { body: string; variables: Prisma.JsonValue }) {
   const variables = message.variables as Record<string, string>;
+  const secrets = secretValues(variables);
+  const hide = (text: string) => maskConsentLinks(hideSecrets(text, secrets));
   return {
-    body: maskConsentLinks(message.body),
-    variables: Object.fromEntries(Object.entries(variables).map(([name, value]) => [name, maskConsentLinks(value)])),
+    body: hide(message.body),
+    variables: Object.fromEntries(Object.entries(variables).map(([name, value]) => [name, hide(value)])),
   };
 }
 
@@ -120,10 +124,13 @@ export async function deliverMessage(messageId: string, { lastTry }: { lastTry: 
 
   let sent: { provider: string; providerMessageId: string };
   try {
+    const variables = message.variables as Record<string, string>;
+    const secrets = secretValues(variables);
     sent = await sendWhatsApp({
       to,
       body: message.body,
-      ...(providerTemplateId ? { template: { id: providerTemplateId, variables: message.variables as Record<string, string> } } : {}),
+      ...(providerTemplateId ? { template: { id: providerTemplateId, variables } } : {}),
+      ...(secrets.length > 0 ? { secrets } : {}),
     });
   } catch (err) {
     const error = err instanceof Error && err.message ? err.message : "The message couldn't be sent.";

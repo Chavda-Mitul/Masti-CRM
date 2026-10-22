@@ -1,61 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { istToday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { VISA_HANDED_OVER } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { receivedCase, type Agent } from "./visaHelpers";
+import { doorCodeMessages, lastDoorCode, receivedCase, type Agent } from "./visaHelpers";
 
 // The field staff app, phase 5 (docs/decisions/0015-field-staff-app.md Decision 4): the handover at the client's door.
-// The client's code, the booklets matching our stock, who receives them and their photo, his selfie and the place; the
-// case then moves to Delivered, as at the office. No code, no handover; a count that doesn't match, no handover.
-
-const failures = vi.hoisted(() => ({ next: 0 }));
-vi.mock("../src/lib/email", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../src/lib/email")>();
-  return {
-    ...real,
-    sendEmail: async (email: Parameters<typeof real.sendEmail>[0]) => {
-      if (failures.next > 0) {
-        failures.next--;
-        throw new Error("Connection refused");
-      }
-      return real.sendEmail(email);
-    },
-  };
-});
-
-const mailpit = process.env.MAILPIT_URL as string;
+// The client's code (on WhatsApp, message 16), the booklets matching our stock, who receives them and their photo, his
+// selfie and the place; the case then moves to Delivered, as at the office. No code, no handover; a count that doesn't
+// match, no handover.
 
 beforeEach(async () => {
-  failures.next = 0;
   await resetDb();
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
-  await fetch(`${mailpit}/api/v1/messages`, { method: "DELETE" });
 });
-
-/** The newest email Mailpit caught for the Mehtas (another test file's can still be arriving): its code and text. */
-async function lastEmail() {
-  type Mail = { ID: string; Subject: string; To: { Address: string }[] };
-  const { messages } = (await (await fetch(`${mailpit}/api/v1/messages`)).json()) as { messages: Mail[] };
-  const newest = messages.find((m) => m.To.some((t) => t.Address === "rakesh@example.com"));
-  if (!newest) throw new Error("No email in Mailpit");
-  const { Text } = (await (await fetch(`${mailpit}/api/v1/message/${newest.ID}`)).json()) as { Text: string };
-  return { code: /: (\d{6})$/.exec(newest.Subject)![1]!, text: Text };
-}
 
 const PLACE = { lat: 21.1702, lng: 72.8311, accuracy: 9 };
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
 
 /**
- * Mehta's passports in our stock (receivedCase: 2 current + 0 old; Rakesh and Aarav, Neha's case), the client's email on
- * file, and Ramesh's delivery today, written straight to the database (booking is tested in visaFieldJobs.test.ts).
+ * Mehta's passports in our stock (receivedCase: 2 current + 0 old; Rakesh and Aarav, Neha's case), and Ramesh's delivery
+ * today, written straight to the database (booking is tested in visaFieldJobs.test.ts).
  */
 async function setup() {
   const ramesh = await createUser({ name: "Ramesh Patel", mobile: "+919825000001", type: "FIELD" });
   const d = await receivedCase();
-  await prisma.client.update({ where: { id: d.c.client.id }, data: { email: "rakesh@example.com" } });
   const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
   const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
   const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "MORNING" } });
@@ -81,17 +52,19 @@ async function setup() {
 
 const confirmCode = async (boy: Agent, jobId: string) => {
   expect((await boy.post(`/api/field/jobs/${jobId}/otp`).send({})).status).toBe(200);
-  const { code } = await lastEmail();
+  const code = await lastDoorCode();
   expect((await boy.post(`/api/field/jobs/${jobId}/otp/check`).send({ code })).status).toBe(200);
 };
 const photo = (boy: Agent, jobId: string, path: "receiver-photo" | "selfie") => boy.post(`/api/field/jobs/${jobId}/${path}`).set("Content-Type", "image/jpeg").send(JPEG);
 const handOver = (boy: Agent, jobId: string, body: Record<string, unknown>) => boy.post(`/api/field/jobs/${jobId}/handover`).send(body);
 
 describe("the handover at the door (phase 5)", () => {
-  it("sends the client a code worded for the handover, and takes the receiver's photo at a delivery", async () => {
+  it("sends the client the code on WhatsApp, and takes the receiver's photo at a delivery", async () => {
     const { delivery, boy, c, ramesh } = await setup();
     expect((await boy.post(`/api/field/jobs/${delivery.id}/otp`).send({})).status).toBe(200);
-    expect((await lastEmail()).text).toContain(`Ramesh from MASTI TOUR AND TRAVEL is at your door to hand over the passports for ${c.caseNo}.`);
+    const [message] = await doorCodeMessages();
+    expect(message).toMatchObject({ enquiryId: c.id, toMobile: "+919825041234", status: "QUEUED" });
+    expect(message!.body).toBe(`${await lastDoorCode()} is your verification code.\n\nThis code expires in 10 minutes.`);
 
     const res = await photo(boy, delivery.id, "receiver-photo");
     expect(res.status).toBe(200);

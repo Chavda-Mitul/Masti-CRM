@@ -25,12 +25,22 @@ export function useMyRun(day: string | null) {
   })
 }
 
-/** One of his stops, kept fresh like the run: the office may change it or call it off while he's on the way. */
+/** The client's code is on its way: its WhatsApp not yet delivered or failed, and the code not confirmed or expired. */
+function codeOnItsWay(data: MyStop | undefined) {
+  const otp = data?.otp
+  if (!otp || otp.confirmedAt || Date.parse(otp.expiresAt) <= Date.now()) return false
+  return otp.message?.status === 'QUEUED' || otp.message?.status === 'SENT'
+}
+
+/**
+ * One of his stops, kept fresh like the run: the office may change it or call it off while he's on the way. While the
+ * client's code is on its way, every 5 seconds, so he sees it go, arrive, or fail (decided 22 Oct 2026).
+ */
 export function useStop(jobId: string) {
   return useQuery({
     queryKey: fieldKeys.stop(jobId),
     queryFn: () => api<MyStop>(`/field/jobs/${encodeURIComponent(jobId)}`),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (codeOnItsWay(query.state.data) ? 5_000 : 60_000),
   })
 }
 
@@ -64,7 +74,7 @@ export function useMarkFailed(jobId: string) {
   return useStopSave(jobId, (body: { reasonId: number; place: Place }) => api<MyStop>(stopPath(jobId, '/failed'), { method: 'POST', body }))
 }
 
-/** "Send the code" (0015 Decision 4): a new one-time code to the client's email. */
+/** "Send the code" (0015 Decision 4, amended 22 Oct 2026): a new one-time code to the client's WhatsApp. */
 export function useSendOtp(jobId: string) {
   return useStopSave<void>(jobId, () => api<MyStop>(stopPath(jobId, '/otp'), { method: 'POST' }))
 }

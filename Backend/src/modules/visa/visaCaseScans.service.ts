@@ -47,7 +47,7 @@ export async function caseScanLimit(caseNo: string, documentId: string, actor: A
 /** "Save scan": keeps the paper in the client's vault, audited with the case. It doesn't tick the paper. */
 export async function saveCaseScan(caseNo: string, documentId: string, contentType: ScanType, bytes: Buffer, actor: Actor) {
   const { enquiry, query } = await scanFromCase(caseNo, documentId, actor);
-  await saveClientScan(enquiry.clientId, query, contentType, bytes, actor, { caseNo: enquiry.caseNo });
+  await saveClientScan(enquiry.clientId, query, contentType, bytes, actor, { caseNo: enquiry.caseNo, enquiryId: enquiry.id });
   return getVisaCaseById(enquiry.id);
 }
 

@@ -411,8 +411,8 @@ router.get("/field-staff", visaView, async (_req, res) => {
 });
 
 /**
- * "Book the collection boy" (0015 phase 1): the boy, the day, the slot and where. 409 when one is booked already or
- * the client has no email (code CLIENT_EMAIL_MISSING); 400 under `assigneeId`, `day`, `slotId`, `address` or `mapLink`.
+ * "Book the collection boy" (0015 phase 1): the boy, the day, the slot and where. 409 when one is booked already; 400
+ * under `assigneeId`, `day`, `slotId`, `address` or `mapLink`.
  */
 router.post("/cases/:caseNo/field-jobs", visaEdit, async (req, res) => {
   const body = bookFieldJobSchema.parse(req.body);

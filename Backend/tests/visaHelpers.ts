@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { addDays, addMonths, isoWeekday, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
 import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
+import { FIELD_DOOR_CODE } from "../src/modules/messages/messages.seed";
 import { createUser, loginAs, prisma } from "./helpers";
 
 // Shared by the visa case tests (Step 2 in visaDocuments.test.ts, Step 3 in visaFilePrep.test.ts and visaTrip.test.ts,
@@ -352,4 +353,14 @@ export async function letterOthers() {
   await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
   await createUser({ name: "Meena", email: "meena@masti.test", departments: [{ code: "VISA", access: "VIEW" }] });
   return { hod: await loginAs("riya@masti.test"), head: await loginAs("vimal@masti.test"), viewer: await loginAs("meena@masti.test") };
+}
+
+/** The door code messages (message 16, 0015 Decision 4), oldest first: what goes to the client's WhatsApp. */
+export const doorCodeMessages = () => prisma.outboundMessage.findMany({ where: { template: { code: FIELD_DOOR_CODE } }, orderBy: { createdAt: "asc" } });
+
+/** The code in the newest one, as it waits to go: tests run no sender, and once sent the outbox forgets it. */
+export async function lastDoorCode() {
+  const code = ((await doorCodeMessages()).at(-1)?.variables as Record<string, string> | undefined)?.code;
+  if (!code) throw new Error("No door code queued");
+  return code;
 }

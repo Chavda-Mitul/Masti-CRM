@@ -1,5 +1,7 @@
 // The collection and delivery boy's phone screens (docs/decisions/0015-field-staff-app.md), as /api/field returns them.
 
+import type { MessageStatus } from '../enquiries/types'
+
 export type FieldJobKind = 'PICKUP' | 'DELIVERY'
 export type FieldJobStatus = 'BOOKED' | 'DONE' | 'FAILED' | 'CANCELLED'
 
@@ -43,13 +45,15 @@ export interface MyRun {
 
 /** Where the client's one-time code stands (0015 Decision 4); none until one is sent. */
 export interface OtpState {
-  /** Where it went, masked: "h•••@example.com". */
+  /** The client's WhatsApp number it went to, masked: "+91••••••1299". */
   sentTo: string
   sentAt: string
   expiresAt: string
   /** When he may send another. */
   resendAt: string
   confirmedAt: string | null
+  /** Where its WhatsApp has got to, and why when it couldn't go (decided 22 Oct 2026). */
+  message: { status: MessageStatus; error: string | null } | null
 }
 
 /** One of his stops, where its code stands, and today by the server's clock: he records a stop only on its day. */

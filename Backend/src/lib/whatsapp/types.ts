@@ -14,6 +14,8 @@ export interface WhatsAppMessage {
    * {{placeholders}}, keyed as the template names them ("1", "2" or "client_name").
    */
   template?: { id: string; variables: Record<string, string> };
+  /** Values only the client may see (the door code, secrets.ts): a live log hides them. Never sent on. */
+  secrets?: readonly string[];
 }
 
 /**

@@ -3,7 +3,15 @@ import type { Db } from "../../config/prisma";
 import { dayLabel, istToday, timeLabel } from "../../lib/dates";
 import { rupeesText } from "../../lib/money";
 import { getCompanyDetails } from "../company/company.settings";
-import { VISA_APPROVED, VISA_HANDED_OVER, VISA_INVOICE, VISA_PARTLY_APPROVED, VISA_PASSPORTS_BACK, VISA_REFUSED } from "../messages/messages.seed";
+import {
+  VISA_APPROVED,
+  VISA_CREDIT_NOTE,
+  VISA_HANDED_OVER,
+  VISA_INVOICE,
+  VISA_PARTLY_APPROVED,
+  VISA_PASSPORTS_BACK,
+  VISA_REFUSED,
+} from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 
 // What every visa message says about its case (docs/whatsapp-visa-messages.md): {{client_name}}, {{visa}},
@@ -65,6 +73,25 @@ export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { 
     key: `${VISA_INVOICE}:${invoice.id}`,
     clientId: basics.clientId,
     variables: { ...basics.variables, invoice_no: invoice.invoiceNo, amount: rupeesText(invoice.totalPaise) },
+  });
+}
+
+/**
+ * Message 18, "Credit note": one for each credit note issued (a wrong invoice cancelled, a recall, a cancelled case's
+ * refund), in its transaction. Words only for now (the project lead, 22 Oct 2026): staff send the PDF by hand.
+ */
+export async function queueCreditNoteMessage(
+  tx: Db,
+  enquiryId: string,
+  note: { id: string; creditNoteNo: string; totalPaise: number; invoiceNo: string },
+) {
+  const basics = await visaMessageBasics(tx, enquiryId);
+  await queueMessage(tx, {
+    template: VISA_CREDIT_NOTE,
+    enquiryId,
+    key: `${VISA_CREDIT_NOTE}:${note.id}`,
+    clientId: basics.clientId,
+    variables: { ...basics.variables, credit_note_no: note.creditNoteNo, amount: rupeesText(note.totalPaise), invoice_no: note.invoiceNo },
   });
 }
 

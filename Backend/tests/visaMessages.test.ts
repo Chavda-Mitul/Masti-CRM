@@ -4,9 +4,11 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import {
+  CLIENT_DOCUMENTS_KEPT,
   VISA_APPLIED_ONLINE,
   VISA_APPROVED,
   VISA_COLLECTION_VISIT,
+  VISA_CREDIT_NOTE,
   VISA_DELIVERY_VISIT,
   VISA_DOCUMENT_LIST,
   VISA_DOCUMENT_REMINDER,
@@ -23,12 +25,13 @@ import { fitList, namesText, passportCountText } from "../src/modules/visa/visaM
 import { sendDueReminders } from "../src/modules/visa/visaReminders.service";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, PNG, receivedCase, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
-// The visa messages (docs/whatsapp-visa-messages.md; docs/decisions/0021-whatsapp-outbox.md amendments 3 to 5): 1 the
+// The visa messages (docs/whatsapp-visa-messages.md; docs/decisions/0021-whatsapp-outbox.md amendments 3 to 6): 1 the
 // document list, 2 the price, 3 the pending-documents reminder, 5 the collection visit, 7 the invoice, 8 file
-// submitted, 9 applied online, 10–12 the decision, 13 passports at our office, 14 the delivery visit, 15 handed over.
-// Each is queued with the change it follows; messages.test.ts covers how a queued message is sent.
+// submitted, 9 applied online, 10–12 the decision, 13 passports at our office, 14 the delivery visit, 15 handed over,
+// 17 we keep a copy, 18 the credit note. Each is queued with the change it follows; messages.test.ts covers how a
+// queued message is sent, and the field tests the door code (16).
 
 beforeEach(async () => {
   await resetDb();
@@ -520,5 +523,80 @@ describe("message 15, passports handed over", () => {
     // India is UTC+5:30.
     expect(timeLabel(new Date("2026-10-31T06:40:00Z"))).toBe("12:10 pm");
     expect(timeLabel(new Date("2026-10-31T03:35:00Z"))).toBe("9:05 am");
+  });
+});
+
+describe("message 17, we keep a copy", () => {
+  const passport = async () => (await prisma.documentMaster.findUniqueOrThrow({ where: { code: "PASSPORT" } })).id;
+  const relationId = async () => (await prisma.relation.findUniqueOrThrow({ where: { code: "SELF" } })).id;
+
+  it("goes with the client's first scan, saved from a case (so it shows there), and never again", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const member = (await staff.post(`/api/clients/${c.client.id}/members`).send({ name: "Rakesh Mehta", relationId: await relationId() })).body.member;
+    const travellers = (await caseOf(staff, c.caseNo)).travellers;
+    expect((await staff.put(`/api/visa/cases/${c.caseNo}/travellers/${travellers[0].id}/member`).send({ memberId: member.id })).status).toBe(200);
+    const papers = (await caseOf(staff, c.caseNo)).travellers[0].documents as { id: string; name: string }[];
+    const scan = (name: string) =>
+      staff.post(`/api/visa/cases/${c.caseNo}/documents/${papers.find((p) => p.name === name)!.id}/scan`).set("Content-Type", "image/png").send(PNG);
+
+    expect((await scan("Passport")).status).toBe(200);
+    const messages = await sent(CLIENT_DOCUMENTS_KEPT);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ enquiryId: c.id, clientId: c.client.id, toMobile: "+919825041234" });
+    expect(messages[0]!.body).toContain(
+      "We now keep a secure copy of your family's documents at Masti Tours & Travels, so you won't need to bring them again for your next trip.",
+    );
+    expect(messages[0]!.body).toContain(`For any question, call us on ${PHONE}.`);
+
+    // Another paper, then the client page: the client already knows.
+    expect((await scan("Bank statement, last 6 months")).status).toBe(200);
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const fromPage = await head
+      .post(`/api/clients/${c.client.id}/documents`)
+      .query({ documentId: await passport(), memberId: member.id })
+      .set("Content-Type", "image/png")
+      .send(PNG);
+    expect(fromPage.status).toBe(201);
+    expect(await sent(CLIENT_DOCUMENTS_KEPT)).toHaveLength(1);
+  });
+
+  it("goes with a first scan on the client page too, with no case to show it on", async () => {
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const client = (await head.post("/api/clients").send({ mobile: "9825049999", name: "Sunita Patel" })).body.client as { id: string };
+    const member = (await head.post(`/api/clients/${client.id}/members`).send({ name: "Sunita Patel", relationId: await relationId() })).body.member;
+    const res = await head.post(`/api/clients/${client.id}/documents`).query({ documentId: await passport(), memberId: member.id }).set("Content-Type", "image/png").send(PNG);
+    expect(res.status).toBe(201);
+    const [m] = await sent(CLIENT_DOCUMENTS_KEPT);
+    expect(m).toMatchObject({ clientId: client.id, enquiryId: null, toMobile: "+919825049999" });
+    expect(m!.body).toContain("Dear Sunita Patel,");
+  });
+});
+
+describe("message 18, the credit note", () => {
+  it("goes with a wrong invoice's credit note, and with a recall's, with the numbers and the amount", async () => {
+    await mastiReady();
+    const aarti = await visaStaff();
+    const c = await saveCase(aarti);
+    await makeInvoiceable(aarti, c);
+    expect((await raise(aarti, c.caseNo)).status).toBe(200);
+    const shown = (await aarti.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check`)).body;
+    const reasonId = (await prisma.creditNoteReason.findUniqueOrThrow({ where: { code: "WRONG_AMOUNT" } })).id;
+    const cancel = await aarti.post(`/api/visa/cases/${c.caseNo}/invoice/cancel`).send({ invoiceNo: shown.invoiceNo, totalPaise: shown.preview.totalPaise, reasonId });
+    expect(cancel.status).toBe(200);
+
+    const [m] = await sent(VISA_CREDIT_NOTE);
+    expect(m).toMatchObject({ enquiryId: c.id });
+    expect(m!.body).toContain(`We have issued credit note MCN00000001 for ₹6,000 against invoice MVI00000001 (${c.caseNo}).`);
+    expect(m!.body).toContain(`For any question, call us on ${PHONE}.`);
+
+    // A file taken back from the vendor: its credit note goes the same way.
+    const recalled = await recalledCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" } });
+    const notes = await sent(VISA_CREDIT_NOTE);
+    expect(notes).toHaveLength(2);
+    expect(notes[1]).toMatchObject({ enquiryId: recalled.c.id, toMobile: "+919825041236" });
+    expect(notes[1]!.body).toMatch(/We have issued credit note MCN00000002 for ₹[\d,]+ against invoice MVI00000002 \(/);
   });
 });

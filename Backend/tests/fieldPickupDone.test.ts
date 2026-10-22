@@ -1,73 +1,30 @@
 import { createHash } from "node:crypto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { istToday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { PNG, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { doorCodeMessages, lastDoorCode as lastCode, PNG, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The field staff app, phase 4b (docs/decisions/0015-field-staff-app.md Decision 4): the pickup at the door. The client's
-// one-time code by email (only its hash kept; a wait before another; wrong tries counted), his selfie, and "Picked up":
-// the booklets he counted become the case's intake count. No code, no pickup.
-
-/** The email goes to Mailpit for real, unless a test asks the next sends to fail ("Connection refused"). */
-const failures = vi.hoisted(() => ({ next: 0 }));
-vi.mock("../src/lib/email", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../src/lib/email")>();
-  return {
-    ...real,
-    sendEmail: async (email: Parameters<typeof real.sendEmail>[0]) => {
-      if (failures.next > 0) {
-        failures.next--;
-        throw new Error("Connection refused");
-      }
-      return real.sendEmail(email);
-    },
-  };
-});
-
-const mailpit = process.env.MAILPIT_URL as string;
+// one-time code on WhatsApp (message 16; only its hash kept; a wait before another; wrong tries counted; where its
+// message has got to on his phone), his selfie, and "Picked up": the booklets he counted become the case's intake
+// count. No code, no pickup.
 
 beforeEach(async () => {
-  failures.next = 0;
   await resetDb();
   await seedVisaMasters(prisma);
   await seedEnquiryMasters(prisma);
-  await fetch(`${mailpit}/api/v1/messages`, { method: "DELETE" });
 });
-
-interface Mail {
-  ID: string;
-  Subject: string;
-  To: { Address: string }[];
-}
-/**
- * The emails Mailpit caught for this file's client (newest first), with the newest one's text. Only theirs: an email
- * another test file sent just before can still be arriving.
- */
-async function inbox() {
-  const all = ((await (await fetch(`${mailpit}/api/v1/messages`)).json()) as { messages: Mail[] }).messages;
-  const messages = all.filter((m) => m.To.some((t) => t.Address === "hiren@example.com"));
-  const first = messages[0] && ((await (await fetch(`${mailpit}/api/v1/message/${messages[0].ID}`)).json()) as { Text: string });
-  return { messages, text: first?.Text ?? "" };
-}
-/** The code in the newest email's subject. */
-async function lastCode() {
-  const { messages } = await inbox();
-  const code = /: (\d{6})$/.exec(messages[0]?.Subject ?? "")?.[1];
-  if (!code) throw new Error("No code in Mailpit");
-  return code;
-}
 
 const PLACE = { lat: 21.1959, lng: 72.7933, accuracy: 12 };
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
 
-/** Ramesh's pickup today at Hiren Kapadia's (Aarti's case at Step 1, the client's email on file), written straight to the database. */
+/** Ramesh's pickup today at Hiren Kapadia's (Aarti's case at Step 1; no email on file), written straight to the database. */
 async function setup() {
   const ramesh = await createUser({ name: "Ramesh Patel", mobile: "+919825000001", type: "FIELD" });
   const aarti = await visaStaff();
   const c = await saveCase(aarti, { mobile: "98250 41299", clientName: "Hiren Kapadia" });
-  await prisma.client.update({ where: { id: c.client.id }, data: { email: "hiren@example.com" } });
   const aartiUser = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
   const visa = await prisma.department.findUniqueOrThrow({ where: { code: "VISA" } });
   const slot = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "EVENING" } });
@@ -101,59 +58,57 @@ const afterTheWait = (jobId: string) =>
   prisma.fieldJob.update({ where: { id: jobId }, data: { otpSentAt: new Date(Date.now() - 61_000) } });
 
 describe("the client's code", () => {
-  it("goes to the client's email, kept only as a hash; the address shows masked; another only after the wait", async () => {
-    const { pickup, boy, c } = await setup();
+  it("goes to the client's WhatsApp, kept only as a hash; the number shows masked; staff never see it; another only after the wait", async () => {
+    const { pickup, boy, c, aarti } = await setup();
     const res = await send(boy, pickup.id);
     expect(res.status).toBe(200);
     const { otp } = res.body;
-    expect(otp).toMatchObject({ sentTo: "h•••@example.com", confirmedAt: null });
+    expect(otp).toMatchObject({ sentTo: "+91••••••1299", confirmedAt: null, message: { status: "QUEUED", error: null } });
     expect(Date.parse(otp.expiresAt) - Date.parse(otp.sentAt)).toBe(10 * 60_000);
     expect(Date.parse(otp.resendAt) - Date.parse(otp.sentAt)).toBe(60_000);
 
-    const { messages, text } = await inbox();
-    expect(messages).toHaveLength(1);
-    expect(messages[0]!.To.map((t) => t.Address)).toEqual(["hiren@example.com"]);
-    expect(messages[0]!.Subject).toMatch(/^Your code for MASTI TOUR AND TRAVEL: \d{6}$/);
+    // Message 16, Meta's fixed words, to the client's main number. No email is needed.
+    const [message] = await doorCodeMessages();
+    expect(message).toMatchObject({ enquiryId: c.id, toMobile: "+919825041299", status: "QUEUED" });
     const code = await lastCode();
-    expect(text).toContain("Hello Hiren,");
-    expect(text).toContain(`Ramesh from MASTI TOUR AND TRAVEL is at your door to collect the documents for ${c.caseNo}. Give him this code to confirm: ${code}`);
-    expect(text).toContain("It works for 10 minutes. If you didn't expect this, don't share it, and call us on +91-93777-57580.");
+    expect(message!.body).toBe(`${code} is your verification code.\n\nThis code expires in 10 minutes.`);
 
     const row = await prisma.fieldJob.findUniqueOrThrow({ where: { id: pickup.id } });
     expect(row.otpHash).toBe(createHash("sha256").update(`${pickup.id}:${code}`).digest("hex"));
-    expect(row).toMatchObject({ otpSentTo: "hiren@example.com", otpTries: 0, otpConfirmedAt: null });
+    expect(row).toMatchObject({ otpSentTo: "+919825041299", otpTries: 0, otpConfirmedAt: null });
     expect(await prisma.auditLog.findFirstOrThrow({ where: { action: "field.otp.send" } })).toMatchObject({
       entityId: pickup.id,
-      after: { sent: true, to: "hiren@example.com" },
+      after: { to: "+919825041299" },
     });
+
+    // The case's "Sent to the client" card shows the message without the code, even while it waits to go.
+    const card = (await aarti.get(`/api/visa/cases/${c.caseNo}/messages`)).body.messages as { title: string; body: string }[];
+    expect(card.find((m) => m.title === "Code at the door")!.body).toBe("•••••• is your verification code.\n\nThis code expires in 10 minutes.");
+    expect(JSON.stringify(card)).not.toContain(code);
 
     const soon = await send(boy, pickup.id);
     expect(soon.status).toBe(409);
     expect(soon.body.message).toMatch(/^Wait \d+ seconds, then send a new code\.$/);
     await afterTheWait(pickup.id);
     expect((await send(boy, pickup.id)).status).toBe(200);
-    expect((await inbox()).messages).toHaveLength(2);
-
-    // The client's email gone since booking: nothing to send it to.
-    await afterTheWait(pickup.id);
-    await prisma.client.update({ where: { id: c.client.id }, data: { email: null } });
-    const none = await send(boy, pickup.id);
-    expect(none.status).toBe(409);
-    expect(none.body.details.code).toBe("CLIENT_EMAIL_MISSING");
+    expect(await doorCodeMessages()).toHaveLength(2);
   });
 
-  it("that couldn't be sent is cleared again, and he's told why", async () => {
+  it("shows on his phone where its WhatsApp has got to, and why it couldn't go", async () => {
     const { pickup, boy } = await setup();
-    failures.next = 1;
-    const res = await send(boy, pickup.id);
-    expect(res.status).toBe(502);
-    expect(res.body.message).toBe("Couldn't send the code: Connection refused");
-    expect(await prisma.fieldJob.findUniqueOrThrow({ where: { id: pickup.id } })).toMatchObject({ otpHash: null, otpSentAt: null, otpSentTo: null, otpExpiresAt: null });
-    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: "field.otp.send" } })).toMatchObject({
-      after: { sent: false, to: "hiren@example.com", error: "Connection refused" },
-    });
-    // No wait: no code went.
-    expect((await send(boy, pickup.id)).status).toBe(200);
+    await send(boy, pickup.id);
+    const shown = async () => (await boy.get(`/api/field/jobs/${pickup.id}`)).body.otp.message;
+    expect(await shown()).toEqual({ status: "QUEUED", error: null });
+
+    // As the outbox records it when the provider refuses it.
+    const [message] = await doorCodeMessages();
+    const error = "That number isn't on WhatsApp, or isn't written correctly.";
+    await prisma.outboundMessage.update({ where: { id: message!.id }, data: { status: "FAILED", error, failedAt: new Date() } });
+    expect(await shown()).toEqual({ status: "FAILED", error });
+
+    // A new code has its own message: his phone follows that one.
+    await afterTheWait(pickup.id);
+    expect((await send(boy, pickup.id)).body.otp.message).toEqual({ status: "QUEUED", error: null });
   });
 
   it("is checked: a typo isn't a try; wrong ones count down; then it's dead, or expires; the right one confirms", async () => {
@@ -324,7 +279,7 @@ describe("the field settings", () => {
 
     const { otp } = (await send(boy, pickup.id)).body;
     expect(Date.parse(otp.expiresAt) - Date.parse(otp.sentAt)).toBe(15 * 60_000);
-    expect((await inbox()).text).toContain("It works for 15 minutes.");
+    expect((await doorCodeMessages()).at(-1)!.body).toContain("This code expires in 15 minutes.");
   });
 });
 
@@ -338,7 +293,7 @@ describe("the database", () => {
       data: { enquiryId: c.id, kind: "FIELD_SELFIE", storageKey: "t/selfie", fileName: "s.jpg", sizeBytes: 1, uploadedById: ramesh.id },
     });
     const now = new Date();
-    const code = { otpHash: "h", otpSentAt: now, otpSentTo: "hiren@example.com", otpExpiresAt: now };
+    const code = { otpHash: "h", otpSentAt: now, otpSentTo: "+919825041299", otpExpiresAt: now };
 
     await expect(set({ finishedAt: new Date() })).rejects.toThrow(/FieldJob_finished/);
     await expect(set({ status: "FAILED", failReasonId: notHome, ...finished, latitude: 95 })).rejects.toThrow(/FieldJob_place/);

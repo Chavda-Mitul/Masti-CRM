@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText, isStale } from '../../../lib/apiErrors'
 import { istParts, istToday } from '../../../lib/format'
@@ -20,7 +19,7 @@ const WORDING = {
  * "Book the collection boy" (docs/decisions/0015-field-staff-app.md, phase 1) or "Book the delivery boy" (phase 2), or
  * "Change" on a booked one: who goes (the field staff), an open office day, a time slot from the list (on today, the
  * ones already over can't be picked), and where (the client's address, correctable, and their Google Maps link if they
- * shared one). The client's email must be on file: the one-time code they give the boy goes there.
+ * shared one). The one-time code the client gives the boy goes to their WhatsApp, so no email is needed (22 Oct 2026).
  */
 export function FieldJobDialog({
   visaCase: c,
@@ -55,7 +54,6 @@ export function FieldJobDialog({
   // The job's own slot stays on the list if it was switched off since.
   const options = (slots.data ?? []).filter((s) => s.isActive || s.id === job?.slot.id)
   const over = (endsAt: string) => day === today && endsAt <= now
-  const noEmail = !c.client.email
   const fixed = (field: string) => setErrors((all) => (all[field] ? { ...all, [field]: '' } : all))
 
   const press = () => {
@@ -92,18 +90,12 @@ export function FieldJobDialog({
         </h2>
         <p className="muted small" style={{ margin: 0 }}>
           {kind === 'PICKUP' ? `He collects the documents from ${c.client.name}.` : `He takes the passports to ${c.client.name}.`} At the door
-          the client gives him a one-time code from their email.
+          the client gives him a one-time code we send them on WhatsApp.
         </p>
         {kind === 'DELIVERY' && c.passportsReceived && (
           <div className="kv">
             <span>He hands over</span>
             <strong>{bookletsText(c.passportsReceived.booklets)}</strong>
-          </div>
-        )}
-        {noEmail && (
-          <div className="alert alert-bad">
-            Add {c.client.name}’s email first: the one-time code they give the boy goes there.{' '}
-            <Link to={`/clients/${c.client.id}`}>Open the client</Link>
           </div>
         )}
 
@@ -212,7 +204,7 @@ export function FieldJobDialog({
           <button type="button" className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary" disabled={save.isPending || noEmail} onClick={press}>
+          <button type="button" className="btn btn-primary" disabled={save.isPending} onClick={press}>
             {save.isPending ? 'Saving…' : job ? 'Save' : 'Book'}
           </button>
         </div>

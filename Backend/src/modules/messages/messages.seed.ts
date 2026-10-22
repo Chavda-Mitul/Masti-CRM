@@ -52,6 +52,18 @@ export const VISA_DELIVERY_VISIT = "visa.delivery_visit";
 /** Message 15: the passports are handed over, at the office or at the door (Step 8). */
 export const VISA_HANDED_OVER = "visa.handed_over";
 
+/**
+ * Message 16: the boy at the client's door asks for their code (docs/decisions/0015-field-staff-app.md Decision 4). Meta
+ * fixes an authentication template's words, so it names neither Masti nor the visit; {{code}} is the client's alone.
+ */
+export const FIELD_DOOR_CODE = "field.door_code";
+
+/** Message 17: the first scan is saved for a client (docs/decisions/0016-client-documents.md Decision 6). Once, ever. */
+export const CLIENT_DOCUMENTS_KEPT = "client.documents_kept";
+
+/** Message 18: a credit note is issued. Words only for now: no PDF. A suggestion beyond the demo (change request 13). */
+export const VISA_CREDIT_NOTE = "visa.credit_note";
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
@@ -247,6 +259,37 @@ export const MESSAGE_TEMPLATES = [
       "We have handed over {{passport_count}} for {{case_no}} to {{receiver_name}} on {{handover_time}}.",
       "",
       "Thank you for choosing us. If anything is not right, please call us on {{office_phone}}.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: FIELD_DOOR_CODE,
+    name: "Code at the door",
+    body: ["{{code}} is your verification code.", "", "This code expires in {{minutes}} minutes."].join("\n"),
+  },
+  {
+    code: CLIENT_DOCUMENTS_KEPT,
+    name: "We keep a copy",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "We now keep a secure copy of your family's documents at Masti Tours & Travels, so you won't need to bring them again for your next trip. Only the staff handling your case and our senior team can open them.",
+      "",
+      "For any question, call us on {{office_phone}}.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_CREDIT_NOTE,
+    name: "Credit note",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "We have issued credit note {{credit_note_no}} for ₹{{amount}} against invoice {{invoice_no}} ({{case_no}}).",
+      "",
+      "For any question, call us on {{office_phone}}.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),
