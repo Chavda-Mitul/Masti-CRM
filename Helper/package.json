@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-manifest.mjs",
+    "build:store": "npm run build && node scripts/build-store.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "serve:test-portals": "node scripts/serve-test-portals.mjs"

@@ -7,6 +7,7 @@ Masti-CRM-Handover/
 # Build output
 dist/
 dist-ssr/
+dist-store/
 build/
 coverage/
 
