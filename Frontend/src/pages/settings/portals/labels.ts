@@ -1,6 +1,9 @@
+import { addDays, istToday } from '../../../lib/format'
 import type { HelperAnswer, Outcome } from '../../../lib/portalHelper'
 import { dayMonth } from '../../enquiries/case/labels'
 import { postedWhen } from '../../notices/labels'
+import type { PasswordSchedule } from './schemas'
+import type { Portal } from './types'
 
 // Settings → Portal logins' wording (docs/decisions/0024-portal-logins.md), in plain words for staff.
 
@@ -26,8 +29,42 @@ export const needsLooking = (outcome: Outcome | null) => outcome !== 'SUBMITTED'
 /** When: "today, 12:04 pm", "yesterday", "Sat", then "28 Sep". */
 export const usedWhen = postedWhen
 
-/** The card's line about the password ("Password saved 21 Oct"). Scheduled changes come in a later part. */
-export const passwordLine = (passwordChangedAt: string) => `Password saved ${dayMonth(passwordChangedAt)}`
+/** The drawer's "Password changes" choices (component 2). */
+export const SCHEDULE_CHOICES: { value: PasswordSchedule; label: string }[] = [
+  { value: 'DAILY', label: 'Daily' },
+  { value: 'WEEKLY', label: 'Weekly' },
+  { value: 'MONTHLY', label: 'Monthly' },
+  { value: 'NONE', label: 'No schedule' },
+]
+
+const SCHEDULE_WORD: Record<Exclude<PasswordSchedule, 'NONE'>, string> = { DAILY: 'daily', WEEKLY: 'weekly', MONTHLY: 'monthly' }
+
+const WEEKDAY = new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: 'UTC' })
+const DAY_MONTH = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+/** When the next change is due, as the demo says it: "tomorrow", a weekday within the week ("Thu"), then "22 Nov". */
+function dueWhen(dueOn: string, today: string): string {
+  if (dueOn === addDays(today, 1)) return 'tomorrow'
+  const day = new Date(`${dueOn}T00:00:00Z`)
+  return dueOn <= addDays(today, 6) ? WEEKDAY.format(day) : DAY_MONTH.format(day)
+}
+
+/**
+ * The card's line about the password (demo screen 28): "Changed monthly · next 12 Oct", "Weekly change overdue — HOD to
+ * reset" once it's locked, or "No scheduled change · password saved 21 Oct".
+ */
+export function passwordLine(portal: Pick<Portal, 'passwordSchedule' | 'passwordDueOn' | 'passwordChangedAt' | 'locked'>): string {
+  if (portal.passwordSchedule === 'NONE' || !portal.passwordDueOn) {
+    return `No scheduled change · password saved ${dayMonth(portal.passwordChangedAt)}`
+  }
+  const word = SCHEDULE_WORD[portal.passwordSchedule]
+  if (portal.locked) return `${word.charAt(0).toUpperCase()}${word.slice(1)} change overdue — HOD to reset`
+  return `Changed ${word} · next ${dueWhen(portal.passwordDueOn, istToday())}`
+}
+
+/** On a locked portal's drawer: since when, and what to do. */
+export const lockedNote = (dueOn: string) =>
+  `Locked since ${DAY_MONTH.format(new Date(`${dueOn}T00:00:00Z`))}. Change the password on the portal itself, then type the new one here.`
 
 /** What a press tells the person: a toast, and the same words kept on the card when something needs doing. */
 export interface PressResult {

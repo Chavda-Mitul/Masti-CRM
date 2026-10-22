@@ -42,6 +42,14 @@
   display: flex;
   gap: 8px;
 }
+/* Its password change is overdue: locked for everyone until an HOD types a new one (component 2) */
+.portal-card-locked {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+.portal-card-locked .portal-status {
+  color: var(--bad);
+}
 
 /* Who used what: the demo's dashed card */
 .who-used {

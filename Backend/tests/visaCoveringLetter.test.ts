@@ -9,10 +9,10 @@ import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { loginAs, prisma, resetDb } from "./helpers";
 import { letterCase, letterOthers as others, type Agent } from "./visaHelpers";
 
-// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1–3): which
-// letters fit, the draft with its marks and its table of | lines, "Make the letter" with the text as staff left it, and
-// the print of the letter made. The AI paragraph itself is tested in coveringLetterPurpose.test.ts, and how the screen
-// draws the | lines as tables in letterText.test.ts.
+// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1–3 and 5):
+// which letters fit, the draft with its marks and its table of | lines, "Make the letter" with the text as staff left it
+// (and waiting while a mark or a note to the AI is left), and the print of the letter made. "Write the whole letter with
+// AI" is tested in coveringLetterAi.test.ts, and how the screen draws the | lines as tables in letterText.test.ts.
 
 beforeEach(async () => {
   await resetDb();
@@ -199,14 +199,14 @@ describe("drafting a letter", () => {
     expect(draftLetter("Day | City\n{travellers}\nPlace | Hotel", facts, "2026-10-20").letter).toBe(`Day | City\n\n${table}\n\nPlace | Hotel`);
   });
 
-  it("turns a | in any value it fills in into a /, so a value can't split a cell or start a table", () => {
-    const facts = factsWith([{ ...rakesh, relation: "Self | Head" }], {
+  it("turns a | in any value it fills in into a /, and a [[ or ]] into one bracket: a value can't split a cell, start a table or be a note", () => {
+    const facts = factsWith([{ ...rakesh, relation: "Self | Head [[x]]" }], {
       clientName: "Mehta | Sons",
       clientAddress: "12 | Vesu, Surat",
-      trip: { departOn: null, returnOn: null, entryType: null, hotelStay: "Hotel A | Paris" },
+      trip: { departOn: null, returnOn: null, entryType: null, hotelStay: "Hotel A | Paris [[best]] [[[Opera]]]" },
     });
     const { letter } = draftLetter("{clientName}, {clientAddress}, {hotel}.\n{travellers}", facts, "2026-10-20");
-    expect(letter).toBe(`Mehta / Sons, 12 / Vesu, Surat, Hotel A / Paris.\n\n${HEADINGS}\nRAKESH MEHTA | Self / Head | 12 Mar 1980 | Z1234567`);
+    expect(letter).toBe(`Mehta / Sons, 12 / Vesu, Surat, Hotel A / Paris [best] [Opera].\n\n${HEADINGS}\nRAKESH MEHTA | Self / Head [x] | 12 Mar 1980 | Z1234567`);
   });
 
   it("keeps the longest draft under the limit: every traveller a case can have, with long names and nothing else known", () => {
@@ -275,7 +275,7 @@ describe("making the letter", () => {
     const { versionId, draft } = await draftOf(c.caseNo, family);
     const res = await (await neha()).post(`/api/visa/cases/${c.caseNo}/covering-letter`).send({ formatId: family, versionId, letter: draft });
     expect(res.status).toBe(409);
-    expect(res.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: ["why they travel"] });
+    expect(res.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: ["why they travel"], notes: [] });
   });
 
   it("waits while a mark is left, even half deleted: 409 LETTER_INCOMPLETE with the list, and nothing saved", async () => {
@@ -284,7 +284,7 @@ describe("making the letter", () => {
     const agent = await neha();
     const res = await make(agent, c.caseNo, family);
     expect(res.status).toBe(409);
-    expect(res.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: ["the hotel stay"] });
+    expect(res.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: ["the hotel stay"], notes: [] });
     expect(res.body.message).toBe("Not ready yet. Fill these in first: the hotel stay.");
 
     const half = await make(agent, c.caseNo, family, (l) => l.replace("⟦the hotel stay⟧", "Hotel Regina⟧"));
@@ -296,6 +296,31 @@ describe("making the letter", () => {
     const typed = await make(agent, c.caseNo, family, (l) => l.replace("⟦the hotel stay⟧", "Hotel Regina, Paris"));
     expect(typed.status).toBe(200);
     expect((await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id } })).hotelStay).toBeNull();
+  });
+
+  it("waits while a note to the AI is left (amendment 5): 409 LETTER_INCOMPLETE with the notes, a lone [[ or ]] too", async () => {
+    const c = await letterCase();
+    const family = await formatId(FAMILY);
+    const agent = await neha();
+
+    const notes = await make(agent, c.caseNo, family, (l) => `${l}\n\n[[mention our travel insurance]] and [[make it shorter]]`);
+    expect(notes.status).toBe(409);
+    expect(notes.body.details).toEqual({ code: "LETTER_INCOMPLETE", missing: [], notes: ["[[mention our travel insurance]]", "[[make it shorter]]"] });
+    expect(notes.body.message).toBe("Not ready yet. Notes for the AI still in the letter: [[mention our travel insurance]]; [[make it shorter]].");
+
+    // Left on its own, empty, or split over two lines.
+    for (const stray of ["We travel [[soon.", "We travel ]] soon.", "We travel [[ ]] soon.", "We travel [[soon\nand]] back."]) {
+      const res = await make(agent, c.caseNo, family, (l) => `${l}\n\n${stray}`);
+      expect(res.status, stray).toBe(409);
+      expect(res.body.details.notes, stray).toEqual(["a [[ or ]] left over"]);
+    }
+
+    const both = await make(agent, c.caseNo, family, (l) => l.replace(PURPOSE, `${PURPOSE_MARK} [[say we love trains]]`));
+    expect(both.body.message).toBe("Not ready yet. Fill these in first: why they travel. Notes for the AI still in the letter: [[say we love trains]].");
+    expect((await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id } })).coveringLetterMadeAt).toBeNull();
+
+    // Single brackets aren't a note.
+    expect((await make(agent, c.caseNo, family, (l) => `${l}\n\nWe stay at Hotel [Opera].`)).status).toBe(200);
   });
 
   it("takes square brackets that are part of the case's details: they aren't marks", async () => {

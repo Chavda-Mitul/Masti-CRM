@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isProduction } from "../../config/env";
 import { logger } from "../logger";
+import { hideSecrets } from "./secrets";
 import type { WhatsAppMessage, WhatsAppProvider } from "./types";
 
 // WHATSAPP_PROVIDER=log: each message goes into the server log instead of to the client, so a laptop can run the whole
@@ -13,18 +14,19 @@ const hideLinkSecrets = (text: string) => text.replace(/(https?:\/\/[^\s#]+)#[A-
 const hideFileKey = (url: string) => url.replace(/([?&]key=)[^&#]+/g, "$1…");
 
 /**
- * What the log keeps of a message. When live, no link's secret: reading the server log mustn't let anyone act for a
- * client, or open their file. On a laptop the log is the only place to open the link, so it stays whole there.
+ * What the log keeps of a message. When live, no link's secret, no door code and no file link's key: reading the
+ * server log mustn't let anyone act for a client, or open their file. On a laptop the log is the only place to open
+ * the link or read the code, so they stay whole there.
  */
 export function forTheLog(message: WhatsAppMessage, live = isProduction): WhatsAppMessage {
-  if (!live) return message;
-  const { template, attachment } = message;
+  const { secrets = [], ...words } = message;
+  if (!live) return words;
+  const hide = (text: string) => hideLinkSecrets(hideSecrets(text, secrets));
+  const { template, attachment } = words;
   return {
-    ...message,
-    body: hideLinkSecrets(message.body),
-    ...(template
-      ? { template: { ...template, variables: Object.fromEntries(Object.entries(template.variables).map(([name, value]) => [name, hideLinkSecrets(value)])) } }
-      : {}),
+    ...words,
+    body: hide(words.body),
+    ...(template ? { template: { ...template, variables: Object.fromEntries(Object.entries(template.variables).map(([name, value]) => [name, hide(value)])) } } : {}),
     ...(attachment ? { attachment: { ...attachment, url: hideFileKey(attachment.url) } } : {}),
   };
 }

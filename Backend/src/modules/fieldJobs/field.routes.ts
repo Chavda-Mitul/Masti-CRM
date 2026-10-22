@@ -45,7 +45,7 @@ router.post("/jobs/:jobId/failed", async (req, res) => {
   res.json(await markFailed(req.params.jobId, body, actorOf(req)));
 });
 
-/** "Send the code" (Decision 4): a new one-time code to the client's email. */
+/** "Send the code" (Decision 4, amended 22 Oct 2026): a new one-time code to the client's WhatsApp. */
 router.post("/jobs/:jobId/otp", async (req, res) => {
   res.json(await sendOtp(req.params.jobId, actorOf(req)));
 });

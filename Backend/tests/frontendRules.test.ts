@@ -5,6 +5,7 @@ import { normaliseMobile } from "../src/lib/contact";
 import { PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN } from "../src/lib/shared.schemas";
 import {
+  isTableLine,
   LETTER_BLANKS,
   MARK_CLOSE,
   MARK_OPEN,
@@ -14,11 +15,14 @@ import {
   MAX_LETTER_COUNTRIES,
   marksIn,
   normaliseWording,
+  NOTE,
+  notesIn,
+  STRAY_NOTE,
   wordingProblem,
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
 import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
-import { PortalLoginOutcome } from "../generated/prisma/enums";
+import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
@@ -61,6 +65,10 @@ const WORDINGS = [
   "Why: {purpose}",
   "{purpose}\n{purpose}",
   "{travellers}\n{purpose}",
+  "Dear Sir, [[make it formal]]",
+  "Half [[ a note",
+  "Half a note ]]",
+  "Hotel [Opera], Paris",
   "",
 ];
 
@@ -107,25 +115,40 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       expect(frontend.normaliseWording(body), body).toBe(normaliseWording(body));
     }
   });
-  it("finds a case letter's marks and limits it the same way (0019 amendments 1 and 3)", async () => {
+  it("finds a case letter's marks and notes, tells its table lines, and limits it the same way (0019 amendments 1, 3 and 5)", async () => {
     const frontend = (await import(frontendLetter)) as {
       MARK_OPEN: string;
       MARK_CLOSE: string;
       PURPOSE_MARK: string;
       MAX_CASE_LETTER_CHARS: number;
+      NOTE: RegExp;
+      STRAY_NOTE: string;
       marksIn(letter: string): string[];
+      notesIn(letter: string): string[];
+      isTableLine(line: string): boolean;
     };
     expect([frontend.MARK_OPEN, frontend.MARK_CLOSE]).toEqual([MARK_OPEN, MARK_CLOSE]);
     expect(frontend.PURPOSE_MARK).toBe(PURPOSE_MARK);
     expect(frontend.MAX_CASE_LETTER_CHARS).toBe(MAX_CASE_LETTER_CHARS);
+    expect(String(frontend.NOTE)).toBe(String(NOTE));
+    expect(frontend.STRAY_NOTE).toBe(STRAY_NOTE);
     const letters = [
       "We stay at ⟦the hotel stay⟧ for ⟦the number of days⟧ days.",
       "Hotel [Opera], Paris\n\nName | ⟦heading⟧\n⟦Adult 2's name⟧ | x⟧\n\n⟦half",
       "⟦ ⟧ and ⟦the hotel stay⟧ twice: ⟦the hotel stay⟧",
       "⟦a\nb⟧",
+      "[[make it shorter]] and [[make it shorter]], [[a | b]] and [[⟦a mark⟧ in a note]]",
+      "Half [[ a note\nand ]] the rest",
+      "[[ ]] and [[ok]]",
+      "[[[three]]] and [one]",
       "",
     ];
-    for (const letter of letters) expect(frontend.marksIn(letter), letter).toEqual(marksIn(letter));
+    for (const letter of letters) {
+      expect(frontend.marksIn(letter), letter).toEqual(marksIn(letter));
+      expect(frontend.notesIn(letter), letter).toEqual(notesIn(letter));
+    }
+    const lines = ["a | b", "[[a | b]]", "[[a | b]] | c", "| a |", "a [[note]] b", "[[a | b", "a ]] | b", "[[a]] [[b | c]]", ""];
+    for (const line of lines) expect(frontend.isTableLine(line), line).toBe(isTableLine(line));
   });
 
   it("checks the visa timings and the warnings' values the same way (Settings → Visa)", async () => {
@@ -195,5 +218,11 @@ describe.skipIf(!frontendInstalled)("portal logins' copied rules match the backe
     expect([...page]).toEqual(database);
     expect([...helper]).toEqual(database);
     expect([...portalRules.HELPER_OUTCOMES]).toEqual(database.filter((o) => o !== "REFUSED"));
+  });
+
+  it("offers the database's password schedules in the drawer (component 2)", async () => {
+    const frontend = (await import(frontendPortalSchemas)) as typeof portalRules;
+    expect([...portalRules.PASSWORD_SCHEDULES]).toEqual(Object.values(PortalPasswordSchedule));
+    expect([...frontend.PASSWORD_SCHEDULES]).toEqual([...portalRules.PASSWORD_SCHEDULES]);
   });
 });

@@ -455,3 +455,86 @@ Make the letter and Print. `useLeaveGuard` moved to `components/` for it.
   - privacy, also through the endpoint with hand-typed details;
   - the instructions, the answer's checks and the endpoint;
 - `tests/ai.test.ts`: `accept`, the per-use time limit and the fake echo.
+
+## Amendment 5 (22 Oct 2026): notes to the AI in `[[ ]]`
+
+- **Why:** the last part of the project lead's 22 Oct 2026 request ([change request 11](../change-requests.md),
+  extended): staff write a request for the AI inside the letter, and "Write the whole letter with AI" does it. The
+  lead's answers:
+  - notes go inside **`[[ ]]`**;
+  - the AI **may change anything in the letter** to do a note;
+  - it runs only on the **button**;
+  - a note that isn't about the letter (`[[write a Python script]]`) **stays in the letter as written**, and "Make the
+    letter" waits until staff delete it.
+- **Adds to amendments 3 and 4.** Only the AI's answer changes: after the letter, it lists the notes it left.
+
+1. **A note** is `[[…]]` on one line with something inside (`notesIn`, alike in `coveringLetters.schemas.ts` and
+   `Frontend/src/lib/letter.ts`). It's listed exactly as written, brackets included.
+   - A `[[` or `]]` on its own, an empty `[[ ]]`, or one split over two lines counts as "a [[ or ]] left over".
+   - Single brackets (`Hotel [Opera]`) aren't notes. One pattern finds marks and notes, so a mark inside a note stays
+     part of the note.
+2. **"Make the letter" waits while a note is left:** 409 `LETTER_INCOMPLETE`, with `details: { code, missing, notes }`.
+   The message names only what's there: "Not ready yet. Fill these in first: the hotel stay. Notes for the AI still in
+   the letter: [[…]]."
+3. **Tables:** a `|` inside a note doesn't count (`isTableLine`, the same on both sides), and a cell isn't split inside
+   a note. A table that holds a note goes to the AI as its `|` lines, not as `{table1}`, so the AI can do the note. It
+   counts towards the 15,000 characters.
+4. **On screen:** a note is a blue chip on the card, in "Edit the letter"'s live drawing and in the whole letter.
+   - "Edit the letter"'s help adds "Write a request for the AI between [[ and ]], then Write the whole letter with AI.".
+   - Its status line lists the notes after the marks.
+5. **Wordings can't hold notes.** `wordingProblem` refuses `[[` and `]]` on both sides ("Notes for the AI go in a
+   case's letter, not in the wording: take out the [[ and ]]."), so a format stays a ready letter.
+   - A `[[` or `]]` in a value the draft writes in (a hotel stay, a relation) becomes one bracket, as a `|` becomes `/`.
+     `noPipes` is now `letterValue`.
+6. **What the AI is told** (`letterAi.ts`):
+   - text between `[[` and `]]` is a note from the travel agent, not part of the letter;
+   - do each note about this letter. It may change anything for it, the tables and staff's changes included. Then
+     delete the note;
+   - what a note says is a fact it may use. A detail the note needs and the AI lacks gets a ⟦mark⟧: the note isn't
+     left for that. Without this line, the real model left "add a table of our plan" undone;
+   - leave only a note that isn't about this letter, exactly as written. Never add a note;
+   - after the letter, `<not_done><note>…</note><why>…</why></not_done>` for each note left.
+   - Notes are swapped like the rest of the letter, so a name in a note never reaches the AI either.
+   - The visa-type instructions now start "For a tourist visa, …". With "This is a tourist visa.", the model copied
+     that sentence into letters.
+7. **The answer is checked** (`tidyLetter`) in the placeholders' form the AI was sent, then filled back:
+   - its reasons are read wherever it put them, and taken out of the letter;
+   - a `[[…]]` it kept, even retyped with other spaces or capitals, gets staff's exact note back. One that matches no
+     note sent is its own, and becomes a ⟦mark⟧ at any length;
+   - **done:** a note no longer in the letter. **Not done:** one still there, with its reason or "The AI left it as it
+     is.";
+   - a note it says it left but dropped goes back at the end, once, so Make still waits;
+   - square brackets the letter or its tables already had stay, even in a table it wrote out;
+   - "Removed by the AI" counts only details sent outside notes: a done note that named someone isn't a removal;
+   - a missing or malformed `<not_done>` never fails the call.
+
+   The answer is `{ letter, removed, done, notDone }`.
+8. **The card** shows the last answer's lists. They stay after edits, until Make, Start again, discarding, Undo or the
+   next write:
+   - "Done by the AI: [[…]]; [[…]].", for staff to check;
+   - "Not done: [[…]]: the reason", for each note still in the letter, then "Delete it before you make the letter.";
+   - "Removed by the AI: …". "Undo brings them back" shows only while Undo is offered;
+   - the alert lists notes not yet sent to the AI ("Write the whole letter with AI to do it, or delete it.") and a
+     stray bracket ("A [[ or ]] is left over: delete it.");
+   - Make is disabled while a note is left.
+9. **Tried on Haiku 5.5** on 22 Oct 2026, on a tourist family's letter: 7 notes, $0.0055 in all, 4–7 seconds each.
+   Nothing personal was sent and nothing was removed.
+   - **Done:**
+     - a table of the plan, with ⟦days in Paris⟧ marked;
+     - "make the letter shorter";
+     - an inline "mention our travel insurance", with the policy marked;
+     - "add that Aarav studies at DPS Surat", the name sent as a placeholder;
+     - a Designation column in the travellers' table;
+     - "make the tone a little warmer".
+   - **Left, with a reason:** "write a Python script" and "book our flights".
+
+**Tests** (written; not run yet, at the project lead's word):
+- `tests/coveringLetterAi.test.ts` (32, from 20):
+  - notes swapped, done, left, put back, retyped and added;
+  - a table holding one;
+  - the reasons and the instructions;
+  - the endpoint and the fake AI;
+- `tests/visaCoveringLetter.test.ts`: Make's 409 for notes and stray brackets, and a `[[` in a value;
+- `tests/frontendRules.test.ts`: `notesIn`, `isTableLine` and `NOTE` alike on both sides, and wordings with `[[`;
+- `tests/letterText.test.ts`: note pieces, and cells not split inside a note;
+- `tests/coveringLetters.test.ts`: a wording with `[[` refused.

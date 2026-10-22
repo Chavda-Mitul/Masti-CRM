@@ -10,6 +10,9 @@ import { logger } from "../../lib/logger";
 import { MB, pdfPageCount } from "../../lib/pdf";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { isHodOfAny } from "../auth/permissions";
+import { getCompanyDetails } from "../company/company.settings";
+import { CLIENT_DOCUMENTS_KEPT } from "../messages/messages.seed";
+import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { assertCanSeeClient } from "./access";
 import { SCAN_TYPES, type AddClientDocumentQuery, type ScanType } from "./clients.schemas";
@@ -168,6 +171,11 @@ interface ScanSource {
   caseNo: string;
 }
 
+/** A scan saved from a visa case: the client's message about it shows on that case too. */
+interface SavedFromCase extends ScanSource {
+  enquiryId: string;
+}
+
 /**
  * Saves a scan in the client's vault, under a bucket key no other upload shares. The caller checks who may first: the
  * client page lets HODs and the Head, a visa case whoever can tick its papers. The bucket upload happens first, so a
@@ -180,7 +188,7 @@ export async function saveClientScan(
   contentType: ScanType,
   bytes: Buffer,
   actor: Actor,
-  from?: ScanSource,
+  from?: SavedFromCase,
 ) {
   const pageCount = await checkScan(bytes, contentType);
   const { client, member, paper } = await scanTarget(prisma, clientId, query);
@@ -232,6 +240,15 @@ export async function saveClientScan(
         },
         tx,
       );
+      // Message 17 (Decision 6): the client's first scan tells them we keep a copy, once ever. Saved from a case, it shows
+      // on that case's "Sent to the client" card.
+      await queueMessage(tx, {
+        template: CLIENT_DOCUMENTS_KEPT,
+        clientId: client.id,
+        enquiryId: from?.enquiryId ?? null,
+        key: `${CLIENT_DOCUMENTS_KEPT}:${client.id}`,
+        variables: { client_name: client.name, office_phone: (await getCompanyDetails(tx)).phone },
+      });
     });
   } catch (err) {
     // Nothing points at the object: remove it so the bucket holds only files the CRM knows. Best effort.

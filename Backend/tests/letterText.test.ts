@@ -2,14 +2,14 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { draftLetter, type LetterFacts } from "../src/modules/coveringLetters/fill";
 
-// How a covering letter's | lines become tables (docs/decisions/0019-covering-letters.md amendment 3), in
-// Frontend/src/lib/letter.ts, which draws a case's letter, its print and Settings' wording preview. The path is a variable
-// so the backend typecheck doesn't pull in Frontend sources; Vitest loads it at runtime. The file imports nothing, so
-// this runs without the frontend's packages.
+// How a covering letter's | lines become tables, and its [[notes]] to the AI chips (docs/decisions/0019-covering-letters.md
+// amendments 3 and 5), in Frontend/src/lib/letter.ts, which draws a case's letter, its print and Settings' wording
+// preview. The path is a variable so the backend typecheck doesn't pull in Frontend sources; Vitest loads it at runtime.
+// The file imports nothing, so this runs without the frontend's packages.
 
 const frontendLetter = resolve(__dirname, "../../Frontend/src/lib/letter.ts");
 
-type Piece = { text: string } | { blank: string };
+type Piece = { text: string } | { blank: string } | { note: string };
 type Block = { kind: "paragraph"; lines: Piece[][] } | { kind: "table"; head: Piece[][]; rows: Piece[][][] } | { kind: "travellers" };
 interface FrontendLetter {
   textBlocks(text: string): Block[];
@@ -19,8 +19,8 @@ interface FrontendLetter {
 }
 const frontend = async () => (await import(frontendLetter)) as FrontendLetter;
 
-/** A line of pieces in plain words, each blank or mark written <like this>. */
-const plain = (pieces: Piece[]) => pieces.map((p) => ("text" in p ? p.text : `<${p.blank}>`)).join("");
+/** A line of pieces in plain words, each blank or mark written <like this>, and each note «like this». */
+const plain = (pieces: Piece[]) => pieces.map((p) => ("text" in p ? p.text : "blank" in p ? `<${p.blank}>` : `«${p.note}»`)).join("");
 /** Blocks in plain words: a paragraph's lines, a table's headings and rows, or the table of travellers. */
 const shape = (blocks: Block[]) =>
   blocks.map((b) =>
@@ -83,6 +83,29 @@ describe("a case letter's | lines", () => {
   });
 });
 
+describe("a case letter's notes to the AI (amendment 5)", () => {
+  it("show as pieces of their own, a mark inside one staying part of it; a [[ alone stays text", async () => {
+    const { textBlocks } = await frontend();
+    expect(shape(textBlocks("We travel. [[mention ⟦x⟧ insurance]] At ⟦the hotel stay⟧.\nHalf [[ a note"))).toEqual([
+      { p: ["We travel. «[[mention ⟦x⟧ insurance]]» At <⟦the hotel stay⟧>.", "Half [[ a note"] },
+    ]);
+  });
+
+  it("never make a line a table, and aren't cut at a | inside them", async () => {
+    const { textBlocks, tableCells } = await frontend();
+    expect(shape(textBlocks("[[add a table | with days]]\n[[and cities | hotels]]"))).toEqual([
+      { p: ["«[[add a table | with days]]»", "«[[and cities | hotels]]»"] },
+    ]);
+    expect(shape(textBlocks("Name | Relation\nRAKESH MEHTA | Self [[call it Partner | Spouse]]"))).toEqual([
+      { head: ["Name", "Relation"], rows: [["RAKESH MEHTA", "Self «[[call it Partner | Spouse]]»"]] },
+    ]);
+    expect(tableCells(["| A | B |", "| 1 | [[x | y]] |"])).toEqual([
+      ["A", "B"],
+      ["1", "[[x | y]]"],
+    ]);
+  });
+});
+
 describe("a wording's | lines (Settings)", () => {
   it("make tables with their blanks, while {travellers} stays the table of travellers", async () => {
     const { letterBlocks } = await frontend();
@@ -112,7 +135,7 @@ describe("the server's draft, as the screen draws it", () => {
       clientAddress: "12 Shanti Park, Vesu, Surat 395007",
       country: "France",
       visaType: "Tourist",
-      trip: { departOn: null, returnOn: null, entryType: null, hotelStay: "Hotel A | Paris" },
+      trip: { departOn: null, returnOn: null, entryType: null, hotelStay: "Hotel A | Paris [[best]]" },
       travellers: [
         { name: "RAKESH MEHTA", label: "Adult 1", relation: "Self", dateOfBirth: "1980-03-12", passportNumber: "Z1234567" },
         { name: "AARAV MEHTA", label: "Child 1", relation: "Son", dateOfBirth: "2014-01-19", passportNumber: null },
@@ -121,7 +144,8 @@ describe("the server's draft, as the screen draws it", () => {
     const { letter } = draftLetter("Dear Sir,\nWe stay at {hotel}.\nDay | City\n{travellers}\nThanks", facts, "2026-10-20");
     expect(shape(textBlocks(letter))).toEqual([
       // The wording's own | line is alone: a blank line keeps it from the travellers' table, so it stays text.
-      { p: ["Dear Sir,", "We stay at Hotel A / Paris.", "Day | City"] },
+      // A value never starts a table or makes a note: | became / and [[ ]] single brackets.
+      { p: ["Dear Sir,", "We stay at Hotel A / Paris [best].", "Day | City"] },
       {
         head: ["Name", "Relation", "Date of birth", "Passport no."],
         rows: [

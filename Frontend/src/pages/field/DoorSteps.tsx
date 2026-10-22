@@ -4,6 +4,24 @@ import { digits, timeOf, type TypedBooklets } from './labels'
 import { useCheckOtp, useSendOtp } from './queries'
 import type { OtpState } from './types'
 
+/** Where the code's WhatsApp has got to, in his words (decided 22 Oct 2026). A bad one tells him what to do next. */
+function codeStatus(m: NonNullable<OtpState['message']>): { text: string; bad: boolean } {
+  switch (m.status) {
+    case 'QUEUED':
+      return { text: 'WhatsApp: sending…', bad: false }
+    case 'SENT':
+      return { text: 'WhatsApp: sent', bad: false }
+    case 'DELIVERED':
+      return { text: 'WhatsApp: delivered', bad: false }
+    case 'READ':
+      return { text: 'WhatsApp: read by the client', bad: false }
+    case 'FAILED':
+      return { text: `WhatsApp couldn’t send it${m.error ? `: ${m.error}` : ''}. Send a new code, or call the office.`, bad: true }
+    case 'SKIPPED':
+      return { text: 'WhatsApp didn’t send it: this message is switched off. Call the office.', bad: true }
+  }
+}
+
 // The steps at the client's door (docs/decisions/0015-field-staff-app.md Decision 4; demo screen 14), shared by the
 // pickup (PickupSteps) and the delivery (DeliverySteps).
 
@@ -59,8 +77,9 @@ export function BookletsStep({
 }
 
 /**
- * "Code from the client" (Decision 4): Send the code to the client's email, then the 6 digits they read out and Check,
- * or Send a new code; once confirmed, when. No code, no pickup or handover: without it he uses Couldn't complete.
+ * "Code from the client" (Decision 4): Send the code to the client's WhatsApp, then the 6 digits they read out and
+ * Check, or Send a new code; where the WhatsApp has got to; once confirmed, when. No code, no pickup or handover:
+ * without it he uses Couldn't complete.
  */
 export function CodeStep({ n, jobId, otp, disabled }: { n: number; jobId: string; otp: OtpState | null; disabled: boolean }) {
   const [code, setCode] = useState('')
@@ -68,6 +87,7 @@ export function CodeStep({ n, jobId, otp, disabled }: { n: number; jobId: string
   const checkOtp = useCheckOtp(jobId)
   const busy = disabled || sendOtp.isPending || checkOtp.isPending
   const confirmedAt = otp?.confirmedAt ?? null
+  const status = confirmedAt === null && otp?.message ? codeStatus(otp.message) : null
   const problem = issueText(checkOtp.error ?? sendOtp.error)
   const send = () => {
     checkOtp.reset()
@@ -83,10 +103,11 @@ export function CodeStep({ n, jobId, otp, disabled }: { n: number; jobId: string
         confirmedAt
           ? `Confirmed by the client at ${timeOf(confirmedAt)}`
           : otp
-            ? `Sent to ${otp.sentTo} at ${timeOf(otp.sentAt)}. Ask the client to read it out.`
-            : 'It goes to the client’s email; they read it out to you.'
+            ? `Sent on WhatsApp to ${otp.sentTo} at ${timeOf(otp.sentAt)}. Ask the client to read it out.`
+            : 'It goes to the client’s WhatsApp; they read it out to you.'
       }
     >
+      {status && <span className={status.bad ? 'field-step-error' : 'field-step-hint'}>{status.text}</span>}
       {confirmedAt === null &&
         (otp ? (
           <>

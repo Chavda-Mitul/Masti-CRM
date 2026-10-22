@@ -128,19 +128,15 @@ describe("Book the collection boy (phase 1)", () => {
 });
 
 describe("what is refused", () => {
-  it("no email for the client's code, a second pickup, someone who isn't field staff", async () => {
+  it("a second pickup, someone who isn't field staff; not a missing email, as the client's code goes on WhatsApp", async () => {
     const { aarti, c } = await setup({ email: null });
-    const noEmail = await book(aarti, c.caseNo);
-    expect(noEmail.status).toBe(409);
-    expect(noEmail.body).toMatchObject({ message: "Add the client's email first: the one-time code they give the boy goes there.", details: { code: "CLIENT_EMAIL_MISSING" } });
-
-    await prisma.client.update({ where: { id: c.client.id }, data: { email: "rakesh@example.com" } });
     const aartiUser = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
     expect((await book(aarti, c.caseNo, { assigneeId: aartiUser.id })).body.issues.assigneeId).toEqual(["Pick one of the field staff."]);
     const suresh = await createUser({ name: "Suresh", mobile: "+919825000002", type: "FIELD" });
     await prisma.user.update({ where: { id: suresh.id }, data: { isActive: false } });
     expect((await book(aarti, c.caseNo, { assigneeId: suresh.id })).body.issues.assigneeId).toEqual(["Pick one of the field staff."]);
 
+    // No email on file: booked all the same (0015 Decision 4, amended 22 Oct 2026).
     expect((await book(aarti, c.caseNo)).status).toBe(200);
     const twice = await book(aarti, c.caseNo);
     expect(twice.status).toBe(409);
@@ -345,9 +341,8 @@ describe("Book the delivery boy (phase 2)", () => {
     expect((await prisma.auditLog.findFirstOrThrow({ where: { action: "field.job.book" } })).after).toMatchObject({ kind: "DELIVERY", boy: "Ramesh" });
   });
 
-  it("not before the passports are in our stock, not twice, not without the client's email, not view-only", async () => {
+  it("not before the passports are in our stock, not twice, not view-only; no email needed", async () => {
     const { c, processor } = await decidedCase();
-    await prisma.client.update({ where: { id: c.client.id }, data: { email: "rakesh@example.com" } });
     await createUser({ name: "Ramesh", mobile: "+919825000001", type: "FIELD" });
     const atDecision = await book(processor, c.caseNo, { kind: "DELIVERY" });
     expect(atDecision.status).toBe(409);
@@ -359,10 +354,8 @@ describe("Book the delivery boy (phase 2)", () => {
     expect(inTransit.status).toBe(409);
     expect(inTransit.body.message).toBe("Mark the passports received first.");
 
+    // Kiran Bhatt has no email on file: the code goes on WhatsApp.
     const other = await receivedCase({ extra: { mobile: "98250 41236", clientName: "Kiran Bhatt" }, vendorId: c.vendor.id });
-    const noEmail = await book(processor, other.c.caseNo, { kind: "DELIVERY" });
-    expect(noEmail.body.details.code).toBe("CLIENT_EMAIL_MISSING");
-    await prisma.client.update({ where: { id: other.c.client.id }, data: { email: "kiran@example.com" } });
     expect((await book(processor, other.c.caseNo, { kind: "DELIVERY" })).status).toBe(200);
     const twice = await book(processor, other.c.caseNo, { kind: "DELIVERY" });
     expect(twice.status).toBe(409);

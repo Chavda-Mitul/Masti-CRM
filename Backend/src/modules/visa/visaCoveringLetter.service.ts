@@ -5,7 +5,7 @@ import { audit } from "../../lib/audit";
 import { fromDbDate, istTimestamp, istToday, toDbDate } from "../../lib/dates";
 import { conflict, fieldError, HttpError } from "../../lib/httpError";
 import { inForce } from "../coveringLetters/coveringLetter";
-import { marksIn } from "../coveringLetters/coveringLetters.schemas";
+import { marksIn, notesIn } from "../coveringLetters/coveringLetters.schemas";
 import { draftLetter, type LetterFacts } from "../coveringLetters/fill";
 import { letterAsk, MAX_AI_LETTER_CHARS, tidyLetter, type TripFacts } from "../coveringLetters/letterAi";
 import { swapLetter, type PrivateFacts } from "../coveringLetters/placeholders";
@@ -15,18 +15,19 @@ import type { MakeCoveringLetterInput, WriteLetterInput } from "./visa.schemas";
 import { getVisaSettings } from "./visa.settings";
 import { clientAddress, countTravellers, travellerLabel } from "./visaCase";
 
-// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1 and 3): the
+// The covering letter on a visa case (docs/decisions/0019-covering-letters.md Decisions 8–12, amendments 1, 3–5): the
 // letters that fit the case, one drafted from it, "Make the letter" at File preparation, and the print of the letter made.
 // - A letter fits a case: active, the case's visa type, one of its countries, and one traveller or two or more, with a
 //   wording in use today. A visa type or country switched off since still fits, so open cases keep their letters.
 // - The draft writes the case's values in and marks what it lacks (⟦the hotel stay⟧). The letter is one text, its tables
 //   lines with | between the columns. Staff may change any of it and type over the marks; "Make the letter" waits while
-//   a mark is left: 409 LETTER_INCOMPLETE.
+//   a mark or a [[note]] to the AI is left: 409 LETTER_INCOMPLETE.
 // - Made at File preparation by the owner, the HOD or the Head; again as often as needed while there. The case keeps the
 //   letter's text as made, so a later print is the same letter (Decision 10), and the audit keeps each text made. Anyone
 //   who can open the case may print it; printing changes nothing, so it isn't audited (as the sticker, 0008 Decision 5).
 // - "Write the whole letter with AI" (amendment 4) rewrites the letter as it stands, with every personal detail as a
-//   placeholder the CRM fills back. It saves nothing on the case; the AI call is recorded in AiCall (0023).
+//   placeholder the CRM fills back, and does the notes staff wrote in it, or leaves them with a reason (amendment 5). It
+//   saves nothing on the case; the AI call is recorded in AiCall (0023).
 
 const personSelect = { select: { id: true, name: true } } as const;
 
@@ -247,10 +248,10 @@ function draftOf(body: string, row: LetterCaseRow, visa: LetterVisa, today: stri
 }
 
 /**
- * "Make the letter" (Decision 10, amendment 1), at File preparation: with a letter that fits, its text as staff left it,
- * once no mark is left in it. `versionId` is the wording the text started from (today's draft, or the made letter's):
- * one of that letter's wordings whose day has come. Making it again replaces the text, and the audit keeps both. Like
- * the other Step 3 ticks, it doesn't move the case's updatedAt.
+ * "Make the letter" (Decision 10, amendments 1 and 5), at File preparation: with a letter that fits, its text as staff
+ * left it, once no mark and no note to the AI is left in it. `versionId` is the wording the text started from (today's
+ * draft, or the made letter's): one of that letter's wordings whose day has come. Making it again replaces the text,
+ * and the audit keeps both. Like the other Step 3 ticks, it doesn't move the case's updatedAt.
  */
 export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLetterInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, PREPARING);
@@ -264,8 +265,13 @@ export async function makeCoveringLetter(caseNo: string, input: MakeCoveringLett
   });
   if (!version) throw fieldError("versionId", "This letter's wording has changed. Start again to draft it from the wording in use.");
   const marks = marksIn(input.letter);
-  if (marks.length > 0) {
-    throw new HttpError(409, `Not ready yet. Fill these in first: ${marks.join("; ")}.`, { code: "LETTER_INCOMPLETE", missing: marks });
+  const notes = notesIn(input.letter);
+  if (marks.length > 0 || notes.length > 0) {
+    const what = [
+      ...(marks.length > 0 ? [`Fill these in first: ${marks.join("; ")}.`] : []),
+      ...(notes.length > 0 ? [`Notes for the AI still in the letter: ${notes.join("; ")}.`] : []),
+    ];
+    throw new HttpError(409, `Not ready yet. ${what.join(" ")}`, { code: "LETTER_INCOMPLETE", missing: marks, notes });
   }
   const before = madeOf(visa);
 

@@ -42,6 +42,7 @@ import type {
   ReceivedAs,
   StickerCheck,
   VisaCase,
+  WrittenLetter,
 } from './types'
 
 // Server state for the enquiry screens (TanStack Query).
@@ -826,14 +827,14 @@ export function useMakeCoveringLetter(caseNo: string) {
 }
 
 /**
- * "Write the whole letter with AI" (0019 amendment 4): the letter as it stands on the card, rewritten for the trip, and
- * the personal details the AI dropped. Nothing is saved: the card shows the letter. A failure is a 503 whose message
- * says why (AI_FAILED).
+ * "Write the whole letter with AI" (0019 amendments 4 and 5): the letter as it stands on the card, rewritten for the
+ * trip and its notes to the AI, with the personal details the AI dropped and what it did with each note. Nothing is
+ * saved: the card shows the letter. A failure is a 503 whose message says why (AI_FAILED).
  */
 export function useWriteLetter(caseNo: string) {
   return useMutation({
     mutationFn: async (letter: string) =>
-      api<{ letter: string; removed: string[] }>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/write`, {
+      api<WrittenLetter>(`/visa/cases/${encodeURIComponent(caseNo)}/covering-letter/write`, {
         method: 'POST',
         body: { letter },
       }),

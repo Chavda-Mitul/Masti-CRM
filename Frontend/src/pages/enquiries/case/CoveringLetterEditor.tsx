@@ -1,13 +1,13 @@
 import { useEffect, useRef, type MouseEvent } from 'react'
 import { LetterTextPaper } from '../../../components/LetterPaper'
 import { pasteTable } from '../../../components/pasteTable'
-import { MAX_CASE_LETTER_CHARS, marksIn } from '../../../lib/letter'
+import { MAX_CASE_LETTER_CHARS, marksIn, notesIn } from '../../../lib/letter'
 
 /**
- * "Edit the letter" (docs/decisions/0019-covering-letters.md amendments 1 and 3): the case's letter as one text, with the
- * letter drawn beside it as it will print. Lines with | between the columns are tables. Changes go straight to the card,
- * which keeps them until "Make the letter"; Done, Escape or a click outside only closes this, so nothing is lost by
- * closing it.
+ * "Edit the letter" (docs/decisions/0019-covering-letters.md amendments 1, 3 and 5): the case's letter as one text, with
+ * the letter drawn beside it as it will print. Lines with | between the columns are tables, and [[…]] is a note to the
+ * AI. Changes go straight to the card, which keeps them until "Make the letter"; Done, Escape or a click outside only
+ * closes this, so nothing is lost by closing it.
  */
 export function CoveringLetterEditor({
   letter,
@@ -42,6 +42,11 @@ export function CoveringLetterEditor({
   }, [])
 
   const marks = marksIn(letter)
+  const notes = notesIn(letter)
+  const status = [
+    ...(marks.length > 0 ? [`Still to fill in: ${marks.join('; ')}.`] : []),
+    ...(notes.length > 0 ? [`Notes for the AI: ${notes.join('; ')}.`] : []),
+  ]
 
   return (
     <div className="overlay overlay-center" {...overlay}>
@@ -50,7 +55,8 @@ export function CoveringLetterEditor({
         <p className="muted small" style={{ margin: 0 }}>
           A blank line starts a new paragraph. Lines with | between the columns make a table, and its first line is the
           headings: use / elsewhere. Type over each <span className="letter-blank letter-mark">⟦mark⟧</span> with what it
-          asks for, or delete it.
+          asks for, or delete it. Write a request for the AI between <span className="letter-blank letter-note">[[ and ]]</span>,
+          then Write the whole letter with AI.
         </p>
 
         <div className="covering-letter-panes">
@@ -74,7 +80,7 @@ export function CoveringLetterEditor({
 
         <div className="covering-letter-actions" style={{ justifyContent: 'space-between' }}>
           <span className="muted small" role="status">
-            {marks.length > 0 ? `Still to fill in: ${marks.join('; ')}.` : 'Nothing left to fill in.'}
+            {status.length > 0 ? status.join(' ') : 'Nothing left to fill in.'}
           </span>
           <button type="button" className="btn btn-dark" onClick={onClose}>
             Done

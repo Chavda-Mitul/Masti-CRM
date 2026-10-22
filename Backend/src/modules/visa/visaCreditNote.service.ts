@@ -27,6 +27,7 @@ import {
   RAISE_ATTEMPTS,
   type InvoiceBlocker,
 } from "./visaInvoice.service";
+import { queueCreditNoteMessage } from "./visaMessages";
 
 // Credit notes (docs/decisions/0011-visa-at-vendor.md Decisions 5 and 6). An invoice is never changed (golden rule 3,
 // M36). A WHOLE credit note cancels a wrong one, giving back exactly what it charged, its GST included, so the tax
@@ -271,6 +272,8 @@ export async function issueCreditNote(
     },
     tx,
   );
+  // Message 18 (docs/whatsapp-visa-messages.md); a retried number rolls it back with the rest.
+  await queueCreditNoteMessage(tx, enquiryId, { id: note.id, creditNoteNo, totalPaise: draft.totalPaise, invoiceNo: inv.invoiceNo });
   return { creditNoteNo, fileId: file.id };
 }
 

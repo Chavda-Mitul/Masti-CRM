@@ -20,6 +20,8 @@ export interface WhatsAppMessage {
    * approved template with a document comes with Masti's templates (M1).
    */
   attachment?: { url: string; fileName: string };
+  /** Values only the client may see (the door code, secrets.ts): a live log hides them. Never sent on. */
+  secrets?: readonly string[];
 }
 
 /**

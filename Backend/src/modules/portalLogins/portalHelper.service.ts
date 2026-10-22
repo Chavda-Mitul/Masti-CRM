@@ -5,7 +5,7 @@ import { badRequest, conflict, forbidden, HttpError, notFound } from "../../lib/
 import { vaultReady } from "../../lib/secretBox";
 import { getOfficeNetworkSetting, ipAllowed, portalLoginNetwork, sameAddress } from "../auth/officeNetwork";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
-import { canUsePortal, canUsePortalOnCase, portalLoginInclude } from "./portalLogin";
+import { canUsePortal, canUsePortalOnCase, isPasswordLocked, portalLoginInclude, type PasswordDates } from "./portalLogin";
 import type { OutcomeInput } from "./portalLogins.schemas";
 import { notSetUp, openPortalSecret } from "./portalLogins.service";
 
@@ -22,6 +22,8 @@ const hashOf = (ticket: string) => createHash("sha256").update(ticket).digest("h
 
 const runOut = () => new HttpError(410, "This login has run out. Press Log in for me again.");
 const onlyInOffice = () => forbidden("Log in for me works only in the office.");
+/** Its scheduled password change is overdue (component 2). */
+const lockedPortal = () => new HttpError(409, "This portal is locked until the HOD changes its password.", { code: "LOCKED" });
 
 /** A press on Settings → Portal logins: checks the person may use the portal, then makes the ticket. */
 export async function openPortalLogin(id: string, actor: Actor) {
@@ -29,14 +31,15 @@ export async function openPortalLogin(id: string, actor: Actor) {
   if (!portal) throw notFound("Portal not found.");
   if (portal.status !== "ACTIVE" || !portal.department.isActive) throw badRequest("This portal was removed.");
   if (!canUsePortal(actor.user, portal)) throw forbidden("You aren't on this portal's list. Ask your HOD.");
-  return issueTicket(portal.id, actor, null);
+  return issueTicket(portal, actor, null);
 }
 
 /**
- * The ticket for a press the caller has allowed (here, or on a visa case: visaPortal.service.ts): the server must be set
- * up and the office rule met, then the press is kept, with its case when there is one.
+ * The ticket for a press the caller has allowed (here, or on a visa case: visaPortal.service.ts): the portal mustn't be
+ * locked, the server must be set up and the office rule met, then the press is kept, with its case when there is one.
  */
-export async function issueTicket(portalLoginId: string, actor: Actor, onCase: { id: string; caseNo: string } | null) {
+export async function issueTicket(portal: { id: string } & PasswordDates, actor: Actor, onCase: { id: string; caseNo: string } | null) {
+  if (isPasswordLocked(portal)) throw lockedPortal();
   if (!vaultReady()) throw notSetUp();
   if (!(await portalLoginNetwork(actor.ip ?? undefined)).allowed) throw onlyInOffice();
 
@@ -44,7 +47,7 @@ export async function issueTicket(portalLoginId: string, actor: Actor, onCase: {
   const use = await prisma.$transaction(async (tx) => {
     const use = await tx.portalLoginUse.create({
       data: {
-        portalLoginId,
+        portalLoginId: portal.id,
         userId: actor.user.id,
         openedIp: actor.ip,
         ticketHash: hashOf(ticket),
@@ -53,7 +56,7 @@ export async function issueTicket(portalLoginId: string, actor: Actor, onCase: {
       },
     });
     const after = { useId: use.id, ...(onCase ? { caseNo: onCase.caseNo } : {}) };
-    await audit({ actorId: actor.user.id, action: "portalLogin.open", entityType: "PortalLogin", entityId: portalLoginId, after, ip: actor.ip }, tx);
+    await audit({ actorId: actor.user.id, action: "portalLogin.open", entityType: "PortalLogin", entityId: portal.id, after, ip: actor.ip }, tx);
     return use;
   });
   return { useId: use.id, ticket };
@@ -110,6 +113,7 @@ export async function redeemTicket(ticket: string, ip: string | undefined) {
   if (portal.status !== "ACTIVE" || !portal.department.isActive) {
     return refuse(use, from, "removed", new HttpError(410, "This portal was removed. Ask your HOD."));
   }
+  if (isPasswordLocked(portal, now)) return refuse(use, from, "locked", lockedPortal());
   const user = await prisma.user.findUniqueOrThrow({ where: { id: use.userId }, include: withDepartments });
   const allowed = use.enquiryId ? await caseStillAllows(use.enquiryId, user, portal) : canUsePortal(user, portal);
   if (!allowed) return refuse(use, from, "not allowed", forbidden("You can't use this portal any more. Ask your HOD."));

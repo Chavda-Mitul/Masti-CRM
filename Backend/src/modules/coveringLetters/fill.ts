@@ -1,6 +1,6 @@
 import type { EntryType } from "../../../generated/prisma/enums";
 import { dateLabel, daysInclusive, fullDate } from "../../lib/dates";
-import { mark, noPipes, normaliseLetter, PURPOSE_MARK, type LetterBlank } from "./coveringLetters.schemas";
+import { letterValue, mark, normaliseLetter, PURPOSE_MARK, type LetterBlank } from "./coveringLetters.schemas";
 
 // Drafting a case's covering letter from a wording (docs/decisions/0019-covering-letters.md Decisions 4 and 8, amendments
 // 1 and 3). No queries here: the case's details come in as LetterFacts, so the rules are tested on their own. Only the
@@ -52,9 +52,9 @@ export function draftLetter(body: string, facts: LetterFacts, day: string): { le
   const { trip } = facts;
   const first = facts.travellers[0];
   const whoIs = (t: LetterFacts["travellers"][number]) => t.name ?? t.label;
-  /** The value, or a mark with the same words as `missing`. A | in a value becomes a /, so it can't split a table. */
+  /** The value, or a mark with the same words as `missing`, as `letterValue` writes it: no | or [[ of its own. */
   const valueOr = (value: string | null | undefined, what: string) => {
-    if (value) return noPipes(value);
+    if (value) return letterValue(value);
     missing.add(what);
     return mark(what);
   };
@@ -98,7 +98,7 @@ export function draftLetter(body: string, facts: LetterFacts, day: string): { le
   const top = fill(lines.slice(0, at).join("\n"));
   const rows = facts.travellers.map((t) => [
     nameOf(t),
-    noPipes(t.relation ?? ""),
+    letterValue(t.relation ?? ""),
     valueOr(t.dateOfBirth && dateLabel(t.dateOfBirth), `${whoIs(t)}'s date of birth`),
     valueOr(t.passportNumber, `${whoIs(t)}'s passport number`),
   ]);

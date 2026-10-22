@@ -16,7 +16,7 @@ export interface OpenedPress {
  * Log in for me (docs/decisions/0024-portal-logins.md): a one-time ticket from the CRM, handed to the helper, which opens
  * the portal and types the login there. The ID and password never come to this page. One plain async function, so
  * nothing of a press is kept in a query cache. On a visa case, `open` asks for the case's ticket instead (component 3)
- * and `caseNo` goes into the words.
+ * and `caseNo` goes into the words. `disabled`: the portal is locked (component 2).
  */
 export function LogInForMeButton({
   portal,
@@ -25,6 +25,7 @@ export function LogInForMeButton({
   open,
   caseNo,
   className = 'btn btn-primary portal-go',
+  disabled = false,
 }: {
   portal: { id: string; name: string }
   helperIds: string[]
@@ -32,6 +33,7 @@ export function LogInForMeButton({
   open?: () => Promise<OpenedPress>
   caseNo?: string
   className?: string
+  disabled?: boolean
 }) {
   const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
@@ -62,7 +64,7 @@ export function LogInForMeButton({
   }
 
   return (
-    <button type="button" className={className} onClick={() => void press()} disabled={busy}>
+    <button type="button" className={className} onClick={() => void press()} disabled={busy || disabled}>
       {busy ? 'Opening the portal…' : 'Log in for me'}
     </button>
   )

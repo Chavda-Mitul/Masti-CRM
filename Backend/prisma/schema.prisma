@@ -2132,13 +2132,26 @@ enum PortalLoginOutcome {
   FAILED
 }
 
+/// How often a portal's password has to be changed (0024 component 2). From the start of the due date (India time) the
+/// portal is locked for everyone until an HOD types a new password.
+enum PortalPasswordSchedule {
+  /// The day after the last change.
+  DAILY
+  /// 7 days after.
+  WEEKLY
+  /// The same date the next month (31 Jan → 28 Feb).
+  MONTHLY
+  /// No scheduled change: it never locks.
+  NONE
+}
+
 /// A company account on a visa, airline or supplier portal (demo screen 28). Staff press "Log in for me" and never see the
 /// ID or password; the Head and the department's HOD add, change and remove it.
 /// Checks in the migration: name and ID label not blank and not too long; the address http(s); the secret kept exactly
 /// while ACTIVE; one active name per department, whatever the case.
 model PortalLogin {
   /// Made by the server before saving: the secret is sealed with it ("portal-login:<id>").
-  id                String            @id
+  id                String                 @id
   /// Fixed once added.
   departmentId      Int
   /// "France visa portal"
@@ -2146,18 +2159,20 @@ model PortalLogin {
   /// The portal's login page.
   loginUrl          String
   /// What the portal calls the first box: "ID", "User ID", "Agency code".
-  idLabel           String            @default("ID")
+  idLabel           String                 @default("ID")
   /// The ID and password, sealed by src/lib/secretBox.ts under PORTAL_VAULT_KEY. Null once removed.
   secret            Bytes?
-  /// When the password was last saved: on adding, or when an HOD typed a new one.
-  passwordChangedAt DateTime          @db.Timestamptz(3)
-  status            PortalLoginStatus @default(ACTIVE)
+  /// When the password was last saved: on adding, or when an HOD typed a new one. The schedule counts from it.
+  passwordChangedAt DateTime               @db.Timestamptz(3)
+  /// How often the password has to change (component 2); Masti changes monthly.
+  passwordSchedule  PortalPasswordSchedule @default(MONTHLY)
+  status            PortalLoginStatus      @default(ACTIVE)
   createdById       String
-  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token for PATCH; moves on every change, the list of people included.
-  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
-  department        Department        @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  createdBy         User              @relation("PortalLoginCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  department        Department             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  createdBy         User                   @relation("PortalLoginCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   users             PortalLoginUser[]
   uses              PortalLoginUse[]
   /// The visas whose cases open this portal (component 3).

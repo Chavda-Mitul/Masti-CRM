@@ -3,7 +3,7 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
 import { addDays, dayLabel, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
-import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { conflict, fieldError, notFound } from "../../lib/httpError";
 import { blockedDays } from "../holidays/blockedDays";
 import { VISA_COLLECTION_VISIT, VISA_DELIVERY_VISIT } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
@@ -18,9 +18,9 @@ import { visaMessageBasics } from "./visaMessages";
 // case's documents up at Steps 1–2 (phase 1), or the delivery boy to take its passports to the client once they're in
 // our stock (phase 2). Staff pick the boy (an active FIELD user), an open office day and a time slot from the list
 // (Decision 2); the address is copied from the client's (correctable), with an optional Google Maps link (Decision 3).
-// The client's email must be on file: the one-time code they give the boy goes there (Decision 4). One booked job of
-// each kind per case, kept by the case lock; it can be changed or cancelled while booked. While it's booked, an open
-// case is due at the slot's end that day, to check it happened.
+// The one-time code the client gives the boy goes to their WhatsApp (Decision 4, amended 22 Oct 2026), so no email is
+// needed. One booked job of each kind per case, kept by the case lock; it can be changed or cancelled while booked.
+// While it's booked, an open case is due at the slot's end that day, to check it happened.
 
 /**
  * The step each kind of job is booked at: a pickup while the documents are collected (the case's owner, the HOD or the
@@ -29,14 +29,14 @@ import { visaMessageBasics } from "./visaMessages";
 const RULE: Record<FieldJobKind, StepRule> = { PICKUP: COLLECTING, DELIVERY: HANDING_OVER };
 
 /**
- * What booking checks, read again under the lock: the client's email and mobile, a job of this kind already booked,
- * and (for a delivery) whether the passports are in our stock.
+ * What booking checks, read again under the lock: the client's mobile, a job of this kind already booked, and (for a
+ * delivery) whether the passports are in our stock.
  */
 async function gather(db: Db, enquiryId: string, kind: FieldJobKind) {
   return db.enquiry.findUniqueOrThrow({
     where: { id: enquiryId },
     select: {
-      client: { select: { email: true, mobile: true } },
+      client: { select: { mobile: true } },
       fieldJobs: { where: { kind, status: "BOOKED" }, select: { id: true } },
       visa: {
         select: {
@@ -58,16 +58,13 @@ type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
  * One booked job of a kind per case (0015 Defaults); a delivery only of passports in our stock, and not while a short
- * return holds them (0013 Decision 5, amended 17 Oct 2026); and the client's email for their one-time code (Decision 4).
+ * return holds them (0013 Decision 5, amended 17 Oct 2026).
  */
 function assertCanBook(g: Gathered, kind: FieldJobKind) {
   if (kind === "DELIVERY" && !g.visa?.passportsReceivedAt) throw conflict("Mark the passports received first.");
   if (kind === "DELIVERY" && g.visa?.handover) throw conflict("The passports are already handed over.");
   if (kind === "DELIVERY" && g.visa) assertNotHeldShort({ ...g.visa, travellerCount: g.visa._count.travellers });
   if (g.fieldJobs.length > 0) throw conflict(kind === "PICKUP" ? "The collection boy is already booked for this case." : "The delivery boy is already booked for this case.");
-  if (!g.client.email) {
-    throw new HttpError(409, "Add the client's email first: the one-time code they give the boy goes there.", { code: "CLIENT_EMAIL_MISSING" });
-  }
 }
 
 /**

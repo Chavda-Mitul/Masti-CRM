@@ -3,7 +3,7 @@ import { env } from "../src/config/env";
 import { boss, QUEUES, stopWorkers } from "../src/lib/jobs";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppStatus } from "../src/lib/whatsapp";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENT_LIST, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
+import { FIELD_DOOR_CODE, seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENT_LIST, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
 import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage } from "../src/modules/messages/messages.service";
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
@@ -368,6 +368,46 @@ describe("a consent link's secret (0022)", () => {
     const unfillable = await linkQueued("link:unfillable");
     expect(unfillable.status).toBe("FAILED");
     expect((await keepsNoSecret(unfillable.id)).variables).toMatchObject({ consent_link: HIDDEN });
+  });
+});
+
+describe("the door code (message 16, amendment 6)", () => {
+  const CODE = "482915";
+  const WORDS = (code: string) => `${code} is your verification code.\n\nThis code expires in 10 minutes.`;
+
+  /** Message 16 as the boy's "Send the code" queues it, on Rakesh's case. */
+  async function codeQueued(key: string) {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    await prisma.$transaction(async (tx) =>
+      queueMessage(tx, { template: FIELD_DOOR_CODE, clientId: c.client.id, enquiryId: c.id, key, variables: { code: CODE, minutes: "10" } }),
+    );
+    return { staff, c, m: await prisma.outboundMessage.findUniqueOrThrow({ where: { idempotencyKey: key } }) };
+  }
+
+  it("is hidden from staff even while it waits, goes whole to the client, and is forgotten once sent", async () => {
+    const { staff, c, m } = await codeQueued("code:1");
+    expect(m.body).toBe(WORDS(CODE));
+    const card = (await staff.get(`/api/visa/cases/${c.caseNo}/messages`)).body.messages as { title: string; body: string }[];
+    expect(card.find((x) => x.title === "Code at the door")!.body).toBe(WORDS("••••••"));
+    expect(JSON.stringify(card)).not.toContain(CODE);
+
+    await deliverMessage(m.id, { lastTry: false });
+    // The client gets it; the sender is told it's a secret, so a live log hides it.
+    expect(stub.provider!.send).toHaveBeenCalledExactlyOnceWith({ to: "+919825041234", body: WORDS(CODE), secrets: [CODE] });
+    const after = await reload(m.id);
+    expect(after.status).toBe("SENT");
+    expect(after.body).toBe(WORDS("••••••"));
+    expect(after.variables).toEqual({ code: "••••••", minutes: "10" });
+  });
+
+  it("is forgotten when it won't go too", async () => {
+    stub.provider!.send.mockRejectedValueOnce(new WhatsAppError("That number isn't on WhatsApp, or isn't written correctly.", false));
+    const { m } = await codeQueued("code:failed");
+    await deliverMessage(m.id, { lastTry: false });
+    const after = await reload(m.id);
+    expect(after.status).toBe("FAILED");
+    expect(JSON.stringify({ body: after.body, variables: after.variables })).not.toContain(CODE);
   });
 });
 
