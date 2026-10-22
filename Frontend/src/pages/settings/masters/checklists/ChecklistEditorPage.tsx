@@ -6,8 +6,9 @@ import { Link, useBlocker, useParams } from 'react-router'
 import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
+import { RefreshFailed } from '../../../../components/RefreshFailed'
 import { api } from '../../../../lib/api'
-import { errorText, isStale } from '../../../../lib/apiErrors'
+import { errorText, isStale, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { masterKeys, useChecklist, useMasterList, useOfferings, useReplaceChecklist, useSaveOffering } from '../queries'
 import { checklistFormSchema, MAX_CHECKLIST_ITEMS, type ChecklistFormValues, type ChecklistLineValues } from '../schemas'
@@ -55,7 +56,7 @@ export function ChecklistEditorPage() {
       </div>
     )
   }
-  if (checklist.isError || documents.isError) {
+  if (checklist.isLoadingError || lostAccess(checklist) || documents.isLoadingError || lostAccess(documents)) {
     return (
       <div className="card pad" style={{ maxWidth: 560 }}>
         <Link to="/settings/masters/checklists" className="back-link">
@@ -68,13 +69,16 @@ export function ChecklistEditorPage() {
   if (!checklist.data || !documents.data) return <div className="muted">Loading…</div>
 
   return (
-    <ChecklistEditor
-      // A new version (after a save, or "Reload" after a conflict) starts a fresh draft.
-      key={checklist.data.offering.updatedAt}
-      checklist={checklist.data}
-      documents={documents.data}
-      canEdit={me ? canEditVisaMasters(me) : false}
-    />
+    <>
+      <RefreshFailed query={checklist} what="this checklist" />
+      <ChecklistEditor
+        // A new version (after a save, or "Reload" after a conflict) starts a fresh draft.
+        key={checklist.data.offering.updatedAt}
+        checklist={checklist.data}
+        documents={documents.data}
+        canEdit={me ? canEditVisaMasters(me) : false}
+      />
+    </>
   )
 }
 

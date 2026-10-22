@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { can, isHodOfAny, seesOthersEnquiries } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
-import { errorText } from '../../lib/apiErrors'
+import { RefreshFailed } from '../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import { departmentStyle, SELLING_DEPARTMENTS } from '../../lib/departments'
 import { formatMobile, initials } from '../../lib/format'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
@@ -175,6 +176,7 @@ export function EnquiriesPage() {
         ))}
       </div>
 
+      <RefreshFailed query={list} what="the list" />
       <div className={`enquiries-layout${picked ? ' with-panel' : ''}`}>
         <div className="card card-fill" style={{ overflow: 'hidden' }}>
           <div className="pad enq-toolbar">
@@ -210,7 +212,7 @@ export function EnquiriesPage() {
 
           {list.isPending ? (
             <div className="pad muted card-fill-empty">Loading…</div>
-          ) : list.isError ? (
+          ) : list.isLoadingError || lostAccess(list) ? (
             <div className="pad">
               <div className="alert alert-bad">{errorText(list.error)}</div>
             </div>

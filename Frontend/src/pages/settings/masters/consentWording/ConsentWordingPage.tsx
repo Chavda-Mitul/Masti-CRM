@@ -3,7 +3,8 @@ import { Link } from 'react-router'
 import { canEditVisaMasters, canViewVisaMasters } from '../../../../auth/permissions'
 import { useMe } from '../../../../auth/useAuth'
 import { ConsentWording } from '../../../../components/ConsentWording'
-import { errorText } from '../../../../lib/apiErrors'
+import { RefreshFailed } from '../../../../components/RefreshFailed'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 import { authorName } from '../coveringLetters/labels'
 import { useConsentWordings } from '../queries'
 import type { ConsentWordingVersion } from '../types'
@@ -30,7 +31,7 @@ export function ConsentWordingPage() {
       </div>
     )
   }
-  if (wordings.isError) {
+  if (wordings.isLoadingError || lostAccess(wordings)) {
     return (
       <div className="card pad" style={{ maxWidth: 560 }}>
         <Link to="/settings/masters" className="back-link">
@@ -60,6 +61,7 @@ export function ConsentWordingPage() {
         </div>
       </div>
 
+      <RefreshFailed query={wordings} what="the wording" />
       {inUse?.addedBy === null && !editing && (
         <div className="alert alert-warn">This is the draft wording, used until Masti’s own arrives. Clients agree to it as it stands.</div>
       )}

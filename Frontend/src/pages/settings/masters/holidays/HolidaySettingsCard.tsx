@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { useMe } from '../../../../auth/useAuth'
 import { FormField } from '../../../../components/FormField'
-import { errorText } from '../../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useHolidaySettings, useUpdateHolidaySettings } from '../queries'
 import { holidaySettingsFormSchema, type HolidaySettingsFormValues } from '../schemas'
@@ -19,7 +19,7 @@ export function HolidaySettingsCard() {
       <h2 className="h2">Holiday calendar settings</h2>
       {settings.isPending ? (
         <p className="muted">Loading…</p>
-      ) : settings.isError ? (
+      ) : settings.isLoadingError || lostAccess(settings) ? (
         <div className="alert alert-bad">{errorText(settings.error)}</div>
       ) : isHead ? (
         <SettingsForm settings={settings.data} />

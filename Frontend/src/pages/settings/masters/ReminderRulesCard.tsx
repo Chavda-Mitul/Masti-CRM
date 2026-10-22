@@ -4,7 +4,7 @@ import { canEditVisaMasters } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { FormField } from '../../../components/FormField'
 import { TimePicker } from '../../../components/TimePicker'
-import { errorBody, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useDocumentRemindersSetting, useSaveDocumentRemindersSetting } from './queries'
 import { documentRemindersFormSchema, type DocumentRemindersFormValues } from './schemas'
@@ -40,7 +40,7 @@ export function ReminderRulesCard() {
       </p>
       {setting.isPending ? (
         <p className="muted">Loading…</p>
-      ) : setting.isError ? (
+      ) : setting.isLoadingError || lostAccess(setting) ? (
         <div className="alert alert-bad">{errorText(setting.error)}</div>
       ) : canEdit ? (
         <SettingForm setting={setting.data} />

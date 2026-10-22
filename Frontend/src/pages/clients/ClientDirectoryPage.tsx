@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { canBrowseClients, canEditClients } from '../../auth/permissions'
 import { useMe } from '../../auth/useAuth'
+import { RefreshFailed } from '../../components/RefreshFailed'
+import { lostAccess } from '../../lib/apiErrors'
 import { formatMobile, initials } from '../../lib/format'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/clients.css'
@@ -99,6 +101,7 @@ function ClientDirectory() {
         )}
       </div>
 
+      <RefreshFailed query={list} what="the list" />
       <div className="card card-fill" style={{ overflow: 'hidden' }}>
         <div className="pad toolbar">
           <input
@@ -134,7 +137,7 @@ function ClientDirectory() {
 
         {list.isPending ? (
           <div className="pad muted card-fill-empty">Loading…</div>
-        ) : list.isError ? (
+        ) : list.isLoadingError || lostAccess(list) ? (
           <div className="pad">
             <div className="alert alert-bad">{errorText(list.error)}</div>
           </div>

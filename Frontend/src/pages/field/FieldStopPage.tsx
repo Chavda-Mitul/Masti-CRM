@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { errorText } from '../../lib/apiErrors'
+import { errorText, lostAccess } from '../../lib/apiErrors'
 import { currentPlace, type Place } from '../../lib/place'
 import { useToast } from '../../lib/toast'
 import { dayName, KIND_LABEL, shortDay } from './labels'
@@ -131,7 +131,7 @@ function CouldntComplete({ jobId }: { jobId: string }) {
       <p className="muted field-fail-hint">Pick why. Your phone adds where you are and the time.</p>
       {reasons.isPending ? (
         <p className="muted">Loading the reasons…</p>
-      ) : reasons.isError ? (
+      ) : reasons.isLoadingError || lostAccess(reasons) ? (
         <div className="alert alert-bad">{errorText(reasons.error)}</div>
       ) : (
         <div className="field-reasons" role="radiogroup" aria-label="Why">

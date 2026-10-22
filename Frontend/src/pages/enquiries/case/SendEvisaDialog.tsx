@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { enquiryKeys, useSendEvisa, useSendEvisaCheck } from '../queries'
 import type { SendEvisaCheck, VisaCase } from '../types'
@@ -58,7 +58,7 @@ export function SendEvisaDialog({ visaCase: c, onClose }: { visaCase: VisaCase; 
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : blockers.length > 0 ? (
           <div className="alert alert-warn">

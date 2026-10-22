@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { lostAccess } from '../../../lib/apiErrors'
 import { addDays, istToday } from '../../../lib/format'
 import { useBlockedDays } from '../../settings/masters/queries'
 import type { BlockTarget } from '../../settings/masters/types'
@@ -116,7 +117,7 @@ export function OpenDayCalendar({
           )
         })}
       </div>
-      {blocked.isError && <p className="field-error">Couldn’t load the holidays. Please try again.</p>}
+      {(blocked.isLoadingError || lostAccess(blocked)) && <p className="field-error">Couldn’t load the holidays. Please try again.</p>}
       <div className="collection-picked">
         <span className="muted small">{label}</span>
         <strong>{value ? longDate(value) : 'Pick a day'}</strong>

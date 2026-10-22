@@ -1,4 +1,4 @@
-import { errorText } from '../../../lib/apiErrors'
+import { errorText, lostAccess } from '../../../lib/apiErrors'
 import { useDocketSticker } from '../queries'
 import type { VisaCase } from '../types'
 import { DocketSticker } from './DocketSticker'
@@ -22,7 +22,7 @@ export function StickerCard({ visaCase: c }: { visaCase: VisaCase }) {
     <section className="card pad sticker-card">
       <h2 className="h2">Sticker</h2>
       {sticker.isPending && <p className="muted small">Loading…</p>}
-      {sticker.isError && <div className="alert alert-bad">{errorText(sticker.error) ?? 'Couldn’t load the sticker.'}</div>}
+      {(sticker.isLoadingError || lostAccess(sticker)) && <div className="alert alert-bad">{errorText(sticker.error) ?? 'Couldn’t load the sticker.'}</div>}
       {s && (
         <div className="sticker-card-body">
           <div

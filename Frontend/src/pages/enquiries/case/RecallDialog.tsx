@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RequiredMark } from '../../../components/FormField'
-import { errorBody, errorCode, errorText } from '../../../lib/apiErrors'
+import { errorBody, errorCode, errorText, lostAccess } from '../../../lib/apiErrors'
 import { formatRupees, parseRupees, rupeesInput } from '../../../lib/money'
 import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
@@ -86,7 +86,7 @@ export function RecallDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onC
 
         {check.isPending ? (
           <p className="muted">Checking…</p>
-        ) : check.isError ? (
+        ) : check.isLoadingError || lostAccess(check) ? (
           <div className="alert alert-bad">{errorText(check.error)}</div>
         ) : (
           <>
