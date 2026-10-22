@@ -201,7 +201,7 @@ Decided 21 Oct 2026 (project lead):
    in for me" card with "Portal for this visa", by the Head or the Visa HOD.
 
 Built:
-- **Data** (migration `20261021230000_visa_case_portal`): `VisaOffering.portalLoginId` (one of the Visa department's
+- **Data** (migration `20261022130000_visa_case_portal`): `VisaOffering.portalLoginId` (one of the Visa department's
   active portals; removing the portal clears it, audited) and `PortalLoginUse.enquiryId` (the case a press was made on).
 - **Endpoints:** `PATCH /api/masters/visa-offerings/:id` takes `portalLoginId` (400 unless an active Visa portal;
   audited as `visaOffering.update`); the visa list and checklist show `portal`. `POST /api/visa/cases/:caseNo/portal/open`
