@@ -387,7 +387,7 @@ export function NewEnquiryPage() {
 
         <fieldset className="enq-fieldset">
           <legend className="lbl">
-            How urgent?
+            Urgency
             <RequiredMark />
           </legend>
           {urgencyLevels.isLoadingError || lostAccess(urgencyLevels) ? (
@@ -397,7 +397,7 @@ export function NewEnquiryPage() {
               control={control}
               name="urgencyId"
               render={({ field }) => (
-                <div className="pill-group" role="radiogroup" aria-label="How urgent">
+                <div className="pill-group" role="radiogroup" aria-label="Urgency">
                   {(urgencyLevels.data ?? [])
                     .filter((l) => l.isActive)
                     .map((l) => {

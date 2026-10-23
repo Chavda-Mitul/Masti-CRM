@@ -17,7 +17,9 @@ picking Urgent doesn't change the quote.
   lists.
 - **Normal (code `NORMAL`) is where every new enquiry starts,** so it can be renamed but never switched off (refused by
   the service and by a CHECK). Every other level counts as urgent and shows as a red tag with its name.
-- **New enquiry** asks "How urgent?" with a pill per active level, Normal already picked (part 2).
+- **New enquiry** asks for the urgency with a pill per active level, Normal already picked (part 2).
+- **The heading is "Urgency"** on New enquiry and in the case rail (project lead, 23 Oct 2026, after trying it; it was
+  first built as "How urgent?"). The levels' own names stay editable in Settings.
 - **Changed later on the case** by its owner, the Visa HOD or the Head, while the case is open, at any step; every
   change is audited (part 3).
 - **All enquiries** shows the red tag on the row and in the side panel, and an "Urgent only" tick box on the All and
@@ -50,7 +52,7 @@ picking Urgent doesn't change the quote.
   isn't used any more. Pick another." The level is in the `visa.case.create` audit (`urgency: "URGENT"`), and the case
   sends `urgency { id, code, name }`.
 - **Screen:**
-  - New enquiry's Visa card ends with "How urgent? *": a pill for each active level, in the list's order, with Normal
+  - New enquiry's Visa card ends with "Urgency *": a pill for each active level, in the list's order, with Normal
     already picked. A picked urgent pill is red. The form sends null for Normal.
   - The case header shows a red tag with the level's name (e.g. "Urgent") before the status, for every level but
     Normal.
@@ -63,7 +65,7 @@ picking Urgent doesn't change the quote.
   Reminders switch, so there's no `updatedAt` token, and it moves neither the step nor the case's `updatedAt`. An
   unchanged pick writes nothing. A switched-off level is a 400 on `urgencyId`, except on the case that already has
   it. Audited `visa.urgency.update` on the VisaCase, with `clientId` and the codes before and after.
-- **Screen:** "How urgent" in the right rail, after "Whose job it is now".
+- **Screen:** "Urgency" in the right rail, after "Whose job it is now".
   - For whoever may change it: one button per active level (plus this case's own, if switched off since). It saves on
     click with a toast ("Marked Urgent."), and the urgent levels show solid red when picked.
   - For anyone else (a view-only user, or the case on hold or closed): the level as text, red when urgent.

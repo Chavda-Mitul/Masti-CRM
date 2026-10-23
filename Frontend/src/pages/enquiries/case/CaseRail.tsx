@@ -102,9 +102,9 @@ function UrgencySection({ visaCase: c }: { visaCase: VisaCase }) {
 
   return (
     <div className="rail-section">
-      <div className="lbl">How urgent</div>
+      <div className="lbl">Urgency</div>
       {canChange && choices.length > 0 ? (
-        <div className="seg-btn" role="radiogroup" aria-label="How urgent" style={{ marginTop: 8 }}>
+        <div className="seg-btn" role="radiogroup" aria-label="Urgency" style={{ marginTop: 8 }}>
           {choices.map((l) => {
             const on = l.id === c.urgency.id
             return (

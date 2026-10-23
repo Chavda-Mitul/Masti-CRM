@@ -777,7 +777,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - **Came in through:** WhatsApp · Landline · Mobile · Social media · Email ✅. Add Justdial etc. as source tags.
 - **What do they want?** Multi-select: Visa · Holiday · Hotel · Insurance · Ticket ⚠️.
 - **Visa, just four things:** Country, Visa type, Adults (min 1), Children (min 0) ✅, **plus the travel month/date** (the written doc's "time", decided 8 Oct 2026; captured at intake only). "Names, travel dates, duration and single/multiple entry are filled later, when the documents come in."
-- **How urgent?** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): a pill for each active urgency level (Settings → Masters → Lists → Urgency levels), with Normal already picked. A picked urgent pill is red. The case header then shows a red tag with the level's name (built 23 Oct 2026, part 2).
+- **Urgency** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1; the heading was "How urgent?" until the project lead picked "Urgency" the same day): a pill for each active urgency level (Settings → Masters → Lists → Urgency levels), with Normal already picked. A picked urgent pill is red. The case header then shows a red tag with the level's name (built 23 Oct 2026, part 2).
 - **"Save and send document list"**, with a "When you save" panel:
   - the document list and price breakup go to the client on WhatsApp ✅
   - reminders start (every 2 days at 11:00 ⚠️) until the documents are complete
@@ -792,7 +792,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - Title "{Country (zone)} {type} visa — {family}", the case no., and "came in {date} on {source} · {pax} · travelling {month}".
 - A status chip, **Postpone or cancel**, and the **next-step button**.
 - Step chips 1–8. Click any chip to jump to that step.
-- **How urgent** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): a red tag with the level's name before the status chip, for every level but Normal (built, part 2). The right rail's **How urgent** switch changes it (built, part 3): its owner, the Visa HOD or the Head, at any step while the case is open, audited. Everyone else sees the level as text.
+- **Urgency** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): a red tag with the level's name before the status chip, for every level but Normal (built, part 2). The right rail's **Urgency** switch changes it (built, part 3): its owner, the Visa HOD or the Head, at any step while the case is open, audited. Everyone else sees the level as text.
 
 **Status and next-step labels per step** ⚠️ (wording):
 
