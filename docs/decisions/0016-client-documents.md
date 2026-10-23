@@ -3,7 +3,7 @@
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
   (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6). Upload
-  rules per paper (Amendment 1, 23 Oct 2026): part 1, the rules in Settings, built; part 2, refusing uploads, next.
+  rules per paper (Amendment 1): built 23 Oct 2026, the rules in Settings (part 1) and refusing uploads (part 2).
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -43,12 +43,18 @@ other check. It isn't in the demo: change request 16.
 - **A photo size is its shape** (aspect ratio), not its pixels: a JPG or PNG's width ÷ height must match the paper's
   (35 × 45 mm is 7 : 9), within about 3%, since a scan is never cut exactly. The margin is fixed in the code. A PDF
   isn't checked for it.
-- **A wrong upload is refused** (part 2): on the client page's Documents card and in Step 2's Save scan, with a toast at
-  the bottom saying what the paper needs. The server refuses it too.
+- **A wrong upload is refused** (part 2): on the client page's Add a scan and in Step 2's Save scan, with a toast at the
+  bottom saying what the paper needs (the project lead chose the toast for Add a scan too, 23 Oct). The server refuses
+  it too.
 
 **Defaults added when building (23 Oct 2026; say if any is wrong):**
 - **Only uploads are checked:** a scan already in the vault stays valid when a paper's rules change later.
 - **New papers start with all three types ticked** and no other rule.
+- **A phone photo shot on its side** (its EXIF rotation) is measured as it shows, upright.
+- **The messages name the paper and the rule,** e.g. `"Photos" must be a JPG or PNG. This file is a PDF.` A file's size
+  is rounded up when it's too big and down when too small, so it never reads as the limit itself.
+- **Add a scan** drops a wrong file (the box stays open to pick another), checks a picked file again when the paper
+  changes, and shows the chosen paper's rules under File. Its save errors now come as a toast, like Step 2's.
 
 **Built, part 1 (23 Oct 2026):**
 - **Data:** `DocumentMaster.fileTypes` (`ScanFileType[]`, default all three), `minSizeMb`, `maxSizeMb` (double),
@@ -63,6 +69,21 @@ other check. It isn't in the demo: change request 16.
   rules group in the paper's drawer.
 - **Tests:** `visaMasters.test.ts` (defaults, who may change them, the audit, each wrong value, against the stored row,
   the database CHECKs) and `frontendRules.test.ts` (the form's limits match the server's).
+
+**Built, part 2 (23 Oct 2026):**
+- **Before the upload is read** (`scanLimit`, `clientDocuments.service.ts`, for both the client page and the case): a
+  type the paper doesn't take is refused (415), and the largest scan is the paper's own max, else
+  `clients.documents.maxMb` (413).
+- **On the file** (`checkScanRules`, before anything is kept): the type and size again, then a JPG's or PNG's shape
+  from its headers (`imageSize`, `src/lib/images.ts`: PNG IHDR, JPEG frame header and EXIF orientation; no new package).
+- **The rules reach the screens** from the document master as it is now: `papers[].rules` in the client's vault, and
+  each case paper's `scanRules` (read live, like the scan warning). `src/modules/clients/scanRules.ts` holds the select:
+  the case query is built when the app loads, inside an import cycle with the vault's service.
+- **The browser checks type and size first,** with the server's words (`scanFileProblem`, mirrored in
+  `Frontend/src/pages/clients/scanFiles.ts`). The shape is the server's alone: it reads the pixels.
+- **Tests:** `images.test.ts` (sizes, EXIF), `clientDocuments.test.ts` (each refusal and its message, nothing kept, the
+  margin, a turned phone photo, a PDF's shape not checked, a paper's own max above the shared one),
+  `visaCaseScans.test.ts` (the case's rules, read live; Save scan refuses), `frontendRules.test.ts` (the same words).
 
 ## Context
 

@@ -548,7 +548,8 @@ router.put("/cases/:caseNo/travellers/:travellerId/evisa-check", visaEdit, async
 
 /**
  * "Save scan" (0016 Decision 5): keeps one of a traveller's papers in the client's document vault. The file itself is
- * the body (a PDF, JPEG or PNG). The case, the paper and the size limit are checked before the body is read.
+ * the body (a PDF, JPEG or PNG). The case, the paper, its file types and the size limit are checked before the body is
+ * read.
  */
 router.post("/cases/:caseNo/documents/:documentId/scan", visaEdit, async (req, res) => {
   const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
@@ -556,7 +557,7 @@ router.post("/cases/:caseNo/documents/:documentId/scan", visaEdit, async (req, r
   const caseNo = caseNoParam.parse(req.params.caseNo);
   const documentId = idParam.parse(req.params.documentId);
   const actor = actorOf(req);
-  const { maxBytes, tooBig } = await caseScansService.caseScanLimit(caseNo, documentId, actor);
+  const { maxBytes, tooBig } = await caseScansService.caseScanLimit(caseNo, documentId, contentType, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await caseScansService.saveCaseScan(caseNo, documentId, contentType, bytes, actor) });
 });

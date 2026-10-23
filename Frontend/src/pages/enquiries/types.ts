@@ -1,6 +1,6 @@
 // API shapes for the enquiry screens. Mirrors Backend/src/modules/enquiries and Backend/src/modules/visa.
 
-import type { ScanType } from '../clients/scanFiles'
+import type { ScanRules, ScanType } from '../clients/scanFiles'
 
 export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
 export type EnquiryOrigin = 'STAFF' | 'WHATSAPP_BOT' | 'WEBSITE_FORM' | 'CROSS_SELL' | 'IMPORT'
@@ -184,6 +184,8 @@ export interface CaseDocument {
   fromScan: { id: string; uploadedAt: string } | null
   /** "Scan not saved" (0016 Decision 7): ticked Original or Xerox, the master asks for a scan, none kept during this case. */
   noScan: boolean
+  /** What "Save scan" takes for this paper (0016 Amendment 1), from the document master as it is now. */
+  scanRules: ScanRules
   /** Step 3: null until the processor checks it. */
   check: DocumentCheck | null
   /** Why it needs replacing, from Settings → Masters → Document problems. */

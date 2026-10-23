@@ -2,7 +2,7 @@
 
 import type { ConsentCompany, ConsentPerson } from '../consent/queries'
 import type { EnquiryStatus } from '../enquiries/types'
-import type { ScanType } from './scanFiles'
+import type { ScanRules, ScanType } from './scanFiles'
 
 export type ClientKind = 'INDIVIDUAL' | 'CORPORATE'
 export type PassportStatus = 'VALID' | 'RENEW_SOON' | 'EXPIRED'
@@ -123,10 +123,13 @@ export interface ClientDocumentGroup {
   papers: { paper: Paper; current: ClientDocumentScan; older: ClientDocumentScan[] }[]
 }
 
-/** The whole vault, for HODs and the Head: the groups, the papers a scan can be, and the largest scan. */
+/**
+ * The whole vault, for HODs and the Head: the groups, the papers a scan can be with their upload rules (0016
+ * Amendment 1), and the shared largest scan.
+ */
 export interface ClientDocuments {
   groups: ClientDocumentGroup[]
-  papers: Paper[]
+  papers: (Paper & { rules: ScanRules })[]
   maxMb: number
 }
 

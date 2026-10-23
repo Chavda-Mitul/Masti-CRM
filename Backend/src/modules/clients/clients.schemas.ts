@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClientKind } from "../../../generated/prisma/enums";
+import { ClientKind, type ScanFileType } from "../../../generated/prisma/enums";
 import { gstin, pan, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, stateCode, upperNoSpaces } from "../../lib/shared.schemas";
 
 // Only zod, the generated enums and the shared fields (src/lib/shared.schemas.ts) are imported here, so these schemas
@@ -121,6 +121,74 @@ export const lookupQuerySchema = z.object({
 export const SCAN_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" } as const;
 export type ScanType = keyof typeof SCAN_TYPES;
 export const isScanType = (contentType: string): contentType is ScanType => Object.hasOwn(SCAN_TYPES, contentType);
+
+/** A scan's type as a paper's upload rules name it. */
+export const FILE_TYPE_OF = { "application/pdf": "PDF", "image/jpeg": "JPG", "image/png": "PNG" } as const satisfies Record<ScanType, ScanFileType>;
+
+/**
+ * A paper's upload rules (docs/decisions/0016-client-documents.md Amendment 1, change request 16), as the document
+ * master keeps them. Null: no minimum, the shared largest scan (clients.documents.maxMb), no photo shape.
+ */
+export interface ScanRules {
+  fileTypes: ScanFileType[];
+  minSizeMb: number | null;
+  maxSizeMb: number | null;
+  photoWidthMm: number | null;
+  photoHeightMm: number | null;
+}
+
+/** How far a photo's shape may be from its paper's: a scan is never cut exactly. Fixed (project lead, 23 Oct 2026). */
+export const SHAPE_MARGIN = 0.03;
+
+/** As src/lib/pdf.ts's MB: this file imports no lib code. */
+const BYTES_PER_MB = 1024 * 1024;
+
+// The rules' messages. Frontend/src/pages/clients/scanFiles.ts repeats fileTypesText and scanFileProblem word for word,
+// and Backend/tests/frontendRules.test.ts compares them. `what` names the paper, e.g. "Photos" in quotes.
+
+/** "a PDF", "a JPG or PNG", "a PDF, JPG or PNG". */
+export function fileTypesText(types: readonly ScanFileType[]) {
+  return `a ${types.length > 1 ? `${types.slice(0, -1).join(", ")} or ${types.at(-1)}` : types[0]}`;
+}
+
+/** A size in MB to 2 decimals: up for a file too big, down for one too small, so it never reads as the limit itself. */
+function sizeText(bytes: number, round: "up" | "down") {
+  const hundredths = (round === "up" ? Math.ceil : Math.floor)((bytes / BYTES_PER_MB) * 100);
+  return hundredths === 0 ? "under 0.01 MB" : `${hundredths / 100} MB`;
+}
+
+/** Why the paper doesn't take a file of this type, or null. */
+export function fileTypeProblem(what: string, rules: ScanRules, type: ScanFileType) {
+  return rules.fileTypes.includes(type) ? null : `${what} must be ${fileTypesText(rules.fileTypes)}. This file is ${fileTypesText([type])}.`;
+}
+
+/** Why a file of this type and size can't be the paper's scan, or null. The largest is the paper's own, else the shared one. */
+export function scanFileProblem(what: string, rules: ScanRules, sharedMaxMb: number, file: { type: ScanFileType; sizeBytes: number }) {
+  const wrongType = fileTypeProblem(what, rules, file.type);
+  if (wrongType) return wrongType;
+  const maxMb = rules.maxSizeMb ?? sharedMaxMb;
+  if (file.sizeBytes > maxMb * BYTES_PER_MB) {
+    return `${what} can be at most ${maxMb} MB. This file is ${sizeText(file.sizeBytes, "up")}: scan it at a lower resolution.`;
+  }
+  if (rules.minSizeMb !== null && file.sizeBytes < rules.minSizeMb * BYTES_PER_MB) {
+    return `${what} must be at least ${rules.minSizeMb} MB. This file is ${sizeText(file.sizeBytes, "down")}: scan it at a higher resolution.`;
+  }
+  return null;
+}
+
+/**
+ * Why a photo this many pixels wide and high doesn't have its paper's shape (width ÷ height, within SHAPE_MARGIN), or
+ * null. The server's only: it reads the pixels.
+ */
+export function photoShapeProblem(what: string, rules: ScanRules, pixels: { width: number; height: number }) {
+  if (rules.photoWidthMm === null || rules.photoHeightMm === null) return null;
+  const wanted = rules.photoWidthMm / rules.photoHeightMm;
+  if (Math.abs(pixels.width / pixels.height / wanted - 1) <= SHAPE_MARGIN) return null;
+  return (
+    `${what} must have the shape of ${rules.photoWidthMm} × ${rules.photoHeightMm} mm. This photo is ` +
+    `${pixels.width} × ${pixels.height} pixels: crop it to that shape and upload it again.`
+  );
+}
 
 /**
  * Which paper a scan is, and whose. Sent as the upload's query, since the body is the file itself. No member means the

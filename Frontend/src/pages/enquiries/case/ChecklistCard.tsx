@@ -330,7 +330,7 @@ function VaultLine({
     if (picker.current) picker.current.value = ''
     if (!picked) return
     const type = scanType(picked)
-    const problem = scanProblem(picked, maxMb)
+    const problem = scanProblem(picked, { name: d.name, rules: d.scanRules }, maxMb)
     if (problem || !type) {
       toast({ tone: 'bad', message: problem ?? 'Pick a PDF, JPEG or PNG.' })
       return
