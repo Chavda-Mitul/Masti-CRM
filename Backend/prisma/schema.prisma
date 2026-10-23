@@ -2125,8 +2125,9 @@ model MessageTemplate {
   name               String
   /// The words, with {{placeholders}} such as {{client_name}}, {{visa}} and {{case_no}}.
   body               String
-  /// The provider's id for the Meta-approved version (Twilio: its Content SID, "HX…"). Empty until approved: the body
-  /// then goes as written, which WhatsApp delivers only within 24 hours of the client's last message to us.
+  /// The provider's id for the Meta-approved version (Twilio: its Content SID, "HX…"; Meta: the template's name, in
+  /// META_TEMPLATE_LANGUAGE). Empty until approved: the body then goes as written, which WhatsApp delivers only within
+  /// 24 hours of the client's last message to us.
   providerTemplateId String?
   /// Switched off: its messages are still written down, but never sent (SKIPPED).
   isActive           Boolean           @default(true)

@@ -1,5 +1,6 @@
 import { env } from "../../config/env";
 import { logOnlyProvider } from "./logOnly";
+import { metaProvider } from "./meta";
 import { twilioProvider } from "./twilio";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppProvider } from "./types";
 
@@ -32,6 +33,13 @@ function pick(): WhatsAppProvider | null {
         );
       }
       return twilioProvider({ accountSid, authToken, from });
+    }
+    case "meta": {
+      const { META_ACCESS_TOKEN: accessToken, META_PHONE_NUMBER_ID: phoneNumberId, META_TEMPLATE_LANGUAGE: templateLanguage } = env;
+      if (!accessToken || !phoneNumberId) {
+        throw new WhatsAppError("Meta isn't set up yet: add META_ACCESS_TOKEN and META_PHONE_NUMBER_ID to Backend/.env.", false);
+      }
+      return metaProvider({ accessToken, phoneNumberId, templateLanguage });
     }
   }
 }

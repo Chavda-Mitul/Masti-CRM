@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError } from "../src/lib/whatsapp";
 import { forTheLog, logOnlyProvider } from "../src/lib/whatsapp/logOnly";
+import { metaProvider } from "../src/lib/whatsapp/meta";
 import { twilioProvider } from "../src/lib/whatsapp/twilio";
 
-// Sending WhatsApp (docs/decisions/0020-whatsapp-sending.md): the provider .env picks, and what Twilio is asked to do.
-// Twilio itself is a stand-in here, so no test ever sends a real message.
+// Sending WhatsApp (docs/decisions/0020-whatsapp-sending.md): the provider .env picks, and what Twilio and Meta are
+// asked to do. Both are stand-ins here, so no test ever sends a real message.
 
 const twilioMock = vi.hoisted(() => {
   class RestException extends Error {
@@ -238,5 +239,183 @@ describe("Twilio", () => {
       message: "Couldn't reach Twilio: timeout of 30000ms exceeded",
       retryable: true,
     });
+  });
+});
+
+describe("Meta", () => {
+  const meta = { accessToken: "token", phoneNumberId: "1433814799810645", templateLanguage: "en_US" };
+  const fetchMock = vi.fn<typeof fetch>();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Meta's answer: its JSON, with that HTTP status. */
+  const answer = (status: number, json: unknown) => new Response(JSON.stringify(json), { status, headers: { "Content-Type": "application/json" } });
+  /** Meta took the message. */
+  const taken = (id: string) => answer(200, { messaging_product: "whatsapp", contacts: [{ input: "919825041234", wa_id: "919825041234" }], messages: [{ id }] });
+  /** Meta turned the request down, as its Graph API does. */
+  const refused = (status: number, code: number, details: string, subcode?: number) =>
+    answer(status, {
+      error: { message: `(#${code}) ${details}`, type: "OAuthException", code, ...(subcode ? { error_subcode: subcode } : {}), error_data: { messaging_product: "whatsapp", details }, fbtrace_id: "Ab1" },
+    });
+  /** What Meta was asked: the address, the headers and the message. */
+  const asked = () => {
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    return { url, headers: init?.headers, message: JSON.parse(String(init?.body)) as unknown };
+  };
+  const request = { messaging_product: "whatsapp", recipient_type: "individual", to: "919825041234" };
+
+  it("sends our own words to the client's number, without the +", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM1"));
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const sent = await metaProvider(meta).send({ to, body: "All documents received." });
+
+    expect(sent).toEqual({ providerMessageId: "wamid.HBgM1" });
+    expect(asked()).toEqual({
+      url: "https://graph.facebook.com/v26.0/1433814799810645/messages",
+      headers: { Authorization: "Bearer token", "Content-Type": "application/json" },
+      message: { ...request, type: "text", text: { body: "All documents received." } },
+    });
+    // Meta is given 30 seconds, well inside the send job's 2 minutes (src/lib/jobs.ts).
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    timeout.mockRestore();
+  });
+
+  it("sends a file with our words as its caption: Meta fetches it from the link it's given (0025, part 2)", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM2"));
+    const url = "https://crm.masti.in/api/public/message-files/m1/VISA-2026-0041_Rakesh-Mehta_evisa.pdf?key=k";
+    await metaProvider(meta).send({ to, body: "Your e-visa is attached.", attachment: { url, fileName: "VISA-2026-0041_Rakesh-Mehta_evisa.pdf" } });
+
+    expect(asked().message).toEqual({
+      ...request,
+      type: "document",
+      document: { link: url, filename: "VISA-2026-0041_Rakesh-Mehta_evisa.pdf", caption: "Your e-visa is attached." },
+    });
+  });
+
+  it("sends an approved template by name, in the templates' language, with its named values and not our words", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM3"));
+    const variables = { client_name: "Rakesh Mehta", case_no: "VISA-2026-0041" };
+    await metaProvider(meta).send({ to, body: "Dear Rakesh Mehta, …", template: { id: "visa_documents_received", variables } });
+
+    expect(asked().message).toEqual({
+      ...request,
+      type: "template",
+      template: {
+        name: "visa_documents_received",
+        language: { code: "en_US" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", parameter_name: "client_name", text: "Rakesh Mehta" },
+              { type: "text", parameter_name: "case_no", text: "VISA-2026-0041" },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it("sends numbered values in their order, and a template without values on its own", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM4"));
+    const provider = metaProvider(meta);
+    await provider.send({ to, body: "Your appointment is coming up on Fri 24 Oct at 10:30", template: { id: "appointment", variables: { "2": "10:30", "1": "Fri 24 Oct" } } });
+    expect(asked().message).toMatchObject({
+      template: { components: [{ type: "body", parameters: [{ type: "text", text: "Fri 24 Oct" }, { type: "text", text: "10:30" }] }] },
+    });
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(taken("wamid.HBgM5"));
+    await provider.send({ to, body: "Hello World", template: { id: "hello_world", variables: {} } });
+    expect(asked().message).toEqual({ ...request, type: "template", template: { name: "hello_world", language: { code: "en_US" } } });
+  });
+
+  it("puts a file in the document header of an approved template", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM6"));
+    const url = "https://crm.masti.in/api/public/message-files/m1/evisa.pdf?key=k";
+    await metaProvider(meta).send({
+      to,
+      body: "Dear Rakesh Mehta, …",
+      template: { id: "visa_evisa_ready", variables: { client_name: "Rakesh Mehta" } },
+      attachment: { url, fileName: "evisa.pdf" },
+    });
+
+    expect(asked().message).toMatchObject({
+      template: {
+        components: [
+          { type: "header", parameters: [{ type: "document", document: { link: url, filename: "evisa.pdf" } }] },
+          { type: "body", parameters: [{ type: "text", parameter_name: "client_name", text: "Rakesh Mehta" }] },
+        ],
+      },
+    });
+  });
+
+  it("explains a refusal in plain words, or keeps Meta's own for one we don't know; neither is worth another try", async () => {
+    const provider = metaProvider(meta);
+    fetchMock.mockResolvedValueOnce(refused(401, 190, "Error validating access token: Session has expired"));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: expect.stringContaining("Meta refused the access token: it has expired or is wrong."),
+      retryable: false,
+    });
+
+    fetchMock.mockResolvedValueOnce(refused(400, 100, "Object with ID '1433814799810645' does not exist", 33));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: expect.stringContaining("Meta doesn't know this phone number ID"),
+      retryable: false,
+    });
+
+    fetchMock.mockResolvedValueOnce(refused(400, 132001, "template name (visa_x) does not exist in en_US"));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Meta has no approved template by this name in this language. Check the template's name and META_TEMPLATE_LANGUAGE.",
+      retryable: false,
+    });
+
+    fetchMock.mockResolvedValueOnce(refused(400, 135000, "Generic user error"));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Meta error 135000: Generic user error (https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes)",
+      retryable: false,
+    });
+  });
+
+  it("tries again later only when Meta was down or busy", async () => {
+    const provider = metaProvider(meta);
+    fetchMock.mockResolvedValueOnce(new Response("<html>Bad gateway</html>", { status: 502 }));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({ message: "Meta answered 502 without saying why.", retryable: true });
+
+    fetchMock.mockResolvedValueOnce(refused(400, 130429, "Rate limit hit"));
+    expect((await refusal(provider.send({ to, body: "Hi" }))).retryable).toBe(true);
+    fetchMock.mockResolvedValueOnce(refused(400, 131056, "Pair rate limit hit"));
+    expect((await refusal(provider.send({ to, body: "Hi" }))).retryable).toBe(true);
+  });
+
+  it("tries again when the request never reached Meta, but not when it may have got there", async () => {
+    const provider = metaProvider(meta);
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed", { cause: networkError("getaddrinfo ENOTFOUND graph.facebook.com", "ENOTFOUND") }));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Couldn't reach Meta: getaddrinfo ENOTFOUND graph.facebook.com",
+      retryable: true,
+    });
+
+    fetchMock.mockRejectedValueOnce(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Meta didn't answer within 30 seconds, so the message may or may not have gone. Check the chat.",
+      retryable: false,
+    });
+
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed", { cause: networkError("other side closed", "UND_ERR_SOCKET") }));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({
+      message: "Meta didn't answer (other side closed), so the message may or may not have gone. Check the chat.",
+      retryable: false,
+    });
+
+    // Taken, but with no id to follow it by: it may have gone, so it isn't sent again.
+    fetchMock.mockResolvedValueOnce(answer(200, {}));
+    expect(await refusal(provider.send({ to, body: "Hi" }))).toMatchObject({ retryable: false });
   });
 });

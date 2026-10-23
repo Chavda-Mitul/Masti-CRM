@@ -10,14 +10,14 @@ export interface WhatsAppMessage {
    */
   body: string;
   /**
-   * The Meta-approved template as the provider knows it (Twilio: the Content SID, "HX…"), with a value for each of its
-   * {{placeholders}}, keyed as the template names them ("1", "2" or "client_name").
+   * The Meta-approved template as the provider knows it (Twilio: the Content SID, "HX…"; Meta: the template's name),
+   * with a value for each of its {{placeholders}}, keyed as the template names them ("1", "2" or "client_name").
    */
   template?: { id: string; variables: Record<string, string> };
   /**
    * One file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): a link the provider fetches it
-   * from, which works for a short while only (its key is a secret), and the file's name. Only with our own words: an
-   * approved template with a document comes with Masti's templates (M1).
+   * from, which works for a short while only (its key is a secret), and the file's name. Twilio takes one only with our
+   * own words; Meta also puts it in the document header of an approved template that has one.
    */
   attachment?: { url: string; fileName: string };
   /** Values only the client may see (the door code, secrets.ts): a live log hides them. Never sent on. */
@@ -38,11 +38,17 @@ export class WhatsAppError extends Error {
   }
 }
 
+/**
+ * Network errors that mean the request never reached the provider, so trying again can't send twice: the name wasn't
+ * found, there was no way to it (the office internet down), or it turned the connection away.
+ */
+export const NOT_REACHED: ReadonlySet<string> = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "EHOSTUNREACH", "ENETDOWN"]);
+
 /** Where a message has got to, in the CRM's words: the same for every provider. */
 export type WhatsAppStatus = "QUEUED" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 
 export interface WhatsAppProvider {
-  /** Saved with each message, so the log shows who carried it: "twilio", "log". */
+  /** Saved with each message, so the log shows who carried it: "twilio", "meta", "log". */
   readonly name: string;
   /** Hands the message over, returning the provider's id for it. Delivery happens later. Throws a WhatsAppError. */
   send(message: WhatsAppMessage): Promise<{ providerMessageId: string }>;
