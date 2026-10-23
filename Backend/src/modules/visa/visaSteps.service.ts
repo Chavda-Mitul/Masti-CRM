@@ -10,8 +10,16 @@ import { currentScan } from "../clients/clientDocuments.service";
 import { VISA_DOCUMENTS_RECEIVED } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
-import { COLLECTING, loadCase, lockCase, TRIP, visaStage, type LockedCase } from "./caseLock";
-import type { LinkTravellerInput, MatureCaseInput, SetRemindersInput, UpdateCaseDocumentInput, UpdateTripInput, UpdateVisaCaseInput } from "./visa.schemas";
+import { COLLECTING, loadCase, lockCase, TRIP, URGENCY, visaStage, type LockedCase } from "./caseLock";
+import type {
+  LinkTravellerInput,
+  MatureCaseInput,
+  SetRemindersInput,
+  SetUrgencyInput,
+  UpdateCaseDocumentInput,
+  UpdateTripInput,
+  UpdateVisaCaseInput,
+} from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
@@ -19,7 +27,8 @@ import { visaMessageBasics } from "./visaMessages";
 import { ageWarnings, appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 2, part one (docs/decisions/0006-visa-documents.md Decisions 2, 3 and 8): naming travellers, ticking
-// documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity.
+// documents, how they reach us and booklets (Decision 4), moving the case from Enquiry to Documents, and maturity. Also
+// how urgent the case is, at any step (docs/decisions/0003-visa-intake.md amendment 1).
 
 /**
  * Enquiry → Documents, once: the first name or tick does it, as does "Start collecting documents". The stage is matched
@@ -193,6 +202,37 @@ export async function setReminders(caseNo: string, input: SetRemindersInput, act
         clientId: enquiry.clientId,
         before: { remindersOn: before.remindersOn },
         after: { remindersOn: input.on },
+        ip: actor.ip,
+      },
+      tx,
+    );
+  });
+  return getVisaCaseById(enquiry.id);
+}
+
+/**
+ * How urgent the case is (docs/decisions/0003-visa-intake.md amendment 1): the owner, the Visa HOD or the Head, at any
+ * step while the case is open. A level switched off since stays on the cases that have it, but isn't picked anew. Like
+ * the Reminders switch, it moves neither the case's step nor its updatedAt. Audited when it changes.
+ */
+export async function setUrgency(caseNo: string, input: SetUrgencyInput, actor: Actor) {
+  const enquiry = await loadCase(caseNo, actor, URGENCY);
+  await prisma.$transaction(async (tx) => {
+    await lockCase(tx, enquiry.id, actor, URGENCY);
+    const before = await tx.visaCase.findUniqueOrThrow({ where: { enquiryId: enquiry.id }, select: { urgency: { select: { id: true, code: true } } } });
+    if (before.urgency.id === input.urgencyId) return;
+    const level = await tx.urgencyLevel.findUnique({ where: { id: input.urgencyId } });
+    if (!level?.isActive) throw fieldError("urgencyId", "That urgency level isn't used any more. Pick another.");
+    await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { urgencyId: level.id } });
+    await audit(
+      {
+        actorId: actor.user.id,
+        action: "visa.urgency.update",
+        entityType: "VisaCase",
+        entityId: enquiry.id,
+        clientId: enquiry.clientId,
+        before: { urgency: before.urgency.code },
+        after: { urgency: level.code },
         ip: actor.ip,
       },
       tx,

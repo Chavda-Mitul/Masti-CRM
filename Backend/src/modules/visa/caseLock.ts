@@ -150,6 +150,15 @@ export const TRIP: StepRule = {
   wrongStage: "Trip details can't change once the file is ready.",
 };
 
+/**
+ * How urgent the case is (docs/decisions/0003-visa-intake.md amendment 1): at any step while the case is open. A
+ * delivered case is closed, so the status check refuses it first.
+ */
+export const URGENCY: StepRule = {
+  stages: ["ENQUIRY", "DOCUMENTS", "FILE_PREPARATION", "DISPATCH", "AT_VENDOR", "DECISION", "PASSPORT_BACK", "DELIVERED"],
+  wrongStage: "How urgent the case is can't change at this step.",
+};
+
 const caseInclude = {
   department: { select: { code: true } },
   stage: true,

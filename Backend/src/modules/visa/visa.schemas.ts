@@ -333,6 +333,13 @@ export const setRemindersSchema = z.object({
 
 export type SetRemindersInput = z.infer<typeof setRemindersSchema>;
 
+/** How urgent the case is (docs/decisions/0003-visa-intake.md amendment 1). A plain pick, like the Reminders switch. */
+export const setUrgencySchema = z.object({
+  urgencyId: z.number("Pick how urgent it is.").int().positive("Pick how urgent it is."),
+});
+
+export type SetUrgencyInput = z.infer<typeof setUrgencySchema>;
+
 /** "Mark documents complete" (Decision 8). Sends the updatedAt the page loaded: a change by someone else is a 409 STALE. */
 export const matureCaseSchema = z.object({
   updatedAt: z.iso.datetime("Reload and try again."),
