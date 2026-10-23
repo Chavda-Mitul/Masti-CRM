@@ -151,6 +151,45 @@ describe("GET /api/enquiries", () => {
     expect((await aarti.get(`/api/enquiries?q=${a2.caseNo}`)).body.enquiries).toHaveLength(0);
   });
 
+  it("tags urgent visa cases and lists only them with Urgent only, across pages (0003 amendment 1)", async () => {
+    await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const aarti = await loginAs("aarti@masti.test");
+    const urgentId = (await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "URGENT" } })).id;
+    const veryUrgent = await prisma.urgencyLevel.create({ data: { code: "VERY_URGENT", name: "Very urgent", sortOrder: 3 } });
+    const normal = await saveVisa(aarti, "9825000001");
+    const urgent = await saveVisa(aarti, "9825000002", { urgencyId: urgentId });
+    const very = await saveVisa(aarti, "9825000003", { urgencyId: veryUrgent.id });
+
+    const all = (await aarti.get("/api/enquiries")).body.enquiries as { id: string; urgent: string | null }[];
+    expect(Object.fromEntries(all.map((e) => [e.id, e.urgent]))).toEqual({ [normal.id]: null, [urgent.id]: "Urgent", [very.id]: "Very urgent" });
+
+    const only = await aarti.get("/api/enquiries?urgent=true");
+    expect(only.body.enquiries.map((e: { id: string }) => e.id).sort()).toEqual([urgent.id, very.id].sort());
+    // The department chips count the filtered list, as with Only mine.
+    expect(only.body.departments.find((d: { code: string }) => d.code === "VISA").count).toBe(2);
+    expect((await aarti.get("/api/enquiries?urgent=false")).body.enquiries).toHaveLength(3);
+
+    const page1 = await aarti.get("/api/enquiries?urgent=true&limit=1");
+    const page2 = await aarti.get(`/api/enquiries?urgent=true&limit=1&cursor=${page1.body.nextCursor}`);
+    expect([page1.body.enquiries[0].id, page2.body.enquiries[0].id].sort()).toEqual([urgent.id, very.id].sort());
+    expect(page2.body.nextCursor).toBeNull();
+
+    // A level switched off since still tags its cases, and still counts as urgent.
+    await prisma.urgencyLevel.update({ where: { id: veryUrgent.id }, data: { isActive: false } });
+    const after = (await aarti.get("/api/enquiries?urgent=true")).body.enquiries as { id: string; urgent: string | null }[];
+    expect(after.find((e) => e.id === very.id)?.urgent).toBe("Very urgent");
+    expect(after).toHaveLength(2);
+  });
+
+  it("tags no case outside Visa, and Urgent only leaves them out", async () => {
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    const hotel = await hotelsEnquiry("+919825000009");
+    const all = (await head.get("/api/enquiries")).body.enquiries as { id: string; urgent: string | null }[];
+    expect(all.find((e) => e.id === hotel.id)?.urgent).toBeNull();
+    expect((await head.get("/api/enquiries?urgent=true")).body.enquiries).toEqual([]);
+  });
+
   it("shows staff only their own enquiries, the HOD the whole department, and the Head everything", async () => {
     await createUser({ name: "Aarti", email: "aarti@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
     await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });

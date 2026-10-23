@@ -112,6 +112,11 @@
 .enq-name:hover {
   color: var(--primary);
 }
+/* An urgent case's red tag after the client's name, in the list and its side panel (0003 amendment 1). */
+.urgent-tag {
+  margin-left: 8px;
+  vertical-align: middle;
+}
 .ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;

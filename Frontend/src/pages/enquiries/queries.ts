@@ -709,6 +709,7 @@ export function useEnquiryList(filters: EnquiryListFilters) {
       else if (filters.status !== 'OPEN') params.set('status', filters.status)
       if (filters.department) params.set('department', filters.department)
       if (filters.mine) params.set('mine', 'true')
+      if (filters.urgent) params.set('urgent', 'true')
       if (filters.q) params.set('q', filters.q)
       if (pageParam) params.set('cursor', pageParam)
       return api<EnquiryListPage>(`/enquiries?${params.toString()}`)

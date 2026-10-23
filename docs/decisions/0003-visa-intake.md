@@ -1,6 +1,6 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings), part 2 (the picker on New enquiry and the case header's tag) and part 3 (changing it on the case) built 23 Oct 2026.
+- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built 23 Oct 2026 in 4 parts: the list in Settings, the picker on New enquiry and the case header's tag, changing it on the case, and the list's tag and "Urgent only" filter.
 - **Date:** 8 Oct 2026 (proposed), 9 Oct 2026 (refreshed and built)
 - **Scope:** the New enquiry form for Visa (demo screen 05), the All enquiries list (demo screens 02/03) and the Step 1 data of a case. The Step 1 case page (demo screen 06) comes next.
 
@@ -69,6 +69,18 @@ picking Urgent doesn't change the quote.
   - For whoever may change it: one button per active level (plus this case's own, if switched off since). It saves on
     click with a toast ("Marked Urgent."), and the urgent levels show solid red when picked.
   - For anyone else (a view-only user, or the case on hold or closed): the level as text, red when urgent.
+
+**Built, part 4 (23 Oct 2026):**
+- **API:** `GET /api/enquiries` rows carry `urgent`: the level's name when it isn't Normal, else null (and null outside
+  Visa). `?urgent=true` lists only visa cases at a level other than Normal, a switched-off one included. It's one of
+  the filters the department chips count, like Only mine, so the chips and the late count follow it. The order and
+  the cursor don't change.
+- **Screen:** All enquiries shows the red tag after the client's name, on the row and in the side panel. An "Urgent
+  only" tick box sits next to Only mine, on the All and Visa lists (other departments have no urgency yet). It's kept
+  in the URL as `?urgent=true`, like the other filters.
+- **Not built** (offered to the project lead): the tag on Today's Up next, the follow-up desk and the client page's
+  case list (their rows already load the level through `rowInclude`), urgent cases sorted first, and telling the HOD
+  when a case is marked urgent.
 
 ## Refresh (9 Oct 2026)
 

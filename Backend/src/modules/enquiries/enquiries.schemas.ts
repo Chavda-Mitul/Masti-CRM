@@ -21,6 +21,11 @@ export const listEnquiriesQuerySchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => v === "true"),
+  /** "Urgent only" (docs/decisions/0003-visa-intake.md amendment 1): visa cases at any urgency level but Normal. */
+  urgent: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   q: z.string().trim().max(100).optional(),
   /** Opaque: the nextCursor of the previous page. */
   cursor: z.string().max(400).optional(),
