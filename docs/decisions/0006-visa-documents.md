@@ -343,7 +343,9 @@ and the Head or an HOD of every one of them edits it.*
 - **Who edits them:** the Head or any HOD, as with the holiday calendar, because they are shared.
 - **Where:** Settings → Masters → Lists.
 - **Outcomes don't trigger anything** ("Wants to cancel" doesn't cancel the case). Staff press Postpone or cancel. This keeps code from branching on editable data.
-- `EnquiryReasonKind` gets `LOST` when closing and losing are built.
+- `EnquiryReasonKind` gets `LOST` when closing and losing are built. *Changed 23 Oct 2026 by
+  [0017](0017-today-dashboard.md) amendment 2: no LOST kind and no LOST status. A cancelled case is lost business, and
+  its cancel reason is why.*
 
 ### 8. Maturity: staff mark it, the HOD assigns a processor
 

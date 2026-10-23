@@ -4,6 +4,7 @@
   the banner and the four tiles (component 1); Up next (component 2); open enquiries by department and the "Comes with
   …" cards (component 3); the notice board and its card on Today (component 4); the visa team's login popup
   (component 5). **Amended 21 Oct 2026:** New enquiries count from a fixed 18:00, with no setting (see *Amendment 1*).
+  **Amended 23 Oct 2026:** Business lost counts cancelled cases as lost and has its numbers (see *Amendment 2*).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
@@ -27,6 +28,28 @@ Monday it counts from Saturday 18:00. The rest of Decision 3 is unchanged.
 - **This sets golden rule 1 aside** (PROJECT_KNOWLEDGE.md §7) for this one value, on purpose. 18:00 is still our guess
   at the demo's "since yesterday evening" ⚠️: if Masti's evening is another time, it is a code change and a redeploy.
 - **Gone:** `GET` and `PUT /api/today/settings`, the `today` Setting row in the seed, and the card in Settings.
+
+## Amendment 2 (23 Oct 2026, project lead): a cancelled case is lost business
+
+The user asked why the Business lost card was still empty. The demo has no "Mark as lost" button: its **Cancel reasons
+are its lost reasons** (Went with another agent, Price higher, No reply… on screen 07's "Postpone or cancel" and the
+report's "Why we lost them"). So Decision 5 is replaced; the project lead chose:
+
+1. **Cancel = lost.** A cancelled case is lost business, with the reason picked when cancelling, whenever it was
+   cancelled and whatever step it had reached (also one whose passports are still to hand back). No new button.
+2. **Booked = a standing invoice:** a main invoice that no credit note cancelled whole, as `liveInvoiceNo` reads it. A
+   visa case is booked once its invoice is raised, before the file goes to the vendor. Other departments' "booked" is
+   decided when they're built.
+3. **"This month" = the cases that came in this month** (India time). Each is Booked, Lost (cancelled) or Still open
+   (the rest: open or postponed, with no standing invoice), so the three add up to Queries in, as the demo's
+   412 = 168 + 171 + 73. A case from last month cancelled this month isn't counted.
+
+- **The card** (`GET /api/today` → `businessLost`): Queries in · Booked (green) · Lost (red) · Still open, then the top
+  3 reasons as bars with counts, most first; a tie goes in the list's order (the reason's sort order). "Nothing lost
+  this month." when none. Whose cases: Decision 1. Still no "Open report" link until Reports (Decision 4).
+- **No LOST status:** `EnquiryStatus` loses `LOST`, which nothing ever set (migration `20261023200000_no_lost_status`),
+  and `EnquiryReasonKind` won't get one (0006 Decision 7).
+- To confirm with Vimal: M52.
 
 ## Context
 
@@ -93,8 +116,11 @@ Per-role dashboards (Q28 / M32) stay open with Vimal; this is our answer until h
   (Stage 3)
 - **Business lost this month:** the demo's four small tiles (Queries in, Booked, Lost, Still open) showing "—", and
   "Comes with marking enquiries lost" where the top three reasons go (Decision 5). No "Open report" link until Reports.
+  *Amended 23 Oct 2026: the card has its numbers (Amendment 2).*
 
 ### 5. Business lost waits for "mark as Lost"
+
+*Replaced 23 Oct 2026 by Amendment 2: a cancelled case is lost business.*
 
 **Decided 19 Oct 2026 (project lead):** cancelled cases are not counted as lost. Cancelled and Lost stay separate
 statuses (0006: the reason list gets LOST when losing is built), and what counts as "Booked" isn't defined yet. The card
@@ -212,5 +238,6 @@ team"):
 
 - **M32 (Q28):** what staff, HODs and Vimal should see on the home screen. Decision 1 stands until then.
 - **The 18:00 cut-off ⚠️:** Masti's own "evening". Fixed in the code since Amendment 1, so another time is a code change.
+- **M52:** Vimal to confirm Amendment 2: cancelled = lost, booked = invoice raised, the month's new enquiries.
 - **Q24 (the IVS feed) and Q25 (weather, automatic alerts):** until then, the board's two cards say what they wait for,
   and IVS news is posted by hand "From the IVS visa-news feed".
