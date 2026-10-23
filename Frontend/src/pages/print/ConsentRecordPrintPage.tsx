@@ -75,10 +75,17 @@ export function ConsentRecordPrintPage() {
 /** Given through the "I agree" link: who, how and when, from where, and the exact words. */
 function LinkRecord({ record: r }: { record: Extract<ConsentRecord, { source: 'LINK' }> }) {
   const rows: [string, string][] = [['Name', r.person.name], ['Relation', r.person.relation], ...detailRows(r.person)]
+  const { guardian } = r.person
   return (
     <>
       <section>
-        <h2>Agreed by</h2>
+        <h2>{guardian ? 'Agreed for' : 'Agreed by'}</h2>
+        {/* A child: their parent or guardian agreed for them (docs/decisions/0022-consent-form.md amendment 2). */}
+        {guardian && (
+          <p>
+            Agreed on their behalf by <strong>{guardian.name}</strong> ({guardian.relation}), as their parent or guardian.
+          </p>
+        )}
         <dl className="record-rows">
           {rows.map(([label, value]) => (
             <div key={label}>

@@ -232,17 +232,33 @@ export interface ConsentFormField {
   fixed: 'DATE_OF_BIRTH' | 'HOME_ADDRESS' | 'OFFICE_ADDRESS' | null
 }
 
-/** The consent form for one person: the fields in use, in order, and their answers keyed by field id. */
+/** Someone in the family who may agree for a child (0022 amendment 2). age: null with no date of birth on file. */
+export interface ConsentGuardianChoice {
+  id: string
+  name: string
+  relation: string
+  age: number | null
+}
+
+/**
+ * The consent form for one person: the fields in use, in order, and their answers keyed by field id. Someone younger
+ * than adultFrom (Settings → Visa) on the day it's saved is a child: a parent or guardian from guardianChoices agrees
+ * for them (amendment 2).
+ */
 export interface ConsentForm {
   fields: ConsentFormField[]
   answers: Record<string, string | null>
+  adultFrom: number
+  guardianId: string | null
+  guardianChoices: ConsentGuardianChoice[]
   /** The person's optimistic-lock token, sent back with the save. */
   personUpdatedAt: string
 }
 
-/** An answer for every field in use, keyed by field id; null leaves one empty. updatedAt is the person's. */
+/** An answer for every field in use, keyed by field id; null leaves one empty. A child's guardian. updatedAt is the person's. */
 export interface ConsentDetailsBody {
   answers: Record<string, string | null>
+  guardianId: string | null
   updatedAt: string
 }
 
@@ -253,8 +269,10 @@ export interface ConsentDetailsBody {
 export type CaseConsent =
   | { state: 'UNLINKED' }
   /** link: the person's open "I agree" link (0022 part 2), sent when the details were saved; null when none is open. */
-  | { state: 'NONE'; details: ConsentDetails; link: { sentAt: string; toMobile: string } | null }
-  | { state: 'ON_FILE'; id: string; agreedAt: string; paperYear: number | null; details: ConsentDetails }
+  /** link.guardian: a child's link went to the parent or guardian who agrees for them (amendment 2). */
+  | { state: 'NONE'; details: ConsentDetails; link: { sentAt: string; toMobile: string; guardian: string | null } | null }
+  /** guardian: who agreed for a child. */
+  | { state: 'ON_FILE'; id: string; agreedAt: string; paperYear: number | null; guardian: string | null; details: ConsentDetails }
 
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
 export type VisaOutcome = 'APPROVED' | 'REFUSED'

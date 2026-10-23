@@ -446,6 +446,9 @@ model ClientMember {
   /// When staff last saved the form, and who.
   consentDetailsAt   DateTime?           @db.Timestamptz(3)
   consentDetailsById String?
+  /// For a child (younger than visa.childAge ⚠️ when the form is saved): the family member who agrees on their behalf
+  /// and gets the "I agree" link (0022 amendment 2). Null for an adult. Checked in the migration: never themselves.
+  consentGuardianId  String?
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   /// Optimistic-lock token, as on Client.
   updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
@@ -454,9 +457,15 @@ model ClientMember {
   relation           Relation            @relation(fields: [relationId], references: [id], onDelete: Restrict)
   createdBy          User                @relation("ClientMemberCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   consentDetailsBy   User?               @relation("ClientMemberConsentDetailsBy", fields: [consentDetailsById], references: [id], onDelete: Restrict)
+  consentGuardian    ClientMember?       @relation("ClientMemberConsentGuardian", fields: [consentGuardianId], references: [id], onDelete: Restrict)
+  /// The children this person agrees for.
+  consentWards       ClientMember[]      @relation("ClientMemberConsentGuardian")
   travellers         VisaCaseTraveller[]
-  consent            Consent?
-  consentLinks       ConsentLink[]
+  consent            Consent?            @relation("ConsentMember")
+  consentLinks       ConsentLink[]       @relation("ConsentLinkMember")
+  /// Links sent to this person to agree for a child, and the consents they gave so.
+  guardianLinks      ConsentLink[]       @relation("ConsentLinkGuardian")
+  guardianConsents   Consent[]           @relation("ConsentGuardian")
   consentAnswers     ConsentAnswer[]
   documents          ClientDocument[]
 
@@ -1555,8 +1564,11 @@ model Consent {
   paperYear  Int?
   /// Who marked the paper consent on file (PAPER).
   markedById String?
+  /// For a child, the parent or guardian who agreed on their behalf (LINK; 0022 amendment 2).
+  guardianId String?
   createdAt  DateTime        @default(now()) @db.Timestamptz(3)
-  member     ClientMember    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  member     ClientMember    @relation("ConsentMember", fields: [memberId], references: [id], onDelete: Restrict)
+  guardian   ClientMember?   @relation("ConsentGuardian", fields: [guardianId], references: [id], onDelete: Restrict)
   wording    ConsentWording? @relation(fields: [wordingId], references: [id], onDelete: Restrict)
   link       ConsentLink?    @relation(fields: [linkId], references: [id], onDelete: Restrict)
   markedBy   User?           @relation("ConsentMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
@@ -1631,22 +1643,25 @@ model ConsentAnswer {
 /// client agrees through it or "Send the link again" replaces it. Checks in the migration: never both used and replaced,
 /// at most one link per person still open, the number's format.
 model ConsentLink {
-  id          String       @id @default(uuid())
+  id          String        @id @default(uuid())
   memberId    String
   /// The case it was sent from.
   enquiryId   String
-  tokenHash   String       @unique
+  tokenHash   String        @unique
   /// Where it went: the person's own number, or the client's main one.
   toMobile    String
-  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
   createdById String
   /// "Send the link again" made a newer one.
-  replacedAt  DateTime?    @db.Timestamptz(3)
+  replacedAt  DateTime?     @db.Timestamptz(3)
   /// The client agreed through it.
-  usedAt      DateTime?    @db.Timestamptz(3)
-  member      ClientMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  enquiry     Enquiry      @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
-  createdBy   User         @relation("ConsentLinkCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  usedAt      DateTime?     @db.Timestamptz(3)
+  /// For a child, the parent or guardian it went to, to agree on their behalf (0022 amendment 2).
+  guardianId  String?
+  member      ClientMember  @relation("ConsentLinkMember", fields: [memberId], references: [id], onDelete: Restrict)
+  guardian    ClientMember? @relation("ConsentLinkGuardian", fields: [guardianId], references: [id], onDelete: Restrict)
+  enquiry     Enquiry       @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  createdBy   User          @relation("ConsentLinkCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   consent     Consent?
 
   @@index([memberId, createdAt])

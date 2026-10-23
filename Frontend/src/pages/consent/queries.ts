@@ -18,12 +18,14 @@ export interface ConsentCompany {
 /**
  * The person as the form shows them, and as the consent keeps them once agreed: the filled-in fields in the form's
  * order, each under its label then (docs/decisions/0022-consent-form.md amendment 1). A date's value is YYYY-MM-DD.
+ * guardian: for a child, the parent or guardian who agrees on their behalf (amendment 2).
  */
 export interface ConsentPerson {
   name: string
   relation: string
   passportNumber: string | null
   rows: { label: string; kind: ConsentFieldKind; value: string }[]
+  guardian: { name: string; relation: string } | null
 }
 
 interface Agreed {

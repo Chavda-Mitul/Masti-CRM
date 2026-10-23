@@ -11,6 +11,13 @@ import { travellerTab } from './labels'
 /** A save the form recovers from by loading again: the fields changed in Settings, or the person changed meanwhile. */
 const reloadable = (error: unknown) => ['FIELDS_CHANGED', 'STALE'].includes(errorCode(error) ?? '')
 
+/** Completed years from one day to another (YYYY-MM-DD), as the server counts an age. */
+function wholeYears(from: string, to: string): number {
+  const [fy = 0, fm = 0, fd = 0] = from.split('-').map(Number)
+  const [ty = 0, tm = 0, td = 0] = to.split('-').map(Number)
+  return tm < fm || (tm === fm && td < fd) ? ty - fy - 1 : ty - fy
+}
+
 /**
  * The consent form's details for one traveller (docs/decisions/0022-consent-form.md, part 1). Staff fill them in by
  * asking the client; they're saved on the person, for life, so the next case already has them. The fields are a master
@@ -60,12 +67,19 @@ function Filling({
   const save = useSaveConsentDetails(caseNo)
   // What staff typed, by field id. A field not touched shows the person's saved answer, as the form last loaded it.
   const [typed, setTyped] = useState<Record<string, string>>({})
+  const [guardianId, setGuardianId] = useState(form.guardianId ?? '')
   const [missing, setMissing] = useState<Record<string, string>>({})
   const issues = errorBody(save.error)?.issues
   const today = istToday()
 
   const valueOf = (field: ConsentFormField) => typed[field.id] ?? form.answers[field.id] ?? ''
   const errorOf = (field: ConsentFormField) => missing[field.id] ?? issues?.[String(field.id)]?.[0]
+
+  // A child (younger than Settings → Visa's "adult from" by the date of birth typed) needs a parent or guardian from the
+  // family, who agrees on their behalf and gets the link (0022 amendment 2).
+  const birthField = form.fields.find((f) => f.fixed === 'DATE_OF_BIRTH')
+  const birth = birthField ? valueOf(birthField) : ''
+  const child = /^\d{4}-\d{2}-\d{2}$/.test(birth) && wholeYears(birth, today) < form.adultFrom
 
   const input = (field: ConsentFormField) => {
     const common = {
@@ -79,7 +93,7 @@ function Filling({
       case 'NUMBER':
         return <input className="input" inputMode="numeric" {...common} />
       case 'LINK':
-        return <input className="input" inputMode="url" maxLength={CONSENT_ANSWER_MAX.LINK} placeholder="Web address"{...common} />
+        return <input className="input" inputMode="url" maxLength={CONSENT_ANSWER_MAX.LINK} placeholder="Web address" {...common} />
       case 'LONG_TEXT':
         return <textarea className="textarea" rows={2} maxLength={CONSENT_ANSWER_MAX.LONG_TEXT} {...common} />
       default:
@@ -89,12 +103,13 @@ function Filling({
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    const empty = Object.fromEntries(form.fields.filter((f) => f.required && !valueOf(f).trim()).map((f) => [f.id, 'Fill this in.']))
+    const empty: Record<string, string> = Object.fromEntries(form.fields.filter((f) => f.required && !valueOf(f).trim()).map((f) => [f.id, 'Fill this in.']))
+    if (child && !guardianId) empty.guardianId = 'Pick the parent or guardian who agrees for them.'
     setMissing(empty)
     if (Object.keys(empty).length) return
     const answers = Object.fromEntries(form.fields.map((f) => [f.id, valueOf(f).trim() || null]))
     save.mutate(
-      { travellerId: traveller.id, answers, updatedAt: form.personUpdatedAt },
+      { travellerId: traveller.id, answers, guardianId: child ? guardianId : null, updatedAt: form.personUpdatedAt },
       {
         onSuccess: () => {
           toast({ tone: 'ok', message: `Details saved for ${name}.` })
@@ -134,6 +149,35 @@ function Filling({
           </FormField>
         ))}
       </div>
+
+      {child && (
+        <>
+          <div className="lbl section-lbl">For a child</div>
+          <div className="form-grid">
+            <FormField
+              label="Parent or guardian who agrees"
+              required
+              wide
+              error={missing.guardianId ?? issues?.guardianId?.[0]}
+              hint={`${name} is under ${form.adultFrom}, so a parent or guardian agrees for them, and the WhatsApp link goes to them.`}
+            >
+              {form.guardianChoices.length > 0 ? (
+                <select className="select" value={guardianId} onChange={(e) => setGuardianId(e.target.value)} aria-required>
+                  <option value="">Pick from the family…</option>
+                  {form.guardianChoices.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} · {g.relation}
+                      {g.age !== null ? `, ${g.age}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="alert alert-warn">No grown-up on this family’s list yet. Add the parent on the client page first.</div>
+              )}
+            </FormField>
+          </div>
+        </>
+      )}
 
       {message && <div className={`alert ${reloadable(save.error) ? 'alert-warn' : 'alert-bad'}`}>{message}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
