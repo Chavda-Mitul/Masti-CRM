@@ -7,9 +7,8 @@ import { sendWhatsApp, whatsAppProvider, type WhatsAppMessage, type WhatsAppStat
 // sends our own words, which WhatsApp delivers only within 24 hours of that phone's last message to us; "template" sends
 // an approved sample template instead, which goes at any time (Twilio's sandbox sample, or Meta's hello_world, which
 // needs META_TEMPLATE_LANGUAGE=en_US and goes only from Meta's public test numbers); "media" adds the file at that
-// link, which the provider fetches
-// (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template: PowerShell's npm drops flags
-// after --. On a server: node dist/src/scripts/whatsappTest.js
+// link, which the provider fetches (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template:
+// PowerShell's npm drops flags after --. On a server: node dist/src/scripts/whatsappTest.js
 
 /** Twilio's sample template in every sandbox: "Your appointment is coming up on {{1}} at {{2}}". */
 const SANDBOX_TEMPLATE = "HXb5b62575e6e4ff6129ad7c8efe1f983e";

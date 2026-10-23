@@ -122,7 +122,9 @@ How piece 1 sends:
   (`META_TEMPLATE_LANGUAGE`, default `en_US`). Named values go by name, numbered ones in order, and a file goes in the
   template's document header.
 - **No status checks:** Meta can't be asked where a message has got to; it reports only through its webhook. Until
-  piece 2 a sent message stays "Sent" on the case (the outbox schedules no checks for such a provider, 0021 Decision 5).
+  piece 2 a sent message stays "Sent" on the case (the outbox schedules no checks for such a provider, 0021 Decision 5),
+  even one that never arrives: our own words outside the 24 hours, or a file Meta couldn't fetch. While we build, send
+  any message from the test phone to Masti's number once a day, so our words keep arriving.
 - **Failures in plain words**, from Meta's error codes: 0 and 190 (the token expired or wrong), 100 with subcode 33
   (wrong phone number ID), 10, 200–299 and 131005 (the token not allowed), 131030 (not on a test number's list), 131047
   (outside the 24 hours), 131026 (undeliverable), 132000 and 132001 (template values or name), 131058 (hello_world from
