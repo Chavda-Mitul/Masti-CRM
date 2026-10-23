@@ -72,7 +72,7 @@ async function main(): Promise<number> {
     }
     console.log(`Handed to ${provider.name} (${providerMessageId}), which can't be asked about delivery. Check WhatsApp on that phone.`);
     if (!useTemplate) {
-      console.log(`Nothing there? Our own words go only within 24 hours of that phone's last message to us: add "template" to send an approved sample.`);
+      console.log(`Nothing there? Our own words go only within 24 hours of that phone's last message to us: send one from it first.`);
     }
     return 0;
   }

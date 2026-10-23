@@ -96,8 +96,13 @@ hours of the tester's last message to the sandbox.
 
 On 23 Oct 2026 the project lead switched development from Twilio to **Meta's WhatsApp Cloud API**, with no provider in
 between. Masti's choice for go-live is still M2. Twilio stays a choice (`WHATSAPP_PROVIDER=twilio`), since nothing that
-decides what to send changes. The Meta app is set up, and its number is **+91 88855 52064, "Masti Travels"**, connected
-to the Cloud API. The work comes in three pieces, one at a time:
+decides what to send changes. The Meta app is set up, and its number is **Masti's own, +91 88855 52064, "Masti
+Travels"** (the project lead, 23 Oct 2026), connected to the Cloud API. Meta's answer for it on 23 Oct 2026:
+- **Not on the WhatsApp Business app** (`is_on_biz_app: false`), so a client's reply to it reaches no one until the CRM
+  takes in incoming messages (Meta's webhook, piece 2; the Holidays "Client replied — your turn" needs them anyway).
+- **Up to 250 clients a day** (`TIER_250`) until Masti's business is verified with Meta, which raises the limit.
+
+The work comes in three pieces, one at a time:
 
 1. **Sending (built):** `src/lib/whatsapp/meta.ts`, `WHATSAPP_PROVIDER=meta`.
 2. **Delivered, read and failed:** Meta's webhook. It needs its own decision record (an address with no login), a public
