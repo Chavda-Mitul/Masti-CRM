@@ -5,12 +5,17 @@ import { sendWhatsApp, whatsAppProvider, type WhatsAppMessage, type WhatsAppStat
 // npm run whatsapp:test -- 98250 41234 [template | media <https link to a file>]
 // Sends one test WhatsApp through WHATSAPP_PROVIDER to check the set-up (docs/decisions/0020-whatsapp-sending.md). It
 // sends our own words, which WhatsApp delivers only within 24 hours of that phone's last message to us; "template" sends
-// Twilio's sandbox sample template instead, which goes at any time; "media" adds the file at that link, which the
-// provider fetches (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template: PowerShell's npm
-// drops flags after --. On a server: node dist/src/scripts/whatsappTest.js
+// an approved sample template instead, which goes at any time (Twilio's sandbox sample, or Meta's hello_world, which
+// needs META_TEMPLATE_LANGUAGE=en_US and goes only from Meta's public test numbers); "media" adds the file at that
+// link, which the provider fetches
+// (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template: PowerShell's npm drops flags
+// after --. On a server: node dist/src/scripts/whatsappTest.js
 
 /** Twilio's sample template in every sandbox: "Your appointment is coming up on {{1}} at {{2}}". */
 const SANDBOX_TEMPLATE = "HXb5b62575e6e4ff6129ad7c8efe1f983e";
+
+/** Meta's sample template in every WhatsApp account, in English (US), with no values. */
+const META_TEMPLATE = "hello_world";
 
 const WAIT_SECONDS = 30;
 
@@ -35,18 +40,22 @@ async function main(): Promise<number> {
   }
   const provider = whatsAppProvider();
   if (!provider) {
-    console.error("WhatsApp is off. Set WHATSAPP_PROVIDER and the TWILIO_* values in Backend/.env (see .env.example).");
+    console.error("WhatsApp is off. Set WHATSAPP_PROVIDER and its values (TWILIO_* or META_*) in Backend/.env (see .env.example).");
     return 1;
   }
 
   const day = dayLabel(istToday());
   const time = istTimestamp().slice(11, 16);
+  const sample: WhatsAppMessage =
+    provider.name === "meta"
+      ? { to, body: "Hello World (Meta's sample template)", template: { id: META_TEMPLATE, variables: {} } }
+      : {
+          to,
+          body: `Your appointment is coming up on ${day} at ${time}`,
+          template: { id: SANDBOX_TEMPLATE, variables: { "1": day, "2": time } },
+        };
   const message: WhatsAppMessage = useTemplate
-    ? {
-        to,
-        body: `Your appointment is coming up on ${day} at ${time}`,
-        template: { id: SANDBOX_TEMPLATE, variables: { "1": day, "2": time } },
-      }
+    ? sample
     : mediaUrl
       ? {
           to,
@@ -57,7 +66,14 @@ async function main(): Promise<number> {
 
   const { providerMessageId } = await sendWhatsApp(message);
   if (!provider.checkStatus) {
-    console.log(`Handed to "${provider.name}" (${providerMessageId}), which can't report delivery. See the server log.`);
+    if (provider.name === "log") {
+      console.log(`Handed to "log" (${providerMessageId}), which can't report delivery. See the server log.`);
+      return 0;
+    }
+    console.log(`Handed to ${provider.name} (${providerMessageId}), which can't be asked about delivery. Check WhatsApp on that phone.`);
+    if (!useTemplate) {
+      console.log(`Nothing there? Our own words go only within 24 hours of that phone's last message to us: add "template" to send an approved sample.`);
+    }
     return 0;
   }
   console.log(`Handed to ${provider.name} (${providerMessageId}). Waiting for delivery…`);
@@ -80,10 +96,14 @@ async function main(): Promise<number> {
   return 0;
 }
 
+// The script ends on its own rather than by process.exit(): exiting just after a fetch (Meta's provider) trips a libuv
+// assertion on Windows ("UV_HANDLE_CLOSING") and gives a wrong exit code.
 main().then(
-  (code) => process.exit(code),
+  (code) => {
+    process.exitCode = code;
+  },
   (error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    process.exitCode = 1;
   },
 );

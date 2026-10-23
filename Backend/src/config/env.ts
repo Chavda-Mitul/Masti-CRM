@@ -58,9 +58,10 @@ const envSchema = z.object({
   // The sender, e.g. "MASTI TOUR AND TRAVEL <crm@example.com>".
   SMTP_FROM: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   // WhatsApp to clients (CLAUDE.md rule 7, docs/decisions/0020-whatsapp-sending.md), through src/lib/whatsapp only.
-  // "twilio" sends through Twilio (its sandbox while we build); "log" writes each message to the server log instead, for
-  // a laptop with no WhatsApp account; "off" sends nothing ("WhatsApp isn't set up yet").
-  WHATSAPP_PROVIDER: z.enum(["off", "log", "twilio"]).default("off"),
+  // "meta" sends through Meta's Cloud API directly; "twilio" through Twilio (its sandbox while we build); "log" writes
+  // each message to the server log instead, for a laptop with no WhatsApp account; "off" sends nothing ("WhatsApp isn't
+  // set up yet").
+  WHATSAPP_PROVIDER: z.enum(["off", "log", "twilio", "meta"]).default("off"),
   // From the Twilio Console's Account Info; needed when WHATSAPP_PROVIDER is twilio.
   TWILIO_ACCOUNT_SID: z.preprocess(
     (v) => (v === "" ? undefined : v),
@@ -72,8 +73,19 @@ const envSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.string().regex(/^\+[1-9]\d{6,14}$/, "The number with + and the country code, e.g. +14155238886.").optional(),
   ),
-  // Outside production every client message goes to this phone instead (docs/decisions/0021-whatsapp-outbox.md): yours,
-  // joined to the Twilio sandbox. Needed outside production when WHATSAPP_PROVIDER is twilio; refused in production.
+  // Meta's Cloud API (0020 amendment 1); needed when WHATSAPP_PROVIDER is meta. A system user's token, never committed:
+  // the temporary one from the App Dashboard's API Setup stops working within a day.
+  META_ACCESS_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // The number messages come from, as Meta knows it: App Dashboard → WhatsApp → API Setup → Phone number ID.
+  META_PHONE_NUMBER_ID: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^\d+$/, "Digits only: copy the Phone number ID from the App Dashboard's WhatsApp → API Setup.").optional(),
+  ),
+  // The language Masti's templates are approved in at Meta: en_US is that of Meta's own hello_world.
+  META_TEMPLATE_LANGUAGE: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("en_US")),
+  // Outside production every client message goes to this phone instead (docs/decisions/0021-whatsapp-outbox.md): yours
+  // (with Twilio's sandbox, joined to it). Needed outside production when WHATSAPP_PROVIDER is twilio or meta; refused
+  // in production.
   WHATSAPP_TEST_NUMBER: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z
@@ -155,11 +167,11 @@ const envSchema = z.object({
       message: "Set it in production: portal logins can't be saved or used without it (see .env.example).",
     });
   }
-  if (e.NODE_ENV !== "production" && e.WHATSAPP_PROVIDER === "twilio" && !e.WHATSAPP_TEST_NUMBER) {
+  if (e.NODE_ENV !== "production" && (e.WHATSAPP_PROVIDER === "twilio" || e.WHATSAPP_PROVIDER === "meta") && !e.WHATSAPP_TEST_NUMBER) {
     ctx.addIssue({
       code: "custom",
       path: ["WHATSAPP_TEST_NUMBER"],
-      message: "Outside production, set the phone that gets every message instead of the client: yours, joined to the sandbox.",
+      message: "Outside production, set the phone that gets every message instead of the client: yours (with Twilio's sandbox, joined to it).",
     });
   }
 });

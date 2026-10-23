@@ -78,6 +78,8 @@ On 21 Oct 2026 the project lead chose three things:
    - This needs no public web address, so it works on a laptop and on a server reachable only from the office.
    - The times recorded are when the CRM learned of each change, so they're up to the next check late. Twilio's status
      webhook can replace this later.
+   - *Meta's Cloud API (0020 Amendment 1, 23 Oct 2026) can't be asked, so no checks are queued for its messages: they
+     stay "sent" until Meta's webhook reports them (0020 Amendment 1, piece 2).*
 6. **Outside production, every message goes to the test number** (`WHATSAPP_TEST_NUMBER`), so a laptop never
    messages a real client.
    - The server refuses to start without one outside production when `WHATSAPP_PROVIDER=twilio`.

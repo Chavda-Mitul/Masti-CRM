@@ -1,6 +1,7 @@
 # 0020 · Sending WhatsApp
 
 - **Status:** decided and built, step 1 of 5 (20 Oct 2026, project lead). The provider for go-live is still open (M2).
+  *Since 23 Oct 2026 we build on Meta's Cloud API directly; Twilio stays a choice: see Amendment 1.*
 - **Date:** 20 Oct 2026
 - **Scope:** how the backend hands a WhatsApp message to a provider, which provider, and how to check the set-up. Not
   what is sent or when: the outbox (0003 Decision 6) and the visa messages come next (below).
@@ -23,6 +24,7 @@ changing provider must not touch the code that decides what to send.
    - `log`: the message goes into the server log instead, for a laptop with no WhatsApp account, as Mailpit catches
      email. The server warns at start-up if production uses it.
    - `twilio`: `twilio.ts`, with `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_WHATSAPP_FROM`.
+   - `meta` (since 23 Oct 2026, Amendment 1): `meta.ts`, with `META_ACCESS_TOKEN` and `META_PHONE_NUMBER_ID`.
 
    Another provider (Meta's Cloud API directly, Gupshup, Interakt…) is one more file, one more `case` in `index.ts` and
    one more name in `env.ts`. Templates are approved again at the new provider, so a template's provider id is data,
@@ -48,7 +50,7 @@ changing provider must not touch the code that decides what to send.
 
 | Setting (`Backend/.env`) | Default | Meaning |
 | --- | --- | --- |
-| `WHATSAPP_PROVIDER` | `off` | `off`, `log` or `twilio` |
+| `WHATSAPP_PROVIDER` | `off` | `off`, `log`, `twilio` or `meta` (Amendment 1) |
 | `TWILIO_ACCOUNT_SID` | empty | Starts with `AC`: Twilio Console → Account Info |
 | `TWILIO_AUTH_TOKEN` | empty | Next to it. Never committed |
 | `TWILIO_WHATSAPP_FROM` | empty | The sending number with + and the country code; the sandbox's is `+14155238886` |
@@ -88,4 +90,54 @@ hours of the tester's last message to the sandbox.
    from the CRM's own short-lived link.*
 4. **The consent "I agree" link** (message 4, filling the consent flag from 0006).
 5. **Delivered and read ticks:** Twilio's status webhook, checked with the Auth Token. It needs a public address
-   (ngrok on a laptop).
+   (ngrok on a laptop). *With Meta it's Meta's webhook: Amendment 1, piece 2.*
+
+## Amendment 1 (23 Oct 2026): Meta's Cloud API directly
+
+On 23 Oct 2026 the project lead switched development from Twilio to **Meta's WhatsApp Cloud API**, with no provider in
+between. Masti's choice for go-live is still M2. Twilio stays a choice (`WHATSAPP_PROVIDER=twilio`), since nothing that
+decides what to send changes. The Meta app is set up, and its number is **+91 88855 52064, "Masti Travels"**, connected
+to the Cloud API. The work comes in three pieces, one at a time:
+
+1. **Sending (built):** `src/lib/whatsapp/meta.ts`, `WHATSAPP_PROVIDER=meta`.
+2. **Delivered, read and failed:** Meta's webhook. It needs its own decision record (an address with no login), a public
+   https address (a tunnel on a laptop), and the Meta app published: an unpublished app gets only test webhooks.
+3. **Masti's templates** created and approved in WhatsApp Manager, each one's name on its template row. The door code
+   (message 16) is an authentication template with a copy-code button, and the consent link may go in a URL button:
+   both need their own components.
+
+How piece 1 sends:
+- **One request per message** to `https://graph.facebook.com/v26.0/{phone number id}/messages`, with Node's own
+  `fetch` (no new package) and the access token. Meta gets 30 seconds to answer, as Twilio does. The number goes
+  without its `+`.
+- **Our own words** go as a text message; **a file** as a document, from the CRM's own short-lived link (0025
+  Decision 4), with our words as its caption. Meta fetches it, so the link must be reachable from the internet, as with
+  Twilio.
+- **A template** goes by its name (`MessageTemplate.providerTemplateId`) in one language for all of them
+  (`META_TEMPLATE_LANGUAGE`, default `en_US`). Named values go by name, numbered ones in order, and a file goes in the
+  template's document header.
+- **No status checks:** Meta can't be asked where a message has got to; it reports only through its webhook. Until
+  piece 2 a sent message stays "Sent" on the case (the outbox schedules no checks for such a provider, 0021 Decision 5).
+- **Failures in plain words**, from Meta's error codes: 0 and 190 (the token expired or wrong), 100 with subcode 33
+  (wrong phone number ID), 10, 200–299 and 131005 (the token not allowed), 131030 (not on a test number's list), 131047
+  (outside the 24 hours), 131026 (undeliverable), 132000 and 132001 (template values or name), 131058 (hello_world from
+  a real number), 133010 (number not registered), 131042 (payment), 131031 and 368 (account restricted), 131053 (the
+  file). Others keep Meta's details and the link to its list of codes.
+- **Tried again** only when Meta was down or busy: HTTP 500 and above, 429, and codes 4, 80007, 130429, 131000, 131016,
+  131056, 131057 and 133004. A request that never left is tried again; a timeout or a dropped connection isn't, since
+  the message may have gone.
+- **The test command:** `template` sends Meta's `hello_world`, which Meta allows only from its public test numbers, so
+  from Masti's number the check is our own words, within 24 hours of a message from that phone. The command now ends
+  without `process.exit()`, which crashes Node on Windows just after a `fetch` (a libuv assertion, exit code 127).
+
+| Setting (`Backend/.env`) | Default | Meaning |
+| --- | --- | --- |
+| `META_ACCESS_TOKEN` | empty | A system user's token with `whatsapp_business_messaging`. The App Dashboard's temporary one stops working within a day. Never committed |
+| `META_PHONE_NUMBER_ID` | empty | App Dashboard → WhatsApp → API Setup → Phone number ID (digits) |
+| `META_TEMPLATE_LANGUAGE` | `en_US` | The language Masti's templates are approved in at Meta |
+
+`META_WHATSAPP_BUSINESS_ACCOUNT_ID` is noted in `.env` too, for piece 3 (reading the templates' approval).
+
+**Before piece 2:** a permanent token. In Meta Business Settings → Users → System users, add one, give it the app and
+the WhatsApp account, and generate a token with `whatsapp_business_messaging` and `whatsapp_business_management`. It
+goes straight into `Backend/.env`, never into a chat.

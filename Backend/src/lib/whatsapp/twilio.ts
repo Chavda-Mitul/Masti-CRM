@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import { WhatsAppError, type WhatsAppProvider, type WhatsAppStatus } from "./types";
+import { NOT_REACHED, WhatsAppError, type WhatsAppProvider, type WhatsAppStatus } from "./types";
 
 // WhatsApp through Twilio (https://www.twilio.com/docs/whatsapp): its sandbox while we build, Masti's own number once
 // Meta approves it (docs/decisions/0020-whatsapp-sending.md). Everything Twilio-specific stays in this file.
@@ -13,12 +13,6 @@ export interface TwilioSettings {
 
 /** Twilio gives up on a request after this long, well inside the send job's 2 minutes (src/lib/jobs.ts). */
 const TIMEOUT_MS = 30_000;
-
-/**
- * Errors that mean the request never reached Twilio, so trying again can't send twice: the name wasn't found, there was
- * no way to it (the office internet down), or it turned the connection away.
- */
-const NOT_REACHED = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "EHOSTUNREACH", "ENETDOWN"]);
 
 export function twilioProvider(settings: TwilioSettings): Required<WhatsAppProvider> {
   const client = twilio(settings.accountSid, settings.authToken, { timeout: TIMEOUT_MS });
