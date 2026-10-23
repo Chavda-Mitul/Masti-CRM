@@ -38,11 +38,14 @@ other check. It isn't in the demo: change request 16.
   | File type | PDF, JPG, PNG; at least one ticked | all three |
   | Min size | 0.01–50 MB, up to 2 decimals (0.3) | no minimum |
   | Max size | the same, above the min | `clients.documents.maxMb` (20 MB ⚠️) |
-  | Photo size | width × height in whole mm, 10–200 each, both or neither | no check |
+  | Photo size | width × height in whole mm, any size from 1 up, both or neither | no check |
 
 - **A photo size is its shape** (aspect ratio), not its pixels: a JPG or PNG's width ÷ height must match the paper's
   (35 × 45 mm is 7 : 9), within about 3%, since a scan is never cut exactly. The margin is fixed in the code. A PDF
   isn't checked for it.
+- **No size range on the photo size** (project lead, 23 Oct 2026, after trying it): any whole number from 1 up on each
+  side saves, since only the shape counts (500 × 500 is a square, like 35 × 35). It was 10–200 mm when first built. The
+  only top is the column's own, 32,767 (smallint); migration `20261023144000_photo_size_any` swaps the CHECK.
 - **A wrong upload is refused** (part 2): on the client page's Add a scan and in Step 2's Save scan, with a toast at the
   bottom saying what the paper needs (the project lead chose the toast for Add a scan too, 23 Oct). The server refuses
   it too.
@@ -59,7 +62,7 @@ other check. It isn't in the demo: change request 16.
 **Built, part 1 (23 Oct 2026):**
 - **Data:** `DocumentMaster.fileTypes` (`ScanFileType[]`, default all three), `minSizeMb`, `maxSizeMb` (double),
   `photoWidthMm`, `photoHeightMm` (smallint); migration `20261023100000_document_upload_rules`, with CHECKs for at
-  least one type, 0.01–50 MB with the min below the max, and both photo sides (10–200) or neither. Changes are audited
+  least one type, 0.01–50 MB with the min below the max, and both photo sides (above 0) or neither. Changes are audited
   `document.update`, like the paper's other fields.
 - **Rules between fields** (min below max, both photo sides) are checked against the whole row after the change, so a
   partial save can't split them (`uploadRulesProblem`, `visaMasters.schemas.ts`).

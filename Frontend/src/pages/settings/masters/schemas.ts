@@ -22,8 +22,8 @@ export const MAX_LETTER_CHARS = 6000
 export const MAX_CONSENT_WORDING_CHARS = 8000
 /** The largest file a document's max size may allow. */
 export const MAX_DOCUMENT_MB = 50
-/** A document's photo size: each side, in mm. */
-export const PHOTO_MM = { min: 10, max: 200 } as const
+/** A document's photo size: any whole number on each side, since only the shape is checked; the top is the column's. */
+export const PHOTO_MM = { min: 1, max: 32767 } as const
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -460,7 +460,8 @@ const photoMm = z.string().superRefine((value, ctx) => {
   if (blankOk(value)) return
   const mm = Number(value)
   if (!Number.isInteger(mm)) ctx.addIssue({ code: 'custom', message: 'Whole mm only.' })
-  else if (mm < PHOTO_MM.min || mm > PHOTO_MM.max) ctx.addIssue({ code: 'custom', message: `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.` })
+  else if (mm < PHOTO_MM.min) ctx.addIssue({ code: 'custom', message: `At least ${PHOTO_MM.min}.` })
+  else if (mm > PHOTO_MM.max) ctx.addIssue({ code: 'custom', message: `At most ${PHOTO_MM.max.toLocaleString('en-IN')}.` })
 })
 
 export const documentFormSchema = z

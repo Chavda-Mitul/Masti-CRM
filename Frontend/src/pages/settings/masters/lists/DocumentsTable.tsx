@@ -188,10 +188,10 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
         <input className="input" type="number" min={0.01} step={0.01} inputMode="decimal" {...register('maxSizeMb')} placeholder="e.g. 0.3" />
       </FormField>
       <FormField label="Photo width (mm, optional)" error={errors.photoWidthMm?.message} hint="Fill in both, or leave both blank.">
-        <input className="input" type="number" min={10} step={1} inputMode="numeric" {...register('photoWidthMm')} placeholder="e.g. 35" />
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('photoWidthMm')} placeholder="e.g. 35" />
       </FormField>
       <FormField label="Photo height (mm, optional)" error={errors.photoHeightMm?.message} hint="Only the shape is checked, on JPG and PNG.">
-        <input className="input" type="number" min={10} step={1} inputMode="numeric" {...register('photoHeightMm')} placeholder="e.g. 45" />
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('photoHeightMm')} placeholder="e.g. 45" />
       </FormField>
     </MasterDrawer>
   )
