@@ -71,8 +71,11 @@ export const updateEmbassySchema = z.object({
 
 /** The largest file a paper's max size may allow. */
 export const MAX_DOCUMENT_MB = 50;
-/** A photo size's sides, in mm. */
-export const PHOTO_MM = { min: 10, max: 200 } as const;
+/**
+ * A photo size's sides: any whole number, since only the shape (width ÷ height) is checked (the project lead, 23 Oct
+ * 2026). The top is the column's own limit (smallint).
+ */
+export const PHOTO_MM = { min: 1, max: 32767 } as const;
 
 const FILE_TYPE_ORDER = Object.values(ScanFileType);
 /** At least one; kept in PDF, JPG, PNG order, so saving the same ticks again changes nothing. */
@@ -88,8 +91,8 @@ const sizeMb = z
 const photoMm = z
   .number()
   .int("Whole mm only.")
-  .min(PHOTO_MM.min, `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.`)
-  .max(PHOTO_MM.max, `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.`);
+  .min(PHOTO_MM.min, `At least ${PHOTO_MM.min}.`)
+  .max(PHOTO_MM.max, `At most ${PHOTO_MM.max.toLocaleString("en-IN")}.`);
 
 export interface UploadRules {
   minSizeMb: number | null;

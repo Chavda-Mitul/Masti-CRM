@@ -195,13 +195,22 @@ describe("countries, visa types, documents and offerings", () => {
     await refused({ fileTypes: [] }, "fileTypes", "Tick at least one file type.");
     await refused({ maxSizeMb: 0.305 }, "maxSizeMb", "Up to 2 decimals.");
     await refused({ maxSizeMb: 51 }, "maxSizeMb", "0.01 to 50 MB.");
-    await refused({ photoWidthMm: 5 }, "photoWidthMm", "10 to 200 mm.");
+    await refused({ photoWidthMm: 0 }, "photoWidthMm", "At least 1.");
+    await refused({ photoWidthMm: 40000 }, "photoWidthMm", "At most 32,767.");
+    await refused({ photoWidthMm: 35.5 }, "photoWidthMm", "Whole mm only.");
     // Against the stored row too: a min at or above the saved max of 0.3, a width without a height.
     await refused({ minSizeMb: 0.3 }, "minSizeMb", "Min size must be less than max size.");
     await refused({ photoHeightMm: null }, "photoHeightMm", "Enter both width and height.");
     const bothNew = await hod.post("/api/masters/documents").send({ code: "OCI_CARD", name: "OCI card", minSizeMb: 2, maxSizeMb: 1 });
     expect(bothNew.status).toBe(400);
     expect(bothNew.body.issues.minSizeMb).toEqual(["Min size must be less than max size."]);
+
+    // A photo size can be any size: only its shape is checked (the project lead, 23 Oct 2026).
+    for (const size of [{ photoWidthMm: 500, photoHeightMm: 500 }, { photoWidthMm: 3, photoHeightMm: 4 }]) {
+      const res = await hod.patch(`/api/masters/documents/${voter}`).send(size);
+      expect(res.status).toBe(200);
+      expect(res.body.document).toMatchObject(size);
+    }
 
     // Blank clears a rule.
     const cleared = await hod.patch(`/api/masters/documents/${voter}`).send({ minSizeMb: "", maxSizeMb: null, photoWidthMm: null, photoHeightMm: null });
@@ -211,6 +220,8 @@ describe("countries, visa types, documents and offerings", () => {
     // The database refuses them too (hand-written CHECKs).
     const write = (data: object) => prisma.documentMaster.update({ where: { id: voter }, data });
     await expect(write({ photoWidthMm: 35 })).rejects.toThrow(/DocumentMaster_photo_size/);
+    await expect(write({ photoWidthMm: 0, photoHeightMm: 45 })).rejects.toThrow(/DocumentMaster_photo_size/);
+    await expect(write({ photoWidthMm: 1000, photoHeightMm: 1 })).resolves.toMatchObject({ photoWidthMm: 1000 });
     await expect(write({ fileTypes: [] })).rejects.toThrow(/DocumentMaster_fileTypes_some/);
     await expect(write({ minSizeMb: 2, maxSizeMb: 1 })).rejects.toThrow(/DocumentMaster_size_range/);
   });
