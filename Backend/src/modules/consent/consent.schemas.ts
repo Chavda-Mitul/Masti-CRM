@@ -17,6 +17,13 @@ export const consentAgreeSchema = z.object({
 /** The longest wording, as the database allows (ConsentWording_body_text). The frontend keeps the same limit. */
 export const MAX_CONSENT_WORDING_CHARS = 8000;
 
+/**
+ * The longest answer each kind of consent form field takes (amendment 1): the limits the form's columns had before. A
+ * date and a number have their own shape. The database allows 300 (ConsentAnswer_value_text); the frontend keeps the
+ * same limits.
+ */
+export const CONSENT_ANSWER_MAX = { TEXT: 100, LONG_TEXT: 300, LINK: 300 } as const;
+
 /** A new version of the wording (part 2b), made from the version in use when the editor opened (basedOnId). */
 export const addConsentWordingSchema = z.object({
   body: z

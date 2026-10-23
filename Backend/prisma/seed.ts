@@ -17,7 +17,7 @@ import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedMessageTemplates } from "../src/modules/messages/messages.seed";
-import { seedConsentWording } from "../src/modules/consent/consent.seed";
+import { seedConsentFields, seedConsentWording } from "../src/modules/consent/consent.seed";
 import {
   AWB_KEY,
   DEFAULT_AWB,
@@ -125,6 +125,8 @@ async function main() {
   await seedMessageTemplates(prisma);
   // The consent form's draft wording (docs/decisions/0022-consent-form.md), until Masti's (Q9): only into an empty table.
   await seedConsentWording(prisma);
+  // Its fields (0022 amendment 1): the demo's and the ones Vimal asked for, only into an empty table.
+  await seedConsentFields(prisma);
   await prisma.setting.upsert({
     where: { key: FIRST_FOLLOW_UP_KEY },
     update: {},

@@ -21,6 +21,8 @@ export const MAX_LETTER_COUNTRIES = 50
 export const MAX_LETTER_CHARS = 6000
 /** The longest consent wording, as the database allows. */
 export const MAX_CONSENT_WORDING_CHARS = 8000
+/** The longest answer each kind of consent form field takes (a date and a number have their own shape). */
+export const CONSENT_ANSWER_MAX = { TEXT: 100, LONG_TEXT: 300, LINK: 300 } as const
 /** The largest file a document's max size may allow. */
 export const MAX_DOCUMENT_MB = 50
 /** A document photo's sides, in mm or pixels: any whole number, since only the rule limits them; the top is the column's. */

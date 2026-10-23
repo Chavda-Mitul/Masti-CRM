@@ -206,39 +206,37 @@ export interface CaseFile {
 }
 
 /**
- * The consent form's details on the person (docs/decisions/0022-consent-form.md, part 1): staff fill them in by asking
- * the client, for life. filledAt stays null until the form is saved (the date of birth may already be there).
+ * Whether the consent form's details are filled in (docs/decisions/0022-consent-form.md, part 1): staff fill them in by
+ * asking the client, for life. filledAt stays null until the form is saved. The form itself loads on its own.
  */
 export interface ConsentDetails {
-  dateOfBirth: string | null
-  spouseDateOfBirth: string | null
-  anniversary: string | null
-  motherDateOfBirth: string | null
-  fatherDateOfBirth: string | null
-  residentialAddress: string | null
-  officeAddress: string | null
-  /** A year, in whole rupees. */
-  annualIncome: number | null
-  profession: string | null
-  education: string | null
   filledAt: string | null
   filledBy: PersonRef | null
-  /** The person's optimistic-lock token. */
+}
+
+/** What a consent form field takes (0022 amendment 1). */
+export type ConsentFieldKind = 'TEXT' | 'LONG_TEXT' | 'DATE' | 'NUMBER' | 'LINK'
+
+/** One field on the consent form, from the master in Settings. fixed: one other screens read (age, the covering letter). */
+export interface ConsentFormField {
+  id: number
+  label: string
+  kind: ConsentFieldKind
+  required: boolean
+  fixed: 'DATE_OF_BIRTH' | 'HOME_ADDRESS' | 'OFFICE_ADDRESS' | null
+}
+
+/** The consent form for one person: the fields in use, in order, and their answers keyed by field id. */
+export interface ConsentForm {
+  fields: ConsentFormField[]
+  answers: Record<string, string | null>
+  /** The person's optimistic-lock token, sent back with the save. */
   personUpdatedAt: string
 }
 
-/** Every field each time; null clears one. updatedAt is the person's (personUpdatedAt). */
+/** An answer for every field in use, keyed by field id; null leaves one empty. updatedAt is the person's. */
 export interface ConsentDetailsBody {
-  dateOfBirth: string
-  spouseDateOfBirth: string | null
-  anniversary: string | null
-  motherDateOfBirth: string | null
-  fatherDateOfBirth: string | null
-  residentialAddress: string
-  officeAddress: string | null
-  annualIncome: number | null
-  profession: string | null
-  education: string | null
+  answers: Record<string, string | null>
   updatedAt: string
 }
 

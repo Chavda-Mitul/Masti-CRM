@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api'
 import { errorCode } from '../../lib/apiErrors'
+import type { ConsentFieldKind } from '../enquiries/types'
 
 // The client's consent page (docs/decisions/0022-consent-form.md, part 2; Backend src/modules/consent). No login: the
 // token from the link is the key, sent in the body so it never sits in an address a server logs.
@@ -14,22 +15,15 @@ export interface ConsentCompany {
   phone2: string | null
 }
 
-/** The person as the form shows them, and as the consent keeps them once agreed. Dates are YYYY-MM-DD. */
+/**
+ * The person as the form shows them, and as the consent keeps them once agreed: the filled-in fields in the form's
+ * order, each under its label then (docs/decisions/0022-consent-form.md amendment 1). A date's value is YYYY-MM-DD.
+ */
 export interface ConsentPerson {
   name: string
   relation: string
   passportNumber: string | null
-  dateOfBirth: string | null
-  spouseDateOfBirth: string | null
-  anniversary: string | null
-  motherDateOfBirth: string | null
-  fatherDateOfBirth: string | null
-  residentialAddress: string | null
-  officeAddress: string | null
-  /** A year, in whole rupees. */
-  annualIncome: number | null
-  profession: string | null
-  education: string | null
+  rows: { label: string; kind: ConsentFieldKind; value: string }[]
 }
 
 interface Agreed {

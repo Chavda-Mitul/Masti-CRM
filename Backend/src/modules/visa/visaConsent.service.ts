@@ -1,10 +1,11 @@
-import type { ClientMember } from "../../../generated/prisma/client";
+import type { ConsentField } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh, staleError } from "../../lib/changes";
-import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
-import { conflict, fieldError, notFound } from "../../lib/httpError";
+import { istToday, toDbDate } from "../../lib/dates";
+import { conflict, fieldErrors, HttpError, notFound } from "../../lib/httpError";
 import { getCompanyDetails } from "../company/company.settings";
+import { activeConsentFields, answerOf, answersOf, cleanAnswer, toConsentFieldDto, type AnsweringPerson } from "../consent/consentFields";
 import { newConsentToken } from "../consent/consentToken";
 import { VISA_CONSENT_LINK } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
@@ -16,9 +17,8 @@ import { visaMessageBasics } from "./visaMessages";
 
 // The consent & liability form (docs/decisions/0022-consent-form.md). Part 1: staff fill in a traveller's details by
 // asking the client; they live on the person (ClientMember), for life, so the next case and the visa forms reuse them.
-// Part 2: saving them sends the client the "I agree" link on WhatsApp, once, while the person hasn't agreed.
-
-const DATES = ["dateOfBirth", "spouseDateOfBirth", "anniversary", "motherDateOfBirth", "fatherDateOfBirth"] as const;
+// The fields are a master (amendment 1). Part 2: saving them sends the client the "I agree" link on WhatsApp, once,
+// while the person hasn't agreed.
 
 /** The case and the named traveller's person, for the owner, the HOD or the Head, from Documents until the handover. */
 async function namedTraveller(caseNo: string, travellerId: string, actor: Actor) {
@@ -34,44 +34,76 @@ async function lockPerson(tx: Db, memberId: string) {
   await tx.$queryRaw`SELECT "id" FROM "ClientMember" WHERE "id" = ${memberId} FOR UPDATE`;
 }
 
+/** The form changed in Settings while staff filled it in: a field added, switched off or switched on. */
+const fieldsChanged = () =>
+  new HttpError(409, "The form's fields changed while you were filling it in. Check them and save again.", { code: "FIELDS_CHANGED" });
+
 /**
- * Saves the form for one named traveller. Every field is replaced; someone who changed the person meanwhile (here or on
- * the client page) makes it stale. The first save for someone who hasn't agreed sends their "I agree" link.
+ * The form for one named traveller (amendment 1): the fields in use, in order, and the person's answers keyed by field
+ * id. personUpdatedAt is the person's optimistic-lock token, sent back with the save.
+ */
+export async function getConsentDetails(caseNo: string, travellerId: string, actor: Actor) {
+  const { memberId } = await namedTraveller(caseNo, travellerId, actor);
+  const fields = await activeConsentFields(prisma);
+  const member = await prisma.clientMember.findUniqueOrThrow({ where: { id: memberId }, include: { consentAnswers: true } });
+  return { fields: fields.map(toConsentFieldDto), answers: answersOf(fields, member), personUpdatedAt: member.updatedAt };
+}
+
+/**
+ * Saves the form for one named traveller. Every field in use is answered (or left empty) each time; someone who changed
+ * the person meanwhile (here or on the client page) makes it stale, and so does a change to the fields in Settings.
+ * Answers to fields switched off stay, for when they're switched back on. The first save for someone who hasn't agreed
+ * sends their "I agree" link.
  */
 export async function saveConsentDetails(caseNo: string, travellerId: string, input: ConsentDetailsInput, actor: Actor) {
   const { enquiry, memberId } = await namedTraveller(caseNo, travellerId, actor);
   const today = istToday();
-  for (const field of DATES) {
-    const day = input[field];
-    if (day && day > today) throw fieldError(field, "This date is in the future.");
-  }
 
   await prisma.$transaction(async (tx) => {
     await lockCase(tx, enquiry.id, actor, CONSENTING);
     await lockPerson(tx, memberId);
-    const before = await tx.clientMember.findUniqueOrThrow({ where: { id: memberId } });
+    const fields = await activeConsentFields(tx);
+    const sent = Object.keys(input.answers).sort().join();
+    if (sent !== fields.map((f) => String(f.id)).sort().join()) throw fieldsChanged();
+    const values = new Map<number, string | null>();
+    const problems: Record<string, string> = {};
+    for (const field of fields) {
+      const answer = cleanAnswer(field, input.answers[String(field.id)] ?? null, today);
+      if (answer.error !== undefined) problems[field.id] = answer.error;
+      else values.set(field.id, answer.value);
+    }
+    if (Object.keys(problems).length > 0) throw fieldErrors(problems);
+
+    const before = await tx.clientMember.findUniqueOrThrow({ where: { id: memberId }, include: { consentAnswers: true } });
     if (before.archivedAt) throw conflict("This person was taken off the family list.");
     assertFresh(before.updatedAt, input.updatedAt, "person");
-    const day = (value: string | null) => (value ? toDbDate(value) : null);
+    // A fixed field's answer is a column on the person (fixed fields are always in use, and the date of birth is always
+    // required, both checked by the database).
+    const fixed = (which: NonNullable<ConsentField["fixed"]>) => values.get(fields.find((f) => f.fixed === which)!.id) ?? null;
     const { count } = await tx.clientMember.updateMany({
       where: { id: memberId, updatedAt: before.updatedAt },
       data: {
-        dateOfBirth: toDbDate(input.dateOfBirth),
-        spouseDateOfBirth: day(input.spouseDateOfBirth),
-        anniversary: day(input.anniversary),
-        motherDateOfBirth: day(input.motherDateOfBirth),
-        fatherDateOfBirth: day(input.fatherDateOfBirth),
-        residentialAddress: input.residentialAddress,
-        officeAddress: input.officeAddress,
-        annualIncome: input.annualIncome,
-        profession: input.profession,
-        education: input.education,
+        dateOfBirth: toDbDate(fixed("DATE_OF_BIRTH")!),
+        residentialAddress: fixed("HOME_ADDRESS"),
+        officeAddress: fixed("OFFICE_ADDRESS"),
         consentDetailsAt: new Date(),
         consentDetailsById: actor.user.id,
       },
     });
     if (count === 0) throw staleError("person");
-    const after = await tx.clientMember.findUniqueOrThrow({ where: { id: memberId } });
+    const others = fields.filter((f) => f.fixed === null);
+    const emptied = others.filter((f) => values.get(f.id) === null).map((f) => f.id);
+    await tx.consentAnswer.deleteMany({ where: { memberId, fieldId: { in: emptied } } });
+    for (const field of others) {
+      const value = values.get(field.id);
+      if (!value) continue;
+      await tx.consentAnswer.upsert({
+        where: { memberId_fieldId: { memberId, fieldId: field.id } },
+        create: { memberId, fieldId: field.id, value },
+        update: { value },
+      });
+    }
+    const after = await tx.clientMember.findUniqueOrThrow({ where: { id: memberId }, include: { consentAnswers: true } });
     await audit(
       {
         actorId: actor.user.id,
@@ -79,8 +111,8 @@ export async function saveConsentDetails(caseNo: string, travellerId: string, in
         entityType: "ClientMember",
         entityId: memberId,
         clientId: enquiry.clientId,
-        before: detailsOf(before),
-        after: detailsOf(after),
+        before: detailsOf(fields, before),
+        after: detailsOf(fields, after),
         ip: actor.ip,
       },
       tx,
@@ -150,19 +182,7 @@ async function sendLink(tx: Db, enquiry: LockedCase, memberId: string, actor: Ac
   );
 }
 
-/** The form's fields as the audit log keeps them: dates as days. */
-function detailsOf(m: ClientMember) {
-  const day = (value: Date | null) => (value ? fromDbDate(value) : null);
-  return {
-    dateOfBirth: day(m.dateOfBirth),
-    spouseDateOfBirth: day(m.spouseDateOfBirth),
-    anniversary: day(m.anniversary),
-    motherDateOfBirth: day(m.motherDateOfBirth),
-    fatherDateOfBirth: day(m.fatherDateOfBirth),
-    residentialAddress: m.residentialAddress,
-    officeAddress: m.officeAddress,
-    annualIncome: m.annualIncome,
-    profession: m.profession,
-    education: m.education,
-  };
+/** The form's answers as the audit log keeps them: by each field's label, dates as days. */
+function detailsOf(fields: ConsentField[], person: AnsweringPerson) {
+  return Object.fromEntries(fields.map((f) => [f.label, answerOf(f, person)]));
 }

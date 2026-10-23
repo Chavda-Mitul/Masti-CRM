@@ -20,7 +20,7 @@ import {
   STRAY_NOTE,
   wordingProblem,
 } from "../src/modules/coveringLetters/coveringLetters.schemas";
-import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
+import { CONSENT_ANSWER_MAX, MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
 import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.schemas";
 import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
@@ -85,7 +85,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays, checklists, documents' upload rules, vendors, covering letters and the consent wording the same way, and keeps the same Normal urgency (Settings → Masters)", async () => {
+  it("limits holidays, checklists, documents' upload rules, vendors, covering letters, the consent wording and the consent form's answers the same way, and keeps the same Normal urgency (Settings → Masters)", async () => {
     const frontend = (await import(frontendMasterSchemas)) as {
       MAX_RANGE_DAYS: number;
       MAX_TARGETS: number;
@@ -94,12 +94,14 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_LETTER_CHARS: number;
       MAX_LETTER_COUNTRIES: number;
       MAX_CONSENT_WORDING_CHARS: number;
+      CONSENT_ANSWER_MAX: Record<string, number>;
       MAX_DOCUMENT_MB: number;
       PHOTO_SIDE: { min: number; max: number };
       NORMAL_URGENCY: string;
     };
     expect(frontend.NORMAL_URGENCY).toBe(NORMAL_URGENCY);
     expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
+    expect(frontend.CONSENT_ANSWER_MAX).toEqual(CONSENT_ANSWER_MAX);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
     expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
     expect(frontend.MAX_CHECKLIST_ITEMS).toBe(MAX_CHECKLIST_ITEMS);

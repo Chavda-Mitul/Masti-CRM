@@ -437,18 +437,12 @@ model ClientMember {
   /// Taken off the family list. Never deleted: past cases will point here.
   archivedAt         DateTime?           @db.Timestamptz(3)
   // The consent form's details (docs/decisions/0022-consent-form.md): staff fill them in by asking the client, for
-  // life; the consent the client agrees to keeps a copy of them as they were. Checks in the migration: no blank
-  // text, income not negative, consentDetailsAt and consentDetailsById set together.
-  spouseDateOfBirth  DateTime?           @db.Date
-  anniversary        DateTime?           @db.Date
-  motherDateOfBirth  DateTime?           @db.Date
-  fatherDateOfBirth  DateTime?           @db.Date
+  // life; the consent the client agrees to keeps a copy of them as they were. The fields are a master (ConsentField,
+  // 0022 amendment 1): the two addresses (and dateOfBirth) are fixed fields kept here, because the covering letter reads
+  // them; every other answer is a ConsentAnswer. Checks in the migration: no blank text, consentDetailsAt and
+  // consentDetailsById set together.
   residentialAddress String?
   officeAddress      String?
-  /// A year, in whole rupees.
-  annualIncome       Int?
-  profession         String?
-  education          String?
   /// When staff last saved the form, and who.
   consentDetailsAt   DateTime?           @db.Timestamptz(3)
   consentDetailsById String?
@@ -463,6 +457,7 @@ model ClientMember {
   travellers         VisaCaseTraveller[]
   consent            Consent?
   consentLinks       ConsentLink[]
+  consentAnswers     ConsentAnswer[]
   documents          ClientDocument[]
 
   @@index([clientId])
@@ -1546,7 +1541,7 @@ model Consent {
   wordingId  Int?
   /// The link they agreed through (LINK).
   linkId     String?         @unique
-  /// The name, passport number and form details as the page showed them (LINK).
+  /// The name, passport number and form details (each with its label then) as the page showed them (LINK).
   details    Json?
   /// The phone's network address and browser when they tapped "I agree" (LINK).
   ip         String?
@@ -1572,6 +1567,59 @@ model ConsentWording {
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   addedBy   User?     @relation("ConsentWordingAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
   consents  Consent[]
+}
+
+/// What a consent form field takes (0022 amendment 1). Code branches on it (the input, the check), so an enum.
+enum ConsentFieldKind {
+  /// One line, at most 100 characters.
+  TEXT
+  /// A few lines, at most 300 characters.
+  LONG_TEXT
+  /// A day, never in the future.
+  DATE
+  /// Whole digits, e.g. a pass-out year or an income in rupees.
+  NUMBER
+  /// A web address, e.g. an Instagram page.
+  LINK
+}
+
+/// The three fields other screens read, so their answers stay columns on ClientMember: age comes from the date of
+/// birth, and the covering letter prints the addresses.
+enum ConsentFixedField {
+  DATE_OF_BIRTH
+  HOME_ADDRESS
+  OFFICE_ADDRESS
+}
+
+/// One field on the consent form (0022 amendment 1, change request 18): a master the Head and the Visa HOD shape, seeded
+/// with the form as the demo had it. Switched off, never deleted: people's answers point at it. A fixed field keeps its
+/// answer on ClientMember and only its "required" changes. Checks in the migration: a label not blank, at most 100
+/// characters and unique ignoring case; a fixed field keeps its kind and stays on, and the date of birth is required.
+model ConsentField {
+  id        Int                @id @default(autoincrement())
+  fixed     ConsentFixedField? @unique
+  label     String
+  kind      ConsentFieldKind
+  required  Boolean            @default(false)
+  sortOrder Int                @default(0)
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+  /// Optimistic-lock token for the Settings page.
+  updatedAt DateTime           @updatedAt @db.Timestamptz(3)
+  answers   ConsentAnswer[]
+}
+
+/// One person's answer to one consent form field that isn't fixed (0022 amendment 1). No row when it's empty. The
+/// service checks it against the field's kind. Checks in the migration: not blank, at most 300 characters.
+model ConsentAnswer {
+  memberId String
+  fieldId  Int
+  value    String
+  member   ClientMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  field    ConsentField @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  @@id([memberId, fieldId])
+  @@index([fieldId])
 }
 
 /// A link to one person's consent form, sent on WhatsApp (0022). Only the token's SHA-256 is kept. It works until the
