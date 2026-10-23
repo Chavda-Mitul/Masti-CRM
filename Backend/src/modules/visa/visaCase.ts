@@ -3,6 +3,7 @@ import { fromDbDate } from "../../lib/dates";
 import { lineTotalPaise, quoteTotals } from "../../lib/money";
 import { toMemberDto } from "../clients/client";
 import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
+import { SCAN_RULE_SELECT, scanRulesOf } from "../clients/scanRules";
 import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
@@ -205,8 +206,11 @@ export const visaCaseInclude = {
               checkedBy: personSelect,
               checkReason: { select: { id: true, name: true } },
               clientDocument: { select: { id: true, uploadedAt: true } },
-              /** The master's switch as it is now, so turning it on reaches cases already open (0016 Decision 7). */
-              document: { select: { warnIfNoScan: true } },
+              /**
+               * The master's switch and upload rules as they are now, so changing them reaches cases already open
+               * (0016 Decision 7 and Amendment 1).
+               */
+              document: { select: { warnIfNoScan: true, ...SCAN_RULE_SELECT } },
             },
           },
           /** Refusal letters (0012 Decision 4) and e-visas (0025), newest first: the newest of each kind is current. */
@@ -731,6 +735,8 @@ export function toVisaCaseDto(
               (d.receivedAs === "ORIGINAL" || d.receivedAs === "XEROX") &&
               !!t.memberId &&
               (!onFile || onFile.uploadedAt < row.createdAt),
+            /** What "Save scan" takes for this paper (0016 Amendment 1), checked first in the browser. */
+            scanRules: scanRulesOf(d.document),
             /** The processor's check in Step 3 (0007 Decision 3): null until checked. */
             check: d.check,
             checkReason: d.checkReason,

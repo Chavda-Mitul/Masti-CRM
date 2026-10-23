@@ -1,6 +1,6 @@
 import { prisma } from "../../config/prisma";
 import { badRequest, notFound } from "../../lib/httpError";
-import { clientScanLimit, currentScan, openClientScan, saveClientScan, scanTarget } from "../clients/clientDocuments.service";
+import { currentScan, openClientScan, saveClientScan, scanLimit, scanTarget } from "../clients/clientDocuments.service";
 import type { ScanType } from "../clients/clients.schemas";
 import type { Actor } from "../users/user";
 import { COLLECTING, findVisibleCase, loadCase } from "./caseLock";
@@ -36,12 +36,13 @@ async function scanFromCase(caseNo: string, documentId: string, actor: Actor) {
 
 /**
  * Before the upload is read: the case and the paper are right, and the vault takes it (the person still on the family
- * list, the paper switched on). The setting gives the size limit (clients.documents.maxMb).
+ * list, the paper switched on, a file type the paper takes). The paper's rules, else the setting clients.documents.maxMb,
+ * give the size limit.
  */
-export async function caseScanLimit(caseNo: string, documentId: string, actor: Actor) {
+export async function caseScanLimit(caseNo: string, documentId: string, contentType: ScanType, actor: Actor) {
   const { enquiry, query } = await scanFromCase(caseNo, documentId, actor);
-  await scanTarget(prisma, enquiry.clientId, query);
-  return clientScanLimit();
+  const { paper } = await scanTarget(prisma, enquiry.clientId, query);
+  return scanLimit(paper, contentType);
 }
 
 /** "Save scan": keeps the paper in the client's vault, audited with the case. It doesn't tick the paper. */

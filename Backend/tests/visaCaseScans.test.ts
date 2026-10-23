@@ -6,6 +6,7 @@ import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { jpegOf, padded, pngOf } from "./imageFiles";
 import { saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The client document vault in visa Step 2 (docs/decisions/0016-client-documents.md Decision 5): "Save scan" keeps a
@@ -41,6 +42,7 @@ interface CaseDoc {
   onFile: { id: string; uploadedAt: string; contentType: string; pageCount: number | null; sizeBytes: number } | null;
   fromScan: { id: string; uploadedAt: string } | null;
   noScan: boolean;
+  scanRules: Record<string, unknown>;
 }
 interface CaseDto {
   id: string;
@@ -133,7 +135,7 @@ describe("Save scan from the case", () => {
     await prisma.setting.create({ data: { key: "clients.documents", value: { maxMb: 1 } } });
     const big = await saveScan(staff, c, bank, Buffer.concat([Buffer.from("%PDF-"), Buffer.alloc(MB)]));
     expect(big.status).toBe(413);
-    expect(big.body.message).toBe("This file is over 1 MB. Scan it at a lower resolution and upload it again.");
+    expect(big.body.message).toBe(`"${BANK}" can be at most 1 MB. Scan it at a lower resolution and upload it again.`);
 
     const filePrep = await prisma.departmentStage.findFirstOrThrow({ where: { code: "FILE_PREPARATION" } });
     await prisma.enquiry.update({ where: { id: c.id }, data: { stageId: filePrep.id } });
@@ -143,6 +145,32 @@ describe("Save scan from the case", () => {
 
     expect(await prisma.clientDocument.count()).toBe(0);
     expect(await objectsOf(c.client.id)).toHaveLength(0);
+  });
+
+  it("sends each paper's upload rules with the case and refuses a scan they don't take (0016 Amendment 1)", async () => {
+    const { staff, c } = await linkedCase();
+    expect(docOf(c, "Photos").scanRules).toEqual({
+      fileTypes: ["PDF", "JPG", "PNG"],
+      minSizeMb: null,
+      maxSizeMb: null,
+      photoWidthMm: 35,
+      photoHeightMm: 45,
+    });
+    // Read live from the document master, like the scan warning: a change reaches the open case.
+    await prisma.documentMaster.update({ where: { code: "BANK_STATEMENT_6M" }, data: { fileTypes: ["PDF"], maxSizeMb: 2 } });
+    const live = await load(staff, c.caseNo);
+    expect(docOf(live, BANK).scanRules).toMatchObject({ fileTypes: ["PDF"], maxSizeMb: 2 });
+
+    const png = await saveScan(staff, live, docOf(live, BANK).id, pngOf(70, 90), "image/png");
+    expect(png.status).toBe(415);
+    expect(png.body.message).toBe(`"${BANK}" must be a PDF. This file is a PNG.`);
+    const square = await saveScan(staff, live, docOf(live, "Photos").id, padded(jpegOf(600, 600), 0.1 * MB), "image/jpeg");
+    expect(square.status).toBe(400);
+    expect(square.body.message).toMatch(/^"Photos" must have the shape of 35 × 45 mm\. This photo is 600 × 600 pixels/);
+    expect(await objectsOf(c.client.id)).toHaveLength(0);
+
+    expect((await saveScan(staff, live, docOf(live, BANK).id, await pdf(1))).status).toBe(200);
+    expect((await saveScan(staff, live, docOf(live, "Photos").id, pngOf(70, 90), "image/png")).status).toBe(200);
   });
 });
 

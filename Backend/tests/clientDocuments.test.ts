@@ -6,6 +6,7 @@ import { MB } from "../src/lib/pdf";
 import { bucket, s3 } from "../src/lib/storage";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { jpegOf, padded, pngOf } from "./imageFiles";
 
 // The client document vault (docs/decisions/0016-client-documents.md), the client page's side: the Head and the HOD of
 // any department keep scans of a client's papers, per family member, in the test bucket (MinIO, emptied by
@@ -85,7 +86,7 @@ interface VaultDto {
     member: { id: string; name: string; relation: string; archived: boolean } | null;
     papers: { paper: { id: number; name: string }; current: ScanDto; older: ScanDto[] }[];
   }[];
-  papers: { id: number; name: string }[];
+  papers: { id: number; name: string; rules: Record<string, unknown> }[];
   maxMb: number;
 }
 
@@ -162,7 +163,8 @@ describe("adding scans (Decisions 2 and 3)", () => {
     const { client, aarav } = await family(head);
     const passport = { documentId: await paper("PASSPORT"), memberId: aarav.id };
 
-    await upload(head, client.id, { documentId: await paper("PHOTOS"), memberId: aarav.id }, JPEG, "image/jpeg");
+    // The photos are seeded 35 × 45 mm in shape (0016 Amendment 1).
+    await upload(head, client.id, { documentId: await paper("PHOTOS"), memberId: aarav.id }, pngOf(70, 90), "image/png");
     const first = (await upload(head, client.id, passport, await pdf(1))).body as VaultDto;
     const firstId = first.groups[0]!.papers[0]!.current.id;
     const res = await upload(head, client.id, passport, await pdf(3));
@@ -267,9 +269,58 @@ describe("what a scan must be", () => {
     const big = Buffer.concat([Buffer.from("%PDF-"), Buffer.alloc(MB)]);
     const res = await upload(hod, client.id, { documentId: await paper("PASSPORT"), memberId: aarav.id }, big);
     expect(res.status).toBe(413);
-    expect(res.body.message).toBe("This file is over 1 MB. Scan it at a lower resolution and upload it again.");
+    expect(res.body.message).toBe('"Passport" can be at most 1 MB. Scan it at a lower resolution and upload it again.');
     expect(await prisma.clientDocument.count()).toBe(0);
     expect(await objectsOf(client.id)).toHaveLength(0);
+  });
+
+  it("refuses a scan its paper's upload rules don't take, before keeping anything (0016 Amendment 1)", async () => {
+    const { head } = await people();
+    const { client, aarav } = await family(head);
+    // The photos are seeded 35 × 45 mm in shape; here they also take only a JPG or PNG of 0.01–0.3 MB.
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { fileTypes: ["JPG", "PNG"], minSizeMb: 0.01, maxSizeMb: 0.3 } });
+    const photos = { documentId: await paper("PHOTOS"), memberId: aarav.id };
+    const vault = (await head.get(`/api/clients/${client.id}/documents`)).body as VaultDto;
+    expect(vault.papers.find((p) => p.name === "Photos")!.rules).toEqual({
+      fileTypes: ["JPG", "PNG"],
+      minSizeMb: 0.01,
+      maxSizeMb: 0.3,
+      photoWidthMm: 35,
+      photoHeightMm: 45,
+    });
+
+    const refused = async (body: Buffer, type: string, status: number, message: string) => {
+      const res = await upload(head, client.id, photos, body, type);
+      expect(res.status).toBe(status);
+      expect(res.body.message).toBe(message);
+    };
+    await refused(await pdf(1), "application/pdf", 415, '"Photos" must be a JPG or PNG. This file is a PDF.');
+    await refused(padded(pngOf(70, 90), 0.31 * MB), "image/png", 413, '"Photos" can be at most 0.3 MB. Scan it at a lower resolution and upload it again.');
+    await refused(pngOf(70, 90), "image/png", 400, '"Photos" must be at least 0.01 MB. This file is under 0.01 MB: scan it at a higher resolution.');
+    const shape = (w: number, h: number) =>
+      `"Photos" must have the shape of 35 × 45 mm. This photo is ${w} × ${h} pixels: crop it to that shape and upload it again.`;
+    await refused(padded(pngOf(600, 600), 0.1 * MB), "image/png", 400, shape(600, 600));
+    await refused(padded(jpegOf(450, 350), 0.1 * MB), "image/jpeg", 400, shape(450, 350)); // On its side.
+    await refused(padded(pngOf(380, 531), 0.1 * MB), "image/png", 400, shape(380, 531)); // 8% too narrow.
+    expect(await prisma.clientDocument.count()).toBe(0);
+    expect(await objectsOf(client.id)).toHaveLength(0);
+
+    // 35 × 45 mm at 300 dpi; just under 3% narrower; a phone photo shot on its side that shows upright (EXIF 6).
+    for (const [file, type] of [
+      [pngOf(413, 531), "image/png"],
+      [pngOf(401, 531), "image/png"],
+      [jpegOf(900, 700, 6), "image/jpeg"],
+    ] as const) {
+      expect((await upload(head, client.id, photos, padded(file, 0.1 * MB), type)).status).toBe(201);
+    }
+    expect(await objectsOf(client.id)).toHaveLength(3);
+
+    // A PDF's shape isn't checked, and a paper's own largest scan can be above the shared one.
+    expect((await head.put("/api/clients/settings").send({ documents: { maxMb: 1 } })).status).toBe(200);
+    await prisma.documentMaster.update({ where: { code: "PASSPORT" }, data: { maxSizeMb: 2, photoWidthMm: 35, photoHeightMm: 45 } });
+    const passport = { documentId: await paper("PASSPORT"), memberId: aarav.id };
+    expect((await upload(head, client.id, passport, await pdf(1))).status).toBe(201);
+    expect((await upload(head, client.id, passport, padded(pngOf(413, 531), 1.5 * MB), "image/png")).status).toBe(201);
   });
 
   it("checks the client, the person and the paper", async () => {

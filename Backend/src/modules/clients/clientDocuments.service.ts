@@ -4,8 +4,8 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { istToday } from "../../lib/dates";
 import { fileNamePart } from "../../lib/fileNames";
-import { badRequest, forbidden, notFound } from "../../lib/httpError";
-import { imageType } from "../../lib/images";
+import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { imageSize, imageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
 import { MB, pdfPageCount } from "../../lib/pdf";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
@@ -15,8 +15,18 @@ import { CLIENT_DOCUMENTS_KEPT } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { assertCanSeeClient } from "./access";
-import { SCAN_TYPES, type AddClientDocumentQuery, type ScanType } from "./clients.schemas";
+import {
+  FILE_TYPE_OF,
+  fileTypeProblem,
+  photoShapeProblem,
+  SCAN_TYPES,
+  scanFileProblem,
+  type AddClientDocumentQuery,
+  type ScanRules,
+  type ScanType,
+} from "./clients.schemas";
 import { getClientSettings } from "./clients.settings";
+import { SCAN_RULE_SELECT, scanRulesOf } from "./scanRules";
 
 // The client document vault (docs/decisions/0016-client-documents.md): scans of a client's papers (passport, Aadhaar
 // card, PAN card…), per family member, kept in the private bucket for good (rule 4) and reused on later cases. On the
@@ -70,7 +80,11 @@ function toScan(row: ScanRow) {
 async function vaultOf(clientId: string) {
   const [rows, papers, settings] = await Promise.all([
     prisma.clientDocument.findMany({ where: { clientId }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], select: scanSelect }),
-    prisma.documentMaster.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
+    prisma.documentMaster.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, ...SCAN_RULE_SELECT },
+    }),
     getClientSettings(),
   ]);
 
@@ -103,7 +117,8 @@ async function vaultOf(clientId: string) {
             older: scans.slice(1).map(toScan),
           })),
       })),
-    papers,
+    /** With each paper's upload rules, which the Add form checks a picked file against first. */
+    papers: papers.map((p) => ({ id: p.id, name: p.name, rules: scanRulesOf(p) })),
     maxMb: settings.documents.maxMb,
   };
 }
@@ -128,26 +143,36 @@ export async function scanTarget(db: Db, clientId: string, { documentId, memberI
     if (row.archivedAt) throw badRequest("This person was taken off the family list.");
     member = { id: row.id, name: row.name };
   }
-  const paper = await db.documentMaster.findUnique({ where: { id: documentId }, select: { id: true, name: true, isActive: true } });
+  const paper = await db.documentMaster.findUnique({ where: { id: documentId }, select: { id: true, name: true, isActive: true, ...SCAN_RULE_SELECT } });
   if (!paper) throw notFound("Paper not found.");
   if (!paper.isActive) throw badRequest(`"${paper.name}" is switched off in the document list.`);
-  return { client, member, paper: { id: paper.id, name: paper.name } };
+  return { client, member, paper: { id: paper.id, name: paper.name, rules: scanRulesOf(paper) } };
 }
 
-/** The largest scan (the setting clients.documents.maxMb), and what a bigger upload is told. */
-export async function clientScanLimit() {
-  const { maxMb } = (await getClientSettings()).documents;
-  return { maxBytes: maxMb * MB, tooBig: `This file is over ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
+type ScanPaper = { name: string; rules: ScanRules };
+
+/** "Photos", in quotes, as the rules' messages name a paper. */
+const paperWord = (paper: ScanPaper) => `"${paper.name}"`;
+
+/**
+ * Before the upload is read: a type the paper doesn't take is refused, and the largest scan is the paper's own, else
+ * the shared one (the setting clients.documents.maxMb), with what a bigger upload is told.
+ */
+export async function scanLimit(paper: ScanPaper, contentType: ScanType) {
+  const wrongType = fileTypeProblem(paperWord(paper), paper.rules, FILE_TYPE_OF[contentType]);
+  if (wrongType) throw new HttpError(415, wrongType);
+  const maxMb = paper.rules.maxSizeMb ?? (await getClientSettings()).documents.maxMb;
+  return { maxBytes: maxMb * MB, tooBig: `${paperWord(paper)} can be at most ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
 }
 
 /**
- * Before the upload is read: this user may add scans, and the client, person and paper are right. Refusing here means a
- * wrong upload is never held in memory.
+ * Before the upload is read: this user may add scans, the client, person and paper are right, and the paper takes this
+ * type. Refusing here means a wrong upload is never held in memory.
  */
-export async function clientDocumentLimit(clientId: string, query: AddClientDocumentQuery, user: UserWithDepartments) {
+export async function clientDocumentLimit(clientId: string, query: AddClientDocumentQuery, contentType: ScanType, user: UserWithDepartments) {
   await assertCanSeeDocuments(user, clientId);
-  await scanTarget(prisma, clientId, query);
-  return clientScanLimit();
+  const { paper } = await scanTarget(prisma, clientId, query);
+  return scanLimit(paper, contentType);
 }
 
 /** The scan is what the upload says: a PDF that opens (its pages are returned), or a real PNG or JPEG photo. */
@@ -158,6 +183,21 @@ async function checkScan(bytes: Buffer, contentType: ScanType): Promise<number |
     throw badRequest(`This isn't a ${contentType === "image/png" ? "PNG" : "JPEG"} image. Save it as a PDF, JPEG or PNG and upload it again.`);
   }
   return null;
+}
+
+/**
+ * The paper's upload rules on the file itself (0016 Amendment 1): its type and size again (the paper may have changed
+ * since the upload began), then a JPG's or PNG's shape when the paper has a photo size. A PDF's shape isn't checked.
+ */
+async function checkScanRules(paper: ScanPaper, contentType: ScanType, bytes: Buffer) {
+  const { maxMb } = (await getClientSettings()).documents;
+  const problem = scanFileProblem(paperWord(paper), paper.rules, maxMb, { type: FILE_TYPE_OF[contentType], sizeBytes: bytes.length });
+  if (problem) throw badRequest(problem);
+  if (contentType === "application/pdf" || paper.rules.photoWidthMm === null) return;
+  const pixels = imageSize(bytes, contentType);
+  if (!pixels) throw badRequest("Couldn't read this photo's size. Save it again as a JPG or PNG and upload it again.");
+  const wrongShape = photoShapeProblem(paperWord(paper), paper.rules, pixels);
+  if (wrongShape) throw badRequest(wrongShape);
 }
 
 /** "Aarav-Mehta_Passport_2026-10-17.pdf" ⚠️: whose it is (the client, for their own paper), the paper, the day saved. */
@@ -178,9 +218,10 @@ interface SavedFromCase extends ScanSource {
 
 /**
  * Saves a scan in the client's vault, under a bucket key no other upload shares. The caller checks who may first: the
- * client page lets HODs and the Head, a visa case whoever can tick its papers. The bucket upload happens first, so a
- * slow upload holds no transaction. In the transaction the person and paper are checked again; if they fail now (taken
- * off the list, switched off), the row isn't saved and the object is removed again.
+ * client page lets HODs and the Head, a visa case whoever can tick its papers. The file and the paper's upload rules are
+ * checked before anything is kept. The bucket upload happens first, so a slow upload holds no transaction. In the
+ * transaction the person and paper are checked again; if they fail now (taken off the list, switched off), the row
+ * isn't saved and the object is removed again.
  */
 export async function saveClientScan(
   clientId: string,
@@ -190,8 +231,9 @@ export async function saveClientScan(
   actor: Actor,
   from?: SavedFromCase,
 ) {
-  const pageCount = await checkScan(bytes, contentType);
   const { client, member, paper } = await scanTarget(prisma, clientId, query);
+  const pageCount = await checkScan(bytes, contentType);
+  await checkScanRules(paper, contentType, bytes);
   const fileName = scanFileName(member?.name ?? client.name, paper.name, contentType);
   const storageKey = `clients/${client.id}/${randomUUID()}.${SCAN_TYPES[contentType]}`;
   await putObject(storageKey, bytes, contentType);

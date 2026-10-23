@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { normaliseMobile } from "../src/lib/contact";
-import { PASSPORT_PATTERN } from "../src/modules/clients/clients.schemas";
+import { fileTypesText, PASSPORT_PATTERN, scanFileProblem, type ScanRules } from "../src/modules/clients/clients.schemas";
 import { GSTIN_PATTERN, gstinChecksumOk, PAN_PATTERN } from "../src/lib/shared.schemas";
 import {
   isTableLine,
@@ -35,6 +35,7 @@ import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportVal
 const frontendSchemas = resolve(__dirname, "../../Frontend/src/pages/clients/schemas.ts");
 const frontendMasterSchemas = resolve(__dirname, "../../Frontend/src/pages/settings/masters/schemas.ts");
 const frontendLetter = resolve(__dirname, "../../Frontend/src/lib/letter.ts");
+const frontendScanFiles = resolve(__dirname, "../../Frontend/src/pages/clients/scanFiles.ts");
 const frontendInstalled = existsSync(resolve(__dirname, "../../Frontend/node_modules/zod"));
 
 interface FrontendRules {
@@ -182,6 +183,27 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const age of [0, 1, 18, 25, 26, 17.5]) {
       const v = { adultFrom: age };
       expect(shape.childAge!.safeParse(v).success, `age ${age}`).toBe(childAgeSchema.safeParse(v).success);
+    }
+  });
+
+  it("words a scan's wrong type and size the same way before and after the upload (0016 Amendment 1)", async () => {
+    const frontend = (await import(frontendScanFiles)) as { fileTypesText: typeof fileTypesText; scanFileProblem: typeof scanFileProblem };
+    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null };
+    const rules: ScanRules[] = [
+      { fileTypes: ["PDF", "JPG", "PNG"], ...none },
+      { fileTypes: ["JPG", "PNG"], ...none, minSizeMb: 0.01, maxSizeMb: 0.3, photoWidthMm: 35, photoHeightMm: 45 },
+      { fileTypes: ["PDF"], ...none, maxSizeMb: 2 },
+      { fileTypes: ["PNG"], ...none, minSizeMb: 1.5 },
+    ];
+    const sizes = [0, 1, 4_000, 10_485, 10_486, 314_572, 314_573, 1_048_576, 1_572_864, 2_097_152, 2_097_153, 30 * 1_048_576];
+    for (const r of rules) {
+      expect(frontend.fileTypesText(r.fileTypes)).toBe(fileTypesText(r.fileTypes));
+      for (const type of ["PDF", "JPG", "PNG"] as const) {
+        for (const sizeBytes of sizes) {
+          const file = { type, sizeBytes };
+          expect(frontend.scanFileProblem('"Photos"', r, 20, file), JSON.stringify([r, file])).toBe(scanFileProblem('"Photos"', r, 20, file));
+        }
+      }
     }
   });
 });
