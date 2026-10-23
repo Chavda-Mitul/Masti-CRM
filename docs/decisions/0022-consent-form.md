@@ -1,8 +1,8 @@
 # 0022 · The consent & liability form
 
 - **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
-  "Still open". **Amendment 1** (23 Oct 2026): the form's fields become a master; piece 1a (the form reads them) built
-  23 Oct 2026. Where it disagrees with part 1 below, the amendment wins.
+  "Still open". **Amendment 1** (23 Oct 2026): the form's fields become a master; pieces 1a (the form reads them) and
+  1b (the Settings page) built 23 Oct 2026. Where it disagrees with part 1 below, the amendment wins.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -49,7 +49,28 @@ social media links. The demo has fixed fields: change request 18.
   a field later never changes a record. Renaming one while the client reads asks them to check again
   (`DETAILS_CHANGED`).
 
-**Next:** piece 1b, the Settings page; then amendment 2 (a parent agrees for a child).
+**Built, piece 1b: Settings → Masters → Consent form fields (23 Oct 2026):**
+- **The page** (`/settings/masters/consent-fields`, opened from the Masters page's consent card, which counts the fields
+  on the form) lists every field in the form's order: its name, what it takes, Required or Optional, and On the form or
+  Switched off. A ⓘ says in plain words who fills the fields, and what adding or switching one off does.
+- **The Head and the Visa HOD** add a field (it goes at the end), rename it, tick Required, move it with ↑ and ↓, and
+  switch it off or back on. Visa staff see the list without the buttons.
+  - What a field takes is picked when it's added and never changes; to change it, switch the field off and add a new
+    one.
+  - The three fixed fields show why they're fixed. They have no Switch off, their name can't change, and the date of
+    birth's Required can't be unticked.
+  - A name already used, ignoring case, is refused, and the message says when that field is only switched off.
+- **The API**, under `/api/masters` next to the wording: `GET /consent-fields` (`?active=`) with Visa view; `POST`,
+  `PATCH /consent-fields/:id` and `PUT /consent-fields/order { ids }` for the Head or the Visa HOD
+  (`assertCanEditVisaMasters`).
+  - The order lists every field, switched-off ones too. If a field was added since the page loaded, the order is
+    refused (409 `STALE`), and the page reloads and says so.
+  - Audited as `consentField.create`, `consentField.update` (only the fields that changed) and `consentField.order`
+    (the order before and after).
+  - The fixed fields' rules are refused with a 409 that says why. The database checks them too.
+- **`MAX_CONSENT_FIELD_LABEL`** (100) is mirrored in the frontend; `frontendRules.test.ts` compares the two.
+
+**Next:** amendment 2, a parent agrees for a child.
 
 ## Context
 

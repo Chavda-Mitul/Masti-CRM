@@ -1,3 +1,5 @@
+import type { ConsentFormField } from '../../enquiries/types'
+
 // API shapes for the system masters (Backend/src/modules/holidays, visaMasters; docs/decisions/0005-system-masters.md).
 // Dates are "YYYY-MM-DD" (India); timestamps are ISO strings (UTC).
 
@@ -259,6 +261,12 @@ export interface ConsentWordingVersion {
   body: string
   createdAt: string
   addedBy: WordingAuthor
+}
+
+/** One field on the consent form as Settings lists it, switched-off ones too (0022 amendment 1). */
+export interface ConsentFieldRow extends ConsentFormField {
+  sortOrder: number
+  isActive: boolean
 }
 
 /** A covering-letter format in the list: its details, and the wording in use without its text. */

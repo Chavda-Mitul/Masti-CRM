@@ -1609,7 +1609,7 @@ model ConsentField {
   sortOrder Int                @default(0)
   isActive  Boolean            @default(true)
   createdAt DateTime           @default(now()) @db.Timestamptz(3)
-  /// Optimistic-lock token for the Settings page.
+  /// When it last changed in Settings.
   updatedAt DateTime           @updatedAt @db.Timestamptz(3)
   answers   ConsentAnswer[]
 }

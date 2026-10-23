@@ -23,6 +23,8 @@ export const MAX_LETTER_CHARS = 6000
 export const MAX_CONSENT_WORDING_CHARS = 8000
 /** The longest answer each kind of consent form field takes (a date and a number have their own shape). */
 export const CONSENT_ANSWER_MAX = { TEXT: 100, LONG_TEXT: 300, LINK: 300 } as const
+/** The longest name a consent form field has, as the database allows. */
+export const MAX_CONSENT_FIELD_LABEL = 100
 /** The largest file a document's max size may allow. */
 export const MAX_DOCUMENT_MB = 50
 /** A document photo's sides, in mm or pixels: any whole number, since only the rule limits them; the top is the column's. */
@@ -230,6 +232,14 @@ export const courierFormSchema = z.object({
   awbNeeded: z.boolean(),
 })
 export type CourierFormValues = z.infer<typeof courierFormSchema>
+
+/** A field on the consent form (0022 amendment 1): its name, what it takes (fixed once added) and whether it's needed. */
+export const consentFieldFormSchema = z.object({
+  label: required(MAX_CONSENT_FIELD_LABEL, 'Name the field.'),
+  kind: z.enum(['TEXT', 'LONG_TEXT', 'DATE', 'NUMBER', 'LINK'], 'Pick what the field takes.'),
+  required: z.boolean(),
+})
+export type ConsentFieldFormValues = z.infer<typeof consentFieldFormSchema>
 
 export const creditNoteReasonFormSchema = z.object({
   code: z

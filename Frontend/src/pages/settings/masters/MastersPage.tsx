@@ -5,7 +5,7 @@ import { HolidayCalendarCard } from './holidays/HolidayCalendarCard'
 import { HolidaySettingsCard } from './holidays/HolidaySettingsCard'
 import { sinceDay } from './consentWording/labels'
 import { ReminderRulesCard } from './ReminderRulesCard'
-import { useConsentWordings, useCoveringLetters, useMasterList, useOfferings } from './queries'
+import { useConsentFields, useConsentWordings, useCoveringLetters, useMasterList, useOfferings } from './queries'
 
 /** Masters on the demo that aren't built yet. Shown greyed out, like Phase-2 items in the sidebar. */
 const NOT_BUILT = ['Hotels — minimum markup', 'Accounts routine tasks']
@@ -31,6 +31,7 @@ export function MastersPage() {
   const vendors = useMasterList('vendors', visa)
   const letters = useCoveringLetters(visa)
   const consentInUse = useConsentWordings(visa).data?.[0]
+  const consentFields = useConsentFields(visa)
 
   const active = (rows: { isActive: boolean }[] | undefined) => (rows ? String(rows.filter((r) => r.isActive).length) : '…')
 
@@ -84,15 +85,25 @@ export function MastersPage() {
               {consentInUse?.addedBy === null && <span className="chip chip-sm chip-warn">Draft</span>}
             </h2>
             <p className="muted small">
-              The words clients agree to with “I agree” on the link we send them: once in their life, for every visa.
+              The words clients agree to with “I agree” on the link we send them, once in their life for every visa, and
+              the details staff ask them for.
             </p>
             <div className="kv-line">
               <span>Wording in use since</span>
               <strong>{consentInUse ? sinceDay(consentInUse.createdAt) : '…'}</strong>
             </div>
-            <Link to="/settings/masters/consent-wording" className="btn btn-sm">
-              Open consent wording
-            </Link>
+            <div className="kv-line">
+              <span>Fields on the form</span>
+              <strong>{active(consentFields.data)}</strong>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link to="/settings/masters/consent-wording" className="btn btn-sm">
+                Open consent wording
+              </Link>
+              <Link to="/settings/masters/consent-fields" className="btn btn-sm">
+                Open form fields
+              </Link>
+            </div>
           </section>
         )}
 
