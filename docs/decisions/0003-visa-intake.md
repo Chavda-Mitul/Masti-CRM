@@ -1,8 +1,45 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record.
+- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings) built 23 Oct 2026.
 - **Date:** 8 Oct 2026 (proposed), 9 Oct 2026 (refreshed and built)
 - **Scope:** the New enquiry form for Visa (demo screen 05), the All enquiries list (demo screens 02/03) and the Step 1 data of a case. The Step 1 case page (demo screen 06) comes next.
+
+## Amendment 1 (23 Oct 2026, project lead, from Masti): how urgent a visa enquiry is
+
+**The ask:** Masti wants each visa enquiry marked Normal or Urgent when it comes in, so the visa team sees at a glance
+which cases need speed. The demo has nothing like it: change request 17. It is separate from the quote's processing
+speed ([0009](0009-visa-invoice.md): Normal / Express / Super priority), which is what the client pays the embassy for;
+picking Urgent doesn't change the quote.
+
+**Decided (project lead, 23 Oct 2026):**
+- **An editable list,** Settings → Masters → Lists → Urgency levels, seeded with Masti's two words, Normal and Urgent.
+  The Visa HOD or the Head renames, adds (e.g. "Very urgent"), reorders or switches off levels, like the other visa
+  lists.
+- **Normal (code `NORMAL`) is where every new enquiry starts,** so it can be renamed but never switched off (refused by
+  the service and by a CHECK). Every other level counts as urgent and shows as a red tag with its name.
+- **New enquiry** asks "How urgent?" with a pill per active level, Normal already picked (part 2).
+- **Changed later on the case** by its owner, the Visa HOD or the Head, while the case is open, at any step; every
+  change is audited (part 3).
+- **All enquiries** shows the red tag on the row and in the side panel, and an "Urgent only" tick box on the All and
+  Visa lists. The order doesn't change: late first, then by time due (part 4).
+- **Office only:** nothing goes to the client.
+- **Built one part at a time:** 1 the list in Settings, 2 the picker on New enquiry and the tag in the case header, 3
+  changing it on the case, 4 the list's tag and filter.
+
+**Defaults added when planning (say if any is wrong):**
+- **A level switched off** since a case got it stays on that case (with its tag), but can't be picked anew, as with
+  the processing speeds.
+- **The level is on `VisaCase`** (`urgencyId`, required), not `Enquiry`: changing it doesn't move the case's
+  `updatedAt`, so nobody's open page goes stale (part 2).
+
+**Built, part 1 (23 Oct 2026):**
+- **Data:** `UrgencyLevel` (code, name, sortOrder, isActive), migration `20261023180000_urgency_levels`, with CHECKs on
+  the code's format and on Normal staying switched on. Seeded `NORMAL` "Normal" and `URGENT` "Urgent".
+- **API:** `GET/POST/PATCH /api/masters/urgency-levels`, read with Visa VIEW and changed by the Visa HOD or the Head,
+  audited `urgencyLevel.create` / `urgencyLevel.update`. Switching Normal off is a 409. `NORMAL_URGENCY`
+  (`visaMasters.schemas.ts`) is mirrored in the frontend, and `frontendRules.test.ts` keeps the two the same.
+- **Screen:** the Urgency levels tab, on the shared option table (`FollowUpOptionsTable`); Normal's row has no Switch
+  off.
 
 ## Refresh (9 Oct 2026)
 

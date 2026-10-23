@@ -15,6 +15,7 @@ import {
   createMissingPassportReasonSchema,
   createExtraChargeSchema,
   createProcessingSpeedSchema,
+  createUrgencyLevelSchema,
   createVisaTypeSchema,
   embassyListQuerySchema,
   listQuerySchema,
@@ -31,6 +32,7 @@ import {
   updateMissingPassportReasonSchema,
   updateExtraChargeSchema,
   updateProcessingSpeedSchema,
+  updateUrgencyLevelSchema,
   updateVisaTypeSchema,
 } from "./visaMasters.schemas";
 import * as mastersService from "./visaMasters.service";
@@ -128,6 +130,20 @@ router.post("/processing-speeds", visaEdit, async (req, res) => {
 router.patch("/processing-speeds/:id", visaEdit, async (req, res) => {
   const body = updateProcessingSpeedSchema.parse(req.body);
   res.json({ processingSpeed: await mastersService.updateProcessingSpeed(idParam.parse(req.params.id), body, actorOf(req)) });
+});
+
+// Urgency levels: picked on New enquiry, changed on the case (docs/decisions/0003-visa-intake.md amendment 1)
+router.get("/urgency-levels", visaView, async (req, res) => {
+  const { active } = listQuerySchema.parse(req.query);
+  res.json({ urgencyLevels: await mastersService.listUrgencyLevels(active) });
+});
+router.post("/urgency-levels", visaEdit, async (req, res) => {
+  const body = createUrgencyLevelSchema.parse(req.body);
+  res.status(201).json({ urgencyLevel: await mastersService.createUrgencyLevel(body, actorOf(req)) });
+});
+router.patch("/urgency-levels/:id", visaEdit, async (req, res) => {
+  const body = updateUrgencyLevelSchema.parse(req.body);
+  res.json({ urgencyLevel: await mastersService.updateUrgencyLevel(idParam.parse(req.params.id), body, actorOf(req)) });
 });
 
 // Couriers: how a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6)

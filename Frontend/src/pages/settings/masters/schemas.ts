@@ -24,6 +24,8 @@ export const MAX_CONSENT_WORDING_CHARS = 8000
 export const MAX_DOCUMENT_MB = 50
 /** A document photo's sides, in mm or pixels: any whole number, since only the rule limits them; the top is the column's. */
 export const PHOTO_SIDE = { min: 1, max: 32767 } as const
+/** The urgency level every enquiry starts on: never switched off; every other level shows as a red tag (0003 amendment 1). */
+export const NORMAL_URGENCY = 'NORMAL'
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {

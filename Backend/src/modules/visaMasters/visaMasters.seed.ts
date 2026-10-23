@@ -63,6 +63,15 @@ export const PROCESSING_SPEEDS = [
   { code: "SUPER_PRIORITY", name: "Super priority", sortOrder: 3 },
 ];
 
+/**
+ * How urgent a visa enquiry is (docs/decisions/0003-visa-intake.md amendment 1): Masti's own two words. NORMAL is where
+ * every enquiry starts (NORMAL_URGENCY).
+ */
+export const URGENCY_LEVELS = [
+  { code: "NORMAL", name: "Normal", sortOrder: 1 },
+  { code: "URGENT", name: "Urgent", sortOrder: 2 },
+];
+
 /** How a docket goes to the vendor (docs/decisions/0008-visa-docket-dispatch.md Decision 6): placeholders ⚠️. */
 export const COURIERS = [
   { code: "BLUE_DART", name: "Blue Dart", awbNeeded: true, sortOrder: 1 },
@@ -148,6 +157,9 @@ export async function seedVisaMasters(db: Db) {
   }
   for (const speed of PROCESSING_SPEEDS) {
     await db.processingSpeed.upsert({ where: { code: speed.code }, update: {}, create: speed });
+  }
+  for (const level of URGENCY_LEVELS) {
+    await db.urgencyLevel.upsert({ where: { code: level.code }, update: {}, create: level });
   }
   for (const courier of COURIERS) {
     await db.courier.upsert({ where: { code: courier.code }, update: {}, create: courier });

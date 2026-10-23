@@ -25,7 +25,7 @@ import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.sc
 import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
-import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, PHOTO_SIDE } from "../src/modules/visaMasters/visaMasters.schemas";
+import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, NORMAL_URGENCY, PHOTO_SIDE } from "../src/modules/visaMasters/visaMasters.schemas";
 import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
@@ -85,7 +85,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays, checklists, documents' upload rules, vendors, covering letters and the consent wording the same way (Settings → Masters)", async () => {
+  it("limits holidays, checklists, documents' upload rules, vendors, covering letters and the consent wording the same way, and keeps the same Normal urgency (Settings → Masters)", async () => {
     const frontend = (await import(frontendMasterSchemas)) as {
       MAX_RANGE_DAYS: number;
       MAX_TARGETS: number;
@@ -96,7 +96,9 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_CONSENT_WORDING_CHARS: number;
       MAX_DOCUMENT_MB: number;
       PHOTO_SIDE: { min: number; max: number };
+      NORMAL_URGENCY: string;
     };
+    expect(frontend.NORMAL_URGENCY).toBe(NORMAL_URGENCY);
     expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
     expect(frontend.MAX_TARGETS).toBe(MAX_TARGETS);
