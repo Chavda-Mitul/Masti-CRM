@@ -14,11 +14,13 @@ import { useToast } from '../../lib/toast'
 import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import '../../styles/enquiries.css'
 import { normaliseMobile } from '../clients/schemas'
+import { useMasterList } from '../settings/masters/queries'
+import { NORMAL_URGENCY } from '../settings/masters/schemas'
 import { useClientLookup, useCreateVisaCase, useEnquirySources, useVisaIntakeOfferings } from './queries'
 import type { FamilyMatch } from './types'
 import { emptyVisaEnquiry, MAX_ADULTS, MAX_CHILDREN, toCreateVisaCaseBody, visaEnquiryFormSchema, type VisaEnquiryFormValues } from './schemas'
 
-const FIELDS = ['mobile', 'clientName', 'sourceCode', 'offeringId', 'adults', 'children', 'travelMonth', 'travelDate'] as const
+const FIELDS = ['mobile', 'clientName', 'sourceCode', 'offeringId', 'adults', 'children', 'travelMonth', 'travelDate', 'urgencyId'] as const
 
 /** A fresh key per form, so a retried or double-clicked save returns the same case. Works over plain HTTP too. */
 function newIdempotencyKey(): string {
@@ -46,6 +48,7 @@ export function NewEnquiryPage() {
   const [idempotencyKey] = useState(newIdempotencyKey)
   const sources = useEnquirySources()
   const offerings = useVisaIntakeOfferings()
+  const urgencyLevels = useMasterList('urgency-levels')
   const save = useCreateVisaCase(idempotencyKey)
 
   const form = useForm<VisaEnquiryFormValues>({
@@ -382,6 +385,40 @@ export function NewEnquiryPage() {
           </FormField>
         </div>
 
+        <fieldset className="enq-fieldset">
+          <legend className="lbl">
+            How urgent?
+            <RequiredMark />
+          </legend>
+          {urgencyLevels.isLoadingError || lostAccess(urgencyLevels) ? (
+            <div className="alert alert-bad">{errorText(urgencyLevels.error)}</div>
+          ) : (
+            <Controller
+              control={control}
+              name="urgencyId"
+              render={({ field }) => (
+                <div className="pill-group" role="radiogroup" aria-label="How urgent">
+                  {(urgencyLevels.data ?? [])
+                    .filter((l) => l.isActive)
+                    .map((l) => {
+                      // "" is Normal, where every enquiry starts (0003 amendment 1); every other level is urgent.
+                      const normal = l.code === NORMAL_URGENCY
+                      const value = normal ? '' : String(l.id)
+                      const on = field.value === value
+                      return (
+                        <label key={l.id} className={`pill${on ? ' on' : ''}${on && !normal ? ' pill-urgent' : ''}`}>
+                          <input type="radio" className="sr-only" name={field.name} value={value} checked={on} onChange={() => field.onChange(value)} />
+                          {l.name}
+                        </label>
+                      )
+                    })}
+                </div>
+              )}
+            />
+          )}
+          {errors.urgencyId && <span className="field-error">{errors.urgencyId.message}</span>}
+        </fieldset>
+
         <p className="muted small" style={{ margin: '14px 0 0' }}>
           Names, duration and single/multiple entry are filled in later, when the documents come in.
         </p>
@@ -394,7 +431,7 @@ export function NewEnquiryPage() {
       )}
 
       <div className="enquiry-actions">
-        <button type="submit" className="btn btn-primary btn-lg" disabled={save.isPending || !offerings.data || !sources.data}>
+        <button type="submit" className="btn btn-primary btn-lg" disabled={save.isPending || !offerings.data || !sources.data || !urgencyLevels.data}>
           {save.isPending ? 'Saving…' : 'Save enquiry'}
         </button>
         <Link to="/enquiries" className="btn btn-lg">

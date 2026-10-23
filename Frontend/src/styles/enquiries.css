@@ -294,6 +294,11 @@
   border-color: var(--ink);
   color: var(--on-fill);
 }
+/* A picked urgent level on New enquiry (0003 amendment 1): red, like its tag on the case. */
+.pill.on.pill-urgent {
+  background: var(--bad);
+  border-color: var(--bad);
+}
 .pill:focus-within {
   outline: 2px solid var(--primary);
   outline-offset: 2px;

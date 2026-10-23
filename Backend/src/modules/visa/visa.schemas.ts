@@ -252,6 +252,8 @@ export const createVisaCaseSchema = z
     children: z.number().int().min(0).max(MAX_CHILDREN),
     travelMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Pick the travel month."),
     travelDate: z.iso.date("Use a valid date.").nullish(),
+    /** How urgent it is (docs/decisions/0003-visa-intake.md amendment 1): an active level; none is Normal. */
+    urgencyId: z.number("Pick how urgent it is.").int().positive("Pick how urgent it is.").nullish(),
   })
   .refine((v) => !v.travelDate || v.travelDate.slice(0, 7) === v.travelMonth, {
     path: ["travelDate"],
