@@ -317,9 +317,10 @@ export interface DocumentMaster {
   warnIfNoScan: boolean
   /** Upload rules (0016 Amendment 1): at least one type, in PDF, JPG, PNG order. */
   fileTypes: ScanFileType[]
-  /** Null: no minimum / the shared limit. */
-  minSizeMb: number | null
-  maxSizeMb: number | null
+  /** In sizeUnit. Null: no minimum / the shared limit (in MB). */
+  minSize: number | null
+  maxSize: number | null
+  sizeUnit: SizeUnit
   /** The photo's size in mm; only its shape is checked, on a JPG or PNG. Both or neither. */
   photoWidthMm: number | null
   photoHeightMm: number | null
@@ -331,6 +332,9 @@ export interface DocumentMaster {
 }
 
 export type ScanFileType = 'PDF' | 'JPG' | 'PNG'
+
+/** A paper's min and max size unit: 1 KB = 1,024 bytes, 1 MB = 1,024 KB, as Windows shows file sizes. */
+export type SizeUnit = 'KB' | 'MB'
 
 export interface Offering {
   id: number

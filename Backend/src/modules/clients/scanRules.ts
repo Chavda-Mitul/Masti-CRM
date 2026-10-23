@@ -7,8 +7,9 @@ import type { ScanRules } from "./clients.schemas";
 
 export const SCAN_RULE_SELECT = {
   fileTypes: true,
-  minSizeMb: true,
-  maxSizeMb: true,
+  minSize: true,
+  maxSize: true,
+  sizeUnit: true,
   photoWidthMm: true,
   photoHeightMm: true,
   minWidthPx: true,
@@ -20,8 +21,9 @@ export const SCAN_RULE_SELECT = {
 export function scanRulesOf(row: Prisma.DocumentMasterGetPayload<{ select: typeof SCAN_RULE_SELECT }>): ScanRules {
   return {
     fileTypes: row.fileTypes,
-    minSizeMb: row.minSizeMb,
-    maxSizeMb: row.maxSizeMb,
+    minSize: row.minSize,
+    maxSize: row.maxSize,
+    sizeUnit: row.sizeUnit,
     photoWidthMm: row.photoWidthMm,
     photoHeightMm: row.photoHeightMm,
     minWidthPx: row.minWidthPx,

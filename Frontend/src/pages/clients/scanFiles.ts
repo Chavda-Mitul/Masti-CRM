@@ -1,5 +1,5 @@
 import { fileSize, MB } from '../enquiries/case/pdfFiles'
-import type { ScanFileType } from '../settings/masters/types'
+import type { ScanFileType, SizeUnit } from '../settings/masters/types'
 
 // A scan for the client document vault (docs/decisions/0016-client-documents.md): a scanner's PDF or a phone photo,
 // of a type and size its paper's upload rules take (Amendment 1). The server checks it again, by its first bytes, and
@@ -24,8 +24,10 @@ const FILE_TYPE_OF: Record<ScanType, ScanFileType> = { 'application/pdf': 'PDF',
 /** A paper's upload rules (0016 Amendment 1). Null: no minimum, the shared largest scan, no photo shape, no pixel limits. */
 export interface ScanRules {
   fileTypes: ScanFileType[]
-  minSizeMb: number | null
-  maxSizeMb: number | null
+  /** In sizeUnit. */
+  minSize: number | null
+  maxSize: number | null
+  sizeUnit: SizeUnit
   photoWidthMm: number | null
   photoHeightMm: number | null
   minWidthPx: number | null
@@ -37,8 +39,9 @@ export interface ScanRules {
 /** Before a paper is picked: any type, up to the shared largest scan. */
 const ANY_PAPER: ScanRules = {
   fileTypes: ['PDF', 'JPG', 'PNG'],
-  minSizeMb: null,
-  maxSizeMb: null,
+  minSize: null,
+  maxSize: null,
+  sizeUnit: 'MB',
   photoWidthMm: null,
   photoHeightMm: null,
   minWidthPx: null,
@@ -55,10 +58,22 @@ export function fileTypesText(types: readonly ScanFileType[]) {
   return `a ${types.length > 1 ? `${types.slice(0, -1).join(', ')} or ${types.at(-1)}` : types[0]}`
 }
 
-/** A size in MB to 2 decimals: up for a file too big, down for one too small, so it never reads as the limit itself. */
-function sizeText(bytes: number, round: 'up' | 'down') {
-  const hundredths = (round === 'up' ? Math.ceil : Math.floor)((bytes / MB) * 100)
-  return hundredths === 0 ? 'under 0.01 MB' : `${hundredths / 100} MB`
+/** Bytes in a KB and an MB, as Windows counts them. */
+const BYTES_PER: Record<SizeUnit, number> = { KB: 1024, MB }
+
+/** The largest scan a paper takes: its own max in its unit, else the shared one in MB. */
+function largestScan(rules: ScanRules, sharedMaxMb: number): { size: number; unit: SizeUnit } {
+  return rules.maxSize !== null ? { size: rules.maxSize, unit: rules.sizeUnit } : { size: sharedMaxMb, unit: 'MB' }
+}
+
+/**
+ * A size in whole KB or in MB to 2 decimals: up for a file too big, down for one too small, so it never reads as the
+ * limit itself.
+ */
+function sizeText(bytes: number, unit: SizeUnit, round: 'up' | 'down') {
+  const steps = unit === 'KB' ? 1 : 100
+  const n = (round === 'up' ? Math.ceil : Math.floor)((bytes / BYTES_PER[unit]) * steps)
+  return n === 0 ? `under ${1 / steps} ${unit}` : `${n / steps} ${unit}`
 }
 
 /** Why a file of this type and size can't be the paper's scan, or null. The largest is the paper's own, else the shared one. */
@@ -66,12 +81,13 @@ export function scanFileProblem(what: string, rules: ScanRules, sharedMaxMb: num
   if (!rules.fileTypes.includes(file.type)) {
     return `${what} must be ${fileTypesText(rules.fileTypes)}. This file is ${fileTypesText([file.type])}.`
   }
-  const maxMb = rules.maxSizeMb ?? sharedMaxMb
-  if (file.sizeBytes > maxMb * MB) {
-    return `${what} can be at most ${maxMb} MB. This file is ${sizeText(file.sizeBytes, 'up')}: scan it at a lower resolution.`
+  const max = largestScan(rules, sharedMaxMb)
+  if (file.sizeBytes > max.size * BYTES_PER[max.unit]) {
+    return `${what} can be at most ${max.size} ${max.unit}. This file is ${sizeText(file.sizeBytes, max.unit, 'up')}: scan it at a lower resolution.`
   }
-  if (rules.minSizeMb !== null && file.sizeBytes < rules.minSizeMb * MB) {
-    return `${what} must be at least ${rules.minSizeMb} MB. This file is ${sizeText(file.sizeBytes, 'down')}: scan it at a higher resolution.`
+  const unit = rules.sizeUnit
+  if (rules.minSize !== null && file.sizeBytes < rules.minSize * BYTES_PER[unit]) {
+    return `${what} must be at least ${rules.minSize} ${unit}. This file is ${sizeText(file.sizeBytes, unit, 'down')}: scan it at a higher resolution.`
   }
   return null
 }

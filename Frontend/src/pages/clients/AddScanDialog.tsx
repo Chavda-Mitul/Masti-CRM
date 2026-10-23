@@ -164,7 +164,7 @@ export function AddScanDialog({ client, vault, onClose }: { client: ClientProfil
           ) : (
             <span className="hint">
               {paper
-                ? `${paper.name}: ${uploadRulesLabel({ ...paper.rules, maxSizeMb: paper.rules.maxSizeMb ?? vault.maxMb })}.`
+                ? `${paper.name}: ${uploadRulesLabel(paper.rules, vault.maxMb)}.`
                 : `A PDF, JPEG or PNG, up to ${vault.maxMb} MB.`}
             </span>
           )}

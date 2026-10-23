@@ -920,10 +920,11 @@ model DocumentMaster {
   /// Upload rules (0016 Amendment 1, change request 16), checked when a scan of this paper is uploaded. Which file
   /// types may be uploaded: at least one (database check).
   fileTypes       ScanFileType[]      @default([PDF, JPG, PNG])
-  /// The smallest and largest file, 0.01–50 MB, min below max (database checks). Null: no minimum, and the shared
-  /// clients.documents.maxMb.
-  minSizeMb       Float?
-  maxSizeMb       Float?
+  /// The smallest and largest file, in sizeUnit: MB 0.01–50 (2 decimals), KB 1–51,200 (whole); min below max
+  /// (database checks). Null: no minimum, and the shared clients.documents.maxMb.
+  minSize         Float?
+  maxSize         Float?
+  sizeUnit        SizeUnit            @default(MB)
   /// The photo's size in mm (35 × 45). Only its shape is checked, on a JPG or PNG, so any size above 0 will do. Both or
   /// neither (database check).
   photoWidthMm    Int?                @db.SmallInt
@@ -947,6 +948,13 @@ enum ScanFileType {
   PDF
   JPG
   PNG
+}
+
+/// The unit a paper's min and max file size are typed in (change request 16): KB for a photo, as visa websites state
+/// it, MB for a paper. 1 KB = 1,024 bytes and 1 MB = 1,024 KB, as Windows shows file sizes.
+enum SizeUnit {
+  KB
+  MB
 }
 
 /// What we need. Code branches on it (Original/Xerox toggle, "Made" for things we arrange), so an enum.

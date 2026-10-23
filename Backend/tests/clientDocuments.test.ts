@@ -278,13 +278,14 @@ describe("what a scan must be", () => {
     const { head } = await people();
     const { client, aarav } = await family(head);
     // The photos are seeded 35 × 45 mm in shape; here they also take only a JPG or PNG of 0.01–0.3 MB.
-    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { fileTypes: ["JPG", "PNG"], minSizeMb: 0.01, maxSizeMb: 0.3 } });
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { fileTypes: ["JPG", "PNG"], minSize: 0.01, maxSize: 0.3 } });
     const photos = { documentId: await paper("PHOTOS"), memberId: aarav.id };
     const vault = (await head.get(`/api/clients/${client.id}/documents`)).body as VaultDto;
     expect(vault.papers.find((p) => p.name === "Photos")!.rules).toEqual({
       fileTypes: ["JPG", "PNG"],
-      minSizeMb: 0.01,
-      maxSizeMb: 0.3,
+      minSize: 0.01,
+      maxSize: 0.3,
+      sizeUnit: "MB",
       photoWidthMm: 35,
       photoHeightMm: 45,
       minWidthPx: null,
@@ -321,7 +322,7 @@ describe("what a scan must be", () => {
 
     // A PDF's shape isn't checked, and a paper's own largest scan can be above the shared one.
     expect((await head.put("/api/clients/settings").send({ documents: { maxMb: 1 } })).status).toBe(200);
-    await prisma.documentMaster.update({ where: { code: "PASSPORT" }, data: { maxSizeMb: 2, photoWidthMm: 35, photoHeightMm: 45 } });
+    await prisma.documentMaster.update({ where: { code: "PASSPORT" }, data: { maxSize: 2, photoWidthMm: 35, photoHeightMm: 45 } });
     const passport = { documentId: await paper("PASSPORT"), memberId: aarav.id };
     expect((await upload(head, client.id, passport, await pdf(1))).status).toBe(201);
     expect((await upload(head, client.id, passport, padded(pngOf(413, 531), 1.5 * MB), "image/png")).status).toBe(201);
@@ -374,6 +375,28 @@ describe("what a scan must be", () => {
       '"Photos" must have the shape of 35 × 45 mm. This photo is 600 × 600 pixels: crop it to that shape and upload it again.',
     );
     expect((await upload(head, client.id, photos, await pdf(1))).status).toBe(201);
+  });
+
+  it("words a paper's sizes in KB when it sets them in KB (0016 Amendment 1)", async () => {
+    const { head } = await people();
+    const { client, aarav } = await family(head);
+    // The USA's photo is at most 240 KB; at least 40 KB too, to see both ends. 1 KB is 1,024 bytes.
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { sizeUnit: "KB", minSize: 40, maxSize: 240 } });
+    const photos = { documentId: await paper("PHOTOS"), memberId: aarav.id };
+    const vault = (await head.get(`/api/clients/${client.id}/documents`)).body as VaultDto;
+    expect(vault.papers.find((p) => p.name === "Photos")!.rules).toMatchObject({ sizeUnit: "KB", minSize: 40, maxSize: 240 });
+
+    const big = await upload(head, client.id, photos, padded(pngOf(70, 90), 240 * 1024 + 1), "image/png");
+    expect(big.status).toBe(413);
+    expect(big.body.message).toBe('"Photos" can be at most 240 KB. Scan it at a lower resolution and upload it again.');
+    const small = await upload(head, client.id, photos, padded(pngOf(70, 90), 40 * 1024 - 1), "image/png");
+    expect(small.status).toBe(400);
+    expect(small.body.message).toBe('"Photos" must be at least 40 KB. This file is 39 KB: scan it at a higher resolution.');
+    expect(await objectsOf(client.id)).toHaveLength(0);
+
+    for (const bytes of [40 * 1024, 240 * 1024]) {
+      expect((await upload(head, client.id, photos, padded(pngOf(70, 90), bytes), "image/png")).status).toBe(201);
+    }
   });
 
   it("checks the client, the person and the paper", async () => {

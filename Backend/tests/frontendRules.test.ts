@@ -190,14 +190,31 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
 
   it("words a scan's wrong type and size the same way before and after the upload (0016 Amendment 1)", async () => {
     const frontend = (await import(frontendScanFiles)) as { fileTypesText: typeof fileTypesText; scanFileProblem: typeof scanFileProblem };
-    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null, minWidthPx: null, minHeightPx: null, maxWidthPx: null, maxHeightPx: null };
+    const none: Omit<ScanRules, "fileTypes"> = {
+      minSize: null,
+      maxSize: null,
+      sizeUnit: "MB",
+      photoWidthMm: null,
+      photoHeightMm: null,
+      minWidthPx: null,
+      minHeightPx: null,
+      maxWidthPx: null,
+      maxHeightPx: null,
+    };
     const rules: ScanRules[] = [
       { fileTypes: ["PDF", "JPG", "PNG"], ...none },
-      { fileTypes: ["JPG", "PNG"], ...none, minSizeMb: 0.01, maxSizeMb: 0.3, photoWidthMm: 35, photoHeightMm: 45 },
-      { fileTypes: ["PDF"], ...none, maxSizeMb: 2 },
-      { fileTypes: ["PNG"], ...none, minSizeMb: 1.5 },
+      { fileTypes: ["JPG", "PNG"], ...none, minSize: 0.01, maxSize: 0.3, photoWidthMm: 35, photoHeightMm: 45 },
+      { fileTypes: ["PDF"], ...none, maxSize: 2 },
+      { fileTypes: ["PNG"], ...none, minSize: 1.5 },
+      // In KB: China's 40–120 KB, Singapore's up to 60 KB, and a smallest only (the shared largest is in MB).
+      { fileTypes: ["JPG"], ...none, sizeUnit: "KB", minSize: 40, maxSize: 120 },
+      { fileTypes: ["JPG", "PNG"], ...none, sizeUnit: "KB", maxSize: 60 },
+      { fileTypes: ["PDF", "JPG", "PNG"], ...none, sizeUnit: "KB", minSize: 10 },
     ];
-    const sizes = [0, 1, 4_000, 10_485, 10_486, 314_572, 314_573, 1_048_576, 1_572_864, 2_097_152, 2_097_153, 30 * 1_048_576];
+    const sizes = [
+      ...[0, 1, 1_023, 1_024, 4_000, 10_239, 10_240, 10_485, 10_486, 40_959, 40_960, 61_440, 61_441, 122_880, 122_881],
+      ...[314_572, 314_573, 1_048_576, 1_572_864, 2_097_152, 2_097_153, 30 * 1_048_576],
+    ];
     for (const r of rules) {
       expect(frontend.fileTypesText(r.fileTypes)).toBe(fileTypesText(r.fileTypes));
       for (const type of ["PDF", "JPG", "PNG"] as const) {

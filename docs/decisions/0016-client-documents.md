@@ -3,8 +3,8 @@
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
   (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6). Upload
-  rules per paper (Amendment 1): built 23 Oct 2026, the rules in Settings (part 1), refusing uploads (part 2), and a
-  photo's smallest and largest in pixels (part 3).
+  rules per paper (Amendment 1): built 23 Oct 2026, the rules in Settings (part 1), refusing uploads (part 2), a
+  photo's smallest and largest in pixels (part 3), and sizes in KB or MB (part 4).
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -37,7 +37,8 @@ other check. It isn't in the demo: change request 16.
   | Rule | What can be set | Not set |
   | --- | --- | --- |
   | File type | PDF, JPG, PNG; at least one ticked | all three |
-  | Min size | 0.01–50 MB, up to 2 decimals (0.3) | no minimum |
+  | Sizes in | KB or MB, for both sizes | MB |
+  | Min size | MB: 0.01–50, up to 2 decimals (0.3); KB: a whole 1–51,200 (240) | no minimum |
   | Max size | the same, above the min | `clients.documents.maxMb` (20 MB ⚠️) |
   | Photo size | width × height in whole mm, any size from 1 up, both or neither | no check |
   | Smallest / largest photo | width × height in whole pixels, each pair both or neither, the smallest not bigger; the same pair for an exact size | no check |
@@ -53,7 +54,10 @@ other check. It isn't in the demo: change request 16.
   400 × 514; the UK at least 600 × 750. So a paper can also set its smallest and largest photo in pixels, checked on a
   JPG or PNG as it shows (EXIF rotation applied). It is checked after the shape, on the server, which reads the pixels.
   Each country's photo with its own rules is its own paper (e.g. "Photos – USA") in that country's checklist; no code.
-  The sizes in KB are the next step.
+- **Sizes in KB or MB** (project lead, 23 Oct 2026, the same day): visa websites give a photo's limit in KB (240 KB
+  for the USA, 60 KB for Singapore, 40–120 KB for China), which MB with 2 decimals can't say exactly. A paper picks
+  one unit for both its sizes. 1 KB = 1,024 bytes and 1 MB = 1,024 KB, as Windows shows file sizes, so the numbers
+  staff see on their PC match the toast. The shared largest scan stays in MB.
 - **A wrong upload is refused** (part 2): on the client page's Add a scan and in Step 2's Save scan, with a toast at the
   bottom saying what the paper needs (the project lead chose the toast for Add a scan too, 23 Oct). The server refuses
   it too.
@@ -108,6 +112,20 @@ other check. It isn't in the demo: change request 16.
 - **Tests:** `visaMasters.test.ts` (saved and audited, exact / smallest only / largest only, each wrong value, the
   CHECK), `clientDocuments.test.ts` (too few, too many, not exact, a turned phone photo, the shape first, a PDF not
   checked, nothing kept), `visaCaseScans.test.ts` (the case's rules carry them; Save scan refuses).
+
+**Built, part 4 (23 Oct 2026): sizes in KB or MB**
+- **Data:** `minSizeMb` and `maxSizeMb` renamed to `minSize` and `maxSize` (a size already set keeps its value, in MB),
+  and `sizeUnit` (`SizeUnit`: KB or MB, default MB); migration `20261023170000_size_unit` rewrites the
+  `DocumentMaster_size_range` CHECK per unit (KB whole, 1–51,200; MB 0.01–50; min below max).
+- **Rules:** each size is checked in the row's unit on the whole row (`uploadRulesProblem`), so switching the unit
+  checks the sizes already saved: `Whole KB only.`, `1 to 51200 KB.`, `0.01 to 50 MB.`, `Up to 2 decimals.`
+- **Messages** (`scanFileProblem` and `scanLimit`, mirrored in `scanFiles.ts`): the limit in the paper's unit, or MB for
+  the shared one, and the file's size in the same unit, whole KB rounded up or down (`under 1 KB`).
+- **Screen:** "Sizes in: MB / KB" above the two size boxes, whose labels and examples follow it. The column and the Add
+  a scan hint read e.g. `40–120 KB`, or `40 KB – 20 MB` when only a min is set.
+- **Tests:** `visaMasters.test.ts` (KB saved and audited, each wrong value, a unit switch checked against the saved
+  sizes, the CHECK per unit), `clientDocuments.test.ts` (240 KB max → 413, 40 KB min → `This file is 39 KB`, both ends
+  saved), `frontendRules.test.ts` (KB rule sets and sizes at the KB edges, the same words).
 
 ## Context
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClientKind, type ScanFileType } from "../../../generated/prisma/enums";
+import { ClientKind, type ScanFileType, type SizeUnit } from "../../../generated/prisma/enums";
 import { gstin, pan, PERSON_NAME_MESSAGE, PERSON_NAME_PATTERN, stateCode, upperNoSpaces } from "../../lib/shared.schemas";
 
 // Only zod, the generated enums and the shared fields (src/lib/shared.schemas.ts) are imported here, so these schemas
@@ -132,8 +132,10 @@ export const FILE_TYPE_OF = { "application/pdf": "PDF", "image/jpeg": "JPG", "im
  */
 export interface ScanRules {
   fileTypes: ScanFileType[];
-  minSizeMb: number | null;
-  maxSizeMb: number | null;
+  /** In sizeUnit. */
+  minSize: number | null;
+  maxSize: number | null;
+  sizeUnit: SizeUnit;
   photoWidthMm: number | null;
   photoHeightMm: number | null;
   minWidthPx: number | null;
@@ -145,8 +147,13 @@ export interface ScanRules {
 /** How far a photo's shape may be from its paper's: a scan is never cut exactly. Fixed (project lead, 23 Oct 2026). */
 export const SHAPE_MARGIN = 0.03;
 
-/** As src/lib/pdf.ts's MB: this file imports no lib code. */
-const BYTES_PER_MB = 1024 * 1024;
+/** Bytes in a KB and an MB, as Windows counts them (src/lib/pdf.ts's MB too: this file imports no lib code). */
+export const BYTES_PER = { KB: 1024, MB: 1024 * 1024 } as const satisfies Record<SizeUnit, number>;
+
+/** The largest scan a paper takes: its own max in its unit, else the shared one (clients.documents.maxMb) in MB. */
+export function largestScan(rules: ScanRules, sharedMaxMb: number): { size: number; unit: SizeUnit } {
+  return rules.maxSize !== null ? { size: rules.maxSize, unit: rules.sizeUnit } : { size: sharedMaxMb, unit: "MB" };
+}
 
 // The rules' messages. Frontend/src/pages/clients/scanFiles.ts repeats fileTypesText and scanFileProblem word for word,
 // and Backend/tests/frontendRules.test.ts compares them. `what` names the paper, e.g. "Photos" in quotes.
@@ -156,10 +163,14 @@ export function fileTypesText(types: readonly ScanFileType[]) {
   return `a ${types.length > 1 ? `${types.slice(0, -1).join(", ")} or ${types.at(-1)}` : types[0]}`;
 }
 
-/** A size in MB to 2 decimals: up for a file too big, down for one too small, so it never reads as the limit itself. */
-function sizeText(bytes: number, round: "up" | "down") {
-  const hundredths = (round === "up" ? Math.ceil : Math.floor)((bytes / BYTES_PER_MB) * 100);
-  return hundredths === 0 ? "under 0.01 MB" : `${hundredths / 100} MB`;
+/**
+ * A size in whole KB or in MB to 2 decimals: up for a file too big, down for one too small, so it never reads as the
+ * limit itself.
+ */
+function sizeText(bytes: number, unit: SizeUnit, round: "up" | "down") {
+  const steps = unit === "KB" ? 1 : 100;
+  const n = (round === "up" ? Math.ceil : Math.floor)((bytes / BYTES_PER[unit]) * steps);
+  return n === 0 ? `under ${1 / steps} ${unit}` : `${n / steps} ${unit}`;
 }
 
 /** Why the paper doesn't take a file of this type, or null. */
@@ -171,12 +182,13 @@ export function fileTypeProblem(what: string, rules: ScanRules, type: ScanFileTy
 export function scanFileProblem(what: string, rules: ScanRules, sharedMaxMb: number, file: { type: ScanFileType; sizeBytes: number }) {
   const wrongType = fileTypeProblem(what, rules, file.type);
   if (wrongType) return wrongType;
-  const maxMb = rules.maxSizeMb ?? sharedMaxMb;
-  if (file.sizeBytes > maxMb * BYTES_PER_MB) {
-    return `${what} can be at most ${maxMb} MB. This file is ${sizeText(file.sizeBytes, "up")}: scan it at a lower resolution.`;
+  const max = largestScan(rules, sharedMaxMb);
+  if (file.sizeBytes > max.size * BYTES_PER[max.unit]) {
+    return `${what} can be at most ${max.size} ${max.unit}. This file is ${sizeText(file.sizeBytes, max.unit, "up")}: scan it at a lower resolution.`;
   }
-  if (rules.minSizeMb !== null && file.sizeBytes < rules.minSizeMb * BYTES_PER_MB) {
-    return `${what} must be at least ${rules.minSizeMb} MB. This file is ${sizeText(file.sizeBytes, "down")}: scan it at a higher resolution.`;
+  const unit = rules.sizeUnit;
+  if (rules.minSize !== null && file.sizeBytes < rules.minSize * BYTES_PER[unit]) {
+    return `${what} must be at least ${rules.minSize} ${unit}. This file is ${sizeText(file.sizeBytes, unit, "down")}: scan it at a higher resolution.`;
   }
   return null;
 }
