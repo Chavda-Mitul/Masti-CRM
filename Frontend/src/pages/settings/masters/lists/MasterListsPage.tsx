@@ -26,6 +26,7 @@ type ListTab =
   | 'documents'
   | 'document-problem-reasons'
   | 'processing-speeds'
+  | 'urgency-levels'
   | 'enquiry-sources'
   | 'follow-up-outcomes'
   | 'follow-up-next-steps'
@@ -53,6 +54,7 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
     editors: 'the Head and the Visa HOD',
   },
   { value: 'processing-speeds', label: 'Processing speeds', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
+  { value: 'urgency-levels', label: 'Urgency levels', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'enquiry-sources', label: 'Enquiry sources', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'vendors', label: 'Vendors', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
   { value: 'couriers', label: 'Couriers', visa: true, canEdit: canEditVisaMasters, editors: 'the Head and the Visa HOD' },
@@ -68,8 +70,9 @@ const TABS: { value: ListTab; label: string; visa: boolean; canEdit: (user: User
 ]
 
 /**
- * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, enquiry sources,
- * vendors, couriers, credit-note and recall reasons and extra charges are the Visa department's;
+ * The small master lists, one tab each (?tab=…). Countries, visa types, documents, document problems, processing speeds,
+ * urgency levels, enquiry sources, vendors, couriers, credit-note and recall reasons and extra charges are the Visa
+ * department's;
  * embassies and the field staff's time slots and visit fail reasons are shared by every department (changed by any HOD);
  * each follow-up and reason value is tagged with its departments, and changed by their HODs or the Head (0018).
  */
@@ -127,7 +130,11 @@ export function MasterListsPage() {
       {tab === 'documents' && <DocumentsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'document-problem-reasons' && <DocumentProblemsTable canEdit={canEdit} showInactive={showInactive} />}
       {tab === 'enquiry-sources' && <EnquirySourcesTable canEdit={canEdit} showInactive={showInactive} />}
-      {(tab === 'follow-up-outcomes' || tab === 'follow-up-next-steps' || tab === 'processing-speeds' || tab === 'field-fail-reasons') && (
+      {(tab === 'follow-up-outcomes' ||
+        tab === 'follow-up-next-steps' ||
+        tab === 'processing-speeds' ||
+        tab === 'urgency-levels' ||
+        tab === 'field-fail-reasons') && (
         <FollowUpOptionsTable key={tab} resource={tab} canEdit={canEdit} showInactive={showInactive} />
       )}
       {tab === 'enquiry-reasons' && <EnquiryReasonsTable canEdit={canEdit} showInactive={showInactive} />}

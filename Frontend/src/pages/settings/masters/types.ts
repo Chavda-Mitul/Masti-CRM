@@ -415,6 +415,9 @@ export interface TaggedOption extends FollowUpOption {
 /** How fast the embassy processes the application: "Normal", "Express"… (0009). Picked on the quote. */
 export type ProcessingSpeed = FollowUpOption
 
+/** How urgent a visa enquiry is: "Normal", "Urgent"… (0003 amendment 1). Picked on New enquiry, changed on the case. */
+export type UrgencyLevel = FollowUpOption
+
 /** How a docket goes to the vendor: "Blue Dart", "By hand (no AWB)"… (0008 Decision 6). Picked at dispatch. */
 /** Why a credit note is issued: "Wrong amount", "Recall"… (0011 Decision 5). Picked when an invoice is cancelled. */
 export type CreditNoteReason = FollowUpOption
@@ -468,6 +471,7 @@ export type MasterResource =
   | 'vendors'
   | 'document-problem-reasons'
   | 'processing-speeds'
+  | 'urgency-levels'
   | 'couriers'
   | 'credit-note-reasons'
   | 'recall-reasons'

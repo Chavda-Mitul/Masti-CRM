@@ -17,6 +17,7 @@ import type {
   DocumentRemindersSetting,
   DocumentProblemReason,
   ProcessingSpeed,
+  UrgencyLevel,
   Courier,
   CreditNoteReason,
   RecallReason,
@@ -352,6 +353,7 @@ interface MasterRow {
   vendors: Vendor
   'document-problem-reasons': DocumentProblemReason
   'processing-speeds': ProcessingSpeed
+  'urgency-levels': UrgencyLevel
   couriers: Courier
   'credit-note-reasons': CreditNoteReason
   'recall-reasons': RecallReason
@@ -374,6 +376,7 @@ const LIST_KEY = {
   vendors: 'vendors',
   'document-problem-reasons': 'problemReasons',
   'processing-speeds': 'processingSpeeds',
+  'urgency-levels': 'urgencyLevels',
   couriers: 'couriers',
   'credit-note-reasons': 'creditNoteReasons',
   'recall-reasons': 'recallReasons',
@@ -394,6 +397,7 @@ const ITEM_KEY = {
   vendors: 'vendor',
   'document-problem-reasons': 'problemReason',
   'processing-speeds': 'processingSpeed',
+  'urgency-levels': 'urgencyLevel',
   couriers: 'courier',
   'credit-note-reasons': 'creditNoteReason',
   'recall-reasons': 'recallReason',
@@ -438,8 +442,9 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
         return
       }
-      // The document problems, couriers and the reasons lists change nothing else: the case page reads these lists.
-      if (['document-problem-reasons', 'couriers', 'credit-note-reasons', 'recall-reasons', 'missing-passport-reasons', 'extra-charges', 'field-slots', 'field-fail-reasons'].includes(resource)) return
+      // The document problems, couriers, urgency levels and the reasons lists change nothing else: the screens that
+      // pick from them read these lists.
+      if (['document-problem-reasons', 'couriers', 'urgency-levels', 'credit-note-reasons', 'recall-reasons', 'missing-passport-reasons', 'extra-charges', 'field-slots', 'field-fail-reasons'].includes(resource)) return
       // A case's quote shows its processing speed by name.
       if (resource === 'processing-speeds') {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
