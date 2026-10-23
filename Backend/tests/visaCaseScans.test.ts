@@ -155,6 +155,10 @@ describe("Save scan from the case", () => {
       maxSizeMb: null,
       photoWidthMm: 35,
       photoHeightMm: 45,
+      minWidthPx: null,
+      minHeightPx: null,
+      maxWidthPx: null,
+      maxHeightPx: null,
     });
     // Read live from the document master, like the scan warning: a change reaches the open case.
     await prisma.documentMaster.update({ where: { code: "BANK_STATEMENT_6M" }, data: { fileTypes: ["PDF"], maxSizeMb: 2 } });
@@ -171,6 +175,14 @@ describe("Save scan from the case", () => {
 
     expect((await saveScan(staff, live, docOf(live, BANK).id, await pdf(1))).status).toBe(200);
     expect((await saveScan(staff, live, docOf(live, "Photos").id, pngOf(70, 90), "image/png")).status).toBe(200);
+
+    // The smallest photo in pixels reaches the case too: 70 × 90 has the shape, but now too few pixels.
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { minWidthPx: 413, minHeightPx: 531 } });
+    const sized = await load(staff, c.caseNo);
+    expect(docOf(sized, "Photos").scanRules).toMatchObject({ minWidthPx: 413, minHeightPx: 531, maxWidthPx: null, maxHeightPx: null });
+    const small = await saveScan(staff, sized, docOf(sized, "Photos").id, pngOf(70, 90), "image/png");
+    expect(small.status).toBe(400);
+    expect(small.body.message).toBe('"Photos" must be at least 413 × 531 pixels. This photo is 70 × 90 pixels: scan it at a higher resolution.');
   });
 });
 

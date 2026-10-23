@@ -3,7 +3,8 @@
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
   (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6). Upload
-  rules per paper (Amendment 1): built 23 Oct 2026, the rules in Settings (part 1) and refusing uploads (part 2).
+  rules per paper (Amendment 1): built 23 Oct 2026, the rules in Settings (part 1), refusing uploads (part 2), and a
+  photo's smallest and largest in pixels (part 3).
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -39,6 +40,7 @@ other check. It isn't in the demo: change request 16.
   | Min size | 0.01–50 MB, up to 2 decimals (0.3) | no minimum |
   | Max size | the same, above the min | `clients.documents.maxMb` (20 MB ⚠️) |
   | Photo size | width × height in whole mm, any size from 1 up, both or neither | no check |
+  | Smallest / largest photo | width × height in whole pixels, each pair both or neither, the smallest not bigger; the same pair for an exact size | no check |
 
 - **A photo size is its shape** (aspect ratio), not its pixels: a JPG or PNG's width ÷ height must match the paper's
   (35 × 45 mm is 7 : 9), within about 3%, since a scan is never cut exactly. The margin is fixed in the code. A PDF
@@ -46,6 +48,12 @@ other check. It isn't in the demo: change request 16.
 - **No size range on the photo size** (project lead, 23 Oct 2026, after trying it): any whole number from 1 up on each
   side saves, since only the shape counts (500 × 500 is a square, like 35 × 35). It was 10–200 mm when first built. The
   only top is the column's own, 32,767 (smallint); migration `20261023144000_photo_size_any` swaps the CHECK.
+- **A photo's pixels, as visa websites ask** (project lead, 23 Oct 2026, after we checked their photo rules): their
+  uploads are stated in pixels and KB, not mm. The USA wants 600 × 600 to 1200 × 1200 pixels; Singapore exactly
+  400 × 514; the UK at least 600 × 750. So a paper can also set its smallest and largest photo in pixels, checked on a
+  JPG or PNG as it shows (EXIF rotation applied). It is checked after the shape, on the server, which reads the pixels.
+  Each country's photo with its own rules is its own paper (e.g. "Photos – USA") in that country's checklist; no code.
+  The sizes in KB are the next step.
 - **A wrong upload is refused** (part 2): on the client page's Add a scan and in Step 2's Save scan, with a toast at the
   bottom saying what the paper needs (the project lead chose the toast for Add a scan too, 23 Oct). The server refuses
   it too.
@@ -87,6 +95,19 @@ other check. It isn't in the demo: change request 16.
 - **Tests:** `images.test.ts` (sizes, EXIF), `clientDocuments.test.ts` (each refusal and its message, nothing kept, the
   margin, a turned phone photo, a PDF's shape not checked, a paper's own max above the shared one),
   `visaCaseScans.test.ts` (the case's rules, read live; Save scan refuses), `frontendRules.test.ts` (the same words).
+
+**Built, part 3 (23 Oct 2026): the smallest and largest photo in pixels**
+- **Data:** `DocumentMaster.minWidthPx`, `minHeightPx`, `maxWidthPx`, `maxHeightPx` (smallint); migration
+  `20261023160000_photo_pixels`, with a CHECK: each pair both or neither, above 0, the smallest not bigger than the
+  largest on either side. `uploadRulesProblem` checks the same on the whole row.
+- **On the file:** `checkScanRules` reads a JPG's or PNG's size once when the paper has a shape or pixel rules, then
+  `photoShapeProblem`, then `photoPixelsProblem` (`clients.schemas.ts`): "must be at least 600 × 600 pixels", "can be
+  at most 1200 × 1200 pixels", or "must be exactly 400 × 514 pixels", each with the photo's own size.
+- **Screen:** four boxes under the photo size (smallest and largest width and height), and the Upload rules column
+  reads e.g. `600×600–1200×1200 px`, `400×514 px` (exact), `at least 600×750 px`.
+- **Tests:** `visaMasters.test.ts` (saved and audited, exact / smallest only / largest only, each wrong value, the
+  CHECK), `clientDocuments.test.ts` (too few, too many, not exact, a turned phone photo, the shape first, a PDF not
+  checked, nothing kept), `visaCaseScans.test.ts` (the case's rules carry them; Save scan refuses).
 
 ## Context
 

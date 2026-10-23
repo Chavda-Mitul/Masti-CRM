@@ -88,6 +88,10 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       maxSizeMb: document?.maxSizeMb?.toString() ?? '',
       photoWidthMm: document?.photoWidthMm?.toString() ?? '',
       photoHeightMm: document?.photoHeightMm?.toString() ?? '',
+      minWidthPx: document?.minWidthPx?.toString() ?? '',
+      minHeightPx: document?.minHeightPx?.toString() ?? '',
+      maxWidthPx: document?.maxWidthPx?.toString() ?? '',
+      maxHeightPx: document?.maxHeightPx?.toString() ?? '',
     },
   })
   const { errors } = formState
@@ -103,6 +107,10 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       maxSizeMb: numberOrNull(v.maxSizeMb),
       photoWidthMm: numberOrNull(v.photoWidthMm),
       photoHeightMm: numberOrNull(v.photoHeightMm),
+      minWidthPx: numberOrNull(v.minWidthPx),
+      minHeightPx: numberOrNull(v.minHeightPx),
+      maxWidthPx: numberOrNull(v.maxWidthPx),
+      maxHeightPx: numberOrNull(v.maxHeightPx),
     }
     save.mutate(document ? { id: document.id, body } : { body: { ...body, code: v.code } }, {
       onSuccess: (saved) => {
@@ -121,6 +129,10 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
           'maxSizeMb',
           'photoWidthMm',
           'photoHeightMm',
+          'minWidthPx',
+          'minHeightPx',
+          'maxWidthPx',
+          'maxHeightPx',
         ]),
     })
   })
@@ -192,6 +204,18 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       </FormField>
       <FormField label="Photo height (mm, optional)" error={errors.photoHeightMm?.message} hint="Only the shape is checked, on JPG and PNG.">
         <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('photoHeightMm')} placeholder="e.g. 45" />
+      </FormField>
+      <FormField label="Smallest width (pixels, optional)" error={errors.minWidthPx?.message} hint="Fill in both, or leave both blank.">
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('minWidthPx')} placeholder="e.g. 600" />
+      </FormField>
+      <FormField label="Smallest height (pixels, optional)" error={errors.minHeightPx?.message} hint="A smaller JPG or PNG isn’t saved.">
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('minHeightPx')} placeholder="e.g. 600" />
+      </FormField>
+      <FormField label="Largest width (pixels, optional)" error={errors.maxWidthPx?.message} hint="Fill in both, or leave both blank.">
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('maxWidthPx')} placeholder="e.g. 1200" />
+      </FormField>
+      <FormField label="Largest height (pixels, optional)" error={errors.maxHeightPx?.message} hint="Same as the smallest for an exact size.">
+        <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('maxHeightPx')} placeholder="e.g. 1200" />
       </FormField>
     </MasterDrawer>
   )

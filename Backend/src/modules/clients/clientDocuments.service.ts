@@ -18,6 +18,7 @@ import { assertCanSeeClient } from "./access";
 import {
   FILE_TYPE_OF,
   fileTypeProblem,
+  photoPixelsProblem,
   photoShapeProblem,
   SCAN_TYPES,
   scanFileProblem,
@@ -187,17 +188,19 @@ async function checkScan(bytes: Buffer, contentType: ScanType): Promise<number |
 
 /**
  * The paper's upload rules on the file itself (0016 Amendment 1): its type and size again (the paper may have changed
- * since the upload began), then a JPG's or PNG's shape when the paper has a photo size. A PDF's shape isn't checked.
+ * since the upload began), then a JPG's or PNG's shape and pixels when the paper has a photo size or a smallest or
+ * largest photo. A PDF's aren't checked.
  */
 async function checkScanRules(paper: ScanPaper, contentType: ScanType, bytes: Buffer) {
   const { maxMb } = (await getClientSettings()).documents;
   const problem = scanFileProblem(paperWord(paper), paper.rules, maxMb, { type: FILE_TYPE_OF[contentType], sizeBytes: bytes.length });
   if (problem) throw badRequest(problem);
-  if (contentType === "application/pdf" || paper.rules.photoWidthMm === null) return;
+  const { photoWidthMm, minWidthPx, maxWidthPx } = paper.rules;
+  if (contentType === "application/pdf" || (photoWidthMm === null && minWidthPx === null && maxWidthPx === null)) return;
   const pixels = imageSize(bytes, contentType);
   if (!pixels) throw badRequest("Couldn't read this photo's size. Save it again as a JPG or PNG and upload it again.");
-  const wrongShape = photoShapeProblem(paperWord(paper), paper.rules, pixels);
-  if (wrongShape) throw badRequest(wrongShape);
+  const wrongPhoto = photoShapeProblem(paperWord(paper), paper.rules, pixels) ?? photoPixelsProblem(paperWord(paper), paper.rules, pixels);
+  if (wrongPhoto) throw badRequest(wrongPhoto);
 }
 
 /** "Aarav-Mehta_Passport_2026-10-17.pdf" ⚠️: whose it is (the client, for their own paper), the paper, the day saved. */

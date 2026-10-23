@@ -127,7 +127,8 @@ export const FILE_TYPE_OF = { "application/pdf": "PDF", "image/jpeg": "JPG", "im
 
 /**
  * A paper's upload rules (docs/decisions/0016-client-documents.md Amendment 1, change request 16), as the document
- * master keeps them. Null: no minimum, the shared largest scan (clients.documents.maxMb), no photo shape.
+ * master keeps them. Null: no minimum, the shared largest scan (clients.documents.maxMb), no photo shape, no smallest or
+ * largest photo.
  */
 export interface ScanRules {
   fileTypes: ScanFileType[];
@@ -135,6 +136,10 @@ export interface ScanRules {
   maxSizeMb: number | null;
   photoWidthMm: number | null;
   photoHeightMm: number | null;
+  minWidthPx: number | null;
+  minHeightPx: number | null;
+  maxWidthPx: number | null;
+  maxHeightPx: number | null;
 }
 
 /** How far a photo's shape may be from its paper's: a scan is never cut exactly. Fixed (project lead, 23 Oct 2026). */
@@ -188,6 +193,28 @@ export function photoShapeProblem(what: string, rules: ScanRules, pixels: { widt
     `${what} must have the shape of ${rules.photoWidthMm} × ${rules.photoHeightMm} mm. This photo is ` +
     `${pixels.width} × ${pixels.height} pixels: crop it to that shape and upload it again.`
   );
+}
+
+/**
+ * Why a photo this many pixels wide and high is smaller or bigger than its paper allows (exactly that size when the
+ * smallest and the largest are the same), or null. The server's only: it reads the pixels.
+ */
+export function photoPixelsProblem(what: string, rules: ScanRules, pixels: { width: number; height: number }) {
+  const { minWidthPx, minHeightPx, maxWidthPx, maxHeightPx } = rules;
+  const hasMin = minWidthPx !== null && minHeightPx !== null;
+  const hasMax = maxWidthPx !== null && maxHeightPx !== null;
+  const photo = `This photo is ${pixels.width} × ${pixels.height} pixels`;
+  if (hasMin && hasMax && minWidthPx === maxWidthPx && minHeightPx === maxHeightPx) {
+    if (pixels.width === minWidthPx && pixels.height === minHeightPx) return null;
+    return `${what} must be exactly ${minWidthPx} × ${minHeightPx} pixels. ${photo}: make it that size and upload it again.`;
+  }
+  if (hasMin && (pixels.width < minWidthPx || pixels.height < minHeightPx)) {
+    return `${what} must be at least ${minWidthPx} × ${minHeightPx} pixels. ${photo}: scan it at a higher resolution.`;
+  }
+  if (hasMax && (pixels.width > maxWidthPx || pixels.height > maxHeightPx)) {
+    return `${what} can be at most ${maxWidthPx} × ${maxHeightPx} pixels. ${photo}: scan it at a lower resolution.`;
+  }
+  return null;
 }
 
 /**

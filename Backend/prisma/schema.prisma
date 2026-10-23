@@ -924,9 +924,17 @@ model DocumentMaster {
   /// clients.documents.maxMb.
   minSizeMb       Float?
   maxSizeMb       Float?
-  /// The photo's size in mm (35 × 45). Only its shape is checked, on a JPG or PNG. Both or neither, 10–200 (database checks).
+  /// The photo's size in mm (35 × 45). Only its shape is checked, on a JPG or PNG, so any size above 0 will do. Both or
+  /// neither (database check).
   photoWidthMm    Int?                @db.SmallInt
   photoHeightMm   Int?                @db.SmallInt
+  /// The smallest and largest photo in pixels, as visa websites ask (600 × 600 to 1200 × 1200; the same pair for an
+  /// exact size), checked on a JPG or PNG. Each pair both or neither, above 0, the smallest not bigger than the largest
+  /// (database check). Null: no limit.
+  minWidthPx      Int?                @db.SmallInt
+  minHeightPx     Int?                @db.SmallInt
+  maxWidthPx      Int?                @db.SmallInt
+  maxHeightPx     Int?                @db.SmallInt
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
   checklistItems  VisaChecklistItem[]

@@ -72,10 +72,10 @@ export const updateEmbassySchema = z.object({
 /** The largest file a paper's max size may allow. */
 export const MAX_DOCUMENT_MB = 50;
 /**
- * A photo size's sides: any whole number, since only the shape (width ÷ height) is checked (the project lead, 23 Oct
- * 2026). The top is the column's own limit (smallint).
+ * A photo's sides, in mm or in pixels: any whole number, since only the rule itself limits them (the project lead, 23
+ * Oct 2026). The top is the columns' own limit (smallint).
  */
-export const PHOTO_MM = { min: 1, max: 32767 } as const;
+export const PHOTO_SIDE = { min: 1, max: 32767 } as const;
 
 const FILE_TYPE_ORDER = Object.values(ScanFileType);
 /** At least one; kept in PDF, JPG, PNG order, so saving the same ticks again changes nothing. */
@@ -88,26 +88,52 @@ const sizeMb = z
   .min(0.01, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
   .max(MAX_DOCUMENT_MB, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
   .refine((mb) => Math.abs(mb * 100 - Math.round(mb * 100)) < 1e-9, "Up to 2 decimals.");
-const photoMm = z
-  .number()
-  .int("Whole mm only.")
-  .min(PHOTO_MM.min, `At least ${PHOTO_MM.min}.`)
-  .max(PHOTO_MM.max, `At most ${PHOTO_MM.max.toLocaleString("en-IN")}.`);
+const photoSide = (unit: "mm" | "pixels") =>
+  z
+    .number()
+    .int(`Whole ${unit} only.`)
+    .min(PHOTO_SIDE.min, `At least ${PHOTO_SIDE.min}.`)
+    .max(PHOTO_SIDE.max, `At most ${PHOTO_SIDE.max.toLocaleString("en-IN")}.`);
+const photoMm = photoSide("mm");
+const photoPx = photoSide("pixels");
 
 export interface UploadRules {
   minSizeMb: number | null;
   maxSizeMb: number | null;
   photoWidthMm: number | null;
   photoHeightMm: number | null;
+  minWidthPx: number | null;
+  minHeightPx: number | null;
+  maxWidthPx: number | null;
+  maxHeightPx: number | null;
 }
 
-/** What's wrong between a paper's upload rules (min below max, both photo sides), with the field to show it on, or null. */
+/** A photo's width and height go together: its photo size, its smallest and its largest in pixels. */
+const PHOTO_PAIRS = [
+  ["photoWidthMm", "photoHeightMm"],
+  ["minWidthPx", "minHeightPx"],
+  ["maxWidthPx", "maxHeightPx"],
+] as const;
+
+/**
+ * What's wrong between a paper's upload rules (min below max, both sides of each photo pair, the smallest photo not
+ * bigger than the largest), with the field to show it on, or null.
+ */
 export function uploadRulesProblem(rules: UploadRules): { field: keyof UploadRules; message: string } | null {
   if (rules.minSizeMb !== null && rules.maxSizeMb !== null && rules.minSizeMb >= rules.maxSizeMb) {
     return { field: "minSizeMb", message: "Min size must be less than max size." };
   }
-  if (rules.photoWidthMm === null && rules.photoHeightMm !== null) return { field: "photoWidthMm", message: "Enter both width and height." };
-  if (rules.photoWidthMm !== null && rules.photoHeightMm === null) return { field: "photoHeightMm", message: "Enter both width and height." };
+  for (const [width, height] of PHOTO_PAIRS) {
+    if ((rules[width] === null) !== (rules[height] === null)) {
+      return { field: rules[width] === null ? width : height, message: "Enter both width and height." };
+    }
+  }
+  const { minWidthPx, minHeightPx, maxWidthPx, maxHeightPx } = rules;
+  if (minWidthPx !== null && minHeightPx !== null && maxWidthPx !== null && maxHeightPx !== null) {
+    const bigger = "The smallest can't be bigger than the largest.";
+    if (minWidthPx > maxWidthPx) return { field: "minWidthPx", message: bigger };
+    if (minHeightPx > maxHeightPx) return { field: "minHeightPx", message: bigger };
+  }
   return null;
 }
 
@@ -124,6 +150,10 @@ export const createDocumentSchema = z.object({
   maxSizeMb: clearable(sizeMb),
   photoWidthMm: clearable(photoMm),
   photoHeightMm: clearable(photoMm),
+  minWidthPx: clearable(photoPx),
+  minHeightPx: clearable(photoPx),
+  maxWidthPx: clearable(photoPx),
+  maxHeightPx: clearable(photoPx),
 });
 export const updateDocumentSchema = z.object({
   name: text(150).optional(),
@@ -136,6 +166,10 @@ export const updateDocumentSchema = z.object({
   maxSizeMb: clearable(sizeMb),
   photoWidthMm: clearable(photoMm),
   photoHeightMm: clearable(photoMm),
+  minWidthPx: clearable(photoPx),
+  minHeightPx: clearable(photoPx),
+  maxWidthPx: clearable(photoPx),
+  maxHeightPx: clearable(photoPx),
 });
 
 /** Why a paper needs replacing in Step 3 ("Not signed"), docs/decisions/0007-visa-file-prep.md Decision 3. */

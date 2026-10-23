@@ -3,7 +3,7 @@ import type { ScanFileType } from '../settings/masters/types'
 
 // A scan for the client document vault (docs/decisions/0016-client-documents.md): a scanner's PDF or a phone photo,
 // of a type and size its paper's upload rules take (Amendment 1). The server checks it again, by its first bytes, and
-// a photo's shape, which needs its pixels.
+// a photo's shape and pixel size, which need its pixels.
 
 export type ScanType = 'application/pdf' | 'image/jpeg' | 'image/png'
 
@@ -21,17 +21,31 @@ export function scanType(file: File): ScanType | null {
 /** A scan's type as a paper's upload rules name it. */
 const FILE_TYPE_OF: Record<ScanType, ScanFileType> = { 'application/pdf': 'PDF', 'image/jpeg': 'JPG', 'image/png': 'PNG' }
 
-/** A paper's upload rules (0016 Amendment 1). Null: no minimum, the shared largest scan, no photo shape. */
+/** A paper's upload rules (0016 Amendment 1). Null: no minimum, the shared largest scan, no photo shape, no pixel limits. */
 export interface ScanRules {
   fileTypes: ScanFileType[]
   minSizeMb: number | null
   maxSizeMb: number | null
   photoWidthMm: number | null
   photoHeightMm: number | null
+  minWidthPx: number | null
+  minHeightPx: number | null
+  maxWidthPx: number | null
+  maxHeightPx: number | null
 }
 
 /** Before a paper is picked: any type, up to the shared largest scan. */
-const ANY_PAPER: ScanRules = { fileTypes: ['PDF', 'JPG', 'PNG'], minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null }
+const ANY_PAPER: ScanRules = {
+  fileTypes: ['PDF', 'JPG', 'PNG'],
+  minSizeMb: null,
+  maxSizeMb: null,
+  photoWidthMm: null,
+  photoHeightMm: null,
+  minWidthPx: null,
+  minHeightPx: null,
+  maxWidthPx: null,
+  maxHeightPx: null,
+}
 
 // The rules' messages, word for word Backend/src/modules/clients/clients.schemas.ts (Backend/tests/frontendRules.test.ts
 // compares them). `what` names the paper, e.g. "Photos" in quotes.

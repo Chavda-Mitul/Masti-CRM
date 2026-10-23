@@ -323,6 +323,11 @@ export interface DocumentMaster {
   /** The photo's size in mm; only its shape is checked, on a JPG or PNG. Both or neither. */
   photoWidthMm: number | null
   photoHeightMm: number | null
+  /** The smallest and largest photo in pixels, on a JPG or PNG; the same pair for an exact size. Each pair both or neither. */
+  minWidthPx: number | null
+  minHeightPx: number | null
+  maxWidthPx: number | null
+  maxHeightPx: number | null
 }
 
 export type ScanFileType = 'PDF' | 'JPG' | 'PNG'
