@@ -567,7 +567,7 @@ These are used by every module.
   - passport transit is at the customer's risk (damage, loss, misplacement, delay)
   - bookings made before the visa comes are solely the customer's risk ✅
 
-  The **exact wording comes from Vimal** ❓ (Q9).
+  The **wording was written by the project lead** (23 Oct 2026, `docs/decisions/0022-consent-form.md` Amendment 3) rather than waiting for Vimal's (Q9): eight clauses, Vimal's two among them, plus a parent agreeing for a child. The Head or the Visa HOD change it in Settings → Masters → Consent wording.
 - Entering a name shows whether a consent exists. Anyone without one is **flagged** ✅. The processor obtains it **in parallel** with processing ✅. It is taken once the business reaches a certain stage, not at enquiry ✅.
 - The record is kept digitally (Drive/OneDrive/link) ✅.
 - **Being built in 3 parts (21 Oct 2026, `docs/decisions/0022-consent-form.md`):** (1) staff fill each traveller's details from the case's consent card, kept on the person for life (**built**); (2) the per-traveller link (to the traveller's own number if saved, else the main one), the client's no-login page and "I agree", with my draft wording editable in Settings until Vimal's (**2a built**: the link goes when staff save the details and works until used, the page is `/consent#<token>`, and "I agree" records the wording, the details shown, the IP and the phone; **2b built**: the Head and the Visa HOD change the wording in Settings → Masters → Consent wording, each save a new version used from then on); (3) the client page's consent column, with consents signed on paper before the CRM marked on file with the year by the Visa HOD or the Head (**3a built**), then a printable record of each consent, opened with View record from the case and the client page (**3b built**); New enquiry gets nothing more, as the case's consent card already flags anyone without one (21 Oct 2026).
@@ -1914,7 +1914,7 @@ Masti CRM/
 | 6 | Visa invoice trigger: at courier time, or earlier when fees are paid upfront (VFS)? **13 Oct:** answered in 0009: any time after the quote, required before dispatch (0008) | C | 1 |
 | 7 | Vendor onboarding format for visa submission agents | C | 1 |
 | 8 | WhatsApp message step list and wording (urgent: Meta approval). **8 Oct:** placeholder text until then; still needed | C | 1 |
-| 9 | Consent wording (passport-transit risk, booking-before-visa risk) | C | 1 |
+| 9 | Consent wording (passport-transit risk, booking-before-visa risk). **23 Oct:** not needed any more: the project lead wrote it (0022 Amendment 3) | C | 1 |
 | 10 | Covering-letter formats (which processes and family types); the "100 subscription" remark. **19 Oct:** built with three sample formats the Visa HOD replaces in Settings (0019); Masti's formats still needed | C | 1 |
 | 11 | Decision per traveller or per case? | C | 1 |
 | 12 | Handover OTP/photo flow: confirm the steps shown in the field app | C | 1 |
@@ -2001,7 +2001,7 @@ Both have Meta lead times.
 |---|---|---|
 | C1 | Logo, brand colours, letterhead | Stage 1 |
 | C2 | WhatsApp wording (see above) | Urgent |
-| C3 | Consent wording | Stage 1 |
+| C3 | Consent wording (not needed any more: written by the project lead, 23 Oct 2026) | Stage 1 |
 | C4 | Covering-letter formats (three samples in the build until they arrive, 0019) | Stage 1 |
 | C5 | Invoice and credit-note format, with GST details | Stage 1 |
 | C6 | Quotation formats (holiday, hotel, insurance, ticket) | Stage 2 |

@@ -3,7 +3,8 @@
 - **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
   "Still open". **Amendment 1** (23 Oct 2026): the form's fields become a master; pieces 1a (the form reads them) and
   1b (the Settings page) built 23 Oct 2026. **Amendment 2** (23 Oct 2026): a parent or guardian agrees for a child,
-  built 23 Oct 2026. Where they disagree with parts 1–3 below, the amendments win.
+  built 23 Oct 2026. **Amendment 3** (23 Oct 2026): the wording, written by the project lead instead of waiting for
+  Vimal's, built 23 Oct 2026. Where they disagree with parts 1–3 below, the amendments win.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -115,8 +116,39 @@ now the client on the main number agreed for a child ("Still open" below). Part 
   - "I agree" records the guardian on the consent (audited).
   - The tile then says "Agreed · 23 Oct · by Priya Mehta, for them". The printed record heads its first section
     "Agreed for", with "Agreed on their behalf by Priya Mehta (Spouse), as their parent or guardian."
-- **Not changed:** paper consents, and the wording. Masti's own wording (Q9) may want a sentence for a parent signing
-  for a child; today's draft is written as "I" and "my passport".
+- **Not changed:** paper consents. The wording's clause 7 covers a parent agreeing for a child (amendment 3).
+
+## Amendment 3 (23 Oct 2026, project lead): the wording, without waiting for Vimal's
+
+**Decided:** the project lead wrote the wording, so Q9/M12/C3 no longer wait on Masti. It is the wording in use, not a
+draft. The Head or the Visa HOD can still change it in Settings → Masters → Consent wording (part 2b).
+
+**The wording** (`CONSENT_WORDING`, `src/modules/consent/consent.seed.ts`), as the client reads it, in eight clauses:
+1. **Acting for me:** Masti fills in and submits the applications, books appointments and deals with the embassy, the
+   consulate, the visa centre and their agents.
+2. **My passport:** the authorisation to collect, keep, send and receive the current and old passports, and Vimal's
+   clause 1: in transit it is at the client's risk (damage, loss, misplacement, delay).
+3. **Bookings before the visa:** Vimal's clause 2. Any booking made before the visa is issued is the client's risk,
+   including dates the visa doesn't cover.
+4. **The visa decision** is the embassy's or consulate's alone. Masti can't promise a visa or a date.
+5. **My details and documents** are correct and genuine. The client tells Masti of any change, and a refusal or delay
+   caused by wrong or missing details or documents is theirs.
+6. **Using my details:** Masti keeps the details and copies of the documents for later applications (as the client
+   vault does, 0016), and shares them only with the embassy, the consulate, the visa centre, their agents and couriers,
+   as the applications need. It may send updates on WhatsApp or SMS.
+7. **For a child:** a parent or guardian confirms they may agree, and gives the consent on the child's behalf. "I",
+   "me" and "my" then mean the child (amendment 2).
+8. **For life,** even if the passport changes.
+
+It doesn't cover fees, refunds or cancellation: those rules aren't decided, and they belong in the quote and the
+invoice terms.
+
+**Built (23 Oct 2026):**
+- **The seed** now sets up this wording, with no author, into a database with no wording yet. A database that already
+  has the old draft keeps it, since versions are never changed. Add the new one as a version: a dev database got it by
+  hand on 23 Oct 2026.
+- **The "Draft" marks are gone:** the Masters card's chip and the wording page's "used until Masti's own arrives"
+  note. A version with no author now reads only "Set up with the system".
 
 ## Context
 
@@ -327,6 +359,5 @@ is stored, and the tab's title (`{name}_Consent_record`) names the saved PDF.
 
 ## Still open
 
-- **The wording** (Q9/M12/C3).
 - **SMS as the fallback channel**, which needs a provider with DLT registration.
 - **DPDP** (S11): these are personal details, so for now only staff who can open the case, or edit clients, see them.

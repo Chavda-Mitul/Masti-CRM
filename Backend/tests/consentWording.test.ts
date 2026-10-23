@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { wordingInUse } from "../src/modules/consent/consent.public.service";
 import { MAX_CONSENT_WORDING_CHARS } from "../src/modules/consent/consent.schemas";
-import { DRAFT_CONSENT_WORDING } from "../src/modules/consent/consent.seed";
+import { CONSENT_WORDING } from "../src/modules/consent/consent.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 
 // The consent form's wording in Settings (docs/decisions/0022-consent-form.md, part 2b): who reads it, who adds a
-// version, and which version clients agree to. resetDb seeds the draft.
+// version, and which version clients agree to. resetDb seeds the wording set up with the system.
 
 beforeEach(async () => {
   await resetDb();
@@ -43,7 +43,7 @@ describe("who can see and change the consent wording", () => {
     const versions = await list(staff);
     expect(versions).toHaveLength(1);
     const draft = versions[0]!;
-    expect(draft).toMatchObject({ body: DRAFT_CONSENT_WORDING, addedBy: null });
+    expect(draft).toMatchObject({ body: CONSENT_WORDING, addedBy: null });
 
     const refused = await add(staff, MASTI, draft.id);
     expect(refused.status).toBe(403);
@@ -72,7 +72,7 @@ describe("a new version", () => {
     expect(res.status).toBe(201);
     const [inUse, earlier] = res.body.versions as Version[];
     expect(inUse).toMatchObject({ body: MASTI, addedBy: { name: "Riya" } });
-    expect(earlier).toMatchObject({ id: draft!.id, body: DRAFT_CONSENT_WORDING, addedBy: null });
+    expect(earlier).toMatchObject({ id: draft!.id, body: CONSENT_WORDING, addedBy: null });
 
     // The client's page shows the wording in use: now this one.
     expect(await wordingInUse()).toEqual({ id: inUse!.id, body: MASTI });

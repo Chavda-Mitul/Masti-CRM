@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DRAFT_CONSENT_WORDING } from "../src/modules/consent/consent.seed";
+import { CONSENT_WORDING } from "../src/modules/consent/consent.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { agreeThroughLink, CONSENT_DETAILS, fillConsent, linkSent } from "./consentHelpers";
@@ -36,7 +36,7 @@ describe("a consent given through the link", () => {
       name: "Rakesh Mehta",
       agreedAt: expect.any(String),
       person: opened.person,
-      wording: { id: opened.wording.id, body: DRAFT_CONSENT_WORDING },
+      wording: { id: opened.wording.id, body: CONSENT_WORDING },
       link: { toMobile: "+919825041234", sentBy: "Aarti Patel", caseNo, sentAt: expect.any(String) },
       userAgent: "Test phone",
     });

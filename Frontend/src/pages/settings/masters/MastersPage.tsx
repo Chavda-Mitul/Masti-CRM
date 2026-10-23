@@ -80,10 +80,7 @@ export function MastersPage() {
 
         {visa && (
           <section className="card pad master-card">
-            <h2 className="h2">
-              Consent &amp; liability form
-              {consentInUse?.addedBy === null && <span className="chip chip-sm chip-warn">Draft</span>}
-            </h2>
+            <h2 className="h2">Consent &amp; liability form</h2>
             <p className="muted small">
               The words clients agree to with “I agree” on the link we send them, once in their life for every visa, and
               the details staff ask them for.
