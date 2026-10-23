@@ -1,4 +1,5 @@
 import type { Prisma } from "../../../generated/prisma/client";
+import type { VisaOutcome } from "../../../generated/prisma/enums";
 import { forbidden } from "../../lib/httpError";
 import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
@@ -54,9 +55,22 @@ export function heldAtOffice(e: HeldFields) {
 }
 
 /**
+ * A decided e-visa with nothing left to send: it was sent (docs/decisions/0025-evisa-after-decision.md, part 3), or
+ * everyone was refused (part 5). The passports we hold then go back (part 4).
+ */
+export const EVISA_DONE = {
+  OR: [{ evisaSentAt: { not: null } }, { travellers: { every: { outcome: "REFUSED" } } }],
+} satisfies Prisma.VisaCaseWhereInput;
+
+/** Whether a loaded e-visa has nothing left to send, as EVISA_DONE says. */
+export function evisaDone(v: { evisaSentAt: Date | null; travellers: { outcome: VisaOutcome | null }[] }) {
+  return !!v.evisaSentAt || v.travellers.every((t) => t.outcome === "REFUSED");
+}
+
+/**
  * A visa case whose passports are in our stock, ready to hand over at the desk: received at Step 7 and not yet handed
- * over (0014 Decision 5); a cancelled case's, held at our office (0006 amendment 15); or a sent e-visa's, held at our
- * office since intake (0025, part 4).
+ * over (0014 Decision 5); a cancelled case's, held at our office (0006 amendment 15); or, held at our office since
+ * intake, an e-visa's with nothing left to send (0025, parts 4–5).
  */
 const IN_STOCK: Prisma.EnquiryWhereInput = {
   OR: [
@@ -65,19 +79,22 @@ const IN_STOCK: Prisma.EnquiryWhereInput = {
     {
       status: { in: ["OPEN", "POSTPONED"] },
       stage: { code: "DECISION" },
-      visa: { ...COUNTED_IN, submittedOnlineAt: { not: null }, evisaSentAt: { not: null } },
+      visa: { AND: [COUNTED_IN, EVISA_DONE], submittedOnlineAt: { not: null } },
     },
   ],
 };
 
 /** Whether a loaded case's passports are in our stock, as IN_STOCK says. */
 export function passportsInStock(
-  e: HeldFields & { status: string; visa: { passportsReceivedAt: Date | null; evisaSentAt: Date | null } | null },
+  e: HeldFields & {
+    status: string;
+    visa: { passportsReceivedAt: Date | null; evisaSentAt: Date | null; travellers: { outcome: VisaOutcome | null }[] } | null;
+  },
 ) {
   if (e.stage.code === "PASSPORT_BACK") return !!e.visa?.passportsReceivedAt && !e.visa.handover;
   if (e.status === "CANCELLED") return heldAtOffice(e);
   const open = e.status === "OPEN" || e.status === "POSTPONED";
-  return open && e.stage.code === "DECISION" && !!e.visa?.evisaSentAt && heldAtOffice(e);
+  return open && e.stage.code === "DECISION" && !!e.visa && evisaDone(e.visa) && heldAtOffice(e);
 }
 
 /**

@@ -10,7 +10,7 @@ import { DecisionDialog } from './DecisionDialog'
 import { DispatchDialog } from './DispatchDialog'
 import { FileReadyDialog } from './FileReadyDialog'
 import { HandoverDialog } from './HandoverDialog'
-import { dayMonth, heldAtOffice, heldShort, missingCount, passportsInStock, weekdayDay, windingDown } from './labels'
+import { dayMonth, everyoneRefused, evisaDone, heldAtOffice, heldShort, missingCount, passportsInStock, weekdayDay, windingDown } from './labels'
 import { MatureDialog } from './MatureDialog'
 import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
@@ -39,6 +39,8 @@ function StatusChip({ visaCase: c }: { visaCase: VisaCase }) {
     )
   }
   if (c.status === 'CANCELLED') return <span className="chip chip-bad">Cancelled{c.reason && ` · ${c.reason.name}`}</span>
+  // An e-visa closed with everyone refused and nothing handed over (0025, part 5): nothing was delivered.
+  if (c.status === 'CLOSED' && c.submittedOnline && !c.handover && everyoneRefused(c)) return <span className="chip chip-bad">Refused · closed</span>
   // Handed back to the client and closed (0014): the step's own "Delivered" ⚠️.
   if (c.status === 'CLOSED') return <span className="chip chip-ok">{c.stage.statusLabel}</span>
   if (!c.owner && c.maturedAt) return <span className="chip chip-info">Matured · to assign</span>
@@ -238,10 +240,11 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
     )
   }
   // An e-visa's passports never left the office (0013 Decision 4): its approved travellers' PDFs go to the client
-  // instead (docs/decisions/0025-evisa-after-decision.md, part 3). Once sent, the passports we hold go back (part 4).
+  // instead (docs/decisions/0025-evisa-after-decision.md, part 3). Once sent, the passports we hold go back (part 4);
+  // with everyone refused, there's nothing to send first (part 5).
   if (c.stage.code === 'DECISION' && c.submittedOnline) {
-    // Sent, its passports held at our office since intake: handed back by whoever is at the desk (part 4).
-    if (c.evisaSent) {
+    // Its passports held at our office since intake: handed back by whoever is at the desk (part 4).
+    if (evisaDone(c)) {
       if (!me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
       return (
         <>

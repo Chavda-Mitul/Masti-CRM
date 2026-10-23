@@ -34,13 +34,16 @@ export const VISA_SUBMITTED = "visa.submitted";
 /** Message 9: an e-visa is marked applied online (Step 4). */
 export const VISA_APPLIED_ONLINE = "visa.applied_online";
 
-/** Message 10: the decision is recorded and every traveller is approved (Step 6). Not for an e-visa yet. */
+/**
+ * Message 10: the decision is recorded and every traveller is approved (Step 6). Not for an e-visa: its client gets
+ * message 19, with the e-visa, when it's sent.
+ */
 export const VISA_APPROVED = "visa.approved";
 
-/** Message 11: the decision is recorded and every traveller is refused. */
+/** Message 11: the decision is recorded and every traveller is refused. An e-visa gets message 20. */
 export const VISA_REFUSED = "visa.refused";
 
-/** Message 12: the decision is recorded, some travellers approved and some refused. */
+/** Message 12: the decision is recorded, some travellers approved and some refused. An e-visa gets message 21. */
 export const VISA_PARTLY_APPROVED = "visa.partly_approved";
 
 /** Message 13: every passport that went out is back in our stock (Step 7), a recalled file's too. */
@@ -70,6 +73,14 @@ export const VISA_CREDIT_NOTE = "visa.credit_note";
  * words with the others (M1).
  */
 export const VISA_EVISA_READY = "visa.evisa_ready";
+
+/**
+ * Messages 20 and 21: an e-visa's decision when every traveller is refused, or some are: messages 11 and 12 without
+ * their passport lines, as an e-visa's passports never went anywhere (docs/decisions/0025-evisa-after-decision.md part
+ * 5). Ours, beyond the demo (change request 14); Masti approves their words with the others (M1).
+ */
+export const VISA_EVISA_REFUSED = "visa.evisa_refused";
+export const VISA_EVISA_PARTLY_APPROVED = "visa.evisa_partly_approved";
 
 export const MESSAGE_TEMPLATES = [
   {
@@ -310,6 +321,32 @@ export const MESSAGE_TEMPLATES = [
       "Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}.",
       "",
       "Please print it and keep it with the passport when you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_EVISA_REFUSED,
+    name: "E-visa refused",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "We are sorry to tell you that the {{visa}} has been refused for {{refused_names}} ({{case_no}}).",
+      "",
+      "Please call us on {{office_phone}}: we will explain the reason and what can be done next.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_EVISA_PARTLY_APPROVED,
+    name: "E-visa partly approved",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "The decision on your {{visa}} ({{case_no}}) has come. Good news: it is approved for {{approved_names}}, and we will send the e-visa here shortly. We are sorry that it was refused for {{refused_names}}.",
+      "",
+      "Please call us on {{office_phone}} to talk about the refusal.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),

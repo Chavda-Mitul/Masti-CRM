@@ -173,7 +173,10 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
     after you opened it. Reload and try again."). A saved change moves the case's `updatedAt`, so other open pages reload
     before they act. A save that changes nothing writes nothing.
   - **The case stays as it was:** its step, its due time and "recorded {day} · {name}" on the card. Changes show only in
-    the audit log; the demo has no "changed by" line. A change moves no money and sends no message.
+    the audit log; the demo has no "changed by" line. A change moves no money and sends no message. *Except for an
+    e-visa, recorded or changed so that everyone is refused: with no passports held it moves to Delivered and closes,
+    after a warning; with passports held it's due for their handover ([0025](0025-evisa-after-decision.md) Decision 7,
+    22 Oct 2026).*
   - A traveller changed to Approved keeps their refusal letters, which the case then doesn't show (Decision 4).
 - **Screen:** "Change" at the end of each row of the Decision card, while the case is at Step 6 and open, for whoever
   can act on it. It opens "Change the decision" with that traveller's row (the same toggle and fields as recording).

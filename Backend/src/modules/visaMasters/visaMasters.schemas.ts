@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentRequirement, TravellerGroup } from "../../../generated/prisma/enums";
+import { DocumentRequirement, ScanFileType, TravellerGroup } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 // Codes are stable keys (the seed and the holiday bot use them), so they are set on create and never change.
@@ -67,6 +67,47 @@ export const updateEmbassySchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+// A paper's upload rules (docs/decisions/0016-client-documents.md Amendment 1, change request 16).
+
+/** The largest file a paper's max size may allow. */
+export const MAX_DOCUMENT_MB = 50;
+/** A photo size's sides, in mm. */
+export const PHOTO_MM = { min: 10, max: 200 } as const;
+
+const FILE_TYPE_ORDER = Object.values(ScanFileType);
+/** At least one; kept in PDF, JPG, PNG order, so saving the same ticks again changes nothing. */
+const fileTypes = z
+  .array(z.enum(ScanFileType))
+  .min(1, "Tick at least one file type.")
+  .transform((types) => FILE_TYPE_ORDER.filter((t) => types.includes(t)));
+const sizeMb = z
+  .number()
+  .min(0.01, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
+  .max(MAX_DOCUMENT_MB, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
+  .refine((mb) => Math.abs(mb * 100 - Math.round(mb * 100)) < 1e-9, "Up to 2 decimals.");
+const photoMm = z
+  .number()
+  .int("Whole mm only.")
+  .min(PHOTO_MM.min, `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.`)
+  .max(PHOTO_MM.max, `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.`);
+
+export interface UploadRules {
+  minSizeMb: number | null;
+  maxSizeMb: number | null;
+  photoWidthMm: number | null;
+  photoHeightMm: number | null;
+}
+
+/** What's wrong between a paper's upload rules (min below max, both photo sides), with the field to show it on, or null. */
+export function uploadRulesProblem(rules: UploadRules): { field: keyof UploadRules; message: string } | null {
+  if (rules.minSizeMb !== null && rules.maxSizeMb !== null && rules.minSizeMb >= rules.maxSizeMb) {
+    return { field: "minSizeMb", message: "Min size must be less than max size." };
+  }
+  if (rules.photoWidthMm === null && rules.photoHeightMm !== null) return { field: "photoWidthMm", message: "Enter both width and height." };
+  if (rules.photoWidthMm !== null && rules.photoHeightMm === null) return { field: "photoHeightMm", message: "Enter both width and height." };
+  return null;
+}
+
 export const createDocumentSchema = z.object({
   code: keyCode,
   name: text(150),
@@ -75,6 +116,11 @@ export const createDocumentSchema = z.object({
   isActive: z.boolean().default(true),
   /** "Scan not saved" on a case's paper (docs/decisions/0016-client-documents.md Decision 7). */
   warnIfNoScan: z.boolean().default(false),
+  fileTypes: fileTypes.default([...FILE_TYPE_ORDER]),
+  minSizeMb: clearable(sizeMb),
+  maxSizeMb: clearable(sizeMb),
+  photoWidthMm: clearable(photoMm),
+  photoHeightMm: clearable(photoMm),
 });
 export const updateDocumentSchema = z.object({
   name: text(150).optional(),
@@ -82,6 +128,11 @@ export const updateDocumentSchema = z.object({
   sortOrder: sortOrder.optional(),
   isActive: z.boolean().optional(),
   warnIfNoScan: z.boolean().optional(),
+  fileTypes: fileTypes.optional(),
+  minSizeMb: clearable(sizeMb),
+  maxSizeMb: clearable(sizeMb),
+  photoWidthMm: clearable(photoMm),
+  photoHeightMm: clearable(photoMm),
 });
 
 /** Why a paper needs replacing in Step 3 ("Not signed"), docs/decisions/0007-visa-file-prep.md Decision 3. */

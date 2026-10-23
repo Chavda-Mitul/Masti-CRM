@@ -315,7 +315,17 @@ export interface DocumentMaster {
   isActive: boolean
   /** "Scan not saved" on a case's paper (0016 Decision 7). */
   warnIfNoScan: boolean
+  /** Upload rules (0016 Amendment 1): at least one type, in PDF, JPG, PNG order. */
+  fileTypes: ScanFileType[]
+  /** Null: no minimum / the shared limit. */
+  minSizeMb: number | null
+  maxSizeMb: number | null
+  /** The photo's size in mm; only its shape is checked, on a JPG or PNG. Both or neither. */
+  photoWidthMm: number | null
+  photoHeightMm: number | null
 }
+
+export type ScanFileType = 'PDF' | 'JPG' | 'PNG'
 
 export interface Offering {
   id: number

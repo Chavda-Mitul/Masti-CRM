@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { FormField, RequiredMark } from '../../components/FormField'
 import { useToast } from '../../lib/toast'
 import { fileSize } from '../enquiries/case/pdfFiles'
+import { uploadRulesLabel } from '../settings/masters/forms'
 import { errorText } from './apiErrors'
 import { useAddClientDocument } from './queries'
 import { SCAN_ACCEPT, scanProblem, scanType } from './scanFiles'
@@ -19,6 +20,8 @@ interface Problems {
 /**
  * "Add a scan" (docs/decisions/0016-client-documents.md): whose paper it is, which paper, and the file, a scanner's PDF
  * or a phone photo. It goes straight into the client's vault; a newer scan of the same paper becomes the current one.
+ * A file the paper's upload rules don't take (Amendment 1) is dropped with a toast, as Step 2's Save scan does; the
+ * server's refusals (a photo's shape among them) come as a toast too.
  */
 export function AddScanDialog({ client, vault, onClose }: { client: ClientProfile; vault: ClientDocuments; onClose: () => void }) {
   const add = useAddClientDocument(client.id)
@@ -28,38 +31,53 @@ export function AddScanDialog({ client, vault, onClose }: { client: ClientProfil
   const [paperId, setPaperId] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [problems, setProblems] = useState<Problems>({ whose: null, paper: null, file: null })
+  const paperOf = (id: string) => vault.papers.find((p) => String(p.id) === id) ?? null
+  const paper = paperOf(paperId)
+
+  /** Keeps the file if the paper (or, before one is picked, any paper) takes it; else says why and drops it. */
+  const keepIfTaken = (candidate: File, forPaper: typeof paper) => {
+    const problem = scanProblem(candidate, forPaper, vault.maxMb)
+    if (problem) toast({ tone: 'bad', message: problem })
+    setFile(problem ? null : candidate)
+    return !problem
+  }
 
   const pick = (picked: File | undefined) => {
     if (!picked) return
-    setFile(picked)
-    setProblems((p) => ({ ...p, file: scanProblem(picked, vault.maxMb) }))
+    if (keepIfTaken(picked, paper)) setProblems((p) => ({ ...p, file: null }))
+  }
+
+  const choosePaper = (id: string) => {
+    setPaperId(id)
+    setProblems((p) => ({ ...p, paper: null }))
+    if (file) keepIfTaken(file, paperOf(id))
   }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     const found: Problems = {
       whose: whose ? null : 'Pick whose paper this is.',
-      paper: paperId ? null : 'Pick the paper.',
-      file: file ? scanProblem(file, vault.maxMb) : 'Pick the file.',
+      paper: paper ? null : 'Pick the paper.',
+      file: file ? null : 'Pick the file.',
     }
     setProblems(found)
-    const type = file && scanType(file)
-    if (found.whose || found.paper || found.file || !file || !type) return
+    if (found.whose || !paper || !file || !keepIfTaken(file, paper)) return
+    const type = scanType(file)
+    if (!type) return
 
     const owner = client.members.find((m) => m.id === whose)?.name ?? client.name
-    const paper = vault.papers.find((p) => String(p.id) === paperId)?.name ?? 'scan'
     add.mutate(
-      { documentId: Number(paperId), memberId: whose === OWN ? null : whose, file, type },
+      { documentId: paper.id, memberId: whose === OWN ? null : whose, file, type },
       {
         onSuccess: () => {
-          toast({ tone: 'ok', message: `Saved ${owner}’s ${paper}.` })
+          toast({ tone: 'ok', message: `Saved ${owner}’s ${paper.name}.` })
           onClose()
         },
+        onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? 'Couldn’t save the scan. Please try again.' }),
       },
     )
   }
 
-  const serverMessage = errorText(add.error)
   return (
     <div className="overlay overlay-center" onClick={onClose}>
       <form
@@ -103,10 +121,7 @@ export function AddScanDialog({ client, vault, onClose }: { client: ClientProfil
           <select
             className="select"
             value={paperId}
-            onChange={(e) => {
-              setPaperId(e.target.value)
-              setProblems((p) => ({ ...p, paper: null }))
-            }}
+            onChange={(e) => choosePaper(e.target.value)}
           >
             <option value="">Pick…</option>
             {vault.papers.map((p) => (
@@ -147,11 +162,14 @@ export function AddScanDialog({ client, vault, onClose }: { client: ClientProfil
               {problems.file}
             </span>
           ) : (
-            <span className="hint">A PDF, JPEG or PNG, up to {vault.maxMb} MB.</span>
+            <span className="hint">
+              {paper
+                ? `${paper.name}: ${uploadRulesLabel({ ...paper.rules, maxSizeMb: paper.rules.maxSizeMb ?? vault.maxMb })}.`
+                : `A PDF, JPEG or PNG, up to ${vault.maxMb} MB.`}
+            </span>
           )}
         </div>
 
-        {serverMessage && <div className="alert alert-bad">{serverMessage}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn" onClick={onClose}>
             Cancel

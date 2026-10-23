@@ -1,14 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { FormField } from '../../../../components/FormField'
+import { FormField, RequiredMark } from '../../../../components/FormField'
 import { applyServerIssues } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { useMasterList, useSaveMaster } from '../queries'
 import { documentFormSchema, type DocumentFormValues } from '../schemas'
 import type { DocumentMaster } from '../types'
 import { ListCard } from './ListCard'
-import { orNull } from '../forms'
+import { numberOrNull, orNull, uploadRulesLabel } from '../forms'
 import { MasterDrawer, ToggleActiveButton } from './MasterDrawer'
 
 /**
@@ -37,6 +37,7 @@ export function DocumentsTable({ canEdit, showInactive }: { canEdit: boolean; sh
               <th>Code</th>
               <th>Document</th>
               <th>Shown to the client</th>
+              <th>Upload rules</th>
               <th>Scan warning</th>
               <th>Status</th>
               {canEdit && <th aria-label="Actions" />}
@@ -48,6 +49,7 @@ export function DocumentsTable({ canEdit, showInactive }: { canEdit: boolean; sh
                 <td className="mono">{d.code}</td>
                 <td style={{ fontWeight: 700 }}>{d.name}</td>
                 <td className="muted">{d.detail ?? '—'}</td>
+                <td>{uploadRulesLabel(d)}</td>
                 <td>{d.warnIfNoScan ? 'On' : <span className="muted">Off</span>}</td>
                 <td>{d.isActive ? <span className="chip chip-ok chip-sm">Active</span> : <span className="chip chip-muted chip-sm">Switched off</span>}</td>
                 {canEdit && (
@@ -81,18 +83,45 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       detail: document?.detail ?? '',
       sortOrder: document?.sortOrder ?? 0,
       warnIfNoScan: document?.warnIfNoScan ?? false,
+      fileTypes: document?.fileTypes ?? ['PDF', 'JPG', 'PNG'],
+      minSizeMb: document?.minSizeMb?.toString() ?? '',
+      maxSizeMb: document?.maxSizeMb?.toString() ?? '',
+      photoWidthMm: document?.photoWidthMm?.toString() ?? '',
+      photoHeightMm: document?.photoHeightMm?.toString() ?? '',
     },
   })
   const { errors } = formState
 
   const onSubmit = handleSubmit((v) => {
-    const body = { name: v.name, detail: orNull(v.detail), sortOrder: v.sortOrder, warnIfNoScan: v.warnIfNoScan }
+    const body = {
+      name: v.name,
+      detail: orNull(v.detail),
+      sortOrder: v.sortOrder,
+      warnIfNoScan: v.warnIfNoScan,
+      fileTypes: v.fileTypes,
+      minSizeMb: numberOrNull(v.minSizeMb),
+      maxSizeMb: numberOrNull(v.maxSizeMb),
+      photoWidthMm: numberOrNull(v.photoWidthMm),
+      photoHeightMm: numberOrNull(v.photoHeightMm),
+    }
     save.mutate(document ? { id: document.id, body } : { body: { ...body, code: v.code } }, {
       onSuccess: (saved) => {
         toast({ tone: 'ok', message: `${saved.name} saved.` })
         onClose()
       },
-      onError: (err) => applyServerIssues(err, setError, ['code', 'name', 'detail', 'sortOrder', 'warnIfNoScan']),
+      onError: (err) =>
+        applyServerIssues(err, setError, [
+          'code',
+          'name',
+          'detail',
+          'sortOrder',
+          'warnIfNoScan',
+          'fileTypes',
+          'minSizeMb',
+          'maxSizeMb',
+          'photoWidthMm',
+          'photoHeightMm',
+        ]),
     })
   })
 
@@ -126,6 +155,44 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
         </label>
         <span className="hint">The case shows “Scan not saved” when this paper is ticked but no copy is kept for the next trip.</span>
       </div>
+
+      <span className="lbl section-lbl" style={{ gridColumn: '1 / -1' }}>
+        Upload rules
+      </span>
+      {/* Not a FormField: that is a <label>, and the group holds its own inputs. */}
+      <div className={`field${errors.fileTypes ? ' field-invalid' : ''}`} style={{ gridColumn: '1 / -1' }}>
+        <span>
+          File type
+          <RequiredMark />
+        </span>
+        <div className="check-picks" role="group" aria-label="File type">
+          {(['PDF', 'JPG', 'PNG'] as const).map((type) => (
+            <label className="check" key={type}>
+              <input type="checkbox" value={type} {...register('fileTypes')} />
+              {type}
+            </label>
+          ))}
+        </div>
+        {errors.fileTypes ? (
+          <span className="field-error" role="alert">
+            {errors.fileTypes.message}
+          </span>
+        ) : (
+          <span className="hint">A scan of this paper must be one of these, or it isn’t saved.</span>
+        )}
+      </div>
+      <FormField label="Min size (MB, optional)" error={errors.minSizeMb?.message} hint="Blank: no minimum.">
+        <input className="input" type="number" min={0.01} step={0.01} inputMode="decimal" {...register('minSizeMb')} placeholder="e.g. 0.01" />
+      </FormField>
+      <FormField label="Max size (MB, optional)" error={errors.maxSizeMb?.message} hint="Blank: the usual limit.">
+        <input className="input" type="number" min={0.01} step={0.01} inputMode="decimal" {...register('maxSizeMb')} placeholder="e.g. 0.3" />
+      </FormField>
+      <FormField label="Photo width (mm, optional)" error={errors.photoWidthMm?.message} hint="Fill in both, or leave both blank.">
+        <input className="input" type="number" min={10} step={1} inputMode="numeric" {...register('photoWidthMm')} placeholder="e.g. 35" />
+      </FormField>
+      <FormField label="Photo height (mm, optional)" error={errors.photoHeightMm?.message} hint="Only the shape is checked, on JPG and PNG.">
+        <input className="input" type="number" min={10} step={1} inputMode="numeric" {...register('photoHeightMm')} placeholder="e.g. 45" />
+      </FormField>
     </MasterDrawer>
   )
 }

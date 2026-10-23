@@ -162,6 +162,8 @@ const caseInclude = {
       submittedOnlineAt: true,
       evisaSentAt: true,
       handover: { select: { enquiryId: true } },
+      // An e-visa where everyone was refused has nothing to send: its passports go back (0025, part 5).
+      travellers: { select: { outcome: true } },
     },
   },
 } satisfies Prisma.EnquiryInclude;
@@ -212,6 +214,7 @@ export async function findVisibleCase(caseNo: string, user: UserWithDepartments)
           submittedOnlineAt: true,
           evisaSentAt: true,
           handover: { select: { enquiryId: true } },
+          travellers: { select: { outcome: true } },
         },
       },
     },

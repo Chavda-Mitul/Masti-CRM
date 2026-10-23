@@ -12,6 +12,8 @@ import {
   VISA_DELIVERY_VISIT,
   VISA_DOCUMENT_LIST,
   VISA_DOCUMENT_REMINDER,
+  VISA_EVISA_PARTLY_APPROVED,
+  VISA_EVISA_REFUSED,
   VISA_HANDED_OVER,
   VISA_INVOICE,
   VISA_PARTLY_APPROVED,
@@ -384,7 +386,10 @@ describe("messages 10–12, the decision", () => {
       updatedAt,
     });
   }
-  const decisionMessages = () => prisma.outboundMessage.count({ where: { template: { code: { in: [VISA_APPROVED, VISA_REFUSED, VISA_PARTLY_APPROVED] } } } });
+  const decisionMessages = () =>
+    prisma.outboundMessage.count({
+      where: { template: { code: { in: [VISA_APPROVED, VISA_REFUSED, VISA_PARTLY_APPROVED, VISA_EVISA_REFUSED, VISA_EVISA_PARTLY_APPROVED] } } },
+    });
 
   it("sends Partly approved when some are approved and some refused, with the names and the working days", async () => {
     const { c } = await decidedCase(); // Rakesh approved, Aarav refused
@@ -430,7 +435,8 @@ describe("messages 10–12, the decision", () => {
     );
   });
 
-  it("isn't sent for an e-visa yet (how its client gets the visa is still open)", async () => {
+  // Its refusals get messages 20 and 21 (visaEvisaRefused.test.ts).
+  it("isn't sent for an approved e-visa: each e-visa goes with Send the e-visa (message 19)", async () => {
     const { c, neha } = await eVisa();
     expect((await submitOnline(neha, c.caseNo)).status).toBe(200);
     const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });
