@@ -177,6 +177,28 @@ describe("fillLogin", () => {
     });
   });
 
+  describe("the portal's steps", () => {
+    const steps = () => document.getElementById("masti-crm-helper-steps")?.dataset.steps;
+
+    it("shows a panel of to-dos once it's logged in", async () => {
+      document.body.innerHTML = `<form><input id="user"><input id="pass" type="password"><button>Login</button></form>`;
+      expect(await fillLogin({ ...LOGIN, steps: ["Fill the form", "Enter the acknowledgement number"] }, [ORIGIN], 0)).toBe("SUBMITTED");
+      expect(steps()).toBe("Fill the form\nEnter the acknowledgement number");
+    });
+
+    it("shows the steps on a captcha page too, and none when there are none", async () => {
+      document.body.innerHTML = `
+        <form><input id="user"><input id="pass" type="password">
+        <img id="captchaImage" src="/c.png" alt="Code"><input id="code" name="txtCaptcha"><button>Login</button></form>`;
+      expect(await fillLogin({ ...LOGIN, steps: ["Type the code"] }, [ORIGIN], 0)).toBe("WAITING_FOR_STAFF");
+      expect(steps()).toBe("Type the code");
+
+      document.body.innerHTML = `<form><input id="user"><input id="pass" type="password"><button>Login</button></form>`;
+      expect(await run()).toBe("SUBMITTED");
+      expect(steps()).toBeUndefined();
+    });
+  });
+
   describe("a third login box (an agency code)", () => {
     const page = `<form>
       <label>Agency code <input id="agency" name="agencyCode"></label>

@@ -147,6 +147,8 @@ export async function redeemTicket(ticket: string, ip: string | undefined) {
     password: secret.password,
     // A third login box (e.g. an agency code), when the portal has one; the helper types it into the box its name matches.
     ...(portal.extraLabel && secret.extra !== undefined ? { extraLabel: portal.extraLabel, extra: secret.extra } : {}),
+    // The to-dos to show on the portal once it's open.
+    ...(portal.steps.length > 0 ? { steps: portal.steps } : {}),
   };
 }
 

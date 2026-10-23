@@ -144,7 +144,7 @@ export async function logIn(
     return { outcome };
   };
 
-  let login: { loginUrl?: unknown; loginId?: unknown; password?: unknown; extraLabel?: unknown; extra?: unknown };
+  let login: { loginUrl?: unknown; loginId?: unknown; password?: unknown; extraLabel?: unknown; extra?: unknown; steps?: unknown };
   try {
     const res = await browser.fetch(`${sender.origin}/api/portal-helper/redeem`, {
       method: "POST",
@@ -166,7 +166,12 @@ export async function logIn(
   const allowed = [target.origin, ...(target.protocol === "http:" ? [`https://${target.host}`] : [])];
   const extra =
     typeof login.extraLabel === "string" && typeof login.extra === "string" ? { label: login.extraLabel, value: login.extra } : undefined;
-  const args: [FillLoginArgs, string[], number] = [{ loginId: login.loginId, password: login.password, ...(extra ? { extra } : {}) }, allowed, FILL_WAIT_MS];
+  const steps = Array.isArray(login.steps) ? login.steps.filter((s): s is string => typeof s === "string") : undefined;
+  const args: [FillLoginArgs, string[], number] = [
+    { loginId: login.loginId, password: login.password, ...(extra ? { extra } : {}), ...(steps && steps.length > 0 ? { steps } : {}) },
+    allowed,
+    FILL_WAIT_MS,
+  ];
 
   let tabId: number | undefined;
   try {

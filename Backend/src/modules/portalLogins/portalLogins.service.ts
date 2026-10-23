@@ -174,6 +174,7 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
           loginUrl: input.loginUrl,
           idLabel: input.idLabel,
           extraLabel,
+          steps: input.steps,
           secret,
           passwordChangedAt: new Date(),
           passwordSchedule: input.passwordSchedule,
@@ -187,6 +188,7 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
         loginUrl: input.loginUrl,
         idLabel: input.idLabel,
         extraLabel,
+        steps: input.steps,
         passwordSchedule: input.passwordSchedule,
         status: "ACTIVE",
         userIds,
@@ -222,6 +224,7 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
     loginUrl: input.loginUrl ?? before.loginUrl,
     idLabel: input.idLabel ?? before.idLabel,
     extraLabel: newExtraLabel,
+    steps: input.steps ?? before.steps,
     passwordSchedule: input.passwordSchedule ?? before.passwordSchedule,
   };
   const oldSnapshot = portalLoginSnapshot({ ...before, userIds: beforeUserIds });

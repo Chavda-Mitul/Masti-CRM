@@ -322,3 +322,23 @@ describe("a third login box (an agency code)", () => {
     expect(await opened()).toEqual({ loginId: LOGIN_ID, password: PASSWORD });
   });
 });
+
+describe("steps shown on the portal", () => {
+  it("stores the steps, shows them on the portal, and edits them", async () => {
+    const { neha: nehaUser } = await team();
+    const [vimal, neha] = await agents("vimal", "neha");
+    const portal = await add(vimal, { ...france([]), steps: ["Fill the application form", "Enter the acknowledgement number"] });
+    expect(portal.steps).toEqual(["Fill the application form", "Enter the acknowledgement number"]);
+    // Staff on the list see the steps on the page too.
+    const added = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ userIds: [nehaUser.id], updatedAt: portal.updatedAt });
+    expect(added.status).toBe(200);
+    expect((await page(neha)).portals[0].steps).toEqual(["Fill the application form", "Enter the acknowledgement number"]);
+
+    const res = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ steps: ["Only one step"], updatedAt: added.body.portal.updatedAt });
+    expect(res.status).toBe(200);
+    expect(res.body.portal.steps).toEqual(["Only one step"]);
+
+    const tooMany = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ steps: Array(21).fill("x"), updatedAt: res.body.portal.updatedAt });
+    expect(tooMany.status).toBe(400);
+  });
+});

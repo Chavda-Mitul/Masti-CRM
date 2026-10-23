@@ -8,6 +8,8 @@ export interface FillLoginArgs {
   password: string;
   /** A third login box before the ID and password (e.g. an agency code), for portals that have one. */
   extra?: { label: string; value: string };
+  /** What to do on the portal once it's open; shown in a panel in the portal's tab. */
+  steps?: string[];
 }
 
 /**
@@ -211,6 +213,42 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     (document.body ?? document.documentElement).append(host);
   };
 
+  /** A panel of this portal's to-dos, in the CRM's colours, at the top-right out of the page's own styles' reach. */
+  const showSteps = (steps: string[]) => {
+    const PANEL_ID = "masti-crm-helper-steps";
+    document.getElementById(PANEL_ID)?.remove();
+    const host = document.createElement("div");
+    host.id = PANEL_ID;
+    host.dataset.steps = steps.join("\n");
+    host.style.cssText = "all:initial;position:fixed;top:16px;right:16px;z-index:2147483646;";
+    const card = document.createElement("div");
+    card.style.cssText =
+      "max-width:280px;padding:14px 16px;border:2px solid #1e5aa8;border-radius:14px;background:#fbf8f3;color:#1f2a37;" +
+      "font:500 14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.18);";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;";
+    const title = document.createElement("strong");
+    title.textContent = "Steps for this portal";
+    title.style.color = "#1e5aa8";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close");
+    close.style.cssText = "border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:#1f2a37;";
+    close.addEventListener("click", () => host.remove());
+    head.append(title, close);
+    const list = document.createElement("ol");
+    list.style.cssText = "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;";
+    for (const step of steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      list.append(item);
+    }
+    card.append(head, list);
+    host.attachShadow({ mode: "closed" }).append(card);
+    (document.body ?? document.documentElement).append(host);
+  };
+
   /**
    * Draws a box as dots, even a text box, and stops its text being selected: the mark for the helper's own CSS, and the
    * same in the box's style in case that CSS couldn't be added. Once per mark, so the watch never sets off itself.
@@ -297,6 +335,9 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     if (extraBox && login.extra) type(extraBox, login.extra.value);
     type(idBox, login.loginId);
     type(passwordBox, login.password);
+
+    // The portal's to-dos, once it's open and filled.
+    if (login.steps && login.steps.length > 0) showSteps(login.steps);
 
     const forStaff = findForStaff(form ?? document, passwordBox, idBox);
     if (forStaff) {

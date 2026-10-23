@@ -110,6 +110,7 @@ describe("Log in for me", () => {
       password: PASSWORD,
       extraLabel: "Agency code",
       extra: "AG-99",
+      steps: ["Fill the application form", "Enter the acknowledgement number"],
       userIds: [nehaUser.id],
     });
     expect(added.status).toBe(201);
@@ -122,6 +123,7 @@ describe("Log in for me", () => {
       password: PASSWORD,
       extraLabel: "Agency code",
       extra: "AG-99",
+      steps: ["Fill the application form", "Enter the acknowledgement number"],
     });
   });
 

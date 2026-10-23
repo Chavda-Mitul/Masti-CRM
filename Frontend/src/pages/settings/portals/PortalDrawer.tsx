@@ -8,7 +8,7 @@ import { applyServerIssues, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { lockedNote, SCHEDULE_CHOICES } from './labels'
 import { usePortalPeople, useSavePortal } from './queries'
-import { portalFormSchema, type PortalFormValues } from './schemas'
+import { portalFormSchema, stepsFromText, type PortalFormValues } from './schemas'
 import type { Portal, PortalBody } from './types'
 
 const FIELDS = ['departmentCode', 'name', 'loginUrl', 'idLabel', 'extraLabel', 'extra', 'loginId', 'password', 'passwordSchedule', 'userIds'] as const
@@ -24,6 +24,7 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
       extraLabel: '',
       changeExtra: true,
       extra: '',
+      stepsText: '',
       changeId: true,
       loginId: '',
       changePassword: true,
@@ -43,6 +44,7 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
     // A saved extra box keeps its value unless the HOD types a new one.
     changeExtra: false,
     extra: '',
+    stepsText: portal.steps.join('\n'),
     changeId: false,
     loginId: '',
     // A locked portal is waiting for exactly this.
@@ -64,6 +66,7 @@ function toBody(values: PortalFormValues, hadExtra: boolean): PortalBody {
     idLabel: values.idLabel.trim(),
     passwordSchedule: values.passwordSchedule,
     userIds: values.userIds,
+    steps: stepsFromText(values.stepsText),
     ...(values.changeId ? { loginId: values.loginId.trim() } : {}),
     ...(values.changePassword ? { password: values.password } : {}),
     ...(values.hasExtra
@@ -293,6 +296,19 @@ export function PortalDrawer({
                   </option>
                 ))}
               </select>
+            </FormField>
+
+            <FormField
+              label="Steps to show on the portal (optional)"
+              error={errors.stepsText?.message}
+              hint="One per line. The helper shows them in the portal's tab after it logs in."
+            >
+              <textarea
+                className="input"
+                rows={4}
+                {...register('stepsText')}
+                placeholder={'Fill the application form\nEnter the acknowledgement number\nBook the appointment'}
+              />
             </FormField>
 
             <span className="lbl section-lbl">Who may use it</span>

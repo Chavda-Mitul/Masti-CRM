@@ -409,6 +409,18 @@ helper only knew the ID and password boxes, so it skipped the third. Now a porta
 - **Tests:** backend (`portalLogins`: store, both-or-neither, change/rename/remove; `portalHelper`: redeem hands it over)
   and Helper (`fill`: fills the matching box and the fallback, hides all three).
 
+### Steps shown on the portal (23 Oct 2026, branch `feat/portal-extras`)
+
+Staff forget a step once a portal is open (the acknowledgement number, the appointment). So each portal can carry a
+short to-do list the helper shows in the portal's own tab after it logs in.
+- **Data** (migration `20261023150100_portal_steps`): `PortalLogin.steps` (`text[]`, default empty; up to 20 steps, 120
+  characters each). Admin-editable, not a secret; the DTO and the audit snapshot carry it.
+- **Settings:** a "Steps to show on the portal" box in the drawer, one per line.
+- **Redeem** adds `steps`; the helper (`fill.ts` `showSteps`) draws them as a numbered panel, top-right, in the CRM's
+  colours, with a close button, on both an ordinary login and a captcha/OTP page.
+- **Tests:** backend (`portalLogins`: store, show on the page, edit, the 20-step cap; `portalHelper`: redeem hands them
+  over) and Helper (`fill`: the panel on a login and a captcha page, none when empty).
+
 ### Real portals, 23 Oct 2026, with a made-up ID and password
 
 | Portal | What happened |
