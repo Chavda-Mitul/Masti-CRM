@@ -210,6 +210,13 @@ Amended 22 Oct 2026 (project lead), beyond the demo ([change request 15](../chan
     other badges. Table `UnseenAssignment` (one row per case: who it was given to); `GET /api/enquiries/given-to-me`
     and `POST /api/enquiries/given-to-me/seen`.
 
+Amended 23 Oct 2026 (project lead), on seeing the card in use:
+
+23. **"Booklets received" starts at 1 current, with old empty.** Until a count is saved, the current box shows 1 and
+    the old box is blank (neither shows a grey 0). The 1 is only in the box: it's saved when staff press Save, like a
+    typed count, so a case doesn't look as if we hold a passport before anyone has counted one, and an e-visa (nothing
+    handed over) can leave it unsaved. A saved count shows as saved. Set in the screen for now, not a setting.
+
 ## Context
 
 What the sources say (PROJECT_KNOWLEDGE.md §7, §10.2–§10.5, §12.4, §12.12, §18; demo screens 07 and 21):

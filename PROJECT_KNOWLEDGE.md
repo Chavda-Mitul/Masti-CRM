@@ -1867,7 +1867,7 @@ Masti CRM/
 
 **Decided 10 Oct 2026 (project lead), with Visa Step 2 part 6.** Details are in `docs/decisions/0006-visa-documents.md` *Amendment*; where they differ from the 9 Oct block below, these win.
 - **View-only users see every case of the department, read-only** (e.g. Accounts for fees and invoices). Staff with EDIT still see only their own; HOD the department; Head all. Changing a case stays owner / HOD / Head.
-- **Booklet counts are optional** (blank shows 0); maturity doesn't require them, so e-visas aren't blocked.
+- **Booklet counts are optional** (blank shows 0); maturity doesn't require them, so e-visas aren't blocked. Until a count is saved, the current box starts at 1 and the old box empty; the 1 counts only once staff press Save (decided 23 Oct 2026, 0006 amendment 23).
 - **M4 decided:** the intake person owns the case and does all follow-ups and document collection until maturity.
 - **Document storage: S3-compatible** (AWS S3 or R2; MinIO locally in `Backend/docker-compose.yml`), private, shared through short-lived pre-signed URLs. Golden rule 4 updated. Uploading scans comes after Step 2. M16 answered.
 - **Part 8, maturity:** "Mark documents complete" lists what is missing first. Matured cases wait under a **To assign** sidebar item (with a count, HODs and the Head only) that opens the enquiries list on a To assign tab, so no case sits idle without a processor (0006 *Amendment* 10–11). A matured case is due with the HOD the next open office day at 11:00 ⚠️ (`visa.assignCheck`, decided 16 Oct 2026), not late the moment it's handed over.
