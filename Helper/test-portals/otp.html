@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><title>Airline agent portal</title><link rel="stylesheet" href="/portal.css">
+<main>
+  <h1>Agent login</h1>
+  <form method="post" action="/login">
+    <label>Agent ID <input name="agentId"></label>
+    <label>Password <input id="password" name="password" type="password"></label>
+    <button type="button" id="eye" aria-label="Show password">👁 Show password</button>
+    <button type="button" onclick="document.getElementById('sent').hidden = false">Send OTP</button>
+    <p id="sent" hidden>OTP sent to the registered mobile. (Test code: 123456)</p>
+    <label>Enter OTP <input name="otp" inputmode="numeric"></label>
+    <button type="submit">Login</button>
+  </form>
+</main>
+<script>
+  // The portal's own eye: shows the password as text, and hides it again.
+  const box = document.getElementById("password");
+  document.getElementById("eye").addEventListener("click", () => {
+    box.type = box.type === "password" ? "text" : "password";
+  });
+</script>

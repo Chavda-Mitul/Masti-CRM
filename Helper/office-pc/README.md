@@ -6,11 +6,13 @@ For Masti's IT person, and for us at go-live. The design is in
 Staff press **Log in for me** in the CRM, and the Masti CRM helper, a small Chrome extension, types the portal's saved
 ID and password for them. On the office PCs Chrome is set so that:
 - the helper is always installed, and staff can't remove it or switch it off;
-- the developer tools are off, so nobody can read a password the helper typed;
+- the developer tools, remote debugging and the `chrome://net-export` traffic recorder are off, so nobody can read a
+  password the helper typed;
 - Chrome never offers to save a password;
 - no other extension can be added (some exist just to show passwords), except the ones Masti needs.
 
-The helper itself also empties the password box if a portal's own "show password" eye is pressed.
+The helper itself draws the portal's ID and password boxes as dots, even when a portal's own "show password" eye is
+pressed, and stops them being copied.
 
 ## Before you start (⚠️ from Masti)
 
@@ -63,9 +65,9 @@ In `Backend/.env` on Masti's server, set `PORTAL_HELPER_IDS` to that ID, then re
 4. Check:
    - `chrome://policy` lists the rules, all OK;
    - `chrome://extensions` shows **Masti CRM helper**, installed by your administrator, with no Remove button;
-   - F12 opens nothing;
+   - F12 opens nothing, and `chrome://net-export` is blocked;
    - in the CRM, **Settings → Portal logins → Log in for me** opens a portal logged in;
-   - on a portal with a "show password" eye, pressing it empties the password box.
+   - on a portal with a "show password" eye, pressing it still shows dots, and the ID box can't be copied.
 
 ## Later
 

@@ -14,15 +14,22 @@ export interface FillLoginArgs {
  *
  * No per-portal setup: it finds the boxes the way a browser's password filling does. The login form is the one with
  * exactly one visible password box (a sign-up form has two); the ID box is the visible text box just before it (one
- * marked autocomplete="username" first). The password only ever goes into a password box, and if the portal's own "show
- * password" eye reveals it, it's emptied at once. With letters to type (a captcha) it fills both boxes and leaves the
- * rest to the staff member; otherwise it presses the form's login button.
+ * marked autocomplete="username" first). The password only ever goes into a password box. Both boxes are drawn as dots
+ * and can't be copied, even when the portal's own "show password" eye is pressed (hideLogin). With a one-time code or
+ * letters to type (a captcha) it fills both boxes and leaves the rest to the staff member; otherwise it presses the
+ * form's login button.
  *
  * @param allowedOrigins where this page may be: the portal's saved address (and its https version).
  * @param waitMs how long to wait for a page that draws its login form late.
  */
 export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], waitMs: number): Promise<FillOutcome> {
   const BANNER_ID = "masti-crm-helper-banner";
+  /** Marks a box holding the ID or password; the helper's CSS (HIDE_CSS in logIn.ts) draws it as dots. */
+  const HIDDEN = "data-masti-crm-hidden";
+  /** Where this page's watch over the ID and password lives (see hideLogin). */
+  const WATCH = "__mastiCrmHelperWatch";
+  /** A box for a one-time code: the person types it. */
+  const CODE_BOX = /otp|one[\s-]?time|verification\s*code/;
   const TEXT_TYPES = ["text", "email", "tel", "number"];
   const GOOD_BUTTON = /log\s*-?\s*in|sign\s*-?\s*in|submit|continue|proceed/i;
   const BAD_BUTTON = /forgot|reset|register|sign\s*-?\s*up|create|new\s*user|cancel|clear|back|help|close|otp/i;
@@ -67,7 +74,12 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
   const isAfter = (first: Element, second: Element) => (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
   const isTextBox = (el: Element): el is HTMLInputElement =>
-    el instanceof HTMLInputElement && TEXT_TYPES.includes(el.type) && !el.disabled && visible(el) && !/captcha|search/.test(describe(el));
+    el instanceof HTMLInputElement &&
+    TEXT_TYPES.includes(el.type) &&
+    !el.disabled &&
+    visible(el) &&
+    !/captcha|search/.test(describe(el)) &&
+    !CODE_BOX.test(describe(el));
 
   /** The login form: one visible password box, and a text box before it. */
   const findLogin = () => {
@@ -86,9 +98,24 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     return null;
   };
 
-  /** Letters to type: the box for them if there is one, true if there's only a widget, null if none. */
-  const findCaptcha = (scope: ParentNode, passwordBox: HTMLInputElement, idBox: HTMLInputElement): HTMLInputElement | true | null => {
+  /**
+   * What the person types themselves: a one-time code (OTP) or letters (a captcha). The box for it, true if there's only
+   * a widget, null if nothing is asked; and what the banner says.
+   */
+  const findForStaff = (
+    scope: ParentNode,
+    passwordBox: HTMLInputElement,
+    idBox: HTMLInputElement,
+  ): { box: HTMLInputElement | true; ask: string } | null => {
     const inputs = [...scope.querySelectorAll("input")].filter((el) => el !== passwordBox && el !== idBox && !el.disabled && visible(el));
+    const code = inputs.find((el) => CODE_BOX.test(describe(el)));
+    if (code) return { box: code, ask: "Type the code you were sent, then press Login." };
+    const letters = findCaptcha(scope, inputs, passwordBox);
+    return letters ? { box: letters, ask: "Type the letters you see, then press Login." } : null;
+  };
+
+  /** Letters to type: the box for them if there is one, true if there's only a widget, null if none. */
+  const findCaptcha = (scope: ParentNode, inputs: HTMLInputElement[], passwordBox: HTMLInputElement): HTMLInputElement | true | null => {
     const box = inputs.find((el) => /captcha/.test(describe(el)));
     if (box) return box;
     const image = [...scope.querySelectorAll("img")].find(
@@ -166,22 +193,64 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
   };
 
   /**
-   * A portal's own "show password" eye makes the box a text box, or swaps in a text box holding the password. Once the
-   * helper has typed it, any box but a password box (and the ID box) that holds it is emptied at once, before the page is
-   * drawn again, and the person presses Log in for me again. The watch ends when the login form has gone.
+   * Draws a box as dots, even a text box, and stops its text being selected: the mark for the helper's own CSS, and the
+   * same in the box's style in case that CSS couldn't be added. Once per mark, so the watch never sets off itself.
    */
-  const guardPassword = (form: HTMLFormElement | null, idBox: HTMLInputElement, passwordBox: HTMLInputElement) => {
-    const loginForm: Element = form ?? passwordBox;
-    const observer = new MutationObserver(() => {
-      const shown = [...document.querySelectorAll("input")].filter((el) => el !== idBox && el.type !== "password" && el.value === login.password);
-      for (const box of shown) {
-        setValue(box, "");
-        if (box === passwordBox) box.type = "password";
+  const hide = (box: HTMLInputElement) => {
+    if (box.hasAttribute(HIDDEN)) return;
+    box.setAttribute(HIDDEN, "");
+    box.style.setProperty("-webkit-text-security", "disc", "important");
+    box.style.setProperty("-webkit-user-select", "none", "important");
+    box.style.setProperty("user-select", "none", "important");
+  };
+
+  /**
+   * Staff mustn't see or copy the ID or password, nor on a page where they type letters or a code themselves. Every box
+   * holding either is drawn as dots and can't be copied, cut or dragged: the portal's own "show password" eye shows
+   * dots, and the password box goes back to being one. The watch lasts as long as the page, so a form the page draws
+   * again (after a wrong code, say) is hidden too. One watch per page; a second press adds its login to it.
+   */
+  const hideLogin = (idBox: HTMLInputElement, passwordBox: HTMLInputElement) => {
+    type Watch = { ids: Set<string>; passwords: Set<string>; boxes: Set<HTMLInputElement>; stop?: () => void };
+    // The isolated world's own global: the portal's scripts can't see it.
+    const scope = globalThis as unknown as Record<string, Watch | undefined>;
+    const existing = scope[WATCH];
+    const watch: Watch = existing ?? { ids: new Set(), passwords: new Set(), boxes: new Set() };
+    watch.ids.add(login.loginId);
+    watch.passwords.add(login.password);
+    watch.boxes.add(idBox);
+    watch.boxes.add(passwordBox);
+    const sweep = () => {
+      for (const box of document.querySelectorAll("input")) {
+        const holdsPassword = box.value !== "" && watch.passwords.has(box.value) && !watch.ids.has(box.value);
+        if (!watch.boxes.has(box) && !holdsPassword && !(box.value !== "" && watch.ids.has(box.value))) continue;
+        hide(box);
+        if (holdsPassword && box.type !== "password") box.type = "password";
       }
-      if (shown.length > 0) showBanner("Masti CRM hid the password. Press Log in for me to try again.");
-      else if (!loginForm.isConnected) observer.disconnect();
-    });
-    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["type"] });
+    };
+    sweep();
+    if (existing) return;
+    scope[WATCH] = watch;
+
+    const blocked = ["copy", "cut", "dragstart", "selectstart"];
+    const block = (event: Event) => {
+      if (event.target instanceof HTMLInputElement && event.target.hasAttribute(HIDDEN)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    for (const name of blocked) document.addEventListener(name, block, true);
+    // Before the page is drawn again: an eye switching the box to text, a box swapped in, the page taking the mark off.
+    const observer = new MutationObserver(sweep);
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["type", "value", HIDDEN] });
+    // A value the page sets by script changes no attribute.
+    const timer = setInterval(sweep, 200);
+    watch.stop = () => {
+      observer.disconnect();
+      clearInterval(timer);
+      for (const name of blocked) document.removeEventListener(name, block, true);
+      delete scope[WATCH];
+    };
   };
 
   try {
@@ -198,14 +267,15 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     }
 
     const { form, idBox, passwordBox } = found;
+    // Hidden before anything is typed, so neither is ever drawn.
+    hideLogin(idBox, passwordBox);
     type(idBox, login.loginId);
     type(passwordBox, login.password);
-    guardPassword(form, idBox, passwordBox);
 
-    const captcha = findCaptcha(form ?? document, passwordBox, idBox);
-    if (captcha) {
-      if (captcha !== true) captcha.focus();
-      showBanner("Type the letters you see, then press Login.");
+    const forStaff = findForStaff(form ?? document, passwordBox, idBox);
+    if (forStaff) {
+      if (forStaff.box !== true) forStaff.box.focus();
+      showBanner(forStaff.ask);
       return "WAITING_FOR_STAFF";
     }
 

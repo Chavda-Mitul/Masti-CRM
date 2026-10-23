@@ -1,6 +1,6 @@
 // Pretend portals for trying the helper by hand (docs/decisions/0024-portal-logins.md): npm run serve:test-portals,
 // then open http://localhost:5199. A login is right with the ID test-agent and the password Test-Pass-2026! (and, on the
-// captcha page, the letters 7K2P). Never part of the CRM; only for development.
+// captcha page, the letters 7K2P; on the OTP page, the code 123456). Never part of the CRM; only for development.
 import { readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, normalize } from "node:path";
@@ -24,7 +24,7 @@ createServer((req, res) => {
       const values = [...sent.values()];
       const right = values.includes(RIGHT_ID) && values.includes(RIGHT_PASSWORD);
       const needsLetters = sent.has("captcha");
-      const lettersRight = !needsLetters || sent.get("captcha")?.toUpperCase() === "7K2P";
+      const lettersRight = (!needsLetters || sent.get("captcha")?.toUpperCase() === "7K2P") && (!sent.has("otp") || sent.get("otp")?.trim() === "123456");
       // Each attempt in the console (never the password), so whoever is testing sees the result here too.
       const from = new URL(req.headers.referer ?? "http://unknown/").pathname;
       const result = right && lettersRight ? `logged in as ${RIGHT_ID}` : right ? "wrong letters" : "wrong ID or password";

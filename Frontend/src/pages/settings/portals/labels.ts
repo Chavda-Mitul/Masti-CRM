@@ -13,7 +13,7 @@ export const NO_HELPER = 'Log in for me works only on the office computers.'
 /** "Who used what": what happened after the press. */
 const OUTCOME_WORDS: Record<Outcome, string> = {
   SUBMITTED: 'logged in',
-  WAITING_FOR_STAFF: 'letters to type',
+  WAITING_FOR_STAFF: 'letters or a code to type',
   NO_LOGIN_BOXES: "didn't log in by itself",
   ADDRESS_CHANGED: 'portal has moved',
   DIDNT_OPEN: "page didn't open",
@@ -83,7 +83,7 @@ export function pressResult(answer: HelperAnswer, portalName: string, caseNo?: s
         keep: false,
       }
     case 'WAITING_FOR_STAFF':
-      return { tone: 'ok', message: `${portalName} is open. Type the letters you see there, then press Login.`, keep: false }
+      return { tone: 'ok', message: `${portalName} is open. Type the letters or code it asks for, then press Login.`, keep: false }
     case 'NO_LOGIN_BOXES':
       return { tone: 'warn', message: "This portal didn't log in by itself. Your HOD can see this on Portal logins.", keep: true }
     case 'ADDRESS_CHANGED':

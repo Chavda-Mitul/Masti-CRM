@@ -1,9 +1,9 @@
 # 0024 · Portal logins: "Log in for me"
 
 - **Status:** a trial, decided 21 Oct 2026 by the project lead. Components 1 (PR #67), 2, scheduled password changes
-  (PR #91), and 3, the button on the visa case (PR #86), are merged; component 4, the office-PC kit, is built on
-  `feat/office-pc-kit`, with blanks for Masti's answers. The approach goes to Shivanshu for approval once the trial
-  passes (04 §C item 6, Q4).
+  (PR #91), 3, the button on the visa case (PR #86), and 4, the office-PC kit (PR #94, with blanks for Masti's
+  answers), are merged. Hiding the ID and password (23 Oct) is on `feat/helper-mask-boxes`. The approach goes to
+  Shivanshu for approval once the trial passes (04 §C item 6, Q4).
 - **Date:** 21 Oct 2026
 - **Scope:** Settings → Portal logins (demo screen 28, PROJECT_KNOWLEDGE §12.19): the company's accounts on visa, airline
   and supplier portals, which staff log in to without seeing the ID or password. Answers R3 and Q4.
@@ -107,8 +107,11 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
    - it waits up to 8 seconds for a late form;
    - it types the way a person would, so React and Angular notice;
    - the password only ever goes into a password box;
+   - before typing, it marks the ID and password boxes, and the helper's own CSS draws them as dots: staff never see
+     them, not even with the portal's "show password" eye, and can't copy them ("Hiding the ID and password", below);
    - it presses Login, never "Forgot password?" or "Register";
-   - with letters to type (a captcha) it fills both boxes and shows "Type the letters you see, then press Login."
+   - with a one-time code (OTP) or letters to type (a captcha) it fills both boxes, leaves the rest to the person and
+     shows "Type the code you were sent, then press Login." or "Type the letters you see, then press Login."
 5. The helper answers the page an outcome. The page reports it (`POST /uses/:useId/outcome`), says it in plain words,
    and keeps it on the card when something needs doing.
 6. The helper keeps nothing, and switches off Chrome's "Save password?" offer, which would hand the password to staff.
@@ -116,7 +119,7 @@ Bitwarden and 1Password both call their hidden passwords fill-only and not a com
 | Outcome | What happened | What the person reads |
 |---|---|---|
 | SUBMITTED | Filled and Login pressed | "Opened France visa portal for you. The ID and password were never shown." |
-| WAITING_FOR_STAFF | Filled; letters to type | "… is open. Type the letters you see there, then press Login." |
+| WAITING_FOR_STAFF | Filled; a code or letters to type | "… is open. Type the letters or code it asks for, then press Login." |
 | NO_LOGIN_BOXES | No login form found | "This portal didn't log in by itself. Your HOD can see this on Portal logins." |
 | ADDRESS_CHANGED | Opened at another address; nothing typed | "This portal now opens at a different address. Ask your HOD to check it." |
 | DIDNT_OPEN | The page never finished opening | "The portal didn't open. Check the internet and try again." |
@@ -279,7 +282,16 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
 - **Letters to type (captcha) and one-time codes** need the person. A code sent to Vimal's phone or email means waiting
   for him.
 - **Logins with three boxes** (agency code, user, password) aren't handled yet: there's one ID box. A per-portal "where to
-  type" hint kept as data in the CRM could come later.
+  type" hint kept as data in the CRM could come later. Seen 23 Oct on DVMS Gold Medal: Agent Code, Username, Password,
+  in a drop-down behind a "Login" link.
+- **After a wrong login**, a portal that sends a fresh page may type the ID back into its box itself (seen 23 Oct on
+  ImmiAccount and Cozmo). That page isn't the helper's, so the ID shows there; the password doesn't come back.
+- **A Login button that stays off** until the ID looks right (an email box, South Africa ETA): with a wrong-looking ID
+  the helper can't press it and says "Press the Login button to finish."
+- **A staff member who can run a script** (PowerShell, curl) on a PC could make their own press and collect the login
+  by pretending to be the helper; the office-PC kit doesn't stop that (found 23 Oct). Approving each office PC once
+  (a key the helper keeps, signing each collection) would stop it: parked by the project lead on 23 Oct until later in
+  the build, with the office addresses (M19).
 - **Unusual logins get an "Open portal" fallback instead:**
   - single sign-on on another address;
   - login boxes inside frames;
@@ -289,11 +301,11 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
   - Until an office PC has the kit (component 4), someone technical could read a typed password with the browser's
     developer tools or another extension. With it, those are off. Someone with administrator rights on the PC can still
     undo the rules, so staff mustn't have them (M50).
-  - A portal that copies the password into ordinary text on the page (not a box) isn't covered by the eye guard.
+  - A portal that copies the password into ordinary text on the page (not a box) isn't covered: only boxes are hidden.
   - Anyone who learned it could use it from home until it's next changed (component 2 makes the HOD do that on
     schedule): "office only" applies to the button, not the portal.
 
-## Component 4: the office-PC kit (built 22 Oct 2026, branch `feat/office-pc-kit`)
+## Component 4: the office-PC kit (built 22 Oct 2026, PR #94)
 
 What makes the helper safe on Masti's office PCs: staff can't remove it, can't read a typed password, and Chrome can't
 save one.
@@ -315,7 +327,7 @@ Found 22 Oct 2026 in Chromium's policy definitions:
 - The Chrome Web Store refuses a manifest with a `key` and gives the extension its own ID.
 
 Built:
-- **The eye guard** (`Helper/src/fill.ts`):
+- **The eye guard** (`Helper/src/fill.ts`; replaced on 23 Oct by "Hiding the ID and password", below):
   - once the helper has typed the password, any box but a password box (and the ID box) that holds it is emptied at
     once, before the page is drawn again: the eye switching the box to text, or a page swapping in a text box;
   - the box goes back to a password box, and the banner says "Masti CRM hid the password. Press Log in for me to try
@@ -328,8 +340,8 @@ Built:
   helper. Any other address is refused.
 - **`Helper/office-pc/Set-ChromeRules.ps1`** sets Chrome's machine-wide rules on one PC:
   - `ExtensionInstallForcelist` gets the helper from the store;
-  - `DeveloperToolsAvailability` 2, `ExtensionDeveloperModeSettings` 1, `PasswordManagerEnabled` 0;
-  - `URLBlocklist` gets `javascript://*`;
+  - `DeveloperToolsAvailability` 2, `ExtensionDeveloperModeSettings` 1, `PasswordManagerEnabled` 0, `RemoteDebuggingAllowed` 0;
+  - `URLBlocklist` gets `javascript://*`, `chrome://net-export` and `chrome://net-internals` (the traffic recorders);
   - `ExtensionInstallBlocklist` gets `*`, and `ExtensionInstallAllowlist` the helper and `-AllowExtensions`.
 
   It adds to existing lists, `-Remove` takes back only what it set, and `-WhatIf` changes nothing.
@@ -341,6 +353,59 @@ Built:
     left an empty password box and the banner.
   - The script was checked with PowerShell's parser and `-WhatIf` only; it was never applied on our PC, since it
     changes Windows settings.
+
+## Hiding the ID and password (23 Oct 2026, branch `feat/helper-mask-boxes`)
+
+Found on 23 Oct 2026, trying real portals with a made-up login: on South Africa ETA the portal's eye showed the typed
+password (the page drew its form again, which ended the eye guard's watch), and the ID box always showed the ID.
+
+Decided by the project lead the same day:
+1. Draw both boxes as dots with CSS, so the eye shows dots too, instead of emptying the password.
+2. Staff can't copy the ID or password to the clipboard.
+3. On pages with a one-time code (OTP) or letters to type, staff type those themselves; the ID and password stay hidden.
+
+Built (`Helper/src/fill.ts`, `Helper/src/logIn.ts`):
+- **Before typing**, `fillLogin` marks both boxes (`data-masti-crm-hidden`). The helper adds `HIDE_CSS` to the page as
+  the person's own CSS (`chrome.scripting.insertCSS`, origin USER): it beats the page's CSS, and the page's security
+  rules (CSP) can't block it. The box's own style says the same, in case that CSS couldn't be added.
+- **One watch per page, as long as the page lasts:**
+  - any box holding the ID or the password is marked too (a form the page draws again, a box it swaps in);
+  - a box holding the password goes back to being a password box;
+  - a mark the page takes off is put back.
+- **Copy, cut, drag and select** are refused on marked boxes.
+- **A one-time code:** a box for it ("OTP", "one time", "verification code") is never taken for the ID box. The helper
+  fills the rest, puts the cursor in it and says "Type the code you were sent, then press Login." The CRM says "… is
+  open. Type the letters or code it asks for, then press Login."
+- **Pretend portal:** `otp.html` (code 123456).
+- **Tests:** Helper 40 (the eye guard's 4 replaced by 6 on hiding and 1 on the code; 1 on the CSS coming first).
+- **Checked in Chrome** on the South Africa ETA page (the built code, run in a tab): both boxes dots, the eye showed dots,
+  and select-all with Ctrl+C in the ID box left the clipboard as it was.
+
+### Other extensions on the PC (23 Oct 2026)
+
+Another extension could read the ID and password the helper types. The office PCs block every other extension
+(component 4), and as a second guard the helper itself won't type while one is on:
+- before the ticket is spent, `blockingExtensionNames` (`logIn.ts`) lists the enabled extensions that aren't Masti's;
+  the press is REFUSED with "Switch off your other Chrome extensions to use Log in for me: …";
+- an extension Chrome's own rules installed (`installType: "admin"`) is allowed — that's how Masti approves one, so the
+  office kit now force-installs `-AllowExtensions`, not just allowlists them;
+- needs the `management` permission (a stronger Chrome warning: "Read and change your apps, extensions and themes").
+- **The popup switch** (`popup.html`, `popup.ts`, `storage` permission): the office build always checks; while the
+  helper is loaded unpacked for development the check is off, so it doesn't block building, and the popup's one switch
+  turns it on to test it by hand.
+
+### Real portals, 23 Oct 2026, with a made-up ID and password
+
+| Portal | What happened |
+|---|---|
+| Australia ImmiAccount | Filled, Login pressed; the portal said the username or password was wrong |
+| Cozmo (visa) | Filled, Login pressed; "Unauthorized Access!" |
+| Megha Visa | Picked the login form, not the sign-up form beside it; filled, pressed; "Wrong email or password" |
+| Olysim partners | Filled, pressed; "User does not exist" |
+| Udaan | The bookmarked address no longer opens; at udaanindia.in, filled and pressed |
+| South Africa ETA | Filled; its Login button stays off until the ID looks like an email |
+| DVMS Gold Medal | No login boxes on the saved page; the login has three boxes (above) |
+| FRRO e-services | The site didn't open from this PC |
 
 ## Still open
 
