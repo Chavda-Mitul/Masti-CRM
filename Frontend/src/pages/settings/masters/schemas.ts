@@ -20,6 +20,10 @@ export const MAX_LETTER_COUNTRIES = 50
 export const MAX_LETTER_CHARS = 6000
 /** The longest consent wording, as the database allows. */
 export const MAX_CONSENT_WORDING_CHARS = 8000
+/** The largest file a document's max size may allow. */
+export const MAX_DOCUMENT_MB = 50
+/** A document's photo size: each side, in mm. */
+export const PHOTO_MM = { min: 10, max: 200 } as const
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -445,17 +449,45 @@ export const consentWordingFormSchema = z.object({
 })
 export type ConsentWordingFormValues = z.infer<typeof consentWordingFormSchema>
 
-export const documentFormSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. BANK_STATEMENT_6M.'),
-  name: required(150, 'Enter the document.'),
-  detail: text(300),
-  sortOrder,
-  warnIfNoScan: z.boolean(),
+// A document's upload rules (0016 Amendment 1): kept as text in the form, blank meaning not set.
+const sizeMb = z.string().superRefine((value, ctx) => {
+  if (blankOk(value)) return
+  const mb = Number(value)
+  if (!Number.isFinite(mb) || mb < 0.01 || mb > MAX_DOCUMENT_MB) ctx.addIssue({ code: 'custom', message: `0.01 to ${MAX_DOCUMENT_MB} MB.` })
+  else if (Math.abs(mb * 100 - Math.round(mb * 100)) >= 1e-9) ctx.addIssue({ code: 'custom', message: 'Up to 2 decimals.' })
 })
+const photoMm = z.string().superRefine((value, ctx) => {
+  if (blankOk(value)) return
+  const mm = Number(value)
+  if (!Number.isInteger(mm)) ctx.addIssue({ code: 'custom', message: 'Whole mm only.' })
+  else if (mm < PHOTO_MM.min || mm > PHOTO_MM.max) ctx.addIssue({ code: 'custom', message: `${PHOTO_MM.min} to ${PHOTO_MM.max} mm.` })
+})
+
+export const documentFormSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9_]{1,40}$/, 'Use letters, digits or underscores, e.g. BANK_STATEMENT_6M.'),
+    name: required(150, 'Enter the document.'),
+    detail: text(300),
+    sortOrder,
+    warnIfNoScan: z.boolean(),
+    fileTypes: z.array(z.enum(['PDF', 'JPG', 'PNG'])).min(1, 'Tick at least one file type.'),
+    minSizeMb: sizeMb,
+    maxSizeMb: sizeMb,
+    photoWidthMm: photoMm,
+    photoHeightMm: photoMm,
+  })
+  .superRefine((v, ctx) => {
+    if (!blankOk(v.minSizeMb) && !blankOk(v.maxSizeMb) && Number(v.minSizeMb) >= Number(v.maxSizeMb)) {
+      ctx.addIssue({ code: 'custom', path: ['minSizeMb'], message: 'Min size must be less than max size.' })
+    }
+    if (blankOk(v.photoWidthMm) !== blankOk(v.photoHeightMm)) {
+      ctx.addIssue({ code: 'custom', path: [blankOk(v.photoWidthMm) ? 'photoWidthMm' : 'photoHeightMm'], message: 'Enter both width and height.' })
+    }
+  })
 export type DocumentFormValues = z.infer<typeof documentFormSchema>
 
 // ---------------------------------------------------------------------------

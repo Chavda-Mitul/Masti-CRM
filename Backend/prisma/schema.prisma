@@ -917,11 +917,28 @@ model DocumentMaster {
   /// "Scan not saved" on a case when this paper is ticked Original or Xerox and no scan was kept during the case
   /// (docs/decisions/0016-client-documents.md Decision 7). A warning only.
   warnIfNoScan    Boolean             @default(false)
+  /// Upload rules (0016 Amendment 1, change request 16), checked when a scan of this paper is uploaded. Which file
+  /// types may be uploaded: at least one (database check).
+  fileTypes       ScanFileType[]      @default([PDF, JPG, PNG])
+  /// The smallest and largest file, 0.01–50 MB, min below max (database checks). Null: no minimum, and the shared
+  /// clients.documents.maxMb.
+  minSizeMb       Float?
+  maxSizeMb       Float?
+  /// The photo's size in mm (35 × 45). Only its shape is checked, on a JPG or PNG. Both or neither, 10–200 (database checks).
+  photoWidthMm    Int?                @db.SmallInt
+  photoHeightMm   Int?                @db.SmallInt
   createdAt       DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
   checklistItems  VisaChecklistItem[]
   caseDocuments   VisaCaseDocument[]
   clientDocuments ClientDocument[]
+}
+
+/// A file type a paper's scan may be. Fixed (change request 16): the vault keeps PDF, JPEG and PNG only.
+enum ScanFileType {
+  PDF
+  JPG
+  PNG
 }
 
 /// What we need. Code branches on it (Original/Xerox toggle, "Made" for things we arrange), so an enum.

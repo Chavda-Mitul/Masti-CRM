@@ -163,6 +163,58 @@ describe("countries, visa types, documents and offerings", () => {
     expect(audit.after).toEqual({ warnIfNoScan: true });
   });
 
+  it("keeps each document's upload rules: file types, min and max size, photo size; Visa HOD only, audited (CR 16)", async () => {
+    const hod = await visaHod();
+    const staff = await visaStaff();
+    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null };
+
+    // Seeded: every paper takes all three types; the photos have a 35×45 mm shape.
+    const listed = (await staff.get("/api/masters/documents")).body.documents as { code: string }[];
+    expect(listed.find((d) => d.code === "PHOTOS")).toMatchObject({ fileTypes: ["PDF", "JPG", "PNG"], photoWidthMm: 35, photoHeightMm: 45 });
+    const created = await hod.post("/api/masters/documents").send({ code: "VOTER_ID", name: "Voter ID" });
+    expect(created.status).toBe(201);
+    expect(created.body.document).toMatchObject({ fileTypes: ["PDF", "JPG", "PNG"], ...none });
+
+    // Saved in PDF, JPG, PNG order whatever the ticking order, and audited.
+    const voter = created.body.document.id as number;
+    const rules = { fileTypes: ["PNG", "JPG"], minSizeMb: 0.01, maxSizeMb: 0.3, photoWidthMm: 35, photoHeightMm: 45 };
+    expect((await staff.patch(`/api/masters/documents/${voter}`).send(rules)).status).toBe(403);
+    const saved = await hod.patch(`/api/masters/documents/${voter}`).send(rules);
+    expect(saved.status).toBe(200);
+    expect(saved.body.document).toMatchObject({ ...rules, fileTypes: ["JPG", "PNG"] });
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "document.update", entityId: String(voter) } });
+    expect(audit.before).toEqual({ fileTypes: ["PDF", "JPG", "PNG"], ...none });
+    expect(audit.after).toEqual({ ...rules, fileTypes: ["JPG", "PNG"] });
+
+    // Wrong values, next to their field.
+    const refused = async (body: object, field: string, message: string) => {
+      const res = await hod.patch(`/api/masters/documents/${voter}`).send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.issues[field]).toEqual([message]);
+    };
+    await refused({ fileTypes: [] }, "fileTypes", "Tick at least one file type.");
+    await refused({ maxSizeMb: 0.305 }, "maxSizeMb", "Up to 2 decimals.");
+    await refused({ maxSizeMb: 51 }, "maxSizeMb", "0.01 to 50 MB.");
+    await refused({ photoWidthMm: 5 }, "photoWidthMm", "10 to 200 mm.");
+    // Against the stored row too: a min at or above the saved max of 0.3, a width without a height.
+    await refused({ minSizeMb: 0.3 }, "minSizeMb", "Min size must be less than max size.");
+    await refused({ photoHeightMm: null }, "photoHeightMm", "Enter both width and height.");
+    const bothNew = await hod.post("/api/masters/documents").send({ code: "OCI_CARD", name: "OCI card", minSizeMb: 2, maxSizeMb: 1 });
+    expect(bothNew.status).toBe(400);
+    expect(bothNew.body.issues.minSizeMb).toEqual(["Min size must be less than max size."]);
+
+    // Blank clears a rule.
+    const cleared = await hod.patch(`/api/masters/documents/${voter}`).send({ minSizeMb: "", maxSizeMb: null, photoWidthMm: null, photoHeightMm: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.document).toMatchObject({ fileTypes: ["JPG", "PNG"], ...none });
+
+    // The database refuses them too (hand-written CHECKs).
+    const write = (data: object) => prisma.documentMaster.update({ where: { id: voter }, data });
+    await expect(write({ photoWidthMm: 35 })).rejects.toThrow(/DocumentMaster_photo_size/);
+    await expect(write({ fileTypes: [] })).rejects.toThrow(/DocumentMaster_fileTypes_some/);
+    await expect(write({ minSizeMb: 2, maxSizeMb: 1 })).rejects.toThrow(/DocumentMaster_size_range/);
+  });
+
   it("switches what File ready asks for (appointment, vendor) on each visa: Visa HOD or Head only (0007 Decision 6)", async () => {
     const offering = await franceTourist();
     const hod = await visaHod();
