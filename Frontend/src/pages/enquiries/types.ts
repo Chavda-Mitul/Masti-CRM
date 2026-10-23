@@ -41,6 +41,8 @@ export interface EnquiryRow {
   nextStep: string
   /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
   matured: boolean
+  /** The urgency level's name when it isn't Normal, for the red tag (0003 amendment 1); null for Normal and outside Visa. */
+  urgent: string | null
   source: { code: string; name: string }
   origin: EnquiryOrigin
   owner: PersonRef | null
@@ -70,6 +72,8 @@ export interface EnquiryListFilters {
   status: ListStatus
   department: string
   mine: boolean
+  /** "Urgent only" (0003 amendment 1): visa cases at any level but Normal. */
+  urgent: boolean
   q: string
 }
 

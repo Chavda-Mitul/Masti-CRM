@@ -7,6 +7,7 @@ import { can, isHodOf, type DepartmentCode } from "../auth/permissions";
 import type { UserWithDepartments } from "../users/user";
 import { countTravellers, travellersLabel } from "../visa/visaCase";
 import { visaNextStep } from "../visa/visaNextStep";
+import { NORMAL_URGENCY } from "../visaMasters/visaMasters.schemas";
 import { offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { ListEnquiriesQuery } from "./enquiries.schemas";
 import { toStageRef } from "./enquiry";
@@ -30,11 +31,21 @@ export const rowInclude = {
       // Whether its passports are still to hand back (TO_HAND_BACK).
       docket: { select: { dispatchedAt: true } },
       handover: { select: { enquiryId: true } },
+      // How urgent it is (docs/decisions/0003-visa-intake.md amendment 1): the red tag.
+      urgency: { select: { code: true, name: true } },
     },
   },
 } satisfies Prisma.EnquiryInclude;
 
 type EnquiryRow = Prisma.EnquiryGetPayload<{ include: typeof rowInclude }>;
+
+/** The urgency level's name when it isn't Normal, for the red tag (0003 amendment 1); null otherwise. */
+export function urgentOf(row: EnquiryRow): string | null {
+  return row.visa && row.visa.urgency.code !== NORMAL_URGENCY ? row.visa.urgency.name : null;
+}
+
+/** "Urgent only": visa cases at any level but Normal (0003 amendment 1). */
+const URGENT_ONLY: Prisma.EnquiryWhereInput = { visa: { is: { urgency: { code: { not: NORMAL_URGENCY } } } } };
 
 /** "France (Schengen) · Tourist · 2 adults, 2 children". Stage 2 departments add their own line here. */
 export function summaryOf(row: EnquiryRow): string {
@@ -130,6 +141,7 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
     statusWhere,
     ...(query.mine ? [{ ownerId: user.id }] : []),
     ...(query.unassigned ? [{ ownerId: null }] : []),
+    ...(query.urgent ? [URGENT_ONLY] : []),
     ...(query.q ? [searchWhere(query.q)] : []),
   ];
   const where: Prisma.EnquiryWhereInput = { AND: [...base, { departmentId: { in: shown.map((d) => d.id) } }] };
@@ -179,6 +191,8 @@ export async function listEnquiries(query: ListEnquiriesQuery, user: UserWithDep
       nextStep: visaNextStep(row.stage, row.visa),
       /** Documents complete and gone to processing: nobody's yet, it waits for a processor (else for an owner). */
       matured: !!row.visa?.maturedAt,
+      /** The urgency level's name when it isn't Normal: the red tag. Null for Normal and outside Visa. */
+      urgent: urgentOf(row),
       source: row.source,
       origin: row.origin,
       owner: row.owner,
