@@ -152,6 +152,7 @@ export const visaCaseInclude = {
   visa: {
     include: {
       offering: { include: offeringInclude },
+      urgency: { select: { id: true, code: true, name: true } },
       maturedBy: personSelect,
       fileReadyBy: personSelect,
       submittedOnlineBy: personSelect,
@@ -524,6 +525,8 @@ export function toVisaCaseDto(
     children,
     travelMonth: fromDbDate(visa.travelMonth).slice(0, 7),
     travelDate: visa.travelDate ? fromDbDate(visa.travelDate) : null,
+    /** How urgent it is (0003 amendment 1): every level but Normal (NORMAL_URGENCY) shows as a red tag. */
+    urgency: visa.urgency,
     /** Trip details (0007 Decision 4). The duration is worked out from the two dates. */
     trip: {
       departOn: visa.departOn ? fromDbDate(visa.departOn) : null,

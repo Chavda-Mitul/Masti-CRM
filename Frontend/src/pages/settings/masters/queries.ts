@@ -442,11 +442,11 @@ export function useSaveMaster<R extends MasterResource>(resource: R) {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
         return
       }
-      // The document problems, couriers, urgency levels and the reasons lists change nothing else: the screens that
-      // pick from them read these lists.
-      if (['document-problem-reasons', 'couriers', 'urgency-levels', 'credit-note-reasons', 'recall-reasons', 'missing-passport-reasons', 'extra-charges', 'field-slots', 'field-fail-reasons'].includes(resource)) return
-      // A case's quote shows its processing speed by name.
-      if (resource === 'processing-speeds') {
+      // The document problems, couriers and the reasons lists change nothing else: the case page reads these lists.
+      if (['document-problem-reasons', 'couriers', 'credit-note-reasons', 'recall-reasons', 'missing-passport-reasons', 'extra-charges', 'field-slots', 'field-fail-reasons'].includes(resource)) return
+      // A case's quote shows its processing speed by name, and its header its urgency (0003 amendment 1); New enquiry
+      // reads the urgency levels' own list.
+      if (resource === 'processing-speeds' || resource === 'urgency-levels') {
         void queryClient.invalidateQueries({ queryKey: enquiryKeys.cases })
         return
       }

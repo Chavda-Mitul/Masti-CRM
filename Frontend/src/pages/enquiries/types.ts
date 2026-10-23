@@ -144,6 +144,8 @@ export interface CreateVisaCaseBody {
   travelMonth: string
   /** YYYY-MM-DD or null */
   travelDate: string | null
+  /** How urgent it is (0003 amendment 1); null is Normal. */
+  urgencyId: number | null
 }
 
 export type DocumentRequirement = 'ORIGINAL' | 'XEROX_OK' | 'ARRANGED_BY_US'
@@ -695,6 +697,8 @@ export interface VisaCase {
   children: number
   travelMonth: string
   travelDate: string | null
+  /** How urgent it is (0003 amendment 1): every level but Normal (NORMAL_URGENCY) shows as a red tag. */
+  urgency: { id: number; code: string; name: string }
   trip: CaseTrip
   owner: PersonRef | null
   dueAt: string | null

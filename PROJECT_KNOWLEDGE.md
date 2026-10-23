@@ -778,6 +778,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - **Came in through:** WhatsApp · Landline · Mobile · Social media · Email ✅. Add Justdial etc. as source tags.
 - **What do they want?** Multi-select: Visa · Holiday · Hotel · Insurance · Ticket ⚠️.
 - **Visa, just four things:** Country, Visa type, Adults (min 1), Children (min 0) ✅, **plus the travel month/date** (the written doc's "time", decided 8 Oct 2026; captured at intake only). "Names, travel dates, duration and single/multiple entry are filled later, when the documents come in."
+- **How urgent?** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): a pill for each active urgency level (Settings → Masters → Lists → Urgency levels), with Normal already picked. A picked urgent pill is red. The case header then shows a red tag with the level's name (built 23 Oct 2026, part 2).
 - **"Save and send document list"**, with a "When you save" panel:
   - the document list and price breakup go to the client on WhatsApp ✅
   - reminders start (every 2 days at 11:00 ⚠️) until the documents are complete
@@ -1226,7 +1227,7 @@ This is the biggest technical unknown (§16.2).
 - **Dropdown reasons:** "No free-text box for reasons, anywhere." Demo values: Trip cancelled · Went with another agent · Price higher · Visa not needed · Documents not available · No reply.
 - **Staff & roles:** Head · everything; HOD · refunds, vendors, resets (per department); Staff · view or edit.
 - **Also kept here:** document checklists (country × type), covering-letter formats, accounts routine tasks, customers (fixed format · accounts code), plus everything else in §10.12.
-- **Urgency levels** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): how urgent a visa enquiry is, seeded Normal and Urgent, in Lists. The Visa HOD or the Head renames, adds, reorders or switches off levels. Normal is where every new enquiry starts, so it can't be switched off; every other level counts as urgent and shows as a red tag. **Built: the list** (part 1, 23 Oct 2026). Coming next: the picker on New enquiry (§12.3), changing it on the case (§12.4), and the tag and an "Urgent only" filter in All enquiries (§12.2).
+- **Urgency levels** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): how urgent a visa enquiry is, seeded Normal and Urgent, in Lists. The Visa HOD or the Head renames, adds, reorders or switches off levels. Normal is where every new enquiry starts, so it can't be switched off; every other level counts as urgent and shows as a red tag. **Built (23 Oct 2026):** the list (part 1), and the picker on New enquiry with the case header's tag (part 2, §12.3). Coming next: changing it on the case (§12.4), and the tag and an "Urgent only" filter in All enquiries (§12.2).
 
 ### 12.21 WhatsApp automation and the message catalogue
 

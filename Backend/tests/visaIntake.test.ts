@@ -308,6 +308,41 @@ describe("POST /api/visa/cases: saving a visa enquiry", () => {
     expect(await prisma.client.count()).toBe(0);
   });
 
+  it("saves how urgent it is: Normal unless another level is picked (0003 amendment 1)", async () => {
+    const staff = await visaStaff();
+    const normal = await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "NORMAL" } });
+    const urgent = await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "URGENT" } });
+
+    const plain = await staff.post("/api/visa/cases").send(await body());
+    expect(plain.status).toBe(201);
+    expect(plain.body.case.urgency).toEqual({ id: normal.id, code: "NORMAL", name: "Normal" });
+
+    const rushed = await staff.post("/api/visa/cases").send(await body({ mobile: "99000 11122", urgencyId: urgent.id }));
+    expect(rushed.status).toBe(201);
+    expect(rushed.body.case.urgency).toEqual({ id: urgent.id, code: "URGENT", name: "Urgent" });
+    expect((await staff.get(`/api/visa/cases/${rushed.body.case.caseNo}`)).body.case.urgency.code).toBe("URGENT");
+
+    const audits = await prisma.auditLog.findMany({ where: { action: "visa.case.create" }, orderBy: { id: "asc" } });
+    expect(audits.map((a) => a.after)).toMatchObject([{ urgency: "NORMAL" }, { urgency: "URGENT" }]);
+  });
+
+  it("refuses an urgency level that doesn't exist or was switched off", async () => {
+    const staff = await visaStaff();
+    const unknown = await staff.post("/api/visa/cases").send(await body({ urgencyId: 999 }));
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.issues.urgencyId).toEqual(["That urgency level isn't used any more. Pick another."]);
+
+    const urgent = await prisma.urgencyLevel.update({ where: { code: "URGENT" }, data: { isActive: false } });
+    const off = await staff.post("/api/visa/cases").send(await body({ urgencyId: urgent.id }));
+    expect(off.status).toBe(400);
+    expect(off.body.issues.urgencyId).toEqual(["That urgency level isn't used any more. Pick another."]);
+
+    const garbled = await staff.post("/api/visa/cases").send(await body({ urgencyId: "urgent" }));
+    expect(garbled.status).toBe(400);
+    expect(garbled.body.issues.urgencyId).toEqual(["Pick how urgent it is."]);
+    expect(await prisma.enquiry.count()).toBe(0);
+  });
+
   it("needs Visa EDIT", async () => {
     expect((await request(app).post("/api/visa/cases").send(await body())).status).toBe(401);
     const viewer = await visaStaff("VIEW");
