@@ -2,7 +2,8 @@
 
 - **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
   "Still open". **Amendment 1** (23 Oct 2026): the form's fields become a master; pieces 1a (the form reads them) and
-  1b (the Settings page) built 23 Oct 2026. Where it disagrees with part 1 below, the amendment wins.
+  1b (the Settings page) built 23 Oct 2026. **Amendment 2** (23 Oct 2026): a parent or guardian agrees for a child,
+  built 23 Oct 2026. Where they disagree with parts 1–3 below, the amendments win.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
@@ -70,7 +71,52 @@ social media links. The demo has fixed fields: change request 18.
   - The fixed fields' rules are refused with a 409 that says why. The database checks them too.
 - **`MAX_CONSENT_FIELD_LABEL`** (100) is mirrored in the frontend; `frontendRules.test.ts` compares the two.
 
-**Next:** amendment 2, a parent agrees for a child.
+## Amendment 2 (23 Oct 2026, project lead, from Vimal at the demo): a parent or guardian agrees for a child
+
+**The ask:** consent stays one per family member, but for someone under 18 a parent approves it on their behalf. Until
+now the client on the main number agreed for a child ("Still open" below). Part of change request 18.
+
+**Decided (project lead, 23 Oct 2026):**
+- **A child** is someone younger than **Settings → Visa → "adult from"** (`visa.childAge`, 18 ⚠️, the age the input
+  warnings already use) on the day staff save the form, going by the form's date of birth. That is why the date of
+  birth is always required (amendment 1).
+- **Staff pick the parent or guardian** from the family list on the child's form. The "I agree" link goes to that
+  person's own number, or else the client's main number. The page tells them they agree on the child's behalf, and the
+  record names them.
+- **Turning 18 changes nothing:** the consent stays on file, once for life.
+
+**Built (23 Oct 2026):**
+- **Data** (migration `20261023210500_consent_guardian`):
+  - `ClientMember.consentGuardianId`: who agrees for this child, saved with the form, and null for an adult.
+  - `ConsentLink.guardianId`: who the link went to.
+  - `Consent.guardianId`: who agreed.
+  - Checks: nobody is their own guardian (on the form, the link or the consent), and a paper consent has no guardian.
+    The signed paper says who signed.
+- **The form:**
+  - `GET …/consent-details` adds `adultFrom`, `guardianId` and `guardianChoices`: the client's other family members
+    still on the list, except anyone whose date of birth makes them a child too. Someone with no date of birth may be
+    picked, since staff know who the parent is.
+  - The dialog shows **For a child · Parent or guardian who agrees** (required) as soon as the date of birth typed
+    makes the person a child. With nobody to pick, it says to add the parent on the client page first.
+  - The `PUT` takes `guardianId`. For a child it must be one of those choices (400 otherwise, next to the picker). For
+    an adult it's dropped.
+  - The audit keeps the guardian's name with the answers.
+- **The link:**
+  - It goes to the guardian, as part 2 says for anyone: their own number, else the main one.
+  - Message 4 is addressed to the guardian when it goes to their own number (else to the client), "…the consent and
+    liability form for {child}…". Its words didn't need to change.
+  - A save that changes who agrees replaces an open link and sends a new one. That covers another guardian, or the
+    person now entered as an adult or as a child. Saving again with the same guardian sends nothing.
+  - The case's tile says "Link sent · 23 Oct · to Priya Mehta, to agree for them, on +91 …".
+- **The page and the record:**
+  - The consent's copy of the details gains `guardian: { name, relation }`, and the details' fingerprint covers it.
+  - The client's page says "{guardian}, you agree to this form on behalf of {child}, as their parent or guardian", and
+    the tick reads "I have read this form, and I agree on {child}'s behalf."
+  - "I agree" records the guardian on the consent (audited).
+  - The tile then says "Agreed · 23 Oct · by Priya Mehta, for them". The printed record heads its first section
+    "Agreed for", with "Agreed on their behalf by Priya Mehta (Spouse), as their parent or guardian."
+- **Not changed:** paper consents, and the wording. Masti's own wording (Q9) may want a sentence for a parent signing
+  for a child; today's draft is written as "I" and "my passport".
 
 ## Context
 
@@ -282,6 +328,5 @@ is stored, and the tab's title (`{name}_Consent_record`) names the saved PDF.
 ## Still open
 
 - **The wording** (Q9/M12/C3).
-- **Who agrees for a child:** for now the client on the main number does.
 - **SMS as the fallback channel**, which needs a provider with DLT registration.
 - **DPDP** (S11): these are personal details, so for now only staff who can open the case, or edit clients, see them.

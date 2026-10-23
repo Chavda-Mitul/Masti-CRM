@@ -255,7 +255,7 @@ describe("the \"I agree\" link (part 2)", () => {
     expect(message!.body).toMatch(/^Dear Rakesh Mehta,/);
     // The link on a line of its own, easy to tap.
     expect(message!.body).toMatch(/consent and liability form for Rakesh Mehta and tap "I agree":\nhttp:\/\/localhost:5173\/consent#[A-Za-z0-9_-]{43}\n/);
-    expect(saved.body.case.travellers[0].consent.link).toEqual({ sentAt: expect.any(String), toMobile: "+919825041234" });
+    expect(saved.body.case.travellers[0].consent.link).toEqual({ sentAt: expect.any(String), toMobile: "+919825041234", guardian: null });
     expect(await prisma.auditLog.count({ where: { action: "consent.link.sent", clientId } })).toBe(1);
 
     expect((await save(staff, caseNo, traveller, { ...RAKESH, Profession: "Retired" })).status).toBe(200);

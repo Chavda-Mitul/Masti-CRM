@@ -22,6 +22,9 @@ export async function consentForm(agent: Agent, caseNo: string, travellerId: str
   return res.body.form as {
     fields: { id: number; label: string; kind: string; required: boolean; fixed: string | null }[];
     answers: Record<string, string | null>;
+    adultFrom: number;
+    guardianId: string | null;
+    guardianChoices: { id: string; name: string; relation: string; age: number | null }[];
     personUpdatedAt: string;
   };
 }

@@ -22,16 +22,21 @@ export async function wordingInUse(db: Db = prisma) {
   return wording;
 }
 
-/** What the form needs of the person: their name, relation and passport, and their answers. */
-export const formPersonInclude = { relation: true, consentAnswers: true } as const;
+/** What the form needs of the person: their name, relation and passport, their answers, and who agrees for a child. */
+export const formPersonInclude = { relation: true, consentAnswers: true, consentGuardian: { include: { relation: true } } } as const;
+
+type FormPerson = Pick<ClientMember, "name" | "passportNumber"> &
+  AnsweringPerson & { relation: Relation; consentGuardian: (Pick<ClientMember, "name"> & { relation: Relation }) | null };
 
 /**
  * The person as the form shows them, and as the consent keeps them once agreed: the name and current passport
  * number, then the details staff filled in, each with its field's label as it is now (amendment 1), so renaming a field
- * later never changes a record. Only the fields in use that have an answer, in the form's order.
+ * later never changes a record. Only the fields in use that have an answer, in the form's order. For a child, the
+ * parent or guardian who agrees on their behalf (amendment 2).
  */
-export async function formDetailsOf(db: Db, member: Pick<ClientMember, "name" | "passportNumber"> & AnsweringPerson & { relation: Relation }) {
+export async function formDetailsOf(db: Db, member: FormPerson) {
   const fields = await activeConsentFields(db);
+  const guardian = member.consentGuardian;
   return {
     name: member.name,
     relation: member.relation.name,
@@ -40,6 +45,7 @@ export async function formDetailsOf(db: Db, member: Pick<ClientMember, "name" | 
       const value = answerOf(f, member);
       return value === null ? [] : [{ label: f.label, kind: f.kind, value }];
     }),
+    guardian: guardian && { name: guardian.name, relation: guardian.relation.name },
   };
 }
 
@@ -106,6 +112,8 @@ export async function agreeConsent(
         wordingId,
         linkId: link.id,
         details,
+        // A child's link went to the parent or guardian who agrees for them (amendment 2).
+        guardianId: link.guardianId,
         ip: from.ip,
         userAgent: from.userAgent?.slice(0, 500) ?? null,
       },
@@ -117,7 +125,7 @@ export async function agreeConsent(
         entityType: "Consent",
         entityId: consent.id,
         clientId: member.clientId,
-        after: { memberId: member.id, wordingId, linkId: link.id },
+        after: { memberId: member.id, wordingId, linkId: link.id, guardianId: link.guardianId },
         ip: from.ip,
       },
       tx,

@@ -380,10 +380,12 @@ const blankToNull = (value: unknown) => (typeof value === "string" && value.trim
  * A traveller's consent form details (docs/decisions/0022-consent-form.md, part 1 and amendment 1), every field each
  * time: staff fill them in by asking the client. `answers` holds one answer per field in use, keyed by the field's id;
  * "" or null leaves one empty. The fields are a master, so the service checks each answer against its field (its kind,
- * and whether it's required). updatedAt is the person's, as the browser read it.
+ * and whether it's required). For a child, guardianId is the family member who agrees for them (amendment 2); it's
+ * dropped for an adult. updatedAt is the person's, as the browser read it.
  */
 export const consentDetailsSchema = z.object({
   answers: z.record(z.string().regex(/^\d+$/, "Reload and try again."), z.string().max(1000, "At most 1000 characters.").nullable()),
+  guardianId: z.uuid("Pick the parent or guardian who agrees for them.").nullable().default(null),
   updatedAt: z.iso.datetime("Reload and try again."),
 });
 

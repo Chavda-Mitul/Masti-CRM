@@ -46,6 +46,8 @@ function Tile({
       <div className="consent-tile ok">
         <strong>{name}</strong>
         {consent.paperYear !== null ? `On file · ${consent.paperYear} (on paper)` : `Agreed · ${dayMonth(consent.agreedAt)}`}
+        {/* A parent or guardian agreed for a child (0022 amendment 2). */}
+        {consent.guardian && <span className="small">by {consent.guardian}, for them</span>}
         <div className="consent-actions">
           {/* The record opens in a tab of its own, to print or save as PDF (0022 part 3b). Anyone who can open the case. */}
           {traveller.member && (
@@ -79,7 +81,8 @@ function Tile({
       <span className="small">{filled ? `Details filled · ${dayMonth(filled)}` : 'Details not filled'}</span>
       {consent.link && (
         <span className="small">
-          Link sent · {dayMonth(consent.link.sentAt)} · to <span className="consent-mobile">{formatMobile(consent.link.toMobile)}</span>
+          Link sent · {dayMonth(consent.link.sentAt)} · to {consent.link.guardian && `${consent.link.guardian}, to agree for them, on `}
+          <span className="consent-mobile">{formatMobile(consent.link.toMobile)}</span>
         </span>
       )}
       {canAct && (

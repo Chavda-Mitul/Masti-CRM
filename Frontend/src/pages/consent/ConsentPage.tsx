@@ -68,6 +68,13 @@ function OpenForm({
       <section className="card pad">
         <div className="lbl">Consent and liability form</div>
         <h1 className="h1 consent-name">{person.name}</h1>
+        {/* A child: their parent or guardian agrees for them (docs/decisions/0022-consent-form.md amendment 2). */}
+        {person.guardian && (
+          <p className="consent-lead">
+            <strong>{person.guardian.name}</strong>, you agree to this form on behalf of {person.name}, as their parent or
+            guardian.
+          </p>
+        )}
         <p className="muted consent-lead">
           Please check the details, read the form and tap <strong>I agree</strong> at the end.
         </p>
@@ -92,7 +99,8 @@ function OpenForm({
 
       <form className="card pad consent-agree" onSubmit={submit}>
         <label className="check consent-check">
-          <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />I have read this form.
+          <input type="checkbox" checked={read} onChange={(e) => setRead(e.target.checked)} />
+          {person.guardian ? `I have read this form, and I agree on ${person.name}’s behalf.` : 'I have read this form.'}
         </label>
         {message && (
           <div className={`alert ${formChanged(agree.error) ? 'alert-warn' : 'alert-bad'}`} role="alert">
