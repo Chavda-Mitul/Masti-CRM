@@ -188,7 +188,6 @@ function CasesCard({ client }: { client: ClientProfile }) {
 function WhereItStands({ c }: { c: ClientCase }) {
   // Closed: the last step's own label, e.g. "Delivered" ⚠️, as on the case page.
   if (c.status === 'CLOSED') return <span className="chip chip-sm chip-ok">{c.stage.statusLabel}</span>
-  if (c.status === 'LOST') return <span className="chip chip-sm chip-muted">Lost{c.reason && ` · ${c.reason.name}`}</span>
   if (c.status === 'CANCELLED') return <span className="chip chip-sm chip-bad">{statusNote(c)}</span>
   if (c.status === 'POSTPONED') return <span className="chip chip-sm chip-muted">{statusNote(c)}</span>
   return <>{c.stage.name}</>
