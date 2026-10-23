@@ -38,9 +38,9 @@ function statusOf(param: string | null, assigns: boolean): ListStatus {
 
 /**
  * All enquiries (demo screens 02/03): every department in one list, late first, then by time due.
- * Open / Postponed / Cancelled / Closed, department, "Only mine" and search live in the URL
- * (?status=postponed&department=VISA&mine=true&q=), so the sidebar can link to a department and Back returns to the same
- * list. Clicking a row opens its steps on the right.
+ * Open / Postponed / Cancelled / Closed, department, "Only mine", "Urgent only" (0003 amendment 1) and search live in the
+ * URL (?status=postponed&department=VISA&mine=true&urgent=true&q=), so the sidebar can link to a department and Back
+ * returns to the same list. Clicking a row opens its steps on the right.
  */
 export function EnquiriesPage() {
   const { data: me } = useMe()
@@ -67,11 +67,15 @@ export function EnquiriesPage() {
   // Most staff see only their own cases already, so "Only mine" is offered only where it changes the list.
   const offersMine = !!me && seesOthersEnquiries(me)
   const status = statusOf(params.get('status'), assigns)
+  const department = params.get('department')?.toUpperCase() ?? ''
+  // Only visa cases have an urgency (0003 amendment 1), so "Urgent only" is on the All and Visa lists.
+  const offersUrgent = department === '' || department === 'VISA'
   const filters: EnquiryListFilters = {
     status,
-    department: params.get('department')?.toUpperCase() ?? '',
+    department,
     // Cases to assign are nobody's, so "Only mine" doesn't apply there.
     mine: offersMine && status !== 'TO_ASSIGN' && params.get('mine') === 'true',
+    urgent: offersUrgent && params.get('urgent') === 'true',
     q,
   }
   const list = useEnquiryList(filters)
@@ -101,7 +105,7 @@ export function EnquiriesPage() {
     )
   }, [q, setParams])
 
-  const setParam = (key: 'status' | 'department' | 'mine', value: string) => {
+  const setParam = (key: 'status' | 'department' | 'mine' | 'urgent', value: string) => {
     setSeekId(null)
     setParams(
       (prev) => {
@@ -140,6 +144,12 @@ export function EnquiriesPage() {
             <label className="check">
               <input type="checkbox" checked={filters.mine} onChange={(e) => setParam('mine', e.target.checked ? 'true' : '')} />
               Only mine
+            </label>
+          )}
+          {offersUrgent && (
+            <label className="check">
+              <input type="checkbox" checked={filters.urgent} onChange={(e) => setParam('urgent', e.target.checked ? 'true' : '')} />
+              Urgent only
             </label>
           )}
           {canAdd && (
@@ -218,12 +228,12 @@ export function EnquiriesPage() {
             </div>
           ) : rows.length === 0 ? (
             <div className="pad muted card-fill-empty">
-              {filters.q || filters.mine
+              {filters.q || filters.mine || filters.urgent
                 ? 'No enquiries match.'
                 : filters.status === 'TO_ASSIGN'
                   ? 'No cases waiting to be assigned.'
                   : `No ${filters.status.toLowerCase()} enquiries.`}
-              {canAdd && filters.status === 'OPEN' && !filters.q && !filters.mine && (
+              {canAdd && filters.status === 'OPEN' && !filters.q && !filters.mine && !filters.urgent && (
                 <div style={{ marginTop: 12 }}>
                   <Link to="/enquiries/new" className="btn btn-primary">
                     + New enquiry
@@ -308,6 +318,7 @@ function EnquiryTableRow({ row, on, onClick }: { row: EnquiryRow; on: boolean; o
               }}>
               {name}
             </button>
+            {row.urgent && <span className="chip chip-bad chip-sm urgent-tag">{row.urgent}</span>}
             <div className="muted small ellipsis">
               <span className="mono">{row.caseNo}</span> · {row.summary}
             </div>
@@ -366,6 +377,7 @@ function EnquiryPanel({ row, department, onClose }: { row: EnquiryRow; departmen
       </div>
       <h2 className="h2" style={{ marginTop: 10 }}>
         {row.client.name}
+        {row.urgent && <span className="chip chip-bad chip-sm urgent-tag">{row.urgent}</span>}
       </h2>
       <p className="muted small" style={{ margin: '4px 0 0' }}>
         {row.summary}
