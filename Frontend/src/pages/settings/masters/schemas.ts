@@ -22,8 +22,8 @@ export const MAX_LETTER_CHARS = 6000
 export const MAX_CONSENT_WORDING_CHARS = 8000
 /** The largest file a document's max size may allow. */
 export const MAX_DOCUMENT_MB = 50
-/** A document's photo size: any whole number on each side, since only the shape is checked; the top is the column's. */
-export const PHOTO_MM = { min: 1, max: 32767 } as const
+/** A document photo's sides, in mm or pixels: any whole number, since only the rule limits them; the top is the column's. */
+export const PHOTO_SIDE = { min: 1, max: 32767 } as const
 
 /** Days from one date to another, counting both ends: 1 Oct → 7 Oct is 7. */
 export function daysInclusive(from: string, to: string): number {
@@ -456,13 +456,22 @@ const sizeMb = z.string().superRefine((value, ctx) => {
   if (!Number.isFinite(mb) || mb < 0.01 || mb > MAX_DOCUMENT_MB) ctx.addIssue({ code: 'custom', message: `0.01 to ${MAX_DOCUMENT_MB} MB.` })
   else if (Math.abs(mb * 100 - Math.round(mb * 100)) >= 1e-9) ctx.addIssue({ code: 'custom', message: 'Up to 2 decimals.' })
 })
-const photoMm = z.string().superRefine((value, ctx) => {
-  if (blankOk(value)) return
-  const mm = Number(value)
-  if (!Number.isInteger(mm)) ctx.addIssue({ code: 'custom', message: 'Whole mm only.' })
-  else if (mm < PHOTO_MM.min) ctx.addIssue({ code: 'custom', message: `At least ${PHOTO_MM.min}.` })
-  else if (mm > PHOTO_MM.max) ctx.addIssue({ code: 'custom', message: `At most ${PHOTO_MM.max.toLocaleString('en-IN')}.` })
-})
+const photoSide = (unit: 'mm' | 'pixels') =>
+  z.string().superRefine((value, ctx) => {
+    if (blankOk(value)) return
+    const side = Number(value)
+    if (!Number.isInteger(side)) ctx.addIssue({ code: 'custom', message: `Whole ${unit} only.` })
+    else if (side < PHOTO_SIDE.min) ctx.addIssue({ code: 'custom', message: `At least ${PHOTO_SIDE.min}.` })
+    else if (side > PHOTO_SIDE.max) ctx.addIssue({ code: 'custom', message: `At most ${PHOTO_SIDE.max.toLocaleString('en-IN')}.` })
+  })
+const photoMm = photoSide('mm')
+const photoPx = photoSide('pixels')
+/** A photo's width and height go together: its photo size, its smallest and its largest in pixels. */
+const PHOTO_PAIRS = [
+  ['photoWidthMm', 'photoHeightMm'],
+  ['minWidthPx', 'minHeightPx'],
+  ['maxWidthPx', 'maxHeightPx'],
+] as const
 
 export const documentFormSchema = z
   .object({
@@ -480,13 +489,24 @@ export const documentFormSchema = z
     maxSizeMb: sizeMb,
     photoWidthMm: photoMm,
     photoHeightMm: photoMm,
+    minWidthPx: photoPx,
+    minHeightPx: photoPx,
+    maxWidthPx: photoPx,
+    maxHeightPx: photoPx,
   })
   .superRefine((v, ctx) => {
     if (!blankOk(v.minSizeMb) && !blankOk(v.maxSizeMb) && Number(v.minSizeMb) >= Number(v.maxSizeMb)) {
       ctx.addIssue({ code: 'custom', path: ['minSizeMb'], message: 'Min size must be less than max size.' })
     }
-    if (blankOk(v.photoWidthMm) !== blankOk(v.photoHeightMm)) {
-      ctx.addIssue({ code: 'custom', path: [blankOk(v.photoWidthMm) ? 'photoWidthMm' : 'photoHeightMm'], message: 'Enter both width and height.' })
+    for (const [width, height] of PHOTO_PAIRS) {
+      if (blankOk(v[width]) !== blankOk(v[height])) {
+        ctx.addIssue({ code: 'custom', path: [blankOk(v[width]) ? width : height], message: 'Enter both width and height.' })
+      }
+    }
+    if (![v.minWidthPx, v.minHeightPx, v.maxWidthPx, v.maxHeightPx].some((side) => blankOk(side))) {
+      const bigger = "The smallest can't be bigger than the largest."
+      if (Number(v.minWidthPx) > Number(v.maxWidthPx)) ctx.addIssue({ code: 'custom', path: ['minWidthPx'], message: bigger })
+      if (Number(v.minHeightPx) > Number(v.maxHeightPx)) ctx.addIssue({ code: 'custom', path: ['minHeightPx'], message: bigger })
     }
   })
 export type DocumentFormValues = z.infer<typeof documentFormSchema>

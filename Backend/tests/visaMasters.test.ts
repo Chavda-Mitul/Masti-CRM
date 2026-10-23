@@ -226,6 +226,51 @@ describe("countries, visa types, documents and offerings", () => {
     await expect(write({ minSizeMb: 2, maxSizeMb: 1 })).rejects.toThrow(/DocumentMaster_size_range/);
   });
 
+  it("keeps a document's smallest and largest photo in pixels: whole pairs, the smallest not bigger, audited (CR 16)", async () => {
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/documents").send({ code: "PHOTOS_US", name: "Photos – USA" });
+    expect(created.status).toBe(201);
+    expect(created.body.document).toMatchObject({ minWidthPx: null, minHeightPx: null, maxWidthPx: null, maxHeightPx: null });
+    const id = created.body.document.id as number;
+
+    // The USA's 600 × 600 to 1200 × 1200, audited.
+    const usa = { minWidthPx: 600, minHeightPx: 600, maxWidthPx: 1200, maxHeightPx: 1200 };
+    const saved = await hod.patch(`/api/masters/documents/${id}`).send(usa);
+    expect(saved.status).toBe(200);
+    expect(saved.body.document).toMatchObject(usa);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "document.update", entityId: String(id) } });
+    expect(audit.after).toEqual(usa);
+
+    // Wrong values next to their field, and against the stored row: one side of a pair, a smallest above the largest.
+    const refused = async (body: object, field: string, message: string) => {
+      const res = await hod.patch(`/api/masters/documents/${id}`).send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.issues[field]).toEqual([message]);
+    };
+    await refused({ minWidthPx: 0 }, "minWidthPx", "At least 1.");
+    await refused({ maxHeightPx: 600.5 }, "maxHeightPx", "Whole pixels only.");
+    await refused({ maxHeightPx: null }, "maxHeightPx", "Enter both width and height.");
+    await refused({ minWidthPx: 1300 }, "minWidthPx", "The smallest can't be bigger than the largest.");
+    await refused({ minHeightPx: 1300 }, "minHeightPx", "The smallest can't be bigger than the largest.");
+
+    // Singapore's exact 400 × 514 (the same pair twice), only a smallest (the UK's 600 × 750), only a largest.
+    for (const rules of [
+      { minWidthPx: 400, minHeightPx: 514, maxWidthPx: 400, maxHeightPx: 514 },
+      { minWidthPx: 600, minHeightPx: 750, maxWidthPx: null, maxHeightPx: null },
+      { minWidthPx: null, minHeightPx: null, maxWidthPx: 1200, maxHeightPx: 1200 },
+    ]) {
+      const res = await hod.patch(`/api/masters/documents/${id}`).send(rules);
+      expect(res.status).toBe(200);
+      expect(res.body.document).toMatchObject(rules);
+    }
+
+    // The database refuses them too (a hand-written CHECK).
+    const write = (data: object) => prisma.documentMaster.update({ where: { id }, data });
+    await expect(write({ maxWidthPx: null })).rejects.toThrow(/DocumentMaster_photo_pixels/);
+    await expect(write({ minWidthPx: 0, minHeightPx: 5 })).rejects.toThrow(/DocumentMaster_photo_pixels/);
+    await expect(write({ minWidthPx: 1300, minHeightPx: 10 })).rejects.toThrow(/DocumentMaster_photo_pixels/);
+  });
+
   it("switches what File ready asks for (appointment, vendor) on each visa: Visa HOD or Head only (0007 Decision 6)", async () => {
     const offering = await franceTourist();
     const hod = await visaHod();

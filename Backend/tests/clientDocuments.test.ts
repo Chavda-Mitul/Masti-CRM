@@ -287,6 +287,10 @@ describe("what a scan must be", () => {
       maxSizeMb: 0.3,
       photoWidthMm: 35,
       photoHeightMm: 45,
+      minWidthPx: null,
+      minHeightPx: null,
+      maxWidthPx: null,
+      maxHeightPx: null,
     });
 
     const refused = async (body: Buffer, type: string, status: number, message: string) => {
@@ -321,6 +325,55 @@ describe("what a scan must be", () => {
     const passport = { documentId: await paper("PASSPORT"), memberId: aarav.id };
     expect((await upload(head, client.id, passport, await pdf(1))).status).toBe(201);
     expect((await upload(head, client.id, passport, padded(pngOf(413, 531), 1.5 * MB), "image/png")).status).toBe(201);
+  });
+
+  it("refuses a photo of too few or too many pixels, or not its exact size, before keeping anything (0016 Amendment 1)", async () => {
+    const { head } = await people();
+    const { client, aarav } = await family(head);
+    // The USA's 600 × 600 to 1200 × 1200 pixels, with no shape, to see the pixels alone.
+    await prisma.documentMaster.update({
+      where: { code: "PHOTOS" },
+      data: { photoWidthMm: null, photoHeightMm: null, minWidthPx: 600, minHeightPx: 600, maxWidthPx: 1200, maxHeightPx: 1200 },
+    });
+    const photos = { documentId: await paper("PHOTOS"), memberId: aarav.id };
+    const refused = async (file: Buffer, type: string, message: string) => {
+      const res = await upload(head, client.id, photos, padded(file, 0.1 * MB), type);
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe(message);
+    };
+    const tooFew = (w: number, h: number) =>
+      `"Photos" must be at least 600 × 600 pixels. This photo is ${w} × ${h} pixels: scan it at a higher resolution.`;
+    await refused(pngOf(450, 450), "image/png", tooFew(450, 450));
+    await refused(pngOf(800, 599), "image/png", tooFew(800, 599));
+    await refused(jpegOf(1000, 500, 6), "image/jpeg", tooFew(500, 1000)); // Shot on its side: 500 wide as it shows.
+    await refused(
+      pngOf(2400, 2400),
+      "image/png",
+      '"Photos" can be at most 1200 × 1200 pixels. This photo is 2400 × 2400 pixels: scan it at a lower resolution.',
+    );
+    expect(await prisma.clientDocument.count()).toBe(0);
+    expect(await objectsOf(client.id)).toHaveLength(0);
+    for (const file of [pngOf(600, 600), pngOf(1200, 1200), pngOf(800, 1000)]) {
+      expect((await upload(head, client.id, photos, padded(file, 0.1 * MB), "image/png")).status).toBe(201);
+    }
+
+    // Singapore's exact 400 × 514: the smallest and the largest the same.
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { minWidthPx: 400, minHeightPx: 514, maxWidthPx: 400, maxHeightPx: 514 } });
+    await refused(
+      pngOf(413, 531),
+      "image/png",
+      '"Photos" must be exactly 400 × 514 pixels. This photo is 413 × 531 pixels: make it that size and upload it again.',
+    );
+    expect((await upload(head, client.id, photos, padded(pngOf(400, 514), 0.1 * MB), "image/png")).status).toBe(201);
+
+    // With a shape too, the shape is checked first. A PDF has no pixels to check.
+    await prisma.documentMaster.update({ where: { code: "PHOTOS" }, data: { photoWidthMm: 35, photoHeightMm: 45 } });
+    await refused(
+      pngOf(600, 600),
+      "image/png",
+      '"Photos" must have the shape of 35 × 45 mm. This photo is 600 × 600 pixels: crop it to that shape and upload it again.',
+    );
+    expect((await upload(head, client.id, photos, await pdf(1))).status).toBe(201);
   });
 
   it("checks the client, the person and the paper", async () => {

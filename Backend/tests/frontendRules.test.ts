@@ -25,7 +25,7 @@ import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.sc
 import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
-import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, PHOTO_MM } from "../src/modules/visaMasters/visaMasters.schemas";
+import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, PHOTO_SIDE } from "../src/modules/visaMasters/visaMasters.schemas";
 import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
@@ -95,7 +95,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_LETTER_COUNTRIES: number;
       MAX_CONSENT_WORDING_CHARS: number;
       MAX_DOCUMENT_MB: number;
-      PHOTO_MM: { min: number; max: number };
+      PHOTO_SIDE: { min: number; max: number };
     };
     expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
@@ -105,7 +105,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     expect(frontend.MAX_LETTER_CHARS).toBe(MAX_LETTER_CHARS);
     expect(frontend.MAX_LETTER_COUNTRIES).toBe(MAX_LETTER_COUNTRIES);
     expect(frontend.MAX_DOCUMENT_MB).toBe(MAX_DOCUMENT_MB);
-    expect(frontend.PHOTO_MM).toEqual(PHOTO_MM);
+    expect(frontend.PHOTO_SIDE).toEqual(PHOTO_SIDE);
   });
 
   it("checks covering-letter wordings the same way: the same blanks and the same messages", async () => {
@@ -188,7 +188,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
 
   it("words a scan's wrong type and size the same way before and after the upload (0016 Amendment 1)", async () => {
     const frontend = (await import(frontendScanFiles)) as { fileTypesText: typeof fileTypesText; scanFileProblem: typeof scanFileProblem };
-    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null };
+    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null, minWidthPx: null, minHeightPx: null, maxWidthPx: null, maxHeightPx: null };
     const rules: ScanRules[] = [
       { fileTypes: ["PDF", "JPG", "PNG"], ...none },
       { fileTypes: ["JPG", "PNG"], ...none, minSizeMb: 0.01, maxSizeMb: 0.3, photoWidthMm: 35, photoHeightMm: 45 },

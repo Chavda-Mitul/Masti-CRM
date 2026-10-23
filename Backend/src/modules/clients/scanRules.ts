@@ -11,6 +11,10 @@ export const SCAN_RULE_SELECT = {
   maxSizeMb: true,
   photoWidthMm: true,
   photoHeightMm: true,
+  minWidthPx: true,
+  minHeightPx: true,
+  maxWidthPx: true,
+  maxHeightPx: true,
 } satisfies Prisma.DocumentMasterSelect;
 
 export function scanRulesOf(row: Prisma.DocumentMasterGetPayload<{ select: typeof SCAN_RULE_SELECT }>): ScanRules {
@@ -20,5 +24,9 @@ export function scanRulesOf(row: Prisma.DocumentMasterGetPayload<{ select: typeo
     maxSizeMb: row.maxSizeMb,
     photoWidthMm: row.photoWidthMm,
     photoHeightMm: row.photoHeightMm,
+    minWidthPx: row.minWidthPx,
+    minHeightPx: row.minHeightPx,
+    maxWidthPx: row.maxWidthPx,
+    maxHeightPx: row.maxHeightPx,
   };
 }
