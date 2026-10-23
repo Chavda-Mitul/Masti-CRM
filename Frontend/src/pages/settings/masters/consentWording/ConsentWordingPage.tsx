@@ -62,9 +62,6 @@ export function ConsentWordingPage() {
       </div>
 
       <RefreshFailed query={wordings} what="the wording" />
-      {inUse?.addedBy === null && !editing && (
-        <div className="alert alert-warn">This is the draft wording, used until Masti’s own arrives. Clients agree to it as it stands.</div>
-      )}
 
       <section className="card pad letter-card">
         {inUse && editing ? (
@@ -90,7 +87,7 @@ export function ConsentWordingPage() {
               <ConsentWording body={inUse.body} />
             ) : (
               <p className="muted" style={{ margin: 0 }}>
-                No wording yet: the server adds the draft when it starts.
+                No wording yet: the server adds it when it starts.
               </p>
             )}
           </>

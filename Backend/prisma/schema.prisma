@@ -1575,8 +1575,8 @@ model Consent {
 }
 
 /// The consent form's wording (0022). Never changed or removed (a trigger), because consents point at it; the newest is
-/// the one in use. Seeded with a draft until Masti's (Q9): addedById null marks it. Checks in the migration: no blank
-/// body, at most 8000 characters.
+/// the one in use. Seeded with the project lead's wording (amendment 3): addedById null marks the one set up with the
+/// system. Checks in the migration: no blank body, at most 8000 characters.
 model ConsentWording {
   id        Int       @id @default(autoincrement())
   body      String
