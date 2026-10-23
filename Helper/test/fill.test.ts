@@ -177,6 +177,32 @@ describe("fillLogin", () => {
     });
   });
 
+  describe("a third login box (an agency code)", () => {
+    const page = `<form>
+      <label>Agency code <input id="agency" name="agencyCode"></label>
+      <label>User ID <input id="user"></label>
+      <label>Password <input id="pass" type="password"></label>
+      <button type="submit">Login</button></form>`;
+    const withExtra = (label: string) => fillLogin({ ...LOGIN, extra: { label, value: "AG-99" } }, [ORIGIN], 0);
+
+    it("fills the box whose name matches the label, and hides all three", async () => {
+      document.body.innerHTML = page;
+      const sent = countSubmits();
+      expect(await withExtra("Agency code")).toBe("SUBMITTED");
+      expect($("#agency").value).toBe("AG-99");
+      expect($("#user").value).toBe(LOGIN.loginId);
+      expect($("#pass").value).toBe(LOGIN.password);
+      expect(sent).toHaveLength(1);
+      for (const id of ["#agency", "#user", "#pass"]) expect($(id).hasAttribute("data-masti-crm-hidden"), id).toBe(true);
+    });
+
+    it("falls back to the box before the ID box when no name matches the label", async () => {
+      document.body.innerHTML = page;
+      expect(await withExtra("Partner reference")).toBe("SUBMITTED");
+      expect($("#agency").value).toBe("AG-99");
+    });
+  });
+
   describe("staff never see or copy the ID and password", () => {
     /** Lets the helper's watch on the page see what changed. */
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

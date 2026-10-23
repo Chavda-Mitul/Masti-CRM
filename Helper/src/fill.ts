@@ -6,6 +6,8 @@ export type FillOutcome = "SUBMITTED" | "WAITING_FOR_STAFF" | "NO_LOGIN_BOXES" |
 export interface FillLoginArgs {
   loginId: string;
   password: string;
+  /** A third login box before the ID and password (e.g. an agency code), for portals that have one. */
+  extra?: { label: string; value: string };
 }
 
 /**
@@ -114,6 +116,23 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     return letters ? { box: letters, ask: "Type the letters you see, then press Login." } : null;
   };
 
+  /**
+   * A third login box (e.g. an agency code): the visible text box, not the ID or password, whose name matches the label
+   * the HOD typed. If none matches, the text box just before the ID box, where the extra box usually sits.
+   */
+  const findExtraBox = (form: HTMLFormElement | null, idBox: HTMLInputElement, passwordBox: HTMLInputElement, label: string): HTMLInputElement | null => {
+    const candidates = [...(form ?? document).querySelectorAll("input")].filter((el) => el !== idBox && el !== passwordBox && isTextBox(el));
+    if (candidates.length === 0) return null;
+    const words = label.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+    const matched = candidates.find((el) => {
+      const d = describe(el);
+      return words.some((w) => d.includes(w));
+    });
+    if (matched) return matched;
+    const before = candidates.filter((el) => isAfter(el, idBox));
+    return before[before.length - 1] ?? candidates[0]!;
+  };
+
   /** Letters to type: the box for them if there is one, true if there's only a widget, null if none. */
   const findCaptcha = (scope: ParentNode, inputs: HTMLInputElement[], passwordBox: HTMLInputElement): HTMLInputElement | true | null => {
     const box = inputs.find((el) => /captcha/.test(describe(el)));
@@ -210,7 +229,7 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
    * dots, and the password box goes back to being one. The watch lasts as long as the page, so a form the page draws
    * again (after a wrong code, say) is hidden too. One watch per page; a second press adds its login to it.
    */
-  const hideLogin = (idBox: HTMLInputElement, passwordBox: HTMLInputElement) => {
+  const hideLogin = (idBox: HTMLInputElement, passwordBox: HTMLInputElement, extraBox: HTMLInputElement | null) => {
     type Watch = { ids: Set<string>; passwords: Set<string>; boxes: Set<HTMLInputElement>; stop?: () => void };
     // The isolated world's own global: the portal's scripts can't see it.
     const scope = globalThis as unknown as Record<string, Watch | undefined>;
@@ -220,6 +239,11 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     watch.passwords.add(login.password);
     watch.boxes.add(idBox);
     watch.boxes.add(passwordBox);
+    // The extra box's value is hidden like the ID (dots, no copy), not forced to a password box.
+    if (extraBox && login.extra) {
+      watch.ids.add(login.extra.value);
+      watch.boxes.add(extraBox);
+    }
     const sweep = () => {
       for (const box of document.querySelectorAll("input")) {
         const holdsPassword = box.value !== "" && watch.passwords.has(box.value) && !watch.ids.has(box.value);
@@ -267,8 +291,10 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     }
 
     const { form, idBox, passwordBox } = found;
-    // Hidden before anything is typed, so neither is ever drawn.
-    hideLogin(idBox, passwordBox);
+    const extraBox = login.extra ? findExtraBox(form, idBox, passwordBox, login.extra.label) : null;
+    // Hidden before anything is typed, so none is ever drawn.
+    hideLogin(idBox, passwordBox, extraBox);
+    if (extraBox && login.extra) type(extraBox, login.extra.value);
     type(idBox, login.loginId);
     type(passwordBox, login.password);
 

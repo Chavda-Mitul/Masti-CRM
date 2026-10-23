@@ -141,7 +141,13 @@ export async function redeemTicket(ticket: string, ip: string | undefined) {
     if (count !== 1) throw runOut();
     await audit({ actorId: use.userId, action: "portalLogin.use", entityType: "PortalLogin", entityId: portal.id, after: { useId: use.id }, ip: from }, tx);
   });
-  return { loginUrl: portal.loginUrl, loginId: secret.loginId, password: secret.password };
+  return {
+    loginUrl: portal.loginUrl,
+    loginId: secret.loginId,
+    password: secret.password,
+    // A third login box (e.g. an agency code), when the portal has one; the helper types it into the box its name matches.
+    ...(portal.extraLabel && secret.extra !== undefined ? { extraLabel: portal.extraLabel, extra: secret.extra } : {}),
+  };
 }
 
 /** What the helper said happened, reported by the page of the person who pressed. Once per press. */

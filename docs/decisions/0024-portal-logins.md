@@ -281,9 +281,9 @@ On one visa portal and one airline portal (Masti's logins, M49), and the pretend
 
 - **Letters to type (captcha) and one-time codes** need the person. A code sent to Vimal's phone or email means waiting
   for him.
-- **Logins with three boxes** (agency code, user, password) aren't handled yet: there's one ID box. A per-portal "where to
-  type" hint kept as data in the CRM could come later. Seen 23 Oct on DVMS Gold Medal: Agent Code, Username, Password,
-  in a drop-down behind a "Login" link.
+- **Logins with three boxes** (agency code, user, password) are handled since 23 Oct ("A third login box", below): the
+  portal carries the extra box's name and the helper types it. Four or more boxes still aren't. Seen 23 Oct on DVMS Gold
+  Medal: Agent Code, Username, Password, in a drop-down behind a "Login" link.
 - **After a wrong login**, a portal that sends a fresh page may type the ID back into its box itself (seen 23 Oct on
   ImmiAccount and Cozmo). That page isn't the helper's, so the ID shows there; the password doesn't come back.
 - **A Login button that stays off** until the ID looks right (an email box, South Africa ETA): with a wrong-looking ID
@@ -393,6 +393,21 @@ Another extension could read the ID and password the helper types. The office PC
 - **The popup switch** (`popup.html`, `popup.ts`, `storage` permission): the office build always checks; while the
   helper is loaded unpacked for development the check is off, so it doesn't block building, and the popup's one switch
   turns it on to test it by hand.
+
+### A third login box (23 Oct 2026, branch `feat/portal-extras`)
+
+Some visa portals have three login boxes — an agency code before the username and password (DVMS Gold Medal). The
+helper only knew the ID and password boxes, so it skipped the third. Now a portal can carry a third box:
+- **Data** (migration `20261023150000_portal_extra_label`): `PortalLogin.extraLabel` (what the box is called; null for an
+  ordinary two-box login). Its value rides in the sealed `secret` (`PortalSecret.extra`), never in its own column; the
+  audit log keeps the label, never the value.
+- **Settings:** the drawer has "This portal has a third box before the ID (e.g. an agency code)"; when ticked, its name
+  and value. The value is hidden and typed again to change, like the password; unticking it removes the box
+  (`extraLabel: ""`).
+- **Redeem** adds `extraLabel` and `extra`; the helper (`fill.ts`) types the value into the box whose name matches the
+  label, or, failing a match, the text box just before the ID box. That box is hidden and un-copyable too.
+- **Tests:** backend (`portalLogins`: store, both-or-neither, change/rename/remove; `portalHelper`: redeem hands it over)
+  and Helper (`fill`: fills the matching box and the fallback, hides all three).
 
 ### Real portals, 23 Oct 2026, with a made-up ID and password
 
