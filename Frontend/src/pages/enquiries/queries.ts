@@ -177,6 +177,11 @@ export function useSetReminders(caseNo: string) {
   return useCaseAction<{ on: boolean }>(caseNo, (base, body) => api(`${base}/reminders`, { method: 'PUT', body }))
 }
 
+/** How urgent the case is, in the right rail (0003 amendment 1). */
+export function useSetUrgency(caseNo: string) {
+  return useCaseAction<{ urgencyId: number }>(caseNo, (base, body) => api(`${base}/urgency`, { method: 'PUT', body }))
+}
+
 /** How the documents reach us, and booklets received. */
 export function useUpdateVisaCase(caseNo: string) {
   return useCaseAction<{ arrival?: DocumentArrival | null; bookletsCurrent?: number | null; bookletsOld?: number | null }>(

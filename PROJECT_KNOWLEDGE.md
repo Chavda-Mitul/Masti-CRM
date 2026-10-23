@@ -792,6 +792,7 @@ This worked example follows the demo's Mehta family case (France Schengen touris
 - Title "{Country (zone)} {type} visa — {family}", the case no., and "came in {date} on {source} · {pax} · travelling {month}".
 - A status chip, **Postpone or cancel**, and the **next-step button**.
 - Step chips 1–8. Click any chip to jump to that step.
+- **How urgent** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): a red tag with the level's name before the status chip, for every level but Normal (built, part 2). The right rail's **How urgent** switch changes it (built, part 3): its owner, the Visa HOD or the Head, at any step while the case is open, audited. Everyone else sees the level as text.
 
 **Status and next-step labels per step** ⚠️ (wording):
 
@@ -1226,7 +1227,7 @@ This is the biggest technical unknown (§16.2).
 - **Dropdown reasons:** "No free-text box for reasons, anywhere." Demo values: Trip cancelled · Went with another agent · Price higher · Visa not needed · Documents not available · No reply.
 - **Staff & roles:** Head · everything; HOD · refunds, vendors, resets (per department); Staff · view or edit.
 - **Also kept here:** document checklists (country × type), covering-letter formats, accounts routine tasks, customers (fixed format · accounts code), plus everything else in §10.12.
-- **Urgency levels** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): how urgent a visa enquiry is, seeded Normal and Urgent, in Lists. The Visa HOD or the Head renames, adds, reorders or switches off levels. Normal is where every new enquiry starts, so it can't be switched off; every other level counts as urgent and shows as a red tag. **Built (23 Oct 2026):** the list (part 1), and the picker on New enquiry with the case header's tag (part 2, §12.3). Coming next: changing it on the case (§12.4), and the tag and an "Urgent only" filter in All enquiries (§12.2).
+- **Urgency levels** (change request 17, 23 Oct 2026, from Masti; `docs/decisions/0003-visa-intake.md` Amendment 1): how urgent a visa enquiry is, seeded Normal and Urgent, in Lists. The Visa HOD or the Head renames, adds, reorders or switches off levels. Normal is where every new enquiry starts, so it can't be switched off; every other level counts as urgent and shows as a red tag. **Built (23 Oct 2026):** the list (part 1), the picker on New enquiry with the case header's tag (part 2, §12.3), and changing it on the case (part 3, §12.4). Coming next: the tag and an "Urgent only" filter in All enquiries (§12.2).
 
 ### 12.21 WhatsApp automation and the message catalogue
 

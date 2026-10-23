@@ -41,6 +41,7 @@ import {
   sendEvisaSchema,
   setEvisaCheckSchema,
   setRemindersSchema,
+  setUrgencySchema,
   saveSubmissionSchema,
   vendorReceivedSchema,
   writeLetterSchema,
@@ -127,6 +128,12 @@ router.patch("/cases/:caseNo", visaEdit, async (req, res) => {
 router.put("/cases/:caseNo/reminders", visaEdit, async (req, res) => {
   const body = setRemindersSchema.parse(req.body);
   res.json({ case: await stepsService.setReminders(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
+});
+
+/** How urgent the case is (docs/decisions/0003-visa-intake.md amendment 1). */
+router.put("/cases/:caseNo/urgency", visaEdit, async (req, res) => {
+  const body = setUrgencySchema.parse(req.body);
+  res.json({ case: await stepsService.setUrgency(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
 });
 
 /** Tick one paper: Original/Xerox, Made, Not needed, or back to Pending. */

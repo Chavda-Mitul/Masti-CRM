@@ -1,6 +1,6 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings) and part 2 (the picker on New enquiry and the case header's tag) built 23 Oct 2026.
+- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings), part 2 (the picker on New enquiry and the case header's tag) and part 3 (changing it on the case) built 23 Oct 2026.
 - **Date:** 8 Oct 2026 (proposed), 9 Oct 2026 (refreshed and built)
 - **Scope:** the New enquiry form for Visa (demo screen 05), the All enquiries list (demo screens 02/03) and the Step 1 data of a case. The Step 1 case page (demo screen 06) comes next.
 
@@ -55,6 +55,18 @@ picking Urgent doesn't change the quote.
   - The case header shows a red tag with the level's name (e.g. "Urgent") before the status, for every level but
     Normal.
   - Renaming a level in Settings refreshes the cases that are open.
+
+**Built, part 3 (23 Oct 2026):**
+- **API:** `PUT /api/visa/cases/:caseNo/urgency` with `{ urgencyId }`, which returns `{ case }`. The step rule
+  `URGENCY` (`caseLock.ts`) allows every step. As usual, only the owner, the Visa HOD or the Head may change it, on an
+  open case: a postponed one is "Resume it first", and a cancelled or closed one is refused. A plain pick like the
+  Reminders switch, so there's no `updatedAt` token, and it moves neither the step nor the case's `updatedAt`. An
+  unchanged pick writes nothing. A switched-off level is a 400 on `urgencyId`, except on the case that already has
+  it. Audited `visa.urgency.update` on the VisaCase, with `clientId` and the codes before and after.
+- **Screen:** "How urgent" in the right rail, after "Whose job it is now".
+  - For whoever may change it: one button per active level (plus this case's own, if switched off since). It saves on
+    click with a toast ("Marked Urgent."), and the urgent levels show solid red when picked.
+  - For anyone else (a view-only user, or the case on hold or closed): the level as text, red when urgent.
 
 ## Refresh (9 Oct 2026)
 
