@@ -57,7 +57,8 @@ const toCount = (text: string) => (text.trim() === '' ? null : Number(text))
 function ArrivalForm({ visaCase: c }: { visaCase: VisaCase }) {
   const toast = useToast()
   const update = useUpdateVisaCase(c.caseNo)
-  const [current, setCurrent] = useState(c.booklets.current?.toString() ?? '')
+  // Nothing saved yet: "current" starts at 1, kept only when Save is pressed; "old" starts empty (0006 amendment 23).
+  const [current, setCurrent] = useState(c.booklets.current?.toString() ?? '1')
   const [old, setOld] = useState(c.booklets.old?.toString() ?? '')
   const dirty = toCount(current) !== c.booklets.current || toCount(old) !== c.booklets.old
   const valid = [current, old].every((v) => v.trim() === '' || (/^\d+$/.test(v) && Number(v) <= 50))
@@ -97,7 +98,6 @@ function ArrivalForm({ visaCase: c }: { visaCase: VisaCase }) {
             value={current}
             onChange={(e) => setCurrent(e.target.value.replace(/\D/g, '').slice(0, 2))}
             aria-label="Current passports"
-            placeholder="0"
           />
           current
         </label>
@@ -109,7 +109,6 @@ function ArrivalForm({ visaCase: c }: { visaCase: VisaCase }) {
             value={old}
             onChange={(e) => setOld(e.target.value.replace(/\D/g, '').slice(0, 2))}
             aria-label="Old passports"
-            placeholder="0"
           />
           old
         </label>
