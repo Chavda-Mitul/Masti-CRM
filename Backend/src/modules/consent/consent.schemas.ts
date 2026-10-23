@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ConsentFieldKind } from "../../../generated/prisma/enums";
 
 // The client's consent page (docs/decisions/0022-consent-form.md, part 2). The token comes in the body, never the
 // path, so the request log never holds it.
@@ -23,6 +24,38 @@ export const MAX_CONSENT_WORDING_CHARS = 8000;
  * same limits.
  */
 export const CONSENT_ANSWER_MAX = { TEXT: 100, LONG_TEXT: 300, LINK: 300 } as const;
+
+/** The longest name a consent form field has, as the database allows (ConsentField_label_text). The frontend keeps it. */
+export const MAX_CONSENT_FIELD_LABEL = 100;
+
+const fieldLabel = z
+  .string("Name the field.")
+  .trim()
+  .min(1, "Name the field.")
+  .max(MAX_CONSENT_FIELD_LABEL, `At most ${MAX_CONSENT_FIELD_LABEL} characters.`);
+
+/** A new field on the consent form (amendment 1), added at the end. Its kind never changes after. */
+export const createConsentFieldSchema = z.object({
+  label: fieldLabel,
+  kind: z.enum(ConsentFieldKind, "Pick what the field takes."),
+  required: z.boolean().default(false),
+});
+
+/** A field renamed, made required or not, switched off or on: only what's sent changes. */
+export const updateConsentFieldSchema = z.object({
+  label: fieldLabel.optional(),
+  required: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+/** The form's order: every field's id, switched-off ones too, first to last. */
+export const orderConsentFieldsSchema = z.object({
+  ids: z.array(z.number().int().positive(), "Reload and try again.").min(1, "Reload and try again.").max(500),
+});
+
+export type CreateConsentFieldInput = z.infer<typeof createConsentFieldSchema>;
+export type UpdateConsentFieldInput = z.infer<typeof updateConsentFieldSchema>;
+export type OrderConsentFieldsInput = z.infer<typeof orderConsentFieldsSchema>;
 
 /** A new version of the wording (part 2b), made from the version in use when the editor opened (basedOnId). */
 export const addConsentWordingSchema = z.object({

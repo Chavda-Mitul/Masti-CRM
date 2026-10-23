@@ -8,6 +8,7 @@ import type {
   BlockTarget,
   Checklist,
   ChecklistLineBody,
+  ConsentFieldRow,
   ConsentWordingVersion,
   CoveringLetter,
   CoveringLetterBody,
@@ -70,6 +71,7 @@ export const masterKeys = {
   coveringLetters: ['masters', 'covering-letters'] as const,
   coveringLetter: (id: number) => ['masters', 'covering-letters', id] as const,
   consentWording: ['masters', 'consent-wording'] as const,
+  consentFields: ['masters', 'consent-fields'] as const,
 }
 
 /**
@@ -603,6 +605,41 @@ export function useConsentWordings(enabled = true) {
     queryFn: async () => (await api<{ versions: ConsentWordingVersion[] }>('/masters/consent-wording')).versions,
     staleTime: MASTER_STALE,
     refetchOnWindowFocus: false,
+  })
+}
+
+/** The consent form's fields in the form's order, switched-off ones too (0022 amendment 1). */
+export function useConsentFields(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: masterKeys.consentFields,
+    queryFn: async () => (await api<{ fields: ConsentFieldRow[] }>('/masters/consent-fields')).fields,
+    staleTime: MASTER_STALE,
+  })
+}
+
+/** Adds a field (no id) or changes one (id; only what's sent). Staff's open forms load the new fields when they reopen. */
+export function useSaveConsentField() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, body }: { id?: number; body: Record<string, unknown> }) =>
+      (await api<{ field: ConsentFieldRow }>(id ? `/masters/consent-fields/${id}` : '/masters/consent-fields', {
+        method: id ? 'PATCH' : 'POST',
+        body,
+      })).field,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: masterKeys.consentFields }),
+  })
+}
+
+/** The form's new order, every field first to last. On 409 STALE (a field added meanwhile) the list reloads, with a note. */
+export function useOrderConsentFields() {
+  const queryClient = useQueryClient()
+  const onStale = useStaleRecovery(masterKeys.consentFields, 'list of fields')
+  return useMutation({
+    mutationFn: async (ids: number[]) =>
+      (await api<{ fields: ConsentFieldRow[] }>('/masters/consent-fields/order', { method: 'PUT', body: { ids } })).fields,
+    onSuccess: (fields) => queryClient.setQueryData(masterKeys.consentFields, fields),
+    onError: onStale,
   })
 }
 
