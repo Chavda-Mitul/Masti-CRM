@@ -273,3 +273,72 @@ describe("Settings → Portal logins", () => {
     expect(await prisma.auditLog.count({ where: { action: "portalLogin.remove" } })).toBe(1);
   });
 });
+
+describe("a third login box (an agency code)", () => {
+  it("stores the extra box's name, seals its value, and never shows the value", async () => {
+    await team();
+    const [vimal] = await agents("vimal");
+    const portal = await add(vimal, { ...france(), extraLabel: "Agency code", extra: "AG-99" });
+    expect(portal.extraLabel).toBe("Agency code");
+    expect(JSON.stringify(portal)).not.toContain("AG-99");
+
+    const row = await prisma.portalLogin.findUniqueOrThrow({ where: { id: portal.id } });
+    expect(row.extraLabel).toBe("Agency code");
+    expect(openPortalSecret(row)).toEqual({ loginId: LOGIN_ID, password: PASSWORD, extra: "AG-99" });
+
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "portalLogin.create" } });
+    expect(JSON.stringify(entry.after)).toContain("Agency code");
+    expect(JSON.stringify(entry.after)).not.toContain("AG-99");
+  });
+
+  it("needs both the extra box's name and its value, or neither", async () => {
+    await team();
+    const [vimal] = await agents("vimal");
+    expect((await vimal.post("/api/portal-logins").send({ ...france(), extraLabel: "Agency code" })).status).toBe(400);
+    expect((await vimal.post("/api/portal-logins").send({ ...france(), extra: "AG-99" })).status).toBe(400);
+    expect((await vimal.post("/api/portal-logins").send(france())).status).toBe(201);
+  });
+
+  it("changes the value, renames the box keeping the value, and removes the box", async () => {
+    await team();
+    const [vimal] = await agents("vimal");
+    let portal = await add(vimal, { ...france(), extraLabel: "Agency code", extra: "AG-99" });
+    const opened = async () => openPortalSecret(await prisma.portalLogin.findUniqueOrThrow({ where: { id: portal.id } }));
+
+    let res = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ extra: "AG-100", updatedAt: portal.updatedAt });
+    expect(res.status).toBe(200);
+    portal = res.body.portal;
+    expect(await opened()).toMatchObject({ extra: "AG-100" });
+
+    res = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ extraLabel: "Partner code", updatedAt: portal.updatedAt });
+    expect(res.status).toBe(200);
+    portal = res.body.portal;
+    expect(portal.extraLabel).toBe("Partner code");
+    expect(await opened()).toMatchObject({ extra: "AG-100" });
+
+    res = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ extraLabel: "", updatedAt: portal.updatedAt });
+    expect(res.status).toBe(200);
+    expect(res.body.portal.extraLabel).toBeNull();
+    expect(await opened()).toEqual({ loginId: LOGIN_ID, password: PASSWORD });
+  });
+});
+
+describe("steps shown on the portal", () => {
+  it("stores the steps, shows them on the portal, and edits them", async () => {
+    const { neha: nehaUser } = await team();
+    const [vimal, neha] = await agents("vimal", "neha");
+    const portal = await add(vimal, { ...france([]), steps: ["Fill the application form", "Enter the acknowledgement number"] });
+    expect(portal.steps).toEqual(["Fill the application form", "Enter the acknowledgement number"]);
+    // Staff on the list see the steps on the page too.
+    const added = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ userIds: [nehaUser.id], updatedAt: portal.updatedAt });
+    expect(added.status).toBe(200);
+    expect((await page(neha)).portals[0].steps).toEqual(["Fill the application form", "Enter the acknowledgement number"]);
+
+    const res = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ steps: ["Only one step"], updatedAt: added.body.portal.updatedAt });
+    expect(res.status).toBe(200);
+    expect(res.body.portal.steps).toEqual(["Only one step"]);
+
+    const tooMany = await vimal.patch(`/api/portal-logins/${portal.id}`).send({ steps: Array(21).fill("x"), updatedAt: res.body.portal.updatedAt });
+    expect(tooMany.status).toBe(400);
+  });
+});

@@ -20,6 +20,8 @@ export type PortalLoginRow = Prisma.PortalLoginGetPayload<{ include: typeof port
 export interface PortalSecret {
   loginId: string;
   password: string;
+  /** A third login box's value (e.g. an agency code), for portals whose `extraLabel` is set. */
+  extra?: string;
 }
 
 /** The associated data a portal's secret is sealed with: a blob copied onto another portal won't open there. */
@@ -101,6 +103,10 @@ export function toPortalLoginDto(row: PortalLoginRow, user: UserWithDepartments)
     department: { code: row.department.code, name: row.department.name },
     name: row.name,
     idLabel: row.idLabel,
+    /** The third login box's name, or null for an ordinary two-box login; its value is never sent. */
+    extraLabel: row.extraLabel,
+    /** What to do on the portal once it's open; the helper shows it there. */
+    steps: row.steps,
     status: row.status,
     users: row.users.map((u) => u.user).sort((a, b) => a.name.localeCompare(b.name)),
     passwordChangedAt: row.passwordChangedAt,
@@ -122,6 +128,8 @@ export function portalLoginSnapshot(p: {
   name: string;
   loginUrl: string;
   idLabel: string;
+  extraLabel: string | null;
+  steps: string[];
   passwordSchedule: PortalPasswordSchedule;
   status: string;
   userIds: string[];
@@ -131,6 +139,8 @@ export function portalLoginSnapshot(p: {
     name: p.name,
     loginUrl: p.loginUrl,
     idLabel: p.idLabel,
+    extraLabel: p.extraLabel,
+    steps: p.steps,
     passwordSchedule: p.passwordSchedule,
     status: p.status,
     userIds: [...p.userIds].sort(),

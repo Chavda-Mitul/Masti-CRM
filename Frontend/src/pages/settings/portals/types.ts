@@ -15,6 +15,10 @@ export interface Portal {
   name: string
   /** What the portal calls the first box: "ID", "Agency code". */
   idLabel: string
+  /** A third login box's name ("Agency code"), or null for an ordinary two-box login; its value is never sent. */
+  extraLabel: string | null
+  /** What to do on the portal once it's open; the helper shows it there. */
+  steps: string[]
   status: 'ACTIVE' | 'REMOVED'
   users: PortalPerson[]
   passwordChangedAt: string
@@ -70,6 +74,12 @@ export interface PortalBody {
   idLabel?: string
   loginId?: string
   password?: string
+  /** A third login box's name; "" removes it. */
+  extraLabel?: string
+  /** That box's value. */
+  extra?: string
+  /** The to-dos shown when the portal opens. */
+  steps?: string[]
   passwordSchedule?: PasswordSchedule
   userIds?: string[]
   updatedAt?: string

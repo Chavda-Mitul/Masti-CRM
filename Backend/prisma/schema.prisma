@@ -2193,8 +2193,15 @@ model PortalLogin {
   loginUrl          String
   /// What the portal calls the first box: "ID", "User ID", "Agency code".
   idLabel           String                 @default("ID")
-  /// The ID and password, sealed by src/lib/secretBox.ts under PORTAL_VAULT_KEY. Null once removed.
+  /// What a third login box is called ("Agency code"), for portals with one before the ID and password; null when the
+  /// portal has only the two. Its value rides in `secret`, never in its own column (0024).
+  extraLabel        String?
+  /// The ID and password (and the extra box's value when `extraLabel` is set), sealed by src/lib/secretBox.ts under
+  /// PORTAL_VAULT_KEY. Null once removed.
   secret            Bytes?
+  /// What to do on this portal once it's open ("Fill the application form", "Enter the acknowledgement number"), shown
+  /// by the helper in the portal's tab. Admin-editable; empty for none (0024).
+  steps             String[]               @default([])
   /// When the password was last saved: on adding, or when an HOD typed a new one. The schedule counts from it.
   passwordChangedAt DateTime               @db.Timestamptz(3)
   /// How often the password has to change (component 2); Masti changes monthly.

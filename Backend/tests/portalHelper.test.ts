@@ -96,6 +96,37 @@ describe("Log in for me", () => {
     expect((await redeem(ticket)).status).toBe(410);
   });
 
+  it("hands over a third login box when the portal has one", async () => {
+    const nehaUser = await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const vimal = await loginAs("vimal@masti.test");
+    const neha = await loginAs("neha@masti.test");
+    const added = await vimal.post("/api/portal-logins").send({
+      departmentCode: "VISA",
+      name: "DVMS Gold Medal",
+      loginUrl: "https://www.gold-medal.in/pos/",
+      idLabel: "Username",
+      loginId: LOGIN_ID,
+      password: PASSWORD,
+      extraLabel: "Agency code",
+      extra: "AG-99",
+      steps: ["Fill the application form", "Enter the acknowledgement number"],
+      userIds: [nehaUser.id],
+    });
+    expect(added.status).toBe(201);
+    const { ticket } = await press(neha, added.body.portal.id);
+    const got = await redeem(ticket);
+    expect(got.status).toBe(200);
+    expect(got.body).toEqual({
+      loginUrl: "https://www.gold-medal.in/pos/",
+      loginId: LOGIN_ID,
+      password: PASSWORD,
+      extraLabel: "Agency code",
+      extra: "AG-99",
+      steps: ["Fill the application form", "Enter the acknowledgement number"],
+    });
+  });
+
   it("hands the login only to the helper", async () => {
     const { portal } = await setup();
     const neha = await loginAs("neha@masti.test");

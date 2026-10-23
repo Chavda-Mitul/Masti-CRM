@@ -162,7 +162,8 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
   const userIds = await peopleOf(department.id, input.userIds);
 
   const id = randomUUID();
-  const secret = seal({ loginId: input.loginId, password: input.password }, id);
+  const secret = seal({ loginId: input.loginId, password: input.password, ...(input.extra !== undefined ? { extra: input.extra } : {}) }, id);
+  const extraLabel = input.extraLabel ?? null;
   await prisma
     .$transaction(async (tx) => {
       await tx.portalLogin.create({
@@ -172,6 +173,8 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
           name: input.name,
           loginUrl: input.loginUrl,
           idLabel: input.idLabel,
+          extraLabel,
+          steps: input.steps,
           secret,
           passwordChangedAt: new Date(),
           passwordSchedule: input.passwordSchedule,
@@ -184,6 +187,8 @@ export async function createPortalLogin(input: CreatePortalLoginInput, actor: Ac
         name: input.name,
         loginUrl: input.loginUrl,
         idLabel: input.idLabel,
+        extraLabel,
+        steps: input.steps,
         passwordSchedule: input.passwordSchedule,
         status: "ACTIVE",
         userIds,
@@ -207,10 +212,19 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
 
   const beforeUserIds = before.users.map((u) => u.user.id);
   const userIds = input.userIds === undefined ? beforeUserIds : await peopleOf(before.departmentId, input.userIds);
+  // The extra box's name: left out keeps it, "" removes it, else it's the new name. Its value lives in the secret.
+  const newExtraLabel = input.extraLabel === undefined ? before.extraLabel : input.extraLabel === "" ? null : input.extraLabel;
+  const extraValueGiven = input.extra !== undefined;
+  const extraCleared = newExtraLabel === null && before.extraLabel !== null;
+  if (extraValueGiven && newExtraLabel === null) throw fieldError("extra", "This portal has no extra box to set a value for.");
+  if (newExtraLabel !== null && before.extraLabel === null && !extraValueGiven) throw fieldError("extra", "Type the value for the extra box.");
+
   const fields = {
     name: input.name ?? before.name,
     loginUrl: input.loginUrl ?? before.loginUrl,
     idLabel: input.idLabel ?? before.idLabel,
+    extraLabel: newExtraLabel,
+    steps: input.steps ?? before.steps,
     passwordSchedule: input.passwordSchedule ?? before.passwordSchedule,
   };
   const oldSnapshot = portalLoginSnapshot({ ...before, userIds: beforeUserIds });
@@ -218,7 +232,7 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
   const idChanged = input.loginId !== undefined;
   const passwordChanged = input.password !== undefined;
   const listChanged = JSON.stringify(oldSnapshot.userIds) !== JSON.stringify(newSnapshot.userIds);
-  if (!idChanged && !passwordChanged && JSON.stringify(oldSnapshot) === JSON.stringify(newSnapshot)) {
+  if (!idChanged && !passwordChanged && !extraValueGiven && !extraCleared && JSON.stringify(oldSnapshot) === JSON.stringify(newSnapshot)) {
     return toPortalLoginDto(before, actor.user);
   }
   // Otherwise "No schedule" would unlock it without the change it's waiting for.
@@ -227,7 +241,7 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
   }
 
   let secret: Uint8Array<ArrayBuffer> | undefined;
-  if (idChanged || passwordChanged) {
+  if (idChanged || passwordChanged || extraValueGiven || extraCleared) {
     if (!vaultReady()) throw notSetUp();
     // Typing both needs nothing old: that's how an HOD replaces a login that can't be read.
     const saved = idChanged && passwordChanged ? readableSecret(before) : openPortalSecret(before);
@@ -235,7 +249,12 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
     if (passwordChanged && saved?.password === input.password) {
       throw fieldError("password", "That's the same password. Change it on the portal first, then type the new one here.");
     }
-    secret = seal({ loginId: input.loginId ?? saved!.loginId, password: input.password ?? saved!.password }, id);
+    // Cleared: drop it. New value: take it. Otherwise keep the saved one while the box stays.
+    const extraValue = newExtraLabel === null ? undefined : extraValueGiven ? input.extra : saved?.extra;
+    secret = seal(
+      { loginId: input.loginId ?? saved!.loginId, password: input.password ?? saved!.password, ...(extraValue !== undefined ? { extra: extraValue } : {}) },
+      id,
+    );
   }
   const now = new Date();
   await prisma
@@ -251,7 +270,12 @@ export async function updatePortalLogin(id: string, input: UpdatePortalLoginInpu
         await tx.portalLoginUser.deleteMany({ where: { portalLoginId: id } });
         if (userIds.length > 0) await tx.portalLoginUser.createMany({ data: userIds.map((userId) => ({ portalLoginId: id, userId })) });
       }
-      const after = { ...newSnapshot, ...(idChanged ? { idChanged: true } : {}), ...(passwordChanged ? { passwordChanged: true } : {}) };
+      const after = {
+        ...newSnapshot,
+        ...(idChanged ? { idChanged: true } : {}),
+        ...(passwordChanged ? { passwordChanged: true } : {}),
+        ...(extraValueGiven || extraCleared ? { extraChanged: true } : {}),
+      };
       await audit({ actorId: actor.user.id, action: "portalLogin.update", entityType: "PortalLogin", entityId: id, before: oldSnapshot, after, ip: actor.ip }, tx);
     })
     .catch(rethrowUnique(`There's already a portal called "${fields.name}" in ${before.department.name}.`));

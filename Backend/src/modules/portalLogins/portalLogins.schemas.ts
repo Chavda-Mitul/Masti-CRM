@@ -9,6 +9,9 @@ export const MAX_ID_LABEL = 30;
 export const MAX_LOGIN_ID = 200;
 export const MAX_PORTAL_PASSWORD = 200;
 export const MAX_PORTAL_PEOPLE = 100;
+/** The steps the helper shows when a portal opens (0024). */
+export const MAX_STEP = 120;
+export const MAX_STEPS = 20;
 
 /**
  * What the CRM helper may report after a press. REFUSED isn't here: only the server sets it. Matches the Prisma enum
@@ -61,27 +64,49 @@ const loginId = z.string().trim().min(1, "Type the portal's ID.").max(MAX_LOGIN_
 const password = z.string().min(1, "Type the portal's password.").max(MAX_PORTAL_PASSWORD);
 const userIds = z.array(z.string().min(1).max(64)).max(MAX_PORTAL_PEOPLE);
 const passwordSchedule = z.enum(PASSWORD_SCHEDULES, "Pick how often the password changes.");
+/** A third login box's name (e.g. "Agency code"), for portals that have one before the ID and password. */
+const extraLabel = z.string().trim().max(MAX_ID_LABEL);
+/** That box's value. */
+const extra = z.string().min(1, "Type the value for the extra box.").max(MAX_LOGIN_ID);
+/** What to do on the portal once it's open; the helper shows it in the portal's tab. */
+const steps = z.array(z.string().trim().min(1).max(MAX_STEP, `Keep each step to ${MAX_STEP} characters.`)).max(MAX_STEPS, `Up to ${MAX_STEPS} steps.`);
 
-export const createPortalLoginSchema = z.object({
-  departmentCode,
-  name,
-  loginUrl,
-  idLabel: idLabel.default("ID"),
-  loginId,
-  password,
-  /** Masti changes them monthly. */
-  passwordSchedule: passwordSchedule.default("MONTHLY"),
-  /** Who may use it, besides the Head and the department's HOD. */
-  userIds: userIds.default([]),
-});
+export const createPortalLoginSchema = z
+  .object({
+    departmentCode,
+    name,
+    loginUrl,
+    idLabel: idLabel.default("ID"),
+    loginId,
+    password,
+    /** A third login box before the ID and password; leave both out for an ordinary two-box login. */
+    extraLabel: extraLabel.min(1, "Say what the extra box is called.").optional(),
+    extra: extra.optional(),
+    /** The to-dos the helper shows on this portal. */
+    steps: steps.default([]),
+    /** Masti changes them monthly. */
+    passwordSchedule: passwordSchedule.default("MONTHLY"),
+    /** Who may use it, besides the Head and the department's HOD. */
+    userIds: userIds.default([]),
+  })
+  .refine((v) => (v.extraLabel === undefined) === (v.extra === undefined), {
+    message: "Give both the extra box's name and its value, or neither.",
+    path: ["extra"],
+  });
 
-/** The department stays. The ID and the password change only when sent; left out, they're kept. updatedAt: the version the form opened on. */
+/**
+ * The department stays. The ID, password and the extra box's value change only when sent; left out, they're kept.
+ * `extraLabel: ""` removes the extra box. updatedAt: the version the form opened on.
+ */
 export const updatePortalLoginSchema = z.object({
   name: name.optional(),
   loginUrl: loginUrl.optional(),
   idLabel: idLabel.optional(),
   loginId: loginId.optional(),
   password: password.optional(),
+  extraLabel: extraLabel.optional(),
+  extra: extra.optional(),
+  steps: steps.optional(),
   passwordSchedule: passwordSchedule.optional(),
   userIds: userIds.optional(),
   updatedAt: z.iso.datetime("Reload and try again."),

@@ -6,6 +6,10 @@ export type FillOutcome = "SUBMITTED" | "WAITING_FOR_STAFF" | "NO_LOGIN_BOXES" |
 export interface FillLoginArgs {
   loginId: string;
   password: string;
+  /** A third login box before the ID and password (e.g. an agency code), for portals that have one. */
+  extra?: { label: string; value: string };
+  /** What to do on the portal once it's open; shown in a panel in the portal's tab. */
+  steps?: string[];
 }
 
 /**
@@ -114,6 +118,23 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     return letters ? { box: letters, ask: "Type the letters you see, then press Login." } : null;
   };
 
+  /**
+   * A third login box (e.g. an agency code): the visible text box, not the ID or password, whose name matches the label
+   * the HOD typed. If none matches, the text box just before the ID box, where the extra box usually sits.
+   */
+  const findExtraBox = (form: HTMLFormElement | null, idBox: HTMLInputElement, passwordBox: HTMLInputElement, label: string): HTMLInputElement | null => {
+    const candidates = [...(form ?? document).querySelectorAll("input")].filter((el) => el !== idBox && el !== passwordBox && isTextBox(el));
+    if (candidates.length === 0) return null;
+    const words = label.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+    const matched = candidates.find((el) => {
+      const d = describe(el);
+      return words.some((w) => d.includes(w));
+    });
+    if (matched) return matched;
+    const before = candidates.filter((el) => isAfter(el, idBox));
+    return before[before.length - 1] ?? candidates[0]!;
+  };
+
   /** Letters to type: the box for them if there is one, true if there's only a widget, null if none. */
   const findCaptcha = (scope: ParentNode, inputs: HTMLInputElement[], passwordBox: HTMLInputElement): HTMLInputElement | true | null => {
     const box = inputs.find((el) => /captcha/.test(describe(el)));
@@ -192,6 +213,42 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     (document.body ?? document.documentElement).append(host);
   };
 
+  /** A panel of this portal's to-dos, in the CRM's colours, at the top-right out of the page's own styles' reach. */
+  const showSteps = (steps: string[]) => {
+    const PANEL_ID = "masti-crm-helper-steps";
+    document.getElementById(PANEL_ID)?.remove();
+    const host = document.createElement("div");
+    host.id = PANEL_ID;
+    host.dataset.steps = steps.join("\n");
+    host.style.cssText = "all:initial;position:fixed;top:16px;right:16px;z-index:2147483646;";
+    const card = document.createElement("div");
+    card.style.cssText =
+      "max-width:280px;padding:14px 16px;border:2px solid #1e5aa8;border-radius:14px;background:#fbf8f3;color:#1f2a37;" +
+      "font:500 14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.18);";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;";
+    const title = document.createElement("strong");
+    title.textContent = "Steps for this portal";
+    title.style.color = "#1e5aa8";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close");
+    close.style.cssText = "border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:#1f2a37;";
+    close.addEventListener("click", () => host.remove());
+    head.append(title, close);
+    const list = document.createElement("ol");
+    list.style.cssText = "margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;";
+    for (const step of steps) {
+      const item = document.createElement("li");
+      item.textContent = step;
+      list.append(item);
+    }
+    card.append(head, list);
+    host.attachShadow({ mode: "closed" }).append(card);
+    (document.body ?? document.documentElement).append(host);
+  };
+
   /**
    * Draws a box as dots, even a text box, and stops its text being selected: the mark for the helper's own CSS, and the
    * same in the box's style in case that CSS couldn't be added. Once per mark, so the watch never sets off itself.
@@ -210,7 +267,7 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
    * dots, and the password box goes back to being one. The watch lasts as long as the page, so a form the page draws
    * again (after a wrong code, say) is hidden too. One watch per page; a second press adds its login to it.
    */
-  const hideLogin = (idBox: HTMLInputElement, passwordBox: HTMLInputElement) => {
+  const hideLogin = (idBox: HTMLInputElement, passwordBox: HTMLInputElement, extraBox: HTMLInputElement | null) => {
     type Watch = { ids: Set<string>; passwords: Set<string>; boxes: Set<HTMLInputElement>; stop?: () => void };
     // The isolated world's own global: the portal's scripts can't see it.
     const scope = globalThis as unknown as Record<string, Watch | undefined>;
@@ -220,6 +277,11 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     watch.passwords.add(login.password);
     watch.boxes.add(idBox);
     watch.boxes.add(passwordBox);
+    // The extra box's value is hidden like the ID (dots, no copy), not forced to a password box.
+    if (extraBox && login.extra) {
+      watch.ids.add(login.extra.value);
+      watch.boxes.add(extraBox);
+    }
     const sweep = () => {
       for (const box of document.querySelectorAll("input")) {
         const holdsPassword = box.value !== "" && watch.passwords.has(box.value) && !watch.ids.has(box.value);
@@ -267,10 +329,15 @@ export async function fillLogin(login: FillLoginArgs, allowedOrigins: string[], 
     }
 
     const { form, idBox, passwordBox } = found;
-    // Hidden before anything is typed, so neither is ever drawn.
-    hideLogin(idBox, passwordBox);
+    const extraBox = login.extra ? findExtraBox(form, idBox, passwordBox, login.extra.label) : null;
+    // Hidden before anything is typed, so none is ever drawn.
+    hideLogin(idBox, passwordBox, extraBox);
+    if (extraBox && login.extra) type(extraBox, login.extra.value);
     type(idBox, login.loginId);
     type(passwordBox, login.password);
+
+    // The portal's to-dos, once it's open and filled.
+    if (login.steps && login.steps.length > 0) showSteps(login.steps);
 
     const forStaff = findForStaff(form ?? document, passwordBox, idBox);
     if (forStaff) {

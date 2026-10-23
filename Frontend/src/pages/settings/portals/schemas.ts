@@ -8,6 +8,16 @@ export const MAX_PORTAL_URL = 500
 export const MAX_ID_LABEL = 30
 export const MAX_LOGIN_ID = 200
 export const MAX_PORTAL_PASSWORD = 200
+export const MAX_STEP = 120
+export const MAX_STEPS = 20
+
+/** The steps textarea, one per line, as the list the API wants. */
+export function stepsFromText(text: string): string[] {
+  return text
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
 
 /** How often a portal's password has to change (component 2); overdue, the portal locks. */
 export const PASSWORD_SCHEDULES = ['DAILY', 'WEEKLY', 'MONTHLY', 'NONE'] as const
@@ -44,6 +54,12 @@ export const portalFormSchema = z
         if (problem) ctx.addIssue({ code: 'custom', message: problem })
       }),
     idLabel: z.string().trim().min(1, 'Say what the portal calls the first box, e.g. ID.').max(MAX_ID_LABEL, `Keep it to ${MAX_ID_LABEL} characters.`),
+    // A third login box before the ID and password (e.g. an agency code).
+    hasExtra: z.boolean(),
+    extraLabel: z.string().trim().max(MAX_ID_LABEL, `Keep it to ${MAX_ID_LABEL} characters.`),
+    changeExtra: z.boolean(),
+    extra: z.string().max(MAX_LOGIN_ID, `Keep it to ${MAX_LOGIN_ID} characters.`),
+    stepsText: z.string(),
     changeId: z.boolean(),
     loginId: z.string().max(MAX_LOGIN_ID, `Keep the ID to ${MAX_LOGIN_ID} characters.`),
     changePassword: z.boolean(),
@@ -54,6 +70,12 @@ export const portalFormSchema = z
   .superRefine((values, ctx) => {
     if (values.changeId && !values.loginId.trim()) ctx.addIssue({ code: 'custom', path: ['loginId'], message: "Type the portal's ID." })
     if (values.changePassword && !values.password) ctx.addIssue({ code: 'custom', path: ['password'], message: "Type the portal's password." })
+    if (values.hasExtra && !values.extraLabel.trim()) ctx.addIssue({ code: 'custom', path: ['extraLabel'], message: 'Say what the extra box is called.' })
+    if (values.hasExtra && values.changeExtra && !values.extra.trim())
+      ctx.addIssue({ code: 'custom', path: ['extra'], message: 'Type the value for the extra box.' })
+    const steps = stepsFromText(values.stepsText)
+    if (steps.length > MAX_STEPS) ctx.addIssue({ code: 'custom', path: ['stepsText'], message: `Up to ${MAX_STEPS} steps.` })
+    if (steps.some((s) => s.length > MAX_STEP)) ctx.addIssue({ code: 'custom', path: ['stepsText'], message: `Keep each step to ${MAX_STEP} characters.` })
   })
 
 export type PortalFormValues = z.infer<typeof portalFormSchema>

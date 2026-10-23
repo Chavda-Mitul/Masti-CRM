@@ -8,10 +8,10 @@ import { applyServerIssues, errorText, isStale } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { lockedNote, SCHEDULE_CHOICES } from './labels'
 import { usePortalPeople, useSavePortal } from './queries'
-import { portalFormSchema, type PortalFormValues } from './schemas'
+import { portalFormSchema, stepsFromText, type PortalFormValues } from './schemas'
 import type { Portal, PortalBody } from './types'
 
-const FIELDS = ['departmentCode', 'name', 'loginUrl', 'idLabel', 'loginId', 'password', 'passwordSchedule', 'userIds'] as const
+const FIELDS = ['departmentCode', 'name', 'loginUrl', 'idLabel', 'extraLabel', 'extra', 'loginId', 'password', 'passwordSchedule', 'userIds'] as const
 
 function formDefaults(portal: Portal | null, departmentCode: string): PortalFormValues {
   if (!portal) {
@@ -20,6 +20,11 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
       name: '',
       loginUrl: '',
       idLabel: 'ID',
+      hasExtra: false,
+      extraLabel: '',
+      changeExtra: true,
+      extra: '',
+      stepsText: '',
       changeId: true,
       loginId: '',
       changePassword: true,
@@ -34,6 +39,12 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
     name: portal.name,
     loginUrl: portal.loginUrl ?? '',
     idLabel: portal.idLabel,
+    hasExtra: portal.extraLabel !== null,
+    extraLabel: portal.extraLabel ?? '',
+    // A saved extra box keeps its value unless the HOD types a new one.
+    changeExtra: false,
+    extra: '',
+    stepsText: portal.steps.join('\n'),
     changeId: false,
     loginId: '',
     // A locked portal is waiting for exactly this.
@@ -44,16 +55,25 @@ function formDefaults(portal: Portal | null, departmentCode: string): PortalForm
   }
 }
 
-/** The ID and the password go only when typed: left alone, the saved ones stay. */
-function toBody(values: PortalFormValues): PortalBody {
+/**
+ * The ID, the password and the extra box's value go only when typed: left alone, the saved ones stay. An extra box
+ * turned off (`hasExtra` false) on a portal that had one is removed with `extraLabel: ""`.
+ */
+function toBody(values: PortalFormValues, hadExtra: boolean): PortalBody {
   return {
     name: values.name.trim(),
     loginUrl: values.loginUrl.trim(),
     idLabel: values.idLabel.trim(),
     passwordSchedule: values.passwordSchedule,
     userIds: values.userIds,
+    steps: stepsFromText(values.stepsText),
     ...(values.changeId ? { loginId: values.loginId.trim() } : {}),
     ...(values.changePassword ? { password: values.password } : {}),
+    ...(values.hasExtra
+      ? { extraLabel: values.extraLabel.trim(), ...(values.changeExtra ? { extra: values.extra } : {}) }
+      : hadExtra
+        ? { extraLabel: '' } // the box was there and is being removed
+        : {}),
   }
 }
 
@@ -88,6 +108,8 @@ export function PortalDrawer({
   const departmentCode = useWatch({ control, name: 'departmentCode' })
   const changeId = useWatch({ control, name: 'changeId' })
   const changePassword = useWatch({ control, name: 'changePassword' })
+  const hasExtra = useWatch({ control, name: 'hasExtra' })
+  const changeExtra = useWatch({ control, name: 'changeExtra' })
   const people = usePortalPeople(departmentCode)
   const staff = (people.data ?? []).filter((p) => p.role === 'STAFF')
 
@@ -95,7 +117,7 @@ export function PortalDrawer({
   const drawer = useDrawerGuard(formState.isDirty, onClose)
 
   const onSubmit = handleSubmit((values) => {
-    const body = toBody(values)
+    const body = toBody(values, portal?.extraLabel != null)
     save.mutate(
       portal
         ? { id: portal.id, body: { ...body, updatedAt: openedAt ?? portal.updatedAt } }
@@ -160,6 +182,56 @@ export function PortalDrawer({
             <FormField label="What the portal calls the first box" required error={errors.idLabel?.message} hint="e.g. ID, User ID, Email, Agency code">
               <input className="input" {...register('idLabel')} aria-required="true" />
             </FormField>
+
+            <label className="check portal-extra-toggle">
+              <input
+                type="checkbox"
+                {...register('hasExtra', {
+                  // Ticking it to add a box means a value is needed, so open the value box and send what's typed.
+                  onChange: (e) => {
+                    if (e.target.checked) setValue('changeExtra', true)
+                  },
+                })}
+              />
+              This portal has a third box before the ID (e.g. an agency code)
+            </label>
+            {hasExtra && (
+              <>
+                <FormField label="What the extra box is called" required error={errors.extraLabel?.message} hint="e.g. Agency code">
+                  <input className="input" {...register('extraLabel')} placeholder="Agency code" aria-required="true" />
+                </FormField>
+                {changeExtra ? (
+                  <FormField
+                    label="The extra box's value"
+                    required
+                    error={errors.extra?.message}
+                    hint="Staff never see it. It's locked away as soon as you save."
+                  >
+                    <Controller
+                      control={control}
+                      name="extra"
+                      render={({ field }) => (
+                        <PasswordInput
+                          name={field.name}
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          autoComplete="new-password"
+                          aria-required="true"
+                        />
+                      )}
+                    />
+                  </FormField>
+                ) : (
+                  <div className="portal-change">
+                    <span className="muted small">The saved value stays.</span>
+                    <button type="button" className="btn btn-sm" onClick={() => setValue('changeExtra', true, { shouldDirty: true })}>
+                      Change the value
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
 
             {changeId ? (
               <FormField label="The ID" required error={errors.loginId?.message}>
@@ -230,6 +302,19 @@ export function PortalDrawer({
                   </option>
                 ))}
               </select>
+            </FormField>
+
+            <FormField
+              label="Steps to show on the portal (optional)"
+              error={errors.stepsText?.message}
+              hint="One per line. The helper shows them in the portal's tab after it logs in."
+            >
+              <textarea
+                className="input"
+                rows={4}
+                {...register('stepsText')}
+                placeholder={'Fill the application form\nEnter the acknowledgement number\nBook the appointment'}
+              />
             </FormField>
 
             <span className="lbl section-lbl">Who may use it</span>
