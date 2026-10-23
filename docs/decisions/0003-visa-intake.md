@@ -1,6 +1,6 @@
 # 0003 · Visa Step 1 (Intake): data model and API
 
-- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings) built 23 Oct 2026.
+- **Status:** accepted and **refreshed 9 Oct 2026** (project lead), then built (9 Oct 2026). The *Refresh* section below says what changed from the proposal; where it disagrees with the rest of this record, the refresh wins. The rest is kept for the record. **Amendment 1** (23 Oct 2026): how urgent a visa enquiry is, built in 4 parts; part 1 (the list in Settings) and part 2 (the picker on New enquiry and the case header's tag) built 23 Oct 2026.
 - **Date:** 8 Oct 2026 (proposed), 9 Oct 2026 (refreshed and built)
 - **Scope:** the New enquiry form for Visa (demo screen 05), the All enquiries list (demo screens 02/03) and the Step 1 data of a case. The Step 1 case page (demo screen 06) comes next.
 
@@ -40,6 +40,21 @@ picking Urgent doesn't change the quote.
   (`visaMasters.schemas.ts`) is mirrored in the frontend, and `frontendRules.test.ts` keeps the two the same.
 - **Screen:** the Urgency levels tab, on the shared option table (`FollowUpOptionsTable`); Normal's row has no Switch
   off.
+
+**Built, part 2 (23 Oct 2026):**
+- **Data:** `VisaCase.urgencyId` (required) with its index and foreign key, migration
+  `20261023190000_visa_case_urgency`. No backfill, so a database that already has visa cases needs
+  `npx prisma migrate reset`, then `npm run db:seed`.
+- **API:** `POST /api/visa/cases` takes an optional `urgencyId`. Left out or null, the case is Normal, so a future bot
+  or website enquiry needs no change. An unknown or switched-off level is a 400 on `urgencyId`: "That urgency level
+  isn't used any more. Pick another." The level is in the `visa.case.create` audit (`urgency: "URGENT"`), and the case
+  sends `urgency { id, code, name }`.
+- **Screen:**
+  - New enquiry's Visa card ends with "How urgent? *": a pill for each active level, in the list's order, with Normal
+    already picked. A picked urgent pill is red. The form sends null for Normal.
+  - The case header shows a red tag with the level's name (e.g. "Urgent") before the status, for every level but
+    Normal.
+  - Renaming a level in Settings refreshes the cases that are open.
 
 ## Refresh (9 Oct 2026)
 

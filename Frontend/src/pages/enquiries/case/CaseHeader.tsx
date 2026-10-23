@@ -4,6 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDate, formatMonthYear, initials } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
+import { NORMAL_URGENCY } from '../../settings/masters/schemas'
 import { useResumeCase, useStartDocuments } from '../queries'
 import type { VisaCase } from '../types'
 import { DecisionDialog } from './DecisionDialog'
@@ -390,6 +391,8 @@ export function CaseHeader({ visaCase: c }: { visaCase: VisaCase }) {
           </div>
         </div>
         <div className="case-head-actions">
+          {/* How urgent it is (0003 amendment 1): every level but Normal is a red tag. */}
+          {c.urgency.code !== NORMAL_URGENCY && <span className="chip chip-bad">{c.urgency.name}</span>}
           <StatusChip visaCase={c} />
           <HoldButton visaCase={c} />
           {((c.status === 'OPEN' && c.owner) || windingDown(c)) && <NextStepButton visaCase={c} />}

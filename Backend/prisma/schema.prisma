@@ -1310,6 +1310,9 @@ model VisaCase {
   travelMonth             DateTime               @db.Date
   /// The exact date, if the client knows it at intake.
   travelDate              DateTime?              @db.Date
+  /// How urgent it is (docs/decisions/0003-visa-intake.md amendment 1): picked on New enquiry, Normal unless staff pick
+  /// another. Here, not on Enquiry, so changing it doesn't move the case's updatedAt.
+  urgencyId               Int
   /// Step 2: "Client brings them" or "Send collection boy".
   arrival                 DocumentArrival?
   /// Step 2: passports received (current + old). Checked again at handover.
@@ -1400,6 +1403,7 @@ model VisaCase {
   coveringLetterText      String?
   enquiry                 Enquiry                @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   offering                VisaOffering           @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  urgency                 UrgencyLevel           @relation(fields: [urgencyId], references: [id], onDelete: Restrict)
   maturedBy               User?                  @relation("VisaCaseMaturedBy", fields: [maturedById], references: [id], onDelete: Restrict)
   fileReadyBy             User?                  @relation("VisaCaseFileReadyBy", fields: [fileReadyById], references: [id], onDelete: Restrict)
   submittedOnlineBy       User?                  @relation("VisaCaseSubmittedOnlineBy", fields: [submittedOnlineById], references: [id], onDelete: Restrict)
@@ -1424,6 +1428,7 @@ model VisaCase {
   handover                VisaHandover?
 
   @@index([offeringId])
+  @@index([urgencyId])
   @@index([embassyId])
   @@index([vendorId])
   @@index([fileReadyById])
@@ -1637,12 +1642,13 @@ model ProcessingSpeed {
 /// 17). Picked on New enquiry and changed on the case. NORMAL is where every enquiry starts, so it is never switched
 /// off; every other level is urgent and shows as a red tag. Edited by the Visa HOD or the Head.
 model UrgencyLevel {
-  id        Int     @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   /// NORMAL, URGENT… Never changes.
-  code      String  @unique
+  code      String     @unique
   name      String
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+  cases     VisaCase[]
 }
 
 /// How a docket goes to the vendor: "Blue Dart", "DTDC", "By hand (no AWB)" (docs/decisions/0008-visa-docket-dispatch.md

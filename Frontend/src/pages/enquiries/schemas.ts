@@ -29,6 +29,8 @@ export const visaEnquiryFormSchema = z
       .regex(/^\d{4}-\d{2}$/, 'Pick the travel month.')
       .refine((v) => v >= istToday().slice(0, 7), "The travel month can't be in the past."),
     travelDate: z.string(),
+    /** How urgent it is (0003 amendment 1): a level's id, or "" for Normal, where every enquiry starts. */
+    urgencyId: z.string(),
   })
   .superRefine((v, ctx) => {
     if (!v.travelDate) return
@@ -42,7 +44,7 @@ export const visaEnquiryFormSchema = z
 export type VisaEnquiryFormValues = z.infer<typeof visaEnquiryFormSchema>
 
 export function emptyVisaEnquiry(mobile = ''): VisaEnquiryFormValues {
-  return { mobile, clientName: '', sourceCode: '', countryId: '', offeringId: '', adults: 1, children: 0, travelMonth: '', travelDate: '' }
+  return { mobile, clientName: '', sourceCode: '', countryId: '', offeringId: '', adults: 1, children: 0, travelMonth: '', travelDate: '', urgencyId: '' }
 }
 
 export function toCreateVisaCaseBody(v: VisaEnquiryFormValues, familyClientId: string | null = null): CreateVisaCaseBody {
@@ -56,5 +58,6 @@ export function toCreateVisaCaseBody(v: VisaEnquiryFormValues, familyClientId: s
     children: v.children,
     travelMonth: v.travelMonth,
     travelDate: v.travelDate || null,
+    urgencyId: v.urgencyId ? Number(v.urgencyId) : null,
   }
 }

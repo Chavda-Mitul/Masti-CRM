@@ -3,7 +3,7 @@ import type { EnquiryOrigin } from "../../../generated/prisma/client";
 import { prisma } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { addDays, istDateTimeToUtc, istToday, toDbDate } from "../../lib/dates";
-import { badRequest, conflict, forbidden, HttpError, notFound } from "../../lib/httpError";
+import { badRequest, conflict, fieldError, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { isUniqueViolation } from "../../lib/prismaErrors";
 import { saveSetting } from "../../lib/settings";
 import { isHodOf } from "../auth/permissions";
@@ -17,6 +17,7 @@ import { findOrCreateClientByMobile } from "../clients/clients.service";
 import { VISA_DOCUMENT_LIST } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
+import { NORMAL_URGENCY } from "../visaMasters/visaMasters.schemas";
 import { countryLabel, offeringInclude, offeringLabel } from "../visaMasters/visaMasters.service";
 import type { CreateVisaCaseInput, UpdateVisaSettingsInput } from "./visa.schemas";
 import {
@@ -145,6 +146,11 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
     throw badRequest("We don't process this country and visa type any more. Pick another.");
   }
 
+  // How urgent it is (0003 amendment 1): the level picked, or Normal, where every enquiry starts.
+  const urgency = await prisma.urgencyLevel.findUnique({ where: input.urgencyId == null ? { code: NORMAL_URGENCY } : { id: input.urgencyId } });
+  if (!urgency && input.urgencyId == null) throw new HttpError(500, "The urgency levels are not set up. Run the database seed.");
+  if (!urgency?.isActive) throw fieldError("urgencyId", "That urgency level isn't used any more. Pick another.");
+
   if (input.travelMonth < today.slice(0, 7)) throw badRequest("The travel month can't be in the past.");
   if (input.travelDate && input.travelDate < today) throw badRequest("The travel date can't be in the past.");
 
@@ -201,6 +207,7 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
           travelDate: input.travelDate ? toDbDate(input.travelDate) : null,
           // Trip details start from the exact date, if there was one (0007 Decision 4); travelDate stays as filed.
           departOn: input.travelDate ? toDbDate(input.travelDate) : null,
+          urgencyId: urgency.id,
         },
       });
 
@@ -244,6 +251,7 @@ export async function createVisaEnquiry(input: CreateVisaCaseInput, origin: Enqu
             travellers: travellersLabel(input.adults, input.children),
             travelMonth: input.travelMonth,
             travelDate: input.travelDate ?? null,
+            urgency: urgency.code,
             stage: stage.code,
             ownerId: actor.user.id,
             dueAt,
