@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { optionalEmail, optionalGstin, optionalMobile, optionalPan, optionalPersonName, panMatchesGstin } from '../../clients/schemas'
+import type { SizeUnit } from './types'
 
 // Form validation for the system masters. Mirrors Backend/src/modules/holidays/holidays.schemas.ts,
 // visaMasters/visaMasters.schemas.ts, vendors/vendors.schemas.ts and coveringLetters/coveringLetters.schemas.ts, so
@@ -450,12 +451,18 @@ export const consentWordingFormSchema = z.object({
 export type ConsentWordingFormValues = z.infer<typeof consentWordingFormSchema>
 
 // A document's upload rules (0016 Amendment 1): kept as text in the form, blank meaning not set.
-const sizeMb = z.string().superRefine((value, ctx) => {
-  if (blankOk(value)) return
-  const mb = Number(value)
-  if (!Number.isFinite(mb) || mb < 0.01 || mb > MAX_DOCUMENT_MB) ctx.addIssue({ code: 'custom', message: `0.01 to ${MAX_DOCUMENT_MB} MB.` })
-  else if (Math.abs(mb * 100 - Math.round(mb * 100)) >= 1e-9) ctx.addIssue({ code: 'custom', message: 'Up to 2 decimals.' })
-})
+
+/** Why a min or max size doesn't fit its unit, or null, as the server says: MB 0.01–50 with 2 decimals, KB a whole 1–51,200. */
+function sizeProblem(value: string, unit: SizeUnit) {
+  const size = Number(value)
+  if (unit === 'KB') {
+    const maxKb = MAX_DOCUMENT_MB * 1024
+    if (!Number.isInteger(size)) return 'Whole KB only.'
+    return size < 1 || size > maxKb ? `1 to ${maxKb} KB.` : null
+  }
+  if (!Number.isFinite(size) || size < 0.01 || size > MAX_DOCUMENT_MB) return `0.01 to ${MAX_DOCUMENT_MB} MB.`
+  return Math.abs(size * 100 - Math.round(size * 100)) < 1e-9 ? null : 'Up to 2 decimals.'
+}
 const photoSide = (unit: 'mm' | 'pixels') =>
   z.string().superRefine((value, ctx) => {
     if (blankOk(value)) return
@@ -485,8 +492,9 @@ export const documentFormSchema = z
     sortOrder,
     warnIfNoScan: z.boolean(),
     fileTypes: z.array(z.enum(['PDF', 'JPG', 'PNG'])).min(1, 'Tick at least one file type.'),
-    minSizeMb: sizeMb,
-    maxSizeMb: sizeMb,
+    sizeUnit: z.enum(['KB', 'MB']),
+    minSize: z.string(),
+    maxSize: z.string(),
     photoWidthMm: photoMm,
     photoHeightMm: photoMm,
     minWidthPx: photoPx,
@@ -495,8 +503,12 @@ export const documentFormSchema = z
     maxHeightPx: photoPx,
   })
   .superRefine((v, ctx) => {
-    if (!blankOk(v.minSizeMb) && !blankOk(v.maxSizeMb) && Number(v.minSizeMb) >= Number(v.maxSizeMb)) {
-      ctx.addIssue({ code: 'custom', path: ['minSizeMb'], message: 'Min size must be less than max size.' })
+    for (const field of ['minSize', 'maxSize'] as const) {
+      const problem = blankOk(v[field]) ? null : sizeProblem(v[field], v.sizeUnit)
+      if (problem) ctx.addIssue({ code: 'custom', path: [field], message: problem })
+    }
+    if (!blankOk(v.minSize) && !blankOk(v.maxSize) && Number(v.minSize) >= Number(v.maxSize)) {
+      ctx.addIssue({ code: 'custom', path: ['minSize'], message: 'Min size must be less than max size.' })
     }
     for (const [width, height] of PHOTO_PAIRS) {
       if (blankOk(v[width]) !== blankOk(v[height])) {

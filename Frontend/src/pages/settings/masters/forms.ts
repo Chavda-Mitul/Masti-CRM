@@ -14,7 +14,16 @@ export const numberOrNull = (value: string) => (value.trim() === '' ? null : Num
 
 type UploadRules = Pick<
   DocumentMaster,
-  'fileTypes' | 'minSizeMb' | 'maxSizeMb' | 'photoWidthMm' | 'photoHeightMm' | 'minWidthPx' | 'minHeightPx' | 'maxWidthPx' | 'maxHeightPx'
+  | 'fileTypes'
+  | 'minSize'
+  | 'maxSize'
+  | 'sizeUnit'
+  | 'photoWidthMm'
+  | 'photoHeightMm'
+  | 'minWidthPx'
+  | 'minHeightPx'
+  | 'maxWidthPx'
+  | 'maxHeightPx'
 >
 
 /** A photo's smallest and largest in pixels: "354×472–420×560 px", "400×514 px" (exact), "at least 600×750 px". */
@@ -27,16 +36,21 @@ function pixelsLabel(d: UploadRules) {
   return null
 }
 
-/** A document's upload rules in a line: "JPG, PNG · 0.01–0.3 MB · 35×45 mm · 600×600–1200×1200 px". */
-export function uploadRulesLabel(d: UploadRules) {
-  const size =
-    d.minSizeMb !== null && d.maxSizeMb !== null
-      ? `${d.minSizeMb}–${d.maxSizeMb} MB`
-      : d.maxSizeMb !== null
-        ? `up to ${d.maxSizeMb} MB`
-        : d.minSizeMb !== null
-          ? `from ${d.minSizeMb} MB`
-          : null
+/**
+ * A document's sizes in its unit: "40–120 KB", "up to 0.3 MB", "from 40 KB". Given the shared largest scan (in MB),
+ * a paper without its own max says it: "40 KB – 20 MB", "0.01–20 MB", "up to 20 MB".
+ */
+function sizeLabel(d: UploadRules, sharedMaxMb?: number) {
+  const unit = d.sizeUnit
+  if (d.minSize !== null && d.maxSize !== null) return `${d.minSize}–${d.maxSize} ${unit}`
+  if (d.maxSize !== null) return `up to ${d.maxSize} ${unit}`
+  if (sharedMaxMb === undefined) return d.minSize === null ? null : `from ${d.minSize} ${unit}`
+  if (d.minSize === null) return `up to ${sharedMaxMb} MB`
+  return unit === 'MB' ? `${d.minSize}–${sharedMaxMb} MB` : `${d.minSize} KB – ${sharedMaxMb} MB`
+}
+
+/** A document's upload rules in a line: "JPG, PNG · 40–120 KB · 35×45 mm · 600×600–1200×1200 px". */
+export function uploadRulesLabel(d: UploadRules, sharedMaxMb?: number) {
   const photo = d.photoWidthMm !== null && d.photoHeightMm !== null ? `${d.photoWidthMm}×${d.photoHeightMm} mm` : null
-  return [d.fileTypes.join(', '), size, photo, pixelsLabel(d)].filter(Boolean).join(' · ')
+  return [d.fileTypes.join(', '), sizeLabel(d, sharedMaxMb), photo, pixelsLabel(d)].filter(Boolean).join(' · ')
 }

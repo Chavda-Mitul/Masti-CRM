@@ -7,7 +7,7 @@ import { fileNamePart } from "../../lib/fileNames";
 import { badRequest, forbidden, HttpError, notFound } from "../../lib/httpError";
 import { imageSize, imageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
-import { MB, pdfPageCount } from "../../lib/pdf";
+import { pdfPageCount } from "../../lib/pdf";
 import { deleteObject, presignGet, putObject } from "../../lib/storage";
 import { isHodOfAny } from "../auth/permissions";
 import { getCompanyDetails } from "../company/company.settings";
@@ -16,8 +16,10 @@ import { queueMessage } from "../messages/messages.service";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { assertCanSeeClient } from "./access";
 import {
+  BYTES_PER,
   FILE_TYPE_OF,
   fileTypeProblem,
+  largestScan,
   photoPixelsProblem,
   photoShapeProblem,
   SCAN_TYPES,
@@ -162,8 +164,11 @@ const paperWord = (paper: ScanPaper) => `"${paper.name}"`;
 export async function scanLimit(paper: ScanPaper, contentType: ScanType) {
   const wrongType = fileTypeProblem(paperWord(paper), paper.rules, FILE_TYPE_OF[contentType]);
   if (wrongType) throw new HttpError(415, wrongType);
-  const maxMb = paper.rules.maxSizeMb ?? (await getClientSettings()).documents.maxMb;
-  return { maxBytes: maxMb * MB, tooBig: `${paperWord(paper)} can be at most ${maxMb} MB. Scan it at a lower resolution and upload it again.` };
+  const { size, unit } = largestScan(paper.rules, (await getClientSettings()).documents.maxMb);
+  return {
+    maxBytes: size * BYTES_PER[unit],
+    tooBig: `${paperWord(paper)} can be at most ${size} ${unit}. Scan it at a lower resolution and upload it again.`,
+  };
 }
 
 /**

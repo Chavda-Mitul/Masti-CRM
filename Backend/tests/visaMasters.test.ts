@@ -166,7 +166,7 @@ describe("countries, visa types, documents and offerings", () => {
   it("keeps each document's upload rules: file types, min and max size, photo size; Visa HOD only, audited (CR 16)", async () => {
     const hod = await visaHod();
     const staff = await visaStaff();
-    const none = { minSizeMb: null, maxSizeMb: null, photoWidthMm: null, photoHeightMm: null };
+    const none = { minSize: null, maxSize: null, photoWidthMm: null, photoHeightMm: null };
 
     // Seeded: every paper takes all three types; the photos have a 35×45 mm shape.
     const listed = (await staff.get("/api/masters/documents")).body.documents as { code: string }[];
@@ -177,7 +177,7 @@ describe("countries, visa types, documents and offerings", () => {
 
     // Saved in PDF, JPG, PNG order whatever the ticking order, and audited.
     const voter = created.body.document.id as number;
-    const rules = { fileTypes: ["PNG", "JPG"], minSizeMb: 0.01, maxSizeMb: 0.3, photoWidthMm: 35, photoHeightMm: 45 };
+    const rules = { fileTypes: ["PNG", "JPG"], minSize: 0.01, maxSize: 0.3, photoWidthMm: 35, photoHeightMm: 45 };
     expect((await staff.patch(`/api/masters/documents/${voter}`).send(rules)).status).toBe(403);
     const saved = await hod.patch(`/api/masters/documents/${voter}`).send(rules);
     expect(saved.status).toBe(200);
@@ -193,17 +193,17 @@ describe("countries, visa types, documents and offerings", () => {
       expect(res.body.issues[field]).toEqual([message]);
     };
     await refused({ fileTypes: [] }, "fileTypes", "Tick at least one file type.");
-    await refused({ maxSizeMb: 0.305 }, "maxSizeMb", "Up to 2 decimals.");
-    await refused({ maxSizeMb: 51 }, "maxSizeMb", "0.01 to 50 MB.");
+    await refused({ maxSize: 0.305 }, "maxSize", "Up to 2 decimals.");
+    await refused({ maxSize: 51 }, "maxSize", "0.01 to 50 MB.");
     await refused({ photoWidthMm: 0 }, "photoWidthMm", "At least 1.");
     await refused({ photoWidthMm: 40000 }, "photoWidthMm", "At most 32,767.");
     await refused({ photoWidthMm: 35.5 }, "photoWidthMm", "Whole mm only.");
     // Against the stored row too: a min at or above the saved max of 0.3, a width without a height.
-    await refused({ minSizeMb: 0.3 }, "minSizeMb", "Min size must be less than max size.");
+    await refused({ minSize: 0.3 }, "minSize", "Min size must be less than max size.");
     await refused({ photoHeightMm: null }, "photoHeightMm", "Enter both width and height.");
-    const bothNew = await hod.post("/api/masters/documents").send({ code: "OCI_CARD", name: "OCI card", minSizeMb: 2, maxSizeMb: 1 });
+    const bothNew = await hod.post("/api/masters/documents").send({ code: "OCI_CARD", name: "OCI card", minSize: 2, maxSize: 1 });
     expect(bothNew.status).toBe(400);
-    expect(bothNew.body.issues.minSizeMb).toEqual(["Min size must be less than max size."]);
+    expect(bothNew.body.issues.minSize).toEqual(["Min size must be less than max size."]);
 
     // A photo size can be any size: only its shape is checked (the project lead, 23 Oct 2026).
     for (const size of [{ photoWidthMm: 500, photoHeightMm: 500 }, { photoWidthMm: 3, photoHeightMm: 4 }]) {
@@ -213,7 +213,7 @@ describe("countries, visa types, documents and offerings", () => {
     }
 
     // Blank clears a rule.
-    const cleared = await hod.patch(`/api/masters/documents/${voter}`).send({ minSizeMb: "", maxSizeMb: null, photoWidthMm: null, photoHeightMm: null });
+    const cleared = await hod.patch(`/api/masters/documents/${voter}`).send({ minSize: "", maxSize: null, photoWidthMm: null, photoHeightMm: null });
     expect(cleared.status).toBe(200);
     expect(cleared.body.document).toMatchObject({ fileTypes: ["JPG", "PNG"], ...none });
 
@@ -223,7 +223,7 @@ describe("countries, visa types, documents and offerings", () => {
     await expect(write({ photoWidthMm: 0, photoHeightMm: 45 })).rejects.toThrow(/DocumentMaster_photo_size/);
     await expect(write({ photoWidthMm: 1000, photoHeightMm: 1 })).resolves.toMatchObject({ photoWidthMm: 1000 });
     await expect(write({ fileTypes: [] })).rejects.toThrow(/DocumentMaster_fileTypes_some/);
-    await expect(write({ minSizeMb: 2, maxSizeMb: 1 })).rejects.toThrow(/DocumentMaster_size_range/);
+    await expect(write({ minSize: 2, maxSize: 1 })).rejects.toThrow(/DocumentMaster_size_range/);
   });
 
   it("keeps a document's smallest and largest photo in pixels: whole pairs, the smallest not bigger, audited (CR 16)", async () => {
@@ -269,6 +269,42 @@ describe("countries, visa types, documents and offerings", () => {
     await expect(write({ maxWidthPx: null })).rejects.toThrow(/DocumentMaster_photo_pixels/);
     await expect(write({ minWidthPx: 0, minHeightPx: 5 })).rejects.toThrow(/DocumentMaster_photo_pixels/);
     await expect(write({ minWidthPx: 1300, minHeightPx: 10 })).rejects.toThrow(/DocumentMaster_photo_pixels/);
+  });
+
+  it("keeps a document's sizes in KB or MB, each checked in its unit, audited (CR 16)", async () => {
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/documents").send({ code: "PHOTOS_CN", name: "Photos – China" });
+    expect(created.status).toBe(201);
+    expect(created.body.document).toMatchObject({ sizeUnit: "MB", minSize: null, maxSize: null });
+    const id = created.body.document.id as number;
+
+    // China's 40–120 KB, audited with its unit.
+    const china = { sizeUnit: "KB", minSize: 40, maxSize: 120 };
+    const saved = await hod.patch(`/api/masters/documents/${id}`).send(china);
+    expect(saved.status).toBe(200);
+    expect(saved.body.document).toMatchObject(china);
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "document.update", entityId: String(id) } });
+    expect(audit.after).toEqual(china);
+
+    const refused = async (body: object, field: string, message: string) => {
+      const res = await hod.patch(`/api/masters/documents/${id}`).send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.issues[field]).toEqual([message]);
+    };
+    await refused({ minSize: 40.5 }, "minSize", "Whole KB only.");
+    await refused({ minSize: 0 }, "minSize", "1 to 51200 KB.");
+    await refused({ maxSize: 60000 }, "maxSize", "1 to 51200 KB.");
+    // Switching the unit checks the saved sizes in the new one: 120 MB is too big.
+    await refused({ sizeUnit: "MB" }, "maxSize", "0.01 to 50 MB.");
+    const mb = await hod.patch(`/api/masters/documents/${id}`).send({ sizeUnit: "MB", minSize: 0.04, maxSize: 0.12 });
+    expect(mb.status).toBe(200);
+    expect(mb.body.document).toMatchObject({ sizeUnit: "MB", minSize: 0.04, maxSize: 0.12 });
+
+    // The database refuses them too (the CHECK, per unit): 0.04 KB isn't whole, 60 MB is too big.
+    const write = (data: object) => prisma.documentMaster.update({ where: { id }, data });
+    await expect(write({ sizeUnit: "KB" })).rejects.toThrow(/DocumentMaster_size_range/);
+    await expect(write({ maxSize: 60 })).rejects.toThrow(/DocumentMaster_size_range/);
+    await expect(write({ sizeUnit: "KB", minSize: 40, maxSize: 51200 })).resolves.toMatchObject({ maxSize: 51200 });
   });
 
   it("switches what File ready asks for (appointment, vendor) on each visa: Visa HOD or Head only (0007 Decision 6)", async () => {

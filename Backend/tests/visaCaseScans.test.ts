@@ -151,8 +151,9 @@ describe("Save scan from the case", () => {
     const { staff, c } = await linkedCase();
     expect(docOf(c, "Photos").scanRules).toEqual({
       fileTypes: ["PDF", "JPG", "PNG"],
-      minSizeMb: null,
-      maxSizeMb: null,
+      minSize: null,
+      maxSize: null,
+      sizeUnit: "MB",
       photoWidthMm: 35,
       photoHeightMm: 45,
       minWidthPx: null,
@@ -161,9 +162,9 @@ describe("Save scan from the case", () => {
       maxHeightPx: null,
     });
     // Read live from the document master, like the scan warning: a change reaches the open case.
-    await prisma.documentMaster.update({ where: { code: "BANK_STATEMENT_6M" }, data: { fileTypes: ["PDF"], maxSizeMb: 2 } });
+    await prisma.documentMaster.update({ where: { code: "BANK_STATEMENT_6M" }, data: { fileTypes: ["PDF"], maxSize: 2 } });
     const live = await load(staff, c.caseNo);
-    expect(docOf(live, BANK).scanRules).toMatchObject({ fileTypes: ["PDF"], maxSizeMb: 2 });
+    expect(docOf(live, BANK).scanRules).toMatchObject({ fileTypes: ["PDF"], maxSize: 2 });
 
     const png = await saveScan(staff, live, docOf(live, BANK).id, pngOf(70, 90), "image/png");
     expect(png.status).toBe(415);

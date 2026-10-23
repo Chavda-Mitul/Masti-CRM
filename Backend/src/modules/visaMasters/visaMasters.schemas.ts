@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DocumentRequirement, ScanFileType, TravellerGroup } from "../../../generated/prisma/enums";
+import { DocumentRequirement, ScanFileType, SizeUnit, TravellerGroup } from "../../../generated/prisma/enums";
 
 // Only zod and the generated enums are imported here, so these schemas can later be shared with the frontend.
 // Codes are stable keys (the seed and the holiday bot use them), so they are set on create and never change.
@@ -69,7 +69,7 @@ export const updateEmbassySchema = z.object({
 
 // A paper's upload rules (docs/decisions/0016-client-documents.md Amendment 1, change request 16).
 
-/** The largest file a paper's max size may allow. */
+/** The largest file a paper's max size may allow: 50 MB, or 51,200 KB. */
 export const MAX_DOCUMENT_MB = 50;
 /**
  * A photo's sides, in mm or in pixels: any whole number, since only the rule itself limits them (the project lead, 23
@@ -83,11 +83,8 @@ const fileTypes = z
   .array(z.enum(ScanFileType))
   .min(1, "Tick at least one file type.")
   .transform((types) => FILE_TYPE_ORDER.filter((t) => types.includes(t)));
-const sizeMb = z
-  .number()
-  .min(0.01, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
-  .max(MAX_DOCUMENT_MB, `0.01 to ${MAX_DOCUMENT_MB} MB.`)
-  .refine((mb) => Math.abs(mb * 100 - Math.round(mb * 100)) < 1e-9, "Up to 2 decimals.");
+/** A min or max size, in the paper's unit: checked against it on the whole row (`uploadRulesProblem`). */
+const size = z.number();
 const photoSide = (unit: "mm" | "pixels") =>
   z
     .number()
@@ -98,8 +95,9 @@ const photoMm = photoSide("mm");
 const photoPx = photoSide("pixels");
 
 export interface UploadRules {
-  minSizeMb: number | null;
-  maxSizeMb: number | null;
+  minSize: number | null;
+  maxSize: number | null;
+  sizeUnit: SizeUnit;
   photoWidthMm: number | null;
   photoHeightMm: number | null;
   minWidthPx: number | null;
@@ -115,13 +113,29 @@ const PHOTO_PAIRS = [
   ["maxWidthPx", "maxHeightPx"],
 ] as const;
 
+/** Why a min or max size doesn't fit its unit, or null: MB 0.01–50 with up to 2 decimals, KB a whole 1–51,200. */
+function sizeProblem(size: number, unit: SizeUnit) {
+  if (unit === "KB") {
+    const maxKb = MAX_DOCUMENT_MB * 1024;
+    if (!Number.isInteger(size)) return "Whole KB only.";
+    return size < 1 || size > maxKb ? `1 to ${maxKb} KB.` : null;
+  }
+  if (size < 0.01 || size > MAX_DOCUMENT_MB) return `0.01 to ${MAX_DOCUMENT_MB} MB.`;
+  return Math.abs(size * 100 - Math.round(size * 100)) < 1e-9 ? null : "Up to 2 decimals.";
+}
+
 /**
- * What's wrong between a paper's upload rules (min below max, both sides of each photo pair, the smallest photo not
- * bigger than the largest), with the field to show it on, or null.
+ * What's wrong between a paper's upload rules (each size in its unit, min below max, both sides of each photo pair,
+ * the smallest photo not bigger than the largest), with the field to show it on, or null.
  */
 export function uploadRulesProblem(rules: UploadRules): { field: keyof UploadRules; message: string } | null {
-  if (rules.minSizeMb !== null && rules.maxSizeMb !== null && rules.minSizeMb >= rules.maxSizeMb) {
-    return { field: "minSizeMb", message: "Min size must be less than max size." };
+  for (const field of ["minSize", "maxSize"] as const) {
+    const value = rules[field];
+    const problem = value === null ? null : sizeProblem(value, rules.sizeUnit);
+    if (problem) return { field, message: problem };
+  }
+  if (rules.minSize !== null && rules.maxSize !== null && rules.minSize >= rules.maxSize) {
+    return { field: "minSize", message: "Min size must be less than max size." };
   }
   for (const [width, height] of PHOTO_PAIRS) {
     if ((rules[width] === null) !== (rules[height] === null)) {
@@ -146,8 +160,9 @@ export const createDocumentSchema = z.object({
   /** "Scan not saved" on a case's paper (docs/decisions/0016-client-documents.md Decision 7). */
   warnIfNoScan: z.boolean().default(false),
   fileTypes: fileTypes.default([...FILE_TYPE_ORDER]),
-  minSizeMb: clearable(sizeMb),
-  maxSizeMb: clearable(sizeMb),
+  minSize: clearable(size),
+  maxSize: clearable(size),
+  sizeUnit: z.enum(SizeUnit).default(SizeUnit.MB),
   photoWidthMm: clearable(photoMm),
   photoHeightMm: clearable(photoMm),
   minWidthPx: clearable(photoPx),
@@ -162,8 +177,9 @@ export const updateDocumentSchema = z.object({
   isActive: z.boolean().optional(),
   warnIfNoScan: z.boolean().optional(),
   fileTypes: fileTypes.optional(),
-  minSizeMb: clearable(sizeMb),
-  maxSizeMb: clearable(sizeMb),
+  minSize: clearable(size),
+  maxSize: clearable(size),
+  sizeUnit: z.enum(SizeUnit).optional(),
   photoWidthMm: clearable(photoMm),
   photoHeightMm: clearable(photoMm),
   minWidthPx: clearable(photoPx),

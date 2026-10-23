@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { FormField, RequiredMark } from '../../../../components/FormField'
 import { applyServerIssues } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
@@ -75,7 +75,7 @@ export function DocumentsTable({ canEdit, showInactive }: { canEdit: boolean; sh
 function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null; onClose: () => void }) {
   const toast = useToast()
   const save = useSaveMaster('documents')
-  const { register, handleSubmit, setError, formState } = useForm<DocumentFormValues>({
+  const { register, handleSubmit, setError, formState, control } = useForm<DocumentFormValues>({
     resolver: zodResolver(documentFormSchema),
     defaultValues: {
       code: document?.code ?? '',
@@ -84,8 +84,9 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       sortOrder: document?.sortOrder ?? 0,
       warnIfNoScan: document?.warnIfNoScan ?? false,
       fileTypes: document?.fileTypes ?? ['PDF', 'JPG', 'PNG'],
-      minSizeMb: document?.minSizeMb?.toString() ?? '',
-      maxSizeMb: document?.maxSizeMb?.toString() ?? '',
+      sizeUnit: document?.sizeUnit ?? 'MB',
+      minSize: document?.minSize?.toString() ?? '',
+      maxSize: document?.maxSize?.toString() ?? '',
       photoWidthMm: document?.photoWidthMm?.toString() ?? '',
       photoHeightMm: document?.photoHeightMm?.toString() ?? '',
       minWidthPx: document?.minWidthPx?.toString() ?? '',
@@ -95,6 +96,7 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
     },
   })
   const { errors } = formState
+  const unit = useWatch({ control, name: 'sizeUnit' })
 
   const onSubmit = handleSubmit((v) => {
     const body = {
@@ -103,8 +105,9 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
       sortOrder: v.sortOrder,
       warnIfNoScan: v.warnIfNoScan,
       fileTypes: v.fileTypes,
-      minSizeMb: numberOrNull(v.minSizeMb),
-      maxSizeMb: numberOrNull(v.maxSizeMb),
+      sizeUnit: v.sizeUnit,
+      minSize: numberOrNull(v.minSize),
+      maxSize: numberOrNull(v.maxSize),
       photoWidthMm: numberOrNull(v.photoWidthMm),
       photoHeightMm: numberOrNull(v.photoHeightMm),
       minWidthPx: numberOrNull(v.minWidthPx),
@@ -125,8 +128,9 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
           'sortOrder',
           'warnIfNoScan',
           'fileTypes',
-          'minSizeMb',
-          'maxSizeMb',
+          'sizeUnit',
+          'minSize',
+          'maxSize',
           'photoWidthMm',
           'photoHeightMm',
           'minWidthPx',
@@ -193,11 +197,39 @@ function DocumentDrawer({ document, onClose }: { document: DocumentMaster | null
           <span className="hint">A scan of this paper must be one of these, or it isn’t saved.</span>
         )}
       </div>
-      <FormField label="Min size (MB, optional)" error={errors.minSizeMb?.message} hint="Blank: no minimum.">
-        <input className="input" type="number" min={0.01} step={0.01} inputMode="decimal" {...register('minSizeMb')} placeholder="e.g. 0.01" />
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <span>Sizes in</span>
+        <div className="check-picks" role="radiogroup" aria-label="Sizes in">
+          {(['MB', 'KB'] as const).map((u) => (
+            <label className="check" key={u}>
+              <input type="radio" value={u} {...register('sizeUnit')} />
+              {u}
+            </label>
+          ))}
+        </div>
+        <span className="hint">KB for a photo, as visa websites ask. 1 MB = 1,024 KB, as Windows counts.</span>
+      </div>
+      <FormField label={`Min size (${unit}, optional)`} error={errors.minSize?.message} hint="Blank: no minimum.">
+        <input
+          className="input"
+          type="number"
+          min={unit === 'KB' ? 1 : 0.01}
+          step={unit === 'KB' ? 1 : 0.01}
+          inputMode={unit === 'KB' ? 'numeric' : 'decimal'}
+          {...register('minSize')}
+          placeholder={unit === 'KB' ? 'e.g. 40' : 'e.g. 0.01'}
+        />
       </FormField>
-      <FormField label="Max size (MB, optional)" error={errors.maxSizeMb?.message} hint="Blank: the usual limit.">
-        <input className="input" type="number" min={0.01} step={0.01} inputMode="decimal" {...register('maxSizeMb')} placeholder="e.g. 0.3" />
+      <FormField label={`Max size (${unit}, optional)`} error={errors.maxSize?.message} hint="Blank: the usual limit.">
+        <input
+          className="input"
+          type="number"
+          min={unit === 'KB' ? 1 : 0.01}
+          step={unit === 'KB' ? 1 : 0.01}
+          inputMode={unit === 'KB' ? 'numeric' : 'decimal'}
+          {...register('maxSize')}
+          placeholder={unit === 'KB' ? 'e.g. 240' : 'e.g. 0.3'}
+        />
       </FormField>
       <FormField label="Photo width (mm, optional)" error={errors.photoWidthMm?.message} hint="Fill in both, or leave both blank.">
         <input className="input" type="number" min={1} step={1} inputMode="numeric" {...register('photoWidthMm')} placeholder="e.g. 35" />

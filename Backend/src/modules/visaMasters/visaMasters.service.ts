@@ -148,7 +148,7 @@ export async function listDocuments(active?: boolean) {
   return prisma.documentMaster.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
 }
 
-/** The upload rules go together (min below max, photo pairs): checked on the whole row, so a partial save can't split them. */
+/** The upload rules go together (sizes in their unit, photo pairs): checked on the whole row, so a partial save can't split them. */
 function assertUploadRules(rules: UploadRules) {
   const problem = uploadRulesProblem(rules);
   if (problem) throw fieldError(problem.field, problem.message);
@@ -159,8 +159,8 @@ export async function createDocument(input: CreateDocumentInput, actor: Actor) {
   const data = {
     ...input,
     detail: input.detail ?? null,
-    minSizeMb: input.minSizeMb ?? null,
-    maxSizeMb: input.maxSizeMb ?? null,
+    minSize: input.minSize ?? null,
+    maxSize: input.maxSize ?? null,
     photoWidthMm: input.photoWidthMm ?? null,
     photoHeightMm: input.photoHeightMm ?? null,
     minWidthPx: input.minWidthPx ?? null,
