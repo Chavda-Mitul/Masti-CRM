@@ -28,6 +28,17 @@ const browser: Browser = {
       // The CRM tab was closed: nothing to bring back.
     }
   },
+  async extensionsInfo() {
+    const [self, all, stored] = await Promise.all([
+      chrome.management.getSelf(),
+      chrome.management.getAll(),
+      chrome.storage.local.get("enforceInDev"),
+    ]);
+    return { self, all, enforceInDev: Boolean(stored.enforceInDev) };
+  },
+  async insertCss(tabId, css) {
+    await chrome.scripting.insertCSS({ target: { tabId }, css, origin: "USER" });
+  },
   async inject(tabId, args) {
     const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: fillLogin, args });
     return result?.result;

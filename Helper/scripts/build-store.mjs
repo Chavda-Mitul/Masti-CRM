@@ -17,6 +17,7 @@ try {
     const file = source.replace(/\.ts$/, ".js");
     copyFileSync(`dist/${file}`, `dist-store/${file}`);
   }
+  copyFileSync("popup.html", "dist-store/popup.html");
   writeFileSync("dist-store/manifest.json", `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(
     `Built dist-store/ (version ${manifest.version}) for ${new URL(crm).hostname}. Zip the files inside it and upload ` +

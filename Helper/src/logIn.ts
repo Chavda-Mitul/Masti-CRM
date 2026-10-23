@@ -14,6 +14,13 @@ export interface Browser {
   getTab(id: number): Promise<{ status?: string; url?: string } | undefined>;
   /** Brings the CRM's tab back to the front, to show what went wrong. */
   focusTab(id: number): Promise<void>;
+  /**
+   * The helper itself and every extension and app Chrome has, so other password-reading extensions can be caught, plus
+   * the developer switch (`enforceInDev`, set in the popup) that turns the check on while the helper is unpacked.
+   */
+  extensionsInfo(): Promise<{ self: ExtensionInfo; all: ExtensionInfo[]; enforceInDev: boolean }>;
+  /** Adds the helper's own CSS to the tab's page, as the person's own (the page can't override it). */
+  insertCss(tabId: number, css: string): Promise<void>;
   /** Runs fillLogin in the tab's page and returns what it answered. */
   inject(tabId: number, args: [FillLoginArgs, string[], number]): Promise<unknown>;
   sleep(ms: number): Promise<void>;
@@ -27,7 +34,42 @@ const POLL_MS = 500;
 /** How long fillLogin waits for a login form drawn late. */
 const FILL_WAIT_MS = 8_000;
 
+/**
+ * Draws the boxes fillLogin marks (the ID and password) as dots, whatever the portal's own CSS or "show password" eye
+ * says, and stops their text being selected. Added as the person's CSS, which beats the page's, and which the page's
+ * security rules (CSP) can't block.
+ */
+export const HIDE_CSS =
+  "[data-masti-crm-hidden]{-webkit-text-security:disc !important;-webkit-user-select:none !important;user-select:none !important}";
+
 const FILL_OUTCOMES: readonly string[] = ["SUBMITTED", "WAITING_FOR_STAFF", "NO_LOGIN_BOXES", "ADDRESS_CHANGED", "FAILED"] satisfies FillOutcome[];
+
+/** The bit of chrome.management.ExtensionInfo the helper reads. */
+export interface ExtensionInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** "extension", "theme", "hosted_app", … — only a real extension can read the page. */
+  type: string;
+  /** "admin" (installed by Masti's Chrome rules), "normal", "development", "sideload", "other". */
+  installType: string;
+}
+
+/**
+ * Other extensions could read the ID and password the helper types, so the office PCs block them (component 4). As a
+ * second guard, the helper itself won't type while one is on. Which ones block:
+ * - the helper is left out, and so are themes and apps (only an extension runs in the page);
+ * - an extension Masti's own Chrome rules installed (`installType: "admin"`) is allowed: that's how Masti says yes to one;
+ * - a switched-off extension is ignored.
+ * While the helper is loaded unpacked for development (`installType: "development"`), nothing blocks unless the popup's
+ * `enforceInDev` switch is on: that's the building PC, not an office one. The office build always checks.
+ */
+export function blockingExtensionNames(self: ExtensionInfo, all: ExtensionInfo[], enforceInDev = false): string[] {
+  if (self.installType === "development" && !enforceInDev) return [];
+  return all
+    .filter((e) => e.id !== self.id && e.enabled && e.type === "extension" && e.installType !== "admin")
+    .map((e) => e.name);
+}
 
 /** The CRM pages that may ask, from the manifest's externally_connectable patterns ("http://localhost/*": any port). */
 export function crmPageMatcher(patterns: string[]): (origin: string) => boolean {
@@ -83,6 +125,19 @@ export async function logIn(
 ): Promise<LoginResponse> {
   if (typeof ticket !== "string" || !TICKET_PATTERN.test(ticket)) return { outcome: "FAILED" };
   if (!sender.origin || !isCrmPage(sender.origin)) return { outcome: "FAILED" };
+
+  // Before the ticket is spent: no typing while another extension that could read the login is on.
+  try {
+    const { self, all, enforceInDev } = await browser.extensionsInfo();
+    const blockers = blockingExtensionNames(self, all, enforceInDev);
+    if (blockers.length > 0) {
+      const list = blockers.join(", ");
+      return { outcome: "REFUSED", message: `Switch off your other Chrome extensions to use Log in for me: ${list}. Ask your HOD if you need one of them.` };
+    }
+  } catch {
+    // Can't read the list (no management permission in development): carry on.
+  }
+
   const deadline = browser.now() + TOTAL_MS;
   const back = async (outcome: Outcome): Promise<LoginResponse> => {
     if (sender.tabId !== undefined) await browser.focusTab(sender.tabId);
@@ -125,6 +180,8 @@ export async function logIn(
     const origin = originOf(tab.url);
     if (!origin || !allowed.includes(origin)) return back("ADDRESS_CHANGED");
     try {
+      // Before anything is typed. If it can't be added, fillLogin's own dots still hide the boxes.
+      await browser.insertCss(tabId, HIDE_CSS).catch(() => undefined);
       const answer = await browser.inject(tabId, args);
       const outcome: Outcome = typeof answer === "string" && FILL_OUTCOMES.includes(answer) ? (answer as FillOutcome) : "FAILED";
       // The portal's own tab shows a note for these; for the rest the CRM tab comes back to say what happened.

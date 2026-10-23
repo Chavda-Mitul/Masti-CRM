@@ -15,9 +15,9 @@ const idOf = (key: string) =>
     .join("");
 
 describe("the manifest", () => {
-  it("asks only to run in pages and to switch off Chrome's password saving", () => {
+  it("asks only to run in pages, switch off password saving, and see other extensions", () => {
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.permissions).toEqual(["scripting", "privacy"]);
+    expect(manifest.permissions).toEqual(["scripting", "privacy", "management", "storage"]);
     expect(manifest.host_permissions).toEqual(["https://*/*", "http://*/*"]);
     expect(manifest.background).toEqual({ service_worker: "background.js", type: "module" });
     expect(manifest).not.toHaveProperty("content_scripts");

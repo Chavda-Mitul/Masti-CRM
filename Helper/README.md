@@ -51,8 +51,9 @@ npm run serve:test-portals
 
 The pretend portals are at http://localhost:5199. In the CRM, add a portal with the address
 `http://localhost:5199/plain.html`, the ID `test-agent` and the password `Test-Pass-2026!`, then press **Log in for me**.
-The other pages show the other cases: an agency code, letters to type, a "Show password" eye (the helper empties the
-password the moment it's shown), a form drawn late, a page with no login, and a login that moved to another address.
+The other pages show the other cases: an agency code, letters to type, a one-time code (OTP), a "Show password" eye (the
+ID and password stay dots and can't be copied), a form drawn late, a page with no login, and a login that moved to
+another address.
 
 ## Check it
 

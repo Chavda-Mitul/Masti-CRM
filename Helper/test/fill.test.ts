@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
 import { fillLogin } from "../src/fill";
+import { HIDE_CSS } from "../src/logIn";
 
 // The page is https://portal.test/login (vitest.config.ts). happy-dom has no layout, so these check everything but sizes.
 
@@ -28,6 +29,8 @@ function countEvents(box: HTMLInputElement) {
 }
 
 afterEach(() => {
+  // The page's watch over the ID and password lasts as long as the page: end it, so each test starts afresh.
+  (globalThis as unknown as Record<string, { stop?: () => void } | undefined>).__mastiCrmHelperWatch?.stop?.();
   document.body.innerHTML = "";
 });
 
@@ -158,61 +161,115 @@ describe("fillLogin", () => {
     });
   });
 
-  describe("the portal's own show-password eye", () => {
+  describe("a one-time code (OTP)", () => {
+    it("fills both boxes, leaves the code to the staff member, and says so", async () => {
+      document.body.innerHTML = `
+        <form><input id="otp" name="otp" placeholder="Enter OTP"><input id="user"><input id="pass" type="password">
+        <button type="button">Send OTP</button><button>Login</button></form>`;
+      const sent = countSubmits();
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      expect($("#user").value).toBe(LOGIN.loginId);
+      expect($("#otp").value).toBe("");
+      expect($("#pass").value).toBe(LOGIN.password);
+      expect(document.activeElement).toBe($("#otp"));
+      expect(sent).toHaveLength(0);
+      expect(banner()).toBe("Type the code you were sent, then press Login.");
+    });
+  });
+
+  describe("staff never see or copy the ID and password", () => {
     /** Lets the helper's watch on the page see what changed. */
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const hidden = (box: HTMLInputElement) => box.hasAttribute("data-masti-crm-hidden");
+    /** True when the page let the copy (or cut, drag, select) go ahead. */
+    const allowed = (box: HTMLInputElement, name: string) => box.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
 
     const captchaPage = `
       <form><input id="user"><input id="pass" type="password"><button type="button" id="eye">Show</button>
       <img id="captchaImage" src="/captcha.png" alt="Code"><input id="code" name="txtCaptcha"><button>Login</button></form>`;
 
-    it("empties the password the moment the page shows it, keeps it a password box, and says so", async () => {
+    it("marks both boxes before typing, for the helper's CSS to draw as dots", async () => {
+      document.body.innerHTML = captchaPage;
+      const markedWhenTyped: boolean[] = [];
+      for (const box of [$("#user"), $("#pass")]) box.addEventListener("input", () => markedWhenTyped.push(hidden(box)));
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      expect(markedWhenTyped).toEqual([true, true]);
+      expect(HIDE_CSS).toMatch(/^\[data-masti-crm-hidden\]\{-webkit-text-security:disc !important;/);
+      expect(hidden($("#code"))).toBe(false);
+    });
+
+    it("keeps the password hidden when the portal's eye shows it: it stays a password box, and the login stays typed", async () => {
       document.body.innerHTML = captchaPage;
       $<HTMLButtonElement>("#eye").addEventListener("click", () => ($("#pass").type = "text"));
       expect(await run()).toBe("WAITING_FOR_STAFF");
-      const seen = countEvents($("#pass"));
 
       $<HTMLButtonElement>("#eye").click();
       await settle();
-      expect($("#pass").value).toBe("");
       expect($("#pass").type).toBe("password");
-      expect(seen).toContain("input");
-      expect(banner()).toBe("Masti CRM hid the password. Press Log in for me to try again.");
+      expect(hidden($("#pass"))).toBe(true);
+      expect($("#pass").value).toBe(LOGIN.password);
       expect($("#user").value).toBe(LOGIN.loginId);
+      expect(banner()).toBe("Type the letters you see, then press Login.");
     });
 
-    it("empties a text box the page swaps in with the password", async () => {
+    it("won't let the ID or password be copied, cut, dragged or selected; the letters box works as usual", async () => {
+      document.body.innerHTML = captchaPage;
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      $("#pass").type = "text";
+      await settle();
+      for (const name of ["copy", "cut", "dragstart", "selectstart"]) {
+        expect(allowed($("#user"), name), name).toBe(false);
+        expect(allowed($("#pass"), name), name).toBe(false);
+        expect(allowed($("#code"), name), name).toBe(true);
+      }
+    });
+
+    it("hides a box the page swaps in with the password or the ID", async () => {
       document.body.innerHTML = captchaPage;
       expect(await run()).toBe("WAITING_FOR_STAFF");
       const shown = document.createElement("input");
       shown.id = "shown";
-      shown.value = $("#pass").value;
+      shown.value = LOGIN.password;
       $("#pass").replaceWith(shown);
+      const id = document.createElement("input");
+      id.id = "id-again";
+      id.value = LOGIN.loginId;
+      $("#user").replaceWith(id);
       await settle();
-      expect($("#shown").value).toBe("");
+      expect(hidden($("#shown"))).toBe(true);
+      expect($("#shown").type).toBe("password");
+      expect($("#shown").value).toBe(LOGIN.password);
+      expect(hidden($("#id-again"))).toBe(true);
+      expect($("#id-again").type).toBe("text");
+    });
+
+    it("hides the form the page draws again, and puts the marks back if the page takes them off", async () => {
+      document.body.innerHTML = captchaPage;
+      expect(await run()).toBe("WAITING_FOR_STAFF");
+      // A wrong code: the page draws its form again, keeping what was typed.
+      document.body.innerHTML = `<form><input id="user2" value="${LOGIN.loginId}"><input id="pass2" type="text" value="${LOGIN.password}"></form>`;
+      await settle();
+      expect(hidden($("#user2"))).toBe(true);
+      expect(hidden($("#pass2"))).toBe(true);
+      expect($("#pass2").type).toBe("password");
+
+      $("#user2").removeAttribute("data-masti-crm-hidden");
+      await settle();
+      expect(hidden($("#user2"))).toBe(true);
     });
 
     it("leaves every other box alone", async () => {
       document.body.innerHTML = `${captchaPage}<input id="other" type="password" value="not the portal's">`;
       expect(await run()).toBe("WAITING_FOR_STAFF");
       $("#other").type = "text";
-      $("#user").type = "email";
       $("#code").value = "7K2P";
       await settle();
-      expect($("#other").value).toBe("not the portal's");
+      expect($("#other").type).toBe("text");
+      expect(hidden($("#other"))).toBe(false);
+      expect(allowed($("#other"), "copy")).toBe(true);
+      expect(hidden($("#code"))).toBe(false);
       expect($("#user").value).toBe(LOGIN.loginId);
       expect($("#pass").value).toBe(LOGIN.password);
-      expect(banner()).toBe("Type the letters you see, then press Login.");
-    });
-
-    it("stops watching once the login form has gone", async () => {
-      document.body.innerHTML = captchaPage;
-      expect(await run()).toBe("WAITING_FOR_STAFF");
-      $<HTMLFormElement>("form").remove();
-      await settle();
-      document.body.innerHTML = `<input id="later" value="${LOGIN.password}">`;
-      await settle();
-      expect($("#later").value).toBe(LOGIN.password);
     });
   });
 

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Masti CRM helper</title>
+    <style>
+      body { font: 14px/1.4 system-ui, sans-serif; width: 270px; margin: 0; padding: 14px; color: #1f2a37; background: #fbf8f3; }
+      h1 { font-size: 14px; margin: 0 0 10px; color: #1e5aa8; }
+      label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+      input[disabled] + span { color: #6b7280; }
+      .note { color: #6b7280; font-size: 12px; margin: 10px 0 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Masti CRM helper</h1>
+    <label>
+      <input type="checkbox" id="enforceInDev" />
+      <span>Block login when other Chrome extensions are on</span>
+    </label>
+    <p class="note" id="note"></p>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

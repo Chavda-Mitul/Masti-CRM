@@ -7,8 +7,8 @@
   Run it once on each office PC, from PowerShell opened as administrator. It writes Chrome's machine-wide rules
   (policies), so they hold for every Chrome profile on the PC:
   - installs the Masti CRM helper from the Chrome Web Store, so staff can't remove it or switch it off;
-  - switches off the developer tools, the extensions page's developer mode and javascript: links, so nobody can read a
-    password the helper typed;
+  - switches off the developer tools, the extensions page's developer mode, javascript: links, remote debugging and the
+    chrome://net-export / net-internals traffic recorders, so nobody can read a password the helper typed;
   - switches off Chrome's password saving;
   - blocks every other extension, except the ones given in -AllowExtensions.
   It adds to the lists already there and leaves every other rule alone. -Remove takes back only what it set. -WhatIf
@@ -104,23 +104,28 @@ function Remove-Number([string] $name, [int] $value) {
   }
 }
 
-$forceInstall = "$HelperId;$storeUpdateUrl"
-# 2: no developer tools anywhere. 1: no developer mode on the extensions page. 0: no password saving.
-$numbers = [ordered] @{ DeveloperToolsAvailability = 2; ExtensionDeveloperModeSettings = 1; PasswordManagerEnabled = 0 }
+# The helper and any extensions Masti needs are force-installed, so staff can't remove them and the helper counts them
+# as Masti's own (installType "admin") instead of refusing to type beside them.
+$forceInstalls = @("$HelperId;$storeUpdateUrl") + ($AllowExtensions | ForEach-Object { "$_;$storeUpdateUrl" })
+# 2: no developer tools anywhere. 1: no developer mode on the extensions page. 0: no password saving. 0: no remote
+# debugging (--remote-debugging-port, another way into the page from outside Chrome).
+$numbers = [ordered] @{ DeveloperToolsAvailability = 2; ExtensionDeveloperModeSettings = 1; PasswordManagerEnabled = 0; RemoteDebuggingAllowed = 0 }
+# Pages that record everything Chrome sends (the password included) to a file, and typed javascript: links.
+$blockedUrls = @('javascript://*', 'chrome://net-export', 'chrome://net-internals')
 
 if ($Remove) {
   Write-Host 'Taking back the Masti CRM rules for Chrome:'
-  Remove-FromList 'ExtensionInstallForcelist' $forceInstall
+  foreach ($f in $forceInstalls) { Remove-FromList 'ExtensionInstallForcelist' $f }
   foreach ($name in $numbers.Keys) { Remove-Number $name $numbers[$name] }
-  Remove-FromList 'URLBlocklist' 'javascript://*'
+  foreach ($url in $blockedUrls) { Remove-FromList 'URLBlocklist' $url }
   Remove-FromList 'ExtensionInstallBlocklist' '*'
   foreach ($id in @($HelperId) + $AllowExtensions) { Remove-FromList 'ExtensionInstallAllowlist' $id }
 }
 else {
   Write-Host 'Setting the Masti CRM rules for Chrome:'
-  Add-ToList 'ExtensionInstallForcelist' $forceInstall
+  foreach ($f in $forceInstalls) { Add-ToList 'ExtensionInstallForcelist' $f }
   foreach ($name in $numbers.Keys) { Set-Number $name $numbers[$name] }
-  Add-ToList 'URLBlocklist' 'javascript://*'
+  foreach ($url in $blockedUrls) { Add-ToList 'URLBlocklist' $url }
   Add-ToList 'ExtensionInstallBlocklist' '*'
   foreach ($id in @($HelperId) + $AllowExtensions) { Add-ToList 'ExtensionInstallAllowlist' $id }
 }
