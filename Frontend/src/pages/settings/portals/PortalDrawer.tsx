@@ -72,7 +72,7 @@ function toBody(values: PortalFormValues, hadExtra: boolean): PortalBody {
     ...(values.hasExtra
       ? { extraLabel: values.extraLabel.trim(), ...(values.changeExtra ? { extra: values.extra } : {}) }
       : hadExtra
-        ? { extraLabel: '' }
+        ? { extraLabel: '' } // the box was there and is being removed
         : {}),
   }
 }
@@ -96,8 +96,6 @@ export function PortalDrawer({
 }) {
   const toast = useToast()
   const isNew = portal === null
-  // A saved extra box keeps its value behind a "Change the value" toggle, like the password.
-  const hadExtra = portal?.extraLabel != null
   // The version this form was opened on: a background refetch must not hide a conflict.
   const [openedAt] = useState(portal?.updatedAt)
 
@@ -186,7 +184,15 @@ export function PortalDrawer({
             </FormField>
 
             <label className="check portal-extra-toggle">
-              <input type="checkbox" {...register('hasExtra')} />
+              <input
+                type="checkbox"
+                {...register('hasExtra', {
+                  // Ticking it to add a box means a value is needed, so open the value box and send what's typed.
+                  onChange: (e) => {
+                    if (e.target.checked) setValue('changeExtra', true)
+                  },
+                })}
+              />
               This portal has a third box before the ID (e.g. an agency code)
             </label>
             {hasExtra && (
@@ -194,7 +200,7 @@ export function PortalDrawer({
                 <FormField label="What the extra box is called" required error={errors.extraLabel?.message} hint="e.g. Agency code">
                   <input className="input" {...register('extraLabel')} placeholder="Agency code" aria-required="true" />
                 </FormField>
-                {changeExtra || !hadExtra ? (
+                {changeExtra ? (
                   <FormField
                     label="The extra box's value"
                     required
