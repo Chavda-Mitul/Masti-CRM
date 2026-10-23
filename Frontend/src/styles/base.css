@@ -666,13 +666,15 @@ a.btn-primary:hover {
   gap: 6px;
   justify-content: flex-end;
 }
-/* A dropdown value's departments (0018): chips in the list, a row of tick boxes in the drawer. */
+/* A dropdown value's departments (0018): chips in the list, a row of tick boxes in the drawer. A document's file
+   types (0016 Amendment 1) use the same row. */
 .dept-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
-.dept-picks {
+.dept-picks,
+.check-picks {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 20px;

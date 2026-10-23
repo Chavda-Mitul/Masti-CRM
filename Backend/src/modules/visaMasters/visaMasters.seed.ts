@@ -25,13 +25,14 @@ export const EMBASSIES = [{ code: "FR-MUM", countryCode: "FR", name: "French emb
 /**
  * The demo's France Tourist list ⚠️, plus the child alternatives (§10.4), plus the Aadhaar and PAN cards the client
  * document vault keeps (docs/decisions/0016-client-documents.md Decision 2). The passport, Aadhaar and PAN start with the
- * "Scan not saved" warning on (Decision 7) ⚠️.
+ * "Scan not saved" warning on (Decision 7) ⚠️. Every paper takes a PDF, JPG or PNG up to the shared size limit; the
+ * photos' scans must have a 35×45 mm shape (Amendment 1) ⚠️.
  */
 export const DOCUMENTS = [
   { code: "PASSPORT", name: "Passport", detail: null, sortOrder: 1, warnIfNoScan: true },
   { code: "OLD_PASSPORTS", name: "Old passports", detail: null, sortOrder: 2 },
   { code: "VISA_FORM", name: "Visa form, signed", detail: null, sortOrder: 3 },
-  { code: "PHOTOS", name: "Photos", detail: "35×45 mm, white background", sortOrder: 4 },
+  { code: "PHOTOS", name: "Photos", detail: "35×45 mm, white background", sortOrder: 4, photoWidthMm: 35, photoHeightMm: 45 },
   { code: "BANK_STATEMENT_6M", name: "Bank statement, last 6 months", detail: null, sortOrder: 5 },
   { code: "BIRTH_CERTIFICATE", name: "Birth certificate", detail: null, sortOrder: 6 },
   { code: "ITR_3Y", name: "ITR, last 3 years", detail: null, sortOrder: 7 },

@@ -2,7 +2,8 @@
 
 - **Status:** decided (17 Oct 2026, project lead; Vimal wants the scans kept permanently). Being built one component at
   a time (Decision 1). Built: the Documents card on the client page (17 Oct 2026, component 1); the vault in Step 2
-  (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6).
+  (17 Oct 2026, component 2). The WhatsApp message (Decision 6) is sent since 22 Oct 2026 (0021 Amendment 6). Upload
+  rules per paper (Amendment 1, 23 Oct 2026): part 1, the rules in Settings, built; part 2, refusing uploads, next.
 - **Date:** 17 Oct 2026
 - **Scope:** scans of a client's papers (passport, Aadhaar, PAN, photos, bank statements…), kept on the client, per
   family member, and reused on later cases:
@@ -20,6 +21,48 @@
   - [0004](0004-client-master.md): the client and its family members (`ClientMember`)
   - [0005](0005-system-masters.md): the document master (every paper a checklist can ask for), edited in Settings
   - [0006](0006-visa-documents.md): the case's checklist, ticked Original / Xerox / Made / Not needed in Step 2
+
+## Amendment 1 (23 Oct 2026, project lead, from Vimal at the 22 Oct demo): upload rules per paper
+
+**The ask:** Vimal wants each paper in the document master to say what its scan must be, so a wrong file is stopped
+when it's uploaded. Until now every paper took a PDF, JPEG or PNG up to `clients.documents.maxMb` (Decision 2), with no
+other check. It isn't in the demo: change request 16.
+
+**Decided (project lead, 23 Oct 2026):**
+- **Set on the paper itself,** in its add/edit form in Settings → Documents, by whoever edits the document master (the
+  Visa HOD or the Head). No new master: the choices are fixed in the code.
+- **The rules, all optional:**
+
+  | Rule | What can be set | Not set |
+  | --- | --- | --- |
+  | File type | PDF, JPG, PNG; at least one ticked | all three |
+  | Min size | 0.01–50 MB, up to 2 decimals (0.3) | no minimum |
+  | Max size | the same, above the min | `clients.documents.maxMb` (20 MB ⚠️) |
+  | Photo size | width × height in whole mm, 10–200 each, both or neither | no check |
+
+- **A photo size is its shape** (aspect ratio), not its pixels: a JPG or PNG's width ÷ height must match the paper's
+  (35 × 45 mm is 7 : 9), within about 3%, since a scan is never cut exactly. The margin is fixed in the code. A PDF
+  isn't checked for it.
+- **A wrong upload is refused** (part 2): on the client page's Documents card and in Step 2's Save scan, with a toast at
+  the bottom saying what the paper needs. The server refuses it too.
+
+**Defaults added when building (23 Oct 2026; say if any is wrong):**
+- **Only uploads are checked:** a scan already in the vault stays valid when a paper's rules change later.
+- **New papers start with all three types ticked** and no other rule.
+
+**Built, part 1 (23 Oct 2026):**
+- **Data:** `DocumentMaster.fileTypes` (`ScanFileType[]`, default all three), `minSizeMb`, `maxSizeMb` (double),
+  `photoWidthMm`, `photoHeightMm` (smallint); migration `20261023100000_document_upload_rules`, with CHECKs for at
+  least one type, 0.01–50 MB with the min below the max, and both photo sides (10–200) or neither. Changes are audited
+  `document.update`, like the paper's other fields.
+- **Rules between fields** (min below max, both photo sides) are checked against the whole row after the change, so a
+  partial save can't split them (`uploadRulesProblem`, `visaMasters.schemas.ts`).
+- **Seed:** the photos are 35 × 45 mm ⚠️, as their "Shown to the client" line already said. Every paper takes all three
+  types, with no sizes.
+- **Screen:** an "Upload rules" column in the Documents list ("JPG, PNG · 0.01–0.3 MB · 35×45 mm") and an Upload
+  rules group in the paper's drawer.
+- **Tests:** `visaMasters.test.ts` (defaults, who may change them, the audit, each wrong value, against the stored row,
+  the database CHECKs) and `frontendRules.test.ts` (the form's limits match the server's).
 
 ## Context
 
@@ -256,6 +299,7 @@ for a warning instead, switched on per paper.
 | `clients.documents` (the largest scan, in MB) | `{ maxMb: 20 }` ⚠️ |
 | The document master | the papers already there, plus Aadhaar card and PAN card |
 | "Warn if no scan is saved" (Decision 7) | on for the passport, Aadhaar card and PAN card ⚠️ |
+| Upload rules (Amendment 1) | the photos 35 × 45 mm ⚠️; every paper PDF, JPG and PNG, no sizes |
 | The file name and the WhatsApp wording | ours ⚠️ |
 
 ## Not in this record

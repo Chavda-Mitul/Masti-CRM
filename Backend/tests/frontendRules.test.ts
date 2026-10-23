@@ -25,7 +25,7 @@ import { MAX_RANGE_DAYS, MAX_TARGETS } from "../src/modules/holidays/holidays.sc
 import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/enums";
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
-import { MAX_CHECKLIST_ITEMS } from "../src/modules/visaMasters/visaMasters.schemas";
+import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, PHOTO_MM } from "../src/modules/visaMasters/visaMasters.schemas";
 import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
@@ -84,7 +84,7 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const p of PASSPORTS) expect(frontend.PASSPORT_PATTERN.test(p), p).toBe(PASSPORT_PATTERN.test(p));
   });
 
-  it("limits holidays, checklists, vendors, covering letters and the consent wording the same way (Settings → Masters)", async () => {
+  it("limits holidays, checklists, documents' upload rules, vendors, covering letters and the consent wording the same way (Settings → Masters)", async () => {
     const frontend = (await import(frontendMasterSchemas)) as {
       MAX_RANGE_DAYS: number;
       MAX_TARGETS: number;
@@ -93,6 +93,8 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
       MAX_LETTER_CHARS: number;
       MAX_LETTER_COUNTRIES: number;
       MAX_CONSENT_WORDING_CHARS: number;
+      MAX_DOCUMENT_MB: number;
+      PHOTO_MM: { min: number; max: number };
     };
     expect(frontend.MAX_CONSENT_WORDING_CHARS).toBe(MAX_CONSENT_WORDING_CHARS);
     expect(frontend.MAX_RANGE_DAYS).toBe(MAX_RANGE_DAYS);
@@ -101,6 +103,8 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     expect(frontend.MAX_VENDOR_COUNTRIES).toBe(MAX_VENDOR_COUNTRIES);
     expect(frontend.MAX_LETTER_CHARS).toBe(MAX_LETTER_CHARS);
     expect(frontend.MAX_LETTER_COUNTRIES).toBe(MAX_LETTER_COUNTRIES);
+    expect(frontend.MAX_DOCUMENT_MB).toBe(MAX_DOCUMENT_MB);
+    expect(frontend.PHOTO_MM).toEqual(PHOTO_MM);
   });
 
   it("checks covering-letter wordings the same way: the same blanks and the same messages", async () => {

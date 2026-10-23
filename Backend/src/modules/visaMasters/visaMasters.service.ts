@@ -7,6 +7,7 @@ import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
 import { assertCanEditEmbassies, assertCanEditVisaMasters } from "./access";
+import { uploadRulesProblem, type UploadRules } from "./visaMasters.schemas";
 import type {
   CreateCountryInput,
   CreateDocumentInput,
@@ -147,9 +148,24 @@ export async function listDocuments(active?: boolean) {
   return prisma.documentMaster.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
 }
 
+/** The upload rules go together (min below max, both photo sides): checked on the whole row, so a partial save can't split them. */
+function assertUploadRules(rules: UploadRules) {
+  const problem = uploadRulesProblem(rules);
+  if (problem) throw fieldError(problem.field, problem.message);
+}
+
 export async function createDocument(input: CreateDocumentInput, actor: Actor) {
   assertCanEditVisaMasters(actor.user);
-  return createAudited(actor, "document.create", "DocumentMaster", (tx) => tx.documentMaster.create({ data: { ...input, detail: input.detail ?? null } }));
+  const data = {
+    ...input,
+    detail: input.detail ?? null,
+    minSizeMb: input.minSizeMb ?? null,
+    maxSizeMb: input.maxSizeMb ?? null,
+    photoWidthMm: input.photoWidthMm ?? null,
+    photoHeightMm: input.photoHeightMm ?? null,
+  };
+  assertUploadRules(data);
+  return createAudited(actor, "document.create", "DocumentMaster", (tx) => tx.documentMaster.create({ data }));
 }
 
 export async function updateDocument(id: number, input: UpdateDocumentInput, actor: Actor) {
@@ -157,6 +173,7 @@ export async function updateDocument(id: number, input: UpdateDocumentInput, act
   const before = await prisma.documentMaster.findUnique({ where: { id } });
   if (!before) throw notFound("Document not found.");
   const changes = onlyChanged(definedOnly(input), before);
+  assertUploadRules({ ...before, ...changes });
 
   // A document on an active checklist can't be switched off: intake would copy a document nobody can see.
   if (changes.isActive === false) {

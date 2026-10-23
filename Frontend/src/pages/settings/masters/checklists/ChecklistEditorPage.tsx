@@ -12,7 +12,7 @@ import { errorText, isStale, lostAccess } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { masterKeys, useChecklist, useMasterList, useOfferings, useReplaceChecklist, useSaveOffering } from '../queries'
 import { checklistFormSchema, MAX_CHECKLIST_ITEMS, type ChecklistFormValues, type ChecklistLineValues } from '../schemas'
-import type { Checklist, DocumentMaster, DocumentRequirement, TravellerGroup } from '../types'
+import type { Checklist, ChecklistItem, DocumentMaster, DocumentRequirement, TravellerGroup } from '../types'
 import { VisaPortalCard } from './VisaPortalCard'
 
 const REQUIREMENTS: { value: DocumentRequirement; label: string }[] = [
@@ -119,8 +119,8 @@ function ChecklistEditor({ checklist, documents, canEdit }: { checklist: Checkli
   }, [dirty])
 
   // Documents for the dropdowns: the active ones, plus any on this list that were switched off since.
-  const byId = new Map(documents.map((d) => [d.id, d]))
-  for (const item of checklist.items) if (!byId.has(item.document.id)) byId.set(item.document.id, { ...item.document, sortOrder: 0, warnIfNoScan: false })
+  const byId = new Map<number, ChecklistItem['document']>(documents.map((d) => [d.id, d]))
+  for (const item of checklist.items) if (!byId.has(item.document.id)) byId.set(item.document.id, item.document)
   const onList = new Set(lines.map((l) => l.documentId))
   const choosable = (current: number) => [...byId.values()].filter((d) => d.isActive || d.id === current)
   const addable = documents.filter((d) => d.isActive && !onList.has(d.id))
