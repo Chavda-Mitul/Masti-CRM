@@ -7,7 +7,7 @@ import { activeFilter, createAudited, saveChanges } from "../../lib/masters";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import type { Actor } from "../users/user";
 import { assertCanEditEmbassies, assertCanEditVisaMasters } from "./access";
-import { uploadRulesProblem, type UploadRules } from "./visaMasters.schemas";
+import { NORMAL_URGENCY, uploadRulesProblem, type UploadRules } from "./visaMasters.schemas";
 import type {
   CreateCountryInput,
   CreateDocumentInput,
@@ -18,6 +18,7 @@ import type {
   CreateMissingPassportReasonInput,
   CreateExtraChargeInput,
   CreateProcessingSpeedInput,
+  CreateUrgencyLevelInput,
   CreateEmbassyInput,
   CreateEnquirySourceInput,
   CreateOfferingInput,
@@ -31,6 +32,7 @@ import type {
   UpdateMissingPassportReasonInput,
   UpdateExtraChargeInput,
   UpdateProcessingSpeedInput,
+  UpdateUrgencyLevelInput,
   UpdateEmbassyInput,
   UpdateEnquirySourceInput,
   UpdateOfferingInput,
@@ -263,6 +265,40 @@ export async function updateProcessingSpeed(id: number, input: UpdateProcessingS
     entityType: "ProcessingSpeed",
     entityId: id,
     write: (tx) => tx.processingSpeed.update({ where: { id }, data: changes }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Urgency levels: Normal, Urgent… picked on New enquiry, changed on the case (docs/decisions/0003-visa-intake.md
+// amendment 1)
+// ---------------------------------------------------------------------------
+
+export async function listUrgencyLevels(active?: boolean) {
+  return prisma.urgencyLevel.findMany({ where: activeFilter(active), orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+}
+
+export async function createUrgencyLevel(input: CreateUrgencyLevelInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  return createAudited(actor, "urgencyLevel.create", "UrgencyLevel", (tx) => tx.urgencyLevel.create({ data: input }));
+}
+
+export async function updateUrgencyLevel(id: number, input: UpdateUrgencyLevelInput, actor: Actor) {
+  assertCanEditVisaMasters(actor.user);
+  const before = await prisma.urgencyLevel.findUnique({ where: { id } });
+  if (!before) throw notFound("Urgency level not found.");
+  const changes = onlyChanged(definedOnly(input), before);
+  // Every new enquiry starts on Normal (also checked in the migration).
+  if (changes.isActive === false && before.code === NORMAL_URGENCY) {
+    throw conflict(`${before.name} is where every new enquiry starts, so it can't be switched off. Rename it instead.`);
+  }
+  return saveChanges({
+    before,
+    changes,
+    actor,
+    action: "urgencyLevel.update",
+    entityType: "UrgencyLevel",
+    entityId: id,
+    write: (tx) => tx.urgencyLevel.update({ where: { id }, data: changes }),
   });
 }
 

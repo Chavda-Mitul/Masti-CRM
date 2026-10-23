@@ -667,9 +667,80 @@ describe("extra charges (0011 Decision 7)", () => {
   });
 });
 
+describe("urgency levels (0003 amendment 1)", () => {
+  it("is seeded with Normal and Urgent, read by Visa staff and written only by the Visa HOD or the Head", async () => {
+    const staff = await visaStaff("VIEW");
+    const list = await staff.get("/api/masters/urgency-levels");
+    expect(list.status).toBe(200);
+    expect(list.body.urgencyLevels.map((l: { code: string; name: string }) => [l.code, l.name])).toEqual([
+      ["NORMAL", "Normal"],
+      ["URGENT", "Urgent"],
+    ]);
+
+    await createUser({ name: "Neha", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const editor = await loginAs("neha@masti.test");
+    const refused = await editor.post("/api/masters/urgency-levels").send({ code: "VERY_URGENT", name: "Very urgent" });
+    expect(refused.status).toBe(403);
+    expect(refused.body.message).toMatch(/Visa HOD/);
+
+    const hod = await visaHod();
+    const created = await hod.post("/api/masters/urgency-levels").send({ code: " very_urgent ", name: "Very urgent", sortOrder: 3 });
+    expect(created.status).toBe(201);
+    expect(created.body.urgencyLevel).toMatchObject({ code: "VERY_URGENT", name: "Very urgent", sortOrder: 3, isActive: true });
+    expect(await prisma.auditLog.count({ where: { action: "urgencyLevel.create" } })).toBe(1);
+
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+    const head = await loginAs("vimal@masti.test");
+    expect((await head.post("/api/masters/urgency-levels").send({ code: "TODAY", name: "Needed today" })).status).toBe(201);
+  });
+
+  it("refuses a used or badly formed code, never changes a code, renames, reorders and switches levels off", async () => {
+    const hod = await visaHod();
+    expect((await hod.post("/api/masters/urgency-levels").send({ code: "URGENT", name: "Urgent again" })).status).toBe(409);
+    expect((await hod.post("/api/masters/urgency-levels").send({ code: "very urgent", name: "Very urgent" })).status).toBe(400);
+
+    const urgent = await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "URGENT" } });
+    const patched = await hod.patch(`/api/masters/urgency-levels/${urgent.id}`).send({ code: "OLD", name: "Very urgent", sortOrder: 0 });
+    expect(patched.status).toBe(200);
+    expect(patched.body.urgencyLevel).toMatchObject({ code: "URGENT", name: "Very urgent", sortOrder: 0 });
+    const unchanged = await hod.patch(`/api/masters/urgency-levels/${urgent.id}`).send({ name: "Very urgent" });
+    expect(unchanged.status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { action: "urgencyLevel.update" } })).toBe(1);
+
+    // Reordered first in the list.
+    expect((await hod.get("/api/masters/urgency-levels")).body.urgencyLevels.map((l: { code: string }) => l.code)).toEqual(["URGENT", "NORMAL"]);
+
+    await hod.patch(`/api/masters/urgency-levels/${urgent.id}`).send({ isActive: false });
+    expect((await hod.get("/api/masters/urgency-levels?active=true")).body.urgencyLevels.map((l: { code: string }) => l.code)).toEqual(["NORMAL"]);
+    expect((await hod.get("/api/masters/urgency-levels")).body.urgencyLevels).toHaveLength(2);
+  });
+
+  it("never switches Normal off, where every new enquiry starts, but renames it", async () => {
+    const hod = await visaHod();
+    const normal = await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "NORMAL" } });
+    const refused = await hod.patch(`/api/masters/urgency-levels/${normal.id}`).send({ isActive: false });
+    expect(refused.status).toBe(409);
+    expect(refused.body.message).toMatch(/Normal is where every new enquiry starts/);
+    expect((await prisma.urgencyLevel.findUniqueOrThrow({ where: { code: "NORMAL" } })).isActive).toBe(true);
+
+    const renamed = await hod.patch(`/api/masters/urgency-levels/${normal.id}`).send({ name: "Regular" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.urgencyLevel).toMatchObject({ code: "NORMAL", name: "Regular", isActive: true });
+    // Switching it on again, or sending isActive: true, is no change.
+    expect((await hod.patch(`/api/masters/urgency-levels/${normal.id}`).send({ isActive: true })).status).toBe(200);
+    expect(await prisma.auditLog.count({ where: { action: "urgencyLevel.update" } })).toBe(1);
+  });
+});
+
 describe("the database", () => {
   it("refuses a lowercase extra charge code", async () => {
     await expect(prisma.extraCharge.create({ data: { code: "urgent fee", name: "x" } })).rejects.toThrow();
+  });
+
+  it("refuses a lowercase urgency code, and Normal switched off", async () => {
+    await expect(prisma.urgencyLevel.create({ data: { code: "very urgent", name: "x" } })).rejects.toThrow();
+    await expect(prisma.urgencyLevel.update({ where: { code: "NORMAL" }, data: { isActive: false } })).rejects.toThrow();
+    await prisma.urgencyLevel.update({ where: { code: "URGENT" }, data: { isActive: false } });
   });
 
   it("refuses a lowercase recall reason code", async () => {

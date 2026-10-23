@@ -1633,6 +1633,18 @@ model ProcessingSpeed {
   quotes    VisaQuote[]
 }
 
+/// How urgent a visa enquiry is: "Normal", "Urgent"… (docs/decisions/0003-visa-intake.md amendment 1, change request
+/// 17). Picked on New enquiry and changed on the case. NORMAL is where every enquiry starts, so it is never switched
+/// off; every other level is urgent and shows as a red tag. Edited by the Visa HOD or the Head.
+model UrgencyLevel {
+  id        Int     @id @default(autoincrement())
+  /// NORMAL, URGENT… Never changes.
+  code      String  @unique
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+}
+
 /// How a docket goes to the vendor: "Blue Dart", "DTDC", "By hand (no AWB)" (docs/decisions/0008-visa-docket-dispatch.md
 /// Decision 6). Picked at dispatch. Edited by the Visa HOD or the Head; switched off, never deleted.
 model Courier {

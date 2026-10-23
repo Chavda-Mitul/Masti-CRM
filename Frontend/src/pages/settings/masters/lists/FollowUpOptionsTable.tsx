@@ -9,15 +9,15 @@ import { applyServerIssues } from '../../../../lib/apiErrors'
 import { useToast } from '../../../../lib/toast'
 import { startingDepartments } from '../departmentTags'
 import { useMasterList, useSaveMaster } from '../queries'
-import { followUpOptionFormSchema, taggedOptionFormSchema, type FollowUpOptionFormValues } from '../schemas'
+import { followUpOptionFormSchema, NORMAL_URGENCY, taggedOptionFormSchema, type FollowUpOptionFormValues } from '../schemas'
 import type { FollowUpOption } from '../types'
 import { DepartmentsField, DepartmentTags, TaggedEditors } from './DepartmentPicker'
 import { ListCard } from './ListCard'
 import { MasterDrawer, ToggleActiveButton } from './MasterDrawer'
 
-type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps' | 'processing-speeds' | 'field-fail-reasons'
+type OptionResource = 'follow-up-outcomes' | 'follow-up-next-steps' | 'processing-speeds' | 'urgency-levels' | 'field-fail-reasons'
 
-/** The follow-up dropdowns are tagged with the departments they show in (0018); the other two lists aren't. */
+/** The follow-up dropdowns are tagged with the departments they show in (0018); the other lists aren't. */
 const TAGGED: OptionResource[] = ['follow-up-outcomes', 'follow-up-next-steps']
 
 /** A row of either kind: the follow-up ones carry their departments. */
@@ -48,6 +48,15 @@ const COPY: Record<OptionResource, { title: string; column: string; one: string;
     placeholder: 'Express',
     codeHint: 'e.g. EXPRESS.',
   },
+  'urgency-levels': {
+    title: 'Urgency levels',
+    column: 'Level',
+    one: 'a level',
+    intro:
+      'How urgent a visa enquiry is, picked on New enquiry and changed on the case. Every enquiry starts on Normal (code NORMAL), which can be renamed but never switched off. Every other level counts as urgent and shows as a red tag.',
+    placeholder: 'Very urgent',
+    codeHint: 'e.g. VERY_URGENT.',
+  },
   'field-fail-reasons': {
     title: 'Visit fail reasons',
     column: 'Reason',
@@ -60,8 +69,9 @@ const COPY: Record<OptionResource, { title: string; column: string; one: string;
 
 /**
  * Simple dropdown lists of a code and a name: the two follow-up dropdowns (0006 Decision 7, tagged by department in
- * 0018), the processing speeds on a visa quote (0009) and why a field visit fails (0015 Decision 5). No free text:
- * reports count these. A follow-up value is changed only by the Head or an HOD of every department it is for.
+ * 0018), the processing speeds on a visa quote (0009), how urgent a visa enquiry is (0003 amendment 1; Normal is never
+ * switched off) and why a field visit fails (0015 Decision 5). No free text: reports count these. A follow-up value is
+ * changed only by the Head or an HOD of every department it is for.
  */
 export function FollowUpOptionsTable({ resource, canEdit, showInactive }: { resource: OptionResource; canEdit: boolean; showInactive: boolean }) {
   const copy = COPY[resource]
@@ -71,6 +81,8 @@ export function FollowUpOptionsTable({ resource, canEdit, showInactive }: { reso
   const [editing, setEditing] = useState<OptionRow | 'new' | null>(null)
   const rows: OptionRow[] = (list.data ?? []).filter((o) => showInactive || o.isActive)
   const canChange = (o: OptionRow) => !tagged || (!!me && canEditTagged(me, o.departments ?? []))
+  // Every enquiry starts on Normal, so it is never switched off (the backend refuses too).
+  const canSwitchOff = (o: OptionRow) => !(resource === 'urgency-levels' && o.code === NORMAL_URGENCY)
 
   return (
     <>
@@ -114,7 +126,7 @@ export function FollowUpOptionsTable({ resource, canEdit, showInactive }: { reso
                           <button type="button" className="btn btn-sm" onClick={() => setEditing(o)}>
                             Edit
                           </button>
-                          <ToggleActiveButton resource={resource} id={o.id} name={o.name} isActive={o.isActive} />
+                          {canSwitchOff(o) && <ToggleActiveButton resource={resource} id={o.id} name={o.name} isActive={o.isActive} />}
                         </>
                       ) : (
                         <TaggedEditors codes={o.departments ?? []} />
