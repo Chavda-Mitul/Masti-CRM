@@ -42,6 +42,12 @@ const needsSomeone: Prisma.EnquiryWhereInput = {
   OR: [{ status: { in: ["OPEN", "POSTPONED"] } }, { status: "CANCELLED", ...TO_HAND_BACK }],
 };
 
+/** Business lost's top reasons: the demo's three bars (Decision 5). */
+const LOST_REASONS = 3;
+
+/** A case is booked once it has a standing invoice: a main one that no credit note cancelled whole (as liveInvoiceNo). */
+const standingInvoice: Prisma.InvoiceWhereInput = { kind: "MAIN", creditNotes: { none: { kind: "WHOLE" } } };
+
 /** The cases on this user's Today, and how the page names them. */
 async function todayScope(user: UserWithDepartments) {
   const departments = await viewableDepartments(user);
@@ -93,16 +99,46 @@ async function noticeCard(departmentIds: number[], now: Date) {
 }
 
 /**
+ * Business lost this month — and why (Decision 5, amended 23 Oct 2026): the person's cases that came in this calendar
+ * month, each Booked (a standing invoice), Lost (cancelled: the demo's cancel reasons are its lost reasons) or Still
+ * open, so the three add up to Queries in; and the lost ones' top reasons, most first (ties in the list's order).
+ */
+async function businessLost(where: Prisma.EnquiryWhereInput, now: Date) {
+  const monthStart = istDateTimeToUtc(`${istToday(now).slice(0, 8)}01`, "00:00");
+  const cameIn = (more: Prisma.EnquiryWhereInput): Prisma.EnquiryWhereInput => ({ AND: [where, { createdAt: { gte: monthStart } }, more] });
+  const lostWhere = cameIn({ status: "CANCELLED" });
+  const [queriesIn, booked, lost, byReason] = await Promise.all([
+    prisma.enquiry.count({ where: cameIn({}) }),
+    prisma.enquiry.count({ where: cameIn({ status: { not: "CANCELLED" }, invoices: { some: standingInvoice } }) }),
+    prisma.enquiry.count({ where: lostWhere }),
+    prisma.enquiry.groupBy({ by: ["reasonId"], where: lostWhere, _count: { _all: true } }),
+  ]);
+  // A cancelled case always has its reason (a CHECK in the database).
+  const reasons = await prisma.enquiryReason.findMany({ where: { id: { in: byReason.flatMap((r) => (r.reasonId ? [r.reasonId] : [])) } } });
+  const top = reasons
+    .map((r) => ({ name: r.name, sortOrder: r.sortOrder, count: byReason.find((b) => b.reasonId === r.id)?._count._all ?? 0 }))
+    .sort((a, b) => b.count - a.count || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .slice(0, LOST_REASONS);
+  return {
+    queriesIn,
+    booked,
+    lost,
+    stillOpen: queriesIn - booked - lost,
+    reasons: top.map(({ name, count }) => ({ name, count })),
+  };
+}
+
+/**
  * The banner's sentence, the tiles, Up next (Decision 9): the cases behind Due today and Running late, in the enquiries
  * list's order (late first, then by time due), each with what it needs; the department bars (Decision 10): each
- * department's cases on the list's Open tab; and the notice card (Decision 11).
+ * department's cases on the list's Open tab; the notice card (Decision 11); and Business lost (Decision 5).
  */
 export async function todaySummary(user: UserWithDepartments, now: Date = new Date()) {
   const [{ where, scope, departments }, since] = await Promise.all([todayScope(user), newSince(now)]);
   const midnight = istDateTimeToUtc(addDays(istToday(now), 1), "00:00");
   const due = (dueAt: { gte?: Date; lt: Date }): Prisma.EnquiryWhereInput => ({ AND: [where, needsSomeone, { dueAt }] });
 
-  const [dueToday, late, oldest, newEnquiries, upNext, open, notices] = await Promise.all([
+  const [dueToday, late, oldest, newEnquiries, upNext, open, notices, lost] = await Promise.all([
     prisma.enquiry.count({ where: due({ gte: now, lt: midnight }) }),
     prisma.enquiry.count({ where: due({ lt: now }) }),
     prisma.enquiry.aggregate({ where: due({ lt: now }), _min: { dueAt: true } }),
@@ -119,6 +155,7 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
       departments.map((d) => d.id),
       now,
     ),
+    businessLost(where, now),
   ]);
   return {
     scope,
@@ -153,5 +190,6 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
       mine: !isHodOf(user, d.code as DepartmentCode),
     })),
     notices,
+    businessLost: lost,
   };
 }

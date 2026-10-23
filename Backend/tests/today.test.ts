@@ -269,3 +269,140 @@ describe("the notice card", () => {
     expect(titles((await todaySummary(vimal, now)).notices)).toEqual(["Tickets, just now", "Dussehra", "Visa, an hour ago"]);
   });
 });
+
+describe("Business lost this month", () => {
+  // 0017 Decision 5, amendment 2: the cases that came in this month, booked (a standing invoice), lost (cancelled) or
+  // still open; and the top reasons the lost ones went.
+  const monthStart = () => istDateTimeToUtc(`${istToday().slice(0, 8)}01`, "00:00");
+
+  /** A document row for an invoice or a credit note, which each need their own. */
+  async function caseFile(enquiryId: string, kind: "INVOICE" | "CREDIT_NOTE", name: string) {
+    const by = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+    return prisma.caseFile.create({
+      data: { enquiryId, kind, storageKey: `cases/${enquiryId}/${name}.pdf`, fileName: `${name}.pdf`, sizeBytes: 1024, pageCount: 1, uploadedById: by.id },
+    });
+  }
+
+  /** An invoice written straight in the database (raising one is tested in visaInvoice.test.ts). */
+  async function invoiceFor(enquiryId: string, invoiceNo: string, replacesId?: string) {
+    const by = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+    const file = await caseFile(enquiryId, "INVOICE", invoiceNo);
+    return prisma.invoice.create({
+      data: {
+        invoiceNo,
+        enquiryId,
+        replacesId: replacesId ?? null,
+        issuedOn: toDbDate(istToday()),
+        issuedById: by.id,
+        client: {},
+        company: {},
+        terms: {},
+        placeOfSupply: "24",
+        taxType: "INTRA_STATE",
+        sac: "998555",
+        gstRateBp: 1800,
+        processingSpeed: "Normal",
+        grossPaise: 100_000,
+        serviceChargePaise: 0,
+        cgstPaise: 0,
+        sgstPaise: 0,
+        igstPaise: 0,
+        totalPaise: 100_000,
+        fileId: file.id,
+      },
+    });
+  }
+
+  /** A credit note that cancels the whole invoice (issuing one is tested in visaCreditNote.test.ts). */
+  async function cancelInvoice(invoice: { id: string; enquiryId: string; invoiceNo: string }) {
+    const by = await prisma.user.findUniqueOrThrow({ where: { email: "aarti@masti.test" } });
+    const file = await caseFile(invoice.enquiryId, "CREDIT_NOTE", `cn-${invoice.invoiceNo}`);
+    const reason = await prisma.creditNoteReason.findUniqueOrThrow({ where: { code: "WRONG_AMOUNT" } });
+    await prisma.creditNote.create({
+      data: {
+        creditNoteNo: `CN-${invoice.invoiceNo}`,
+        invoiceId: invoice.id,
+        enquiryId: invoice.enquiryId,
+        kind: "WHOLE",
+        reasonId: reason.id,
+        issuedOn: toDbDate(istToday()),
+        issuedById: by.id,
+        client: {},
+        company: {},
+        grossPaise: 100_000,
+        serviceChargePaise: 0,
+        cgstPaise: 0,
+        sgstPaise: 0,
+        igstPaise: 0,
+        totalPaise: 100_000,
+        fileId: file.id,
+      },
+    });
+  }
+
+  it("sorts this month's cases into booked, lost and still open, which add up, with the top 3 reasons", async () => {
+    const aarti = await visaStaff();
+    const start = monthStart();
+    const cancelled = async (code: string) => ({ status: "CANCELLED" as const, reasonId: await reason(code) });
+
+    // Still open: open from the month's first minute, postponed, and one whose only invoice a credit note cancelled.
+    await caseWith(aarti, "9825000001", { createdAt: start });
+    await caseWith(aarti, "9825000002", { status: "POSTPONED", reasonId: await reason("TRAVEL_DATES_MOVED"), resumeOn: toDbDate(addDays(istToday(), 10)) });
+    const creditNoted = await caseWith(aarti, "9825000003", {});
+    await cancelInvoice(await invoiceFor(creditNoted.id, "MVI00000003"));
+    // Booked: an invoice raised, a closed case, and one whose cancelled invoice was replaced.
+    await invoiceFor((await caseWith(aarti, "9825000004", {})).id, "MVI00000004");
+    const closed = await caseWith(aarti, "9825000005", { status: "CLOSED", dueAt: null });
+    await invoiceFor(closed.id, "MVI00000005");
+    const replaced = await caseWith(aarti, "9825000006", {});
+    const wrong = await invoiceFor(replaced.id, "MVI00000006");
+    await cancelInvoice(wrong);
+    await invoiceFor(replaced.id, "MVI00000007", wrong.id);
+    // Lost: every cancelled case, with or without an invoice, and also one whose passports are still to hand back.
+    const afterInvoice = await caseWith(aarti, "9825000007", {});
+    await invoiceFor(afterInvoice.id, "MVI00000008");
+    await prisma.enquiry.update({ where: { id: afterInvoice.id }, data: { ...(await cancelled("TRIP_CANCELLED")), dueAt: null } });
+    await caseWith(aarti, "9825000008", await cancelled("PRICE_HIGHER"));
+    await caseWith(aarti, "9825000009", await cancelled("PRICE_HIGHER"));
+    await caseWith(aarti, "9825000010", await cancelled("NO_REPLY"));
+    const handBack = await caseWith(aarti, "9825000011", await cancelled("NO_REPLY"));
+    await prisma.visaCase.update({ where: { enquiryId: handBack.id }, data: { bookletsCurrent: 1 } });
+    await caseWith(aarti, "9825000012", await cancelled("WENT_WITH_ANOTHER_AGENT"));
+    // Came in last month: not this month's, whatever happened to it since.
+    await caseWith(aarti, "9825000013", { createdAt: new Date(start.getTime() - 60_000), ...(await cancelled("PRICE_HIGHER")) });
+
+    const { businessLost } = await todaySummary(await userOf("aarti@masti.test"));
+    expect(businessLost).toEqual({
+      queriesIn: 12,
+      booked: 3,
+      lost: 6,
+      stillOpen: 3,
+      // Most first; a tie goes in the list's order: Price higher (5) before No reply (8), Went with another agent (3)
+      // before Trip cancelled (4).
+      reasons: [
+        { name: "Price higher", count: 2 },
+        { name: "No reply", count: 2 },
+        { name: "Went with another agent", count: 1 },
+      ],
+    });
+  });
+
+  it("counts staff's own cases, an HOD's department and the Head's everything, like the rest of Today", async () => {
+    const aarti = await visaStaff();
+    await createUser({ name: "Neha Joshi", email: "neha@masti.test", departments: [{ code: "VISA", access: "EDIT" }] });
+    const neha = await loginAs("neha@masti.test");
+    await caseWith(aarti, "9825000001", {});
+    await caseWith(neha, "9825000002", { status: "CANCELLED", reasonId: await reason("NO_REPLY") });
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    await createUser({ name: "Vimal", email: "vimal@masti.test", type: "HEAD" });
+
+    const lostOf = async (email: string) => (await todaySummary(await userOf(email))).businessLost;
+    expect(await lostOf("aarti@masti.test")).toEqual({ queriesIn: 1, booked: 0, lost: 0, stillOpen: 1, reasons: [] });
+    expect(await lostOf("neha@masti.test")).toEqual({ queriesIn: 1, booked: 0, lost: 1, stillOpen: 0, reasons: [{ name: "No reply", count: 1 }] });
+    const everyone = { queriesIn: 2, booked: 0, lost: 1, stillOpen: 1, reasons: [{ name: "No reply", count: 1 }] };
+    expect(await lostOf("riya@masti.test")).toEqual(everyone);
+    expect(await lostOf("vimal@masti.test")).toEqual(everyone);
+    // And on the page's request.
+    expect((await today(aarti)).businessLost).toMatchObject({ queriesIn: 1, stillOpen: 1 });
+  });
+});

@@ -1026,12 +1026,12 @@ model CaseCounter {
   @@id([departmentId, year])
 }
 
-/// Code branches on it (lists, Today, reports), so an enum. The *reasons* are master data (EnquiryReason).
+/// Code branches on it (lists, Today, reports), so an enum. The *reasons* are master data (EnquiryReason). No LOST:
+/// a cancelled case is lost business, with its cancel reason (docs/decisions/0017-today-dashboard.md amendment 2).
 enum EnquiryStatus {
   OPEN
   POSTPONED
   CANCELLED
-  LOST
   CLOSED
 }
 
@@ -1105,7 +1105,7 @@ model FollowUpNextStepDepartment {
   @@index([departmentId])
 }
 
-/// Which action a reason belongs to. LOST comes when closing and losing are built.
+/// Which action a reason belongs to. The cancel reasons are also why business was lost (0017 amendment 2).
 enum EnquiryReasonKind {
   POSTPONE
   CANCEL

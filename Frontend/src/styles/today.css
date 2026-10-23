@@ -195,7 +195,7 @@
   overflow: hidden;
 }
 
-/* Business lost and Money to collect, until their numbers exist (0017 Decisions 4–5). */
+/* Business lost (0017 Decision 5, amendment 2): four small tiles, then the top reasons as bars. */
 .today-lost {
   display: flex;
   flex-direction: column;
@@ -223,14 +223,40 @@
 }
 .today-mini strong {
   font-size: 20px;
-  color: var(--text-faint);
+  color: var(--ink);
 }
 .today-mini.is-ok {
   background: var(--ok-bg);
 }
+.today-mini.is-ok strong {
+  color: var(--ok);
+}
 .today-mini.is-bad {
   background: var(--bad-bg);
 }
+.today-mini.is-bad strong {
+  color: var(--bad);
+}
+.today-lost-row {
+  font-weight: 400;
+  font-size: 13.5px;
+}
+.today-lost-name {
+  flex: 0 0 min(200px, 45%);
+}
+.today-lost-row .today-bar-track > span {
+  background: var(--hero-orange);
+}
+.today-lost-row .today-bar-count {
+  font-weight: 700;
+}
+@media (max-width: 560px) {
+  .today-mini-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Money to collect, until its numbers exist (0017 Decision 4). */
 .today-money {
   display: flex;
   flex-direction: column;

@@ -3,7 +3,8 @@ import { useMe } from '../../auth/useAuth'
 import { RefreshFailed } from '../../components/RefreshFailed'
 import { errorText, lostAccess } from '../../lib/apiErrors'
 import '../../styles/today.css'
-import { BusinessLostCard, MoneyToCollectCard } from './ComesWithCards'
+import { BusinessLostCard } from './BusinessLostCard'
+import { MoneyToCollectCard } from './ComesWithCards'
 import { DepartmentBarsCard } from './DepartmentBarsCard'
 import { greetingNow, heroLine, longToday, newSinceLabel, oldestLabel, scopeLabel } from './labels'
 import { NoticeBoardCard } from './NoticeBoardCard'
@@ -56,7 +57,7 @@ export function TodayPage() {
         <div className="today-grid">
           <div className="today-col">
             <UpNextCard day={day} />
-            <BusinessLostCard />
+            <BusinessLostCard day={day} />
           </div>
           <div className="today-col">
             <DepartmentBarsCard day={day} />

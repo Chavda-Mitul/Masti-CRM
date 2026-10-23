@@ -171,7 +171,7 @@ export interface ClientCase {
   status: EnquiryStatus
   /** The step's name ("Documents") and its own status label ("Delivered" once a visa case is closed). */
   stage: { name: string; statusLabel: string }
-  /** Why it was postponed, cancelled or lost. */
+  /** Why it was postponed or cancelled. */
   reason: { name: string } | null
   resumeOn: string | null
   /** A cancelled visa case whose passports are still to hand back. */

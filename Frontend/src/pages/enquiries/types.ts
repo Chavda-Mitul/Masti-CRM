@@ -2,7 +2,7 @@
 
 import type { ScanRules, ScanType } from '../clients/scanFiles'
 
-export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'LOST' | 'CLOSED'
+export type EnquiryStatus = 'OPEN' | 'POSTPONED' | 'CANCELLED' | 'CLOSED'
 export type EnquiryOrigin = 'STAFF' | 'WHATSAPP_BOT' | 'WEBSITE_FORM' | 'CROSS_SELL' | 'IMPORT'
 
 export interface StageRef {

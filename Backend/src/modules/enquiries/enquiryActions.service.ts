@@ -241,7 +241,7 @@ function assertCanReassign(user: UserWithDepartments, enquiry: LoadedEnquiry) {
 export async function reassign(caseNo: string, input: ReassignInput, actor: Actor) {
   const enquiry = await load(caseNo, actor.user);
   assertCanReassign(actor.user, enquiry);
-  if (enquiry.status === "CLOSED" || enquiry.status === "LOST" || (enquiry.status === "CANCELLED" && !toHandBack(enquiry))) {
+  if (enquiry.status === "CLOSED" || (enquiry.status === "CANCELLED" && !toHandBack(enquiry))) {
     throw conflict("This case is closed.");
   }
   const target = await prisma.user.findUnique({ where: { id: input.ownerId }, include: withDepartments });

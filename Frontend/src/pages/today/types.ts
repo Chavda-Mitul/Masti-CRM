@@ -44,4 +44,9 @@ export interface TodaySummary {
   openByDepartment: { code: string; name: string; count: number; mine: boolean }[]
   /** The notice card (Decision 11): the latest 3 of their departments' notices and the holiday entries still new. */
   notices: NoticeFeedItem[]
+  /**
+   * Business lost this month (Decision 5, amendment 2): the cases that came in this month, booked (a standing invoice),
+   * lost (cancelled) or still open, which add up to queriesIn; and the top 3 reasons they were lost, most first.
+   */
+  businessLost: { queriesIn: number; booked: number; lost: number; stillOpen: number; reasons: { name: string; count: number }[] }
 }
