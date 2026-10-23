@@ -1,11 +1,55 @@
 # 0022 · The consent & liability form
 
 - **Status:** decided 21 Oct 2026 (project lead). Built: parts 1, 2 (2a, 2b) and 3 (3a, 3b). What's left is under
-  "Still open".
+  "Still open". **Amendment 1** (23 Oct 2026): the form's fields become a master; piece 1a (the form reads them) built
+  23 Oct 2026. Where it disagrees with part 1 below, the amendment wins.
 - **Date:** 21 Oct 2026
 - **Scope:** the consent each traveller gives once in their life (PROJECT_KNOWLEDGE §10.5): who fills what, how the
   client agrees, and the record Masti keeps. It builds on 0006 Decision 5, which created the `Consent` table and the case
   card as a flag only. It is not the hotel and ticket non-refundable consent, which is agreed by OTP.
+
+## Amendment 1 (23 Oct 2026, project lead, from Vimal at the demo): the form's fields in a master
+
+**The ask:** Vimal liked the form, but wants to shape it himself: add a field with a label, say what it takes (a date,
+some text…) and whether it's required. Right now he wants institute, education (Masters, PhD…), pass-out year and
+social media links. The demo has fixed fields: change request 18.
+
+**Decided (project lead, 23 Oct 2026):**
+- **A master, Settings → Masters → Consent form fields,** changed by the Head and the Visa HOD (as the wording). A field
+  has a label, a kind, "required", an order, and an on/off switch. Fields are switched off, never deleted.
+- **Five kinds:** Text (one line, at most 100 characters), Long text (a few lines, at most 300), Date (never in the
+  future), Number (whole digits, e.g. a pass-out year or an income; commas and spaces dropped) and Web link (`https://`
+  added when missing). No dropdown: Education is typed.
+- **Three fields stay fixed:** date of birth, home address and office address. Other screens read them (age, the
+  covering letter), so their answers stay columns on the person. For these only "required" changes, and the date of
+  birth is always required (the child rule, amendment 2, needs it). The other seven of part 1's fields (spouse's,
+  mother's and father's dates of birth, anniversary, profession, annual income, education) become ordinary fields.
+- **Set up with** the demo's ten, in part 1's order (home address required ⚠️), then Institute (text), Pass-out year
+  (number), and one Web link each for Instagram, Facebook and LinkedIn. More sites (X, YouTube) are Vimal's to add.
+- **People who already agreed:** nothing changes. Their consent stands (it's once for life), staff may fill a new field,
+  and no new link goes.
+
+**Built, piece 1a: the form reads the master (23 Oct 2026):**
+- **Data:** `ConsentField` (label, kind, `fixed`, required, sortOrder, isActive) and `ConsentAnswer` (one row per person
+  and non-fixed field, none when empty), migration `20261023190000_consent_fields`. The seven columns left
+  `ClientMember`; their dev data goes (reset the dev database). Checks: a label not blank, at most 100 characters and
+  unique ignoring case; a fixed field keeps its kind and stays on; the date of birth stays required; an answer is not
+  blank and at most 300 characters. Seeded into an empty table only (`seedConsentFields`).
+- **The form:** `GET /api/visa/cases/:caseNo/travellers/:travellerId/consent-details` gives the fields in use, in order,
+  and the person's answers by field id, with part 1's rule. The `PUT` now sends `{ answers: { [fieldId]: … }, updatedAt }`:
+  - Every field in use, each time. A field added, switched off or switched on meanwhile is a 409 `FIELDS_CHANGED`; the
+    dialog loads the form again and keeps what was typed (it does the same on `STALE`).
+  - Each answer is checked against its field's kind and "required"; every problem comes back at once, next to its own
+    field (`fieldErrors`).
+  - Answers to a switched-off field are kept, for when it's switched back on.
+  - The audit (`member.consent_details`) keeps the answers by label.
+- **The case** says only whether the details are filled in (`filledAt`, `filledBy`); the dialog loads the rest itself.
+- **The client's page and the record:** the consent's copy of the details is now `{ name, relation, passportNumber,
+  rows: [{ label, kind, value }] }`: the fields in use that are filled in, in order, under their labels then, so renaming
+  a field later never changes a record. Renaming one while the client reads asks them to check again
+  (`DETAILS_CHANGED`).
+
+**Next:** piece 1b, the Settings page; then amendment 2 (a parent agrees for a child).
 
 ## Context
 

@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { ClientMember, Relation } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
-import { fromDbDate } from "../../lib/dates";
 import { HttpError, notFound } from "../../lib/httpError";
 import { getCompanyDetails } from "../company/company.settings";
+import { activeConsentFields, answerOf, type AnsweringPerson } from "./consentFields";
 import { hashConsentToken } from "./consentToken";
 
 // The client's side of the consent form (docs/decisions/0022-consent-form.md, part 2): what the link opens, and "I
@@ -22,31 +22,31 @@ export async function wordingInUse(db: Db = prisma) {
   return wording;
 }
 
+/** What the form needs of the person: their name, relation and passport, and their answers. */
+export const formPersonInclude = { relation: true, consentAnswers: true } as const;
+
 /**
  * The person as the form shows them, and as the consent keeps them once agreed: the name and current passport
- * number, then the details staff filled in.
+ * number, then the details staff filled in, each with its field's label as it is now (amendment 1), so renaming a field
+ * later never changes a record. Only the fields in use that have an answer, in the form's order.
  */
-export function formDetailsOf(member: ClientMember & { relation: Relation }) {
-  const day = (value: Date | null) => (value ? fromDbDate(value) : null);
+export async function formDetailsOf(db: Db, member: Pick<ClientMember, "name" | "passportNumber"> & AnsweringPerson & { relation: Relation }) {
+  const fields = await activeConsentFields(db);
   return {
     name: member.name,
     relation: member.relation.name,
     passportNumber: member.passportNumber,
-    dateOfBirth: day(member.dateOfBirth),
-    spouseDateOfBirth: day(member.spouseDateOfBirth),
-    anniversary: day(member.anniversary),
-    motherDateOfBirth: day(member.motherDateOfBirth),
-    fatherDateOfBirth: day(member.fatherDateOfBirth),
-    residentialAddress: member.residentialAddress,
-    officeAddress: member.officeAddress,
-    annualIncome: member.annualIncome,
-    profession: member.profession,
-    education: member.education,
+    rows: fields.flatMap((f) => {
+      const value = answerOf(f, member);
+      return value === null ? [] : [{ label: f.label, kind: f.kind, value }];
+    }),
   };
 }
 
+type FormDetails = Awaited<ReturnType<typeof formDetailsOf>>;
+
 /** The details' fingerprint: "I agree" sends back the one the page showed, so staff changing them meanwhile is caught. */
-const detailsHashOf = (details: ReturnType<typeof formDetailsOf>) => createHash("sha256").update(JSON.stringify(details)).digest("hex");
+const detailsHashOf = (details: FormDetails) => createHash("sha256").update(JSON.stringify(details)).digest("hex");
 
 /** Masti's name, address and phones for the page (and the printed record): nothing of its tax or bank details. */
 export async function companyForPage() {
@@ -58,13 +58,13 @@ export async function companyForPage() {
 export async function viewConsent(token: string) {
   const link = await prisma.consentLink.findUnique({
     where: { tokenHash: hashConsentToken(token) },
-    include: { member: { include: { relation: true, consent: true } } },
+    include: { member: { include: { ...formPersonInclude, consent: true } } },
   });
   if (!link) throw notFound(INVALID);
   const company = await companyForPage();
   if (link.member.consent) return { state: "AGREED" as const, name: link.member.name, agreedAt: link.member.consent.agreedAt, company };
   if (link.replacedAt) throw replaced();
-  const person = formDetailsOf(link.member);
+  const person = await formDetailsOf(prisma, link.member);
   return { state: "OPEN" as const, person, detailsHash: detailsHashOf(person), wording: await wordingInUse(), company };
 }
 
@@ -85,7 +85,7 @@ export async function agreeConsent(
     // In the same order as staff saving the details (the person, then the link), so the two never deadlock.
     await tx.$queryRaw`SELECT "id" FROM "ClientMember" WHERE "id" = ${found.memberId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "ConsentLink" WHERE "id" = ${found.id} FOR UPDATE`;
-    const member = await tx.clientMember.findUniqueOrThrow({ where: { id: found.memberId }, include: { relation: true, consent: true } });
+    const member = await tx.clientMember.findUniqueOrThrow({ where: { id: found.memberId }, include: { ...formPersonInclude, consent: true } });
     if (member.consent) return { state: "AGREED" as const, name: member.name, agreedAt: member.consent.agreedAt };
     const link = await tx.consentLink.findUniqueOrThrow({ where: { id: found.id } });
     if (link.replacedAt) throw replaced();
@@ -93,7 +93,7 @@ export async function agreeConsent(
     if (wording.id !== wordingId) {
       throw new HttpError(409, "The form changed while you were reading it. Please read it again.", { code: "WORDING_CHANGED" });
     }
-    const details = formDetailsOf(member);
+    const details = await formDetailsOf(tx, member);
     if (detailsHashOf(details) !== shown.detailsHash) {
       throw new HttpError(409, "Your details changed while you were reading. Please check them again.", { code: "DETAILS_CHANGED" });
     }

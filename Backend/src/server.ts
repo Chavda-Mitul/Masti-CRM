@@ -4,7 +4,7 @@ import { prisma } from "./config/prisma";
 import { startJobs, stopJobs, stopWorkers } from "./lib/jobs";
 import { logger } from "./lib/logger";
 import { deleteExpiredSessions } from "./modules/auth/session";
-import { seedConsentWording } from "./modules/consent/consent.seed";
+import { seedConsentFields, seedConsentWording } from "./modules/consent/consent.seed";
 import { startMessages } from "./modules/messages/messages.worker";
 import { startVisaReminders } from "./modules/visa/visaReminders.worker";
 
@@ -29,8 +29,9 @@ async function main() {
   await startMessages();
   // The visa pending-document reminders, every 15 minutes (message 3, 0021 amendment 3).
   await startVisaReminders();
-  // The consent form needs a wording: the draft, into a database with none (docs/decisions/0022-consent-form.md).
+  // The consent form needs a wording and fields: the drafts, into a database with none (docs/decisions/0022-consent-form.md).
   await seedConsentWording(prisma);
+  await seedConsentFields(prisma);
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server running on http://localhost:${env.PORT}`);

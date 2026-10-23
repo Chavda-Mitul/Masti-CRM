@@ -444,27 +444,11 @@ function consentOf(t: TravellerRow) {
 }
 
 /**
- * The consent form's details on the person (docs/decisions/0022-consent-form.md, part 1), as the form starts from
- * them: filledAt stays null until staff save the form (the date of birth may already be there from the client page).
- * personUpdatedAt is the person's optimistic-lock token.
+ * Whether the consent form's details are filled in (docs/decisions/0022-consent-form.md, part 1): filledAt stays null
+ * until staff save the form. The form itself, its fields and answers, loads on its own (amendment 1).
  */
 function consentDetailsOf(m: NonNullable<TravellerRow["member"]>) {
-  const day = (value: Date | null) => (value ? fromDbDate(value) : null);
-  return {
-    dateOfBirth: day(m.dateOfBirth),
-    spouseDateOfBirth: day(m.spouseDateOfBirth),
-    anniversary: day(m.anniversary),
-    motherDateOfBirth: day(m.motherDateOfBirth),
-    fatherDateOfBirth: day(m.fatherDateOfBirth),
-    residentialAddress: m.residentialAddress,
-    officeAddress: m.officeAddress,
-    annualIncome: m.annualIncome,
-    profession: m.profession,
-    education: m.education,
-    filledAt: m.consentDetailsAt,
-    filledBy: m.consentDetailsBy,
-    personUpdatedAt: m.updatedAt,
-  };
+  return { filledAt: m.consentDetailsAt, filledBy: m.consentDetailsBy };
 }
 
 /**

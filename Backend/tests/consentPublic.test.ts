@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { clearOfficeNetworkCache, OFFICE_NETWORK_KEY } from "../src/modules/auth/officeNetwork";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
-import { linkSent } from "./consentHelpers";
+import { fieldId, linkSent, rowsOf } from "./consentHelpers";
 import { app, prisma, request, resetDb } from "./helpers";
 import type { Agent } from "./visaHelpers";
 
@@ -37,15 +37,17 @@ describe("opening the link", () => {
     const wording = await prisma.consentWording.findFirstOrThrow({ orderBy: { id: "desc" } });
     expect(res.body.consent).toMatchObject({
       state: "OPEN",
+      // Only the filled-in fields, in the form's order, each with its label (0022 amendment 1).
       person: {
         name: "Rakesh Mehta",
         relation: "Self",
         passportNumber: "Z1234567",
-        dateOfBirth: "1980-05-14",
-        residentialAddress: "B-702, Raghuvir Residency, Vesu, Surat",
-        annualIncome: 1_200_000,
-        profession: "Diamond trader",
-        education: null,
+        rows: [
+          { label: "Date of birth", kind: "DATE", value: "1980-05-14" },
+          { label: "Home address", kind: "LONG_TEXT", value: "B-702, Raghuvir Residency, Vesu, Surat" },
+          { label: "Profession", kind: "TEXT", value: "Diamond trader" },
+          { label: "Annual income (₹)", kind: "NUMBER", value: "1200000" },
+        ],
       },
       detailsHash: expect.stringMatching(/^[0-9a-f]{64}$/),
       wording: { id: wording.id, body: wording.body },
@@ -129,7 +131,8 @@ describe("I agree", () => {
   it("asks to check the details again when staff changed them meanwhile, so the record holds what was read", async () => {
     const { memberId, token } = await linkSent();
     const opened = (await view(token)).body.consent;
-    await prisma.clientMember.update({ where: { id: memberId }, data: { profession: "Retired" } });
+    const profession = { memberId_fieldId: { memberId, fieldId: await fieldId("Profession") } };
+    await prisma.consentAnswer.update({ where: profession, data: { value: "Retired" } });
     const res = await agree(token, opened);
     expect(res.status).toBe(409);
     expect(res.body.details.code).toBe("DETAILS_CHANGED");
@@ -139,9 +142,29 @@ describe("I agree", () => {
 
     // Opened again, the form shows the new details, and "I agree" keeps those.
     const again = (await view(token)).body.consent;
-    expect(again.person.profession).toBe("Retired");
+    expect(rowsOf(again.person)).toContainEqual(["Profession", "Retired"]);
     expect((await agree(token, again)).status).toBe(200);
     expect(await prisma.consent.findUniqueOrThrow({ where: { memberId } })).toMatchObject({ details: again.person });
+  });
+});
+
+describe("the fields in Settings (0022 amendment 1)", () => {
+  it("shows only the fields in use, under their labels now: a renamed one asks the client to check again", async () => {
+    const { token } = await linkSent();
+    const opened = (await view(token)).body.consent;
+    await prisma.consentField.updateMany({ where: { label: "Profession" }, data: { label: "Occupation" } });
+    await prisma.consentField.updateMany({ where: { label: "Annual income (₹)" }, data: { isActive: false } });
+    const res = await agree(token, opened);
+    expect(res.status).toBe(409);
+    expect(res.body.details.code).toBe("DETAILS_CHANGED");
+
+    const again = (await view(token)).body.consent;
+    expect(rowsOf(again.person)).toEqual([
+      ["Date of birth", "1980-05-14"],
+      ["Home address", "B-702, Raghuvir Residency, Vesu, Surat"],
+      ["Occupation", "Diamond trader"],
+    ]);
+    expect((await agree(token, again)).status).toBe(200);
   });
 });
 

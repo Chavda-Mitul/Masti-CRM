@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DRAFT_CONSENT_WORDING } from "../src/modules/consent/consent.seed";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
-import { agreeThroughLink, CONSENT_DETAILS, linkSent } from "./consentHelpers";
+import { agreeThroughLink, CONSENT_DETAILS, fillConsent, linkSent } from "./consentHelpers";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import type { Agent } from "./visaHelpers";
 
@@ -22,11 +22,11 @@ describe("a consent given through the link", () => {
     const { staff, caseNo, clientId, memberId, travellerId, token } = await linkSent();
     const opened = await agreeThroughLink(token);
 
-    // Afterwards the person's details change and a new wording comes in: the record keeps what was agreed to.
-    const c = (await staff.get(`/api/visa/cases/${caseNo}`)).body.case;
-    const updatedAt = c.travellers[0].consent.details.personUpdatedAt;
-    const edited = await staff.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/consent-details`).send({ ...CONSENT_DETAILS, profession: "Retired", updatedAt });
+    // Afterwards the person's details change, a field is renamed and a new wording comes in: the record keeps what was
+    // agreed to, under the labels the client read.
+    const edited = await fillConsent(staff, caseNo, travellerId, { ...CONSENT_DETAILS, Profession: "Retired" });
     expect(edited.status).toBe(200);
+    await prisma.consentField.updateMany({ where: { label: "Profession" }, data: { label: "Occupation" } });
     await prisma.consentWording.create({ data: { body: "Masti's own wording." } });
 
     const res = await record(staff, clientId, memberId);
@@ -35,11 +35,12 @@ describe("a consent given through the link", () => {
       source: "LINK",
       name: "Rakesh Mehta",
       agreedAt: expect.any(String),
-      person: { ...opened.person, profession: "Diamond trader" },
+      person: opened.person,
       wording: { id: opened.wording.id, body: DRAFT_CONSENT_WORDING },
       link: { toMobile: "+919825041234", sentBy: "Aarti Patel", caseNo, sentAt: expect.any(String) },
       userAgent: "Test phone",
     });
+    expect(res.body.record.person.rows).toContainEqual({ label: "Profession", kind: "TEXT", value: "Diamond trader" });
     expect(res.body.record.ip).toBeTruthy();
     // Masti's name, address and phones only: nothing of its PAN, GSTIN or bank details.
     expect(Object.keys(res.body.record.company).sort()).toEqual(["address", "name", "phone", "phone2"]);

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
-import { agreeThroughLink, CONSENT_DETAILS, linkSent } from "./consentHelpers";
+import { agreeThroughLink, CONSENT_DETAILS, fillConsent, linkSent } from "./consentHelpers";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 import type { Agent } from "./visaHelpers";
 
@@ -29,10 +29,8 @@ async function visaHod() {
 }
 
 /** Saves the traveller's details again, as staff would after a change. */
-async function saveDetailsAgain(staff: Agent, caseNo: string, travellerId: string) {
-  const c = (await staff.get(`/api/visa/cases/${caseNo}`)).body.case;
-  const t = c.travellers.find((x: { id: string }) => x.id === travellerId);
-  return staff.put(`/api/visa/cases/${caseNo}/travellers/${travellerId}/consent-details`).send({ ...CONSENT_DETAILS, profession: "Retired", updatedAt: t.consent.details.personUpdatedAt });
+function saveDetailsAgain(staff: Agent, caseNo: string, travellerId: string) {
+  return fillConsent(staff, caseNo, travellerId, { ...CONSENT_DETAILS, Profession: "Retired" });
 }
 
 describe("marking a consent signed on paper", () => {

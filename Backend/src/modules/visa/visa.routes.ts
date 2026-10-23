@@ -150,6 +150,12 @@ router.put("/cases/:caseNo/travellers/:travellerId/member", visaEdit, async (req
   res.json({ case: await stepsService.linkTraveller(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
+/** The consent form for one named traveller: the fields in use and the person's answers (0022 amendment 1). */
+router.get("/cases/:caseNo/travellers/:travellerId/consent-details", visaEdit, async (req, res) => {
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  res.json({ form: await consentService.getConsentDetails(caseNo, idParam.parse(req.params.travellerId), actorOf(req)) });
+});
+
 /** The consent form's details for one named traveller (docs/decisions/0022-consent-form.md, part 1). */
 router.put("/cases/:caseNo/travellers/:travellerId/consent-details", visaEdit, async (req, res) => {
   const body = consentDetailsSchema.parse(req.body);

@@ -23,5 +23,10 @@ export const conflict = (message: string) => new HttpError(409, message);
  * so the frontend shows it next to that input. For rules the request schema can't see (e.g. the stored row's state).
  */
 export function fieldError(field: string, message: string) {
-  return new z.ZodError([{ code: "custom", path: [field], message, input: undefined }]);
+  return fieldErrors({ [field]: message });
+}
+
+/** fieldError for several fields at once: each message shows next to its own input. */
+export function fieldErrors(messages: Record<string, string>) {
+  return new z.ZodError(Object.entries(messages).map(([field, message]) => ({ code: "custom" as const, path: [field], message, input: undefined })));
 }

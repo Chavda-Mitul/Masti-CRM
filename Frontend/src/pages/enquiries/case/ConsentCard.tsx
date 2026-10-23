@@ -117,8 +117,8 @@ export function ConsentCard({ visaCase: c }: { visaCase: VisaCase }) {
         <span className="muted small">once per person · stays valid if the passport changes</span>
       </div>
       <p className="muted small" style={{ margin: 0 }}>
-        Staff fill the details by asking the client (dates of birth, anniversary, parents’ dates of birth, addresses, income,
-        profession, education). Saving them sends the client a WhatsApp link, where they only tap <strong>I agree</strong>.
+        Staff fill the details by asking the client. Saving them sends the client a WhatsApp link, where they only tap{' '}
+        <strong>I agree</strong>.
       </p>
       <div className="consent-tiles">
         {c.travellers.map((t) => (
@@ -126,7 +126,7 @@ export function ConsentCard({ visaCase: c }: { visaCase: VisaCase }) {
         ))}
       </div>
       {filling && filling.consent.state !== 'UNLINKED' && (
-        <ConsentDetailsDialog caseNo={c.caseNo} traveller={filling} details={filling.consent.details} onClose={() => setFilling(null)} />
+        <ConsentDetailsDialog caseNo={c.caseNo} traveller={filling} onClose={() => setFilling(null)} />
       )}
     </section>
   )

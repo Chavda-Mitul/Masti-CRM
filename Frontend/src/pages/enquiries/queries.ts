@@ -8,6 +8,7 @@ import type {
   CaseMessage,
   ClientLookup,
   ConsentDetailsBody,
+  ConsentForm,
   CoveringLetterPrint,
   CoveringLetterView,
   CreateVisaCaseBody,
@@ -333,6 +334,19 @@ export function useLinkTraveller(caseNo: string) {
   return useCaseAction<{ travellerId: string; memberId: string; confirmWarnings?: boolean }>(caseNo, (base, { travellerId, ...body }) =>
     api(`${base}/travellers/${travellerId}/member`, { method: 'PUT', body }),
   )
+}
+
+/**
+ * The consent form for one named traveller: the fields in use, from the master in Settings, and the person's answers
+ * (0022 amendment 1). Under case(), so reloading the case reloads it; not on window focus, so typing isn't disturbed.
+ */
+export function useConsentForm(caseNo: string, travellerId: string) {
+  return useQuery({
+    queryKey: [...enquiryKeys.case(caseNo), 'consent-form', travellerId],
+    queryFn: async () =>
+      (await api<{ form: ConsentForm }>(`/visa/cases/${encodeURIComponent(caseNo)}/travellers/${travellerId}/consent-details`)).form,
+    refetchOnWindowFocus: false,
+  })
 }
 
 /** The consent form's details for one named traveller (docs/decisions/0022-consent-form.md, part 1). */
