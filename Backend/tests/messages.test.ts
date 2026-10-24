@@ -4,7 +4,15 @@ import { boss, QUEUES, stopWorkers } from "../src/lib/jobs";
 import { WhatsAppError, type WhatsAppMessage, type WhatsAppStatus } from "../src/lib/whatsapp";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { FIELD_DOOR_CODE, seedMessageTemplates, VISA_CONSENT_LINK, VISA_DOCUMENT_LIST, VISA_DOCUMENTS_RECEIVED } from "../src/modules/messages/messages.seed";
-import { checkMessageStatus, deliverMessage, fill, giveUpMessage, queueMessage } from "../src/modules/messages/messages.service";
+import {
+  checkMessageStatus,
+  deliverMessage,
+  dropWaitingMessages,
+  fill,
+  giveUpMessage,
+  queueMessage,
+  rewordWaitingMessage,
+} from "../src/modules/messages/messages.service";
 import { registerMessageWorkers } from "../src/modules/messages/messages.worker";
 import { visaMessageBasics } from "../src/modules/visa/visaMessages";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -306,6 +314,77 @@ describe("sending", () => {
   });
 });
 
+describe("a message that waits first (amendment 8)", () => {
+  const TEN_MINUTES = 10 * 60_000;
+
+  /** One case, and a way to queue its "All documents received" under `key`, held back until `sendAfter` if given. */
+  async function caseToMessage() {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    await dropDocumentList();
+    const queue = async (key: string, sendAfter?: Date) => {
+      await prisma.$transaction(async (tx) =>
+        queueMessage(tx, { template: VISA_DOCUMENTS_RECEIVED, enquiryId: c.id, key, ...(sendAfter ? { sendAfter } : {}), ...(await visaMessageBasics(tx, c.id)) }),
+      );
+      return prisma.outboundMessage.findUniqueOrThrow({ where: { idempotencyKey: key } });
+    };
+    return { c, queue };
+  }
+
+  it("is written now, and its sending job starts only when its time comes", async () => {
+    const { queue } = await caseToMessage();
+    const sendAfter = new Date(Date.now() + TEN_MINUTES);
+    const m = await queue("wait", sendAfter);
+    expect(m).toMatchObject({ status: "QUEUED", body: BODY, sendAfter });
+    const [job] = await sendJobs(m.id);
+    expect(Math.abs(job!.startAfter.getTime() - sendAfter.getTime())).toBeLessThan(1000);
+  });
+
+  it("is worded again with new values while it waits, and no longer once its time has come", async () => {
+    const { c, queue } = await caseToMessage();
+    const m = await queue("wait", new Date(Date.now() + TEN_MINUTES));
+    const { variables } = await prisma.$transaction((tx) => visaMessageBasics(tx, c.id));
+    await prisma.$transaction((tx) => rewordWaitingMessage(tx, "wait", { ...variables, client_name: "Priya Mehta" }));
+    expect(await reload(m.id)).toMatchObject({ body: BODY.replace("Rakesh Mehta", "Priya Mehta"), variables: { client_name: "Priya Mehta" } });
+
+    await prisma.outboundMessage.update({ where: { id: m.id }, data: { sendAfter: new Date(Date.now() - 1000) } });
+    await prisma.$transaction((tx) => rewordWaitingMessage(tx, "wait", { ...variables, client_name: "Aarav Mehta" }));
+    expect((await reload(m.id)).body).toBe(BODY.replace("Rakesh Mehta", "Priya Mehta"));
+  });
+
+  it("is dropped while it waits, with the reason and audited, and its job then sends nothing", async () => {
+    const { c, queue } = await caseToMessage();
+    const m = await queue("wait", new Date(Date.now() + TEN_MINUTES));
+    await prisma.$transaction((tx) => dropWaitingMessages(tx, { enquiryId: c.id, template: VISA_CONSENT_LINK }, "Not this wording."));
+    expect((await reload(m.id)).status).toBe("QUEUED");
+
+    await prisma.$transaction((tx) => dropWaitingMessages(tx, { enquiryId: c.id }, "The case was cancelled."));
+    expect(await reload(m.id)).toMatchObject({ status: "SKIPPED", error: "The case was cancelled." });
+    expect(await prisma.auditLog.findFirstOrThrow({ where: { action: "message.skipped", entityId: m.id } })).toMatchObject({
+      after: { template: VISA_DOCUMENTS_RECEIVED, error: "The case was cancelled." },
+    });
+    await deliverMessage(m.id, { lastTry: false });
+    expect(stub.provider!.send).not.toHaveBeenCalled();
+    expect((await reload(m.id)).status).toBe("SKIPPED");
+  });
+
+  it("leaves alone a message that goes at once, one whose time has come, one being sent and one already sent", async () => {
+    const { c, queue } = await caseToMessage();
+    const atOnce = await queue("at once");
+    const due = await queue("due", new Date(Date.now() + TEN_MINUTES));
+    await prisma.outboundMessage.update({ where: { id: due.id }, data: { sendAfter: new Date(Date.now() - 1000) } });
+    const sending = await queue("sending", new Date(Date.now() + TEN_MINUTES));
+    await prisma.outboundMessage.update({ where: { id: sending.id }, data: { sendingAt: new Date(), attempts: 1 } });
+    const sent = await queue("sent", new Date(Date.now() + TEN_MINUTES));
+    await deliverMessage(sent.id, { lastTry: false });
+
+    await prisma.$transaction((tx) => dropWaitingMessages(tx, { enquiryId: c.id }, "The case was cancelled."));
+    for (const m of [atOnce, due, sending]) expect((await reload(m.id)).status).toBe("QUEUED");
+    expect((await reload(sent.id)).status).toBe("SENT");
+    expect(await prisma.auditLog.count({ where: { action: "message.skipped" } })).toBe(0);
+  });
+});
+
 describe("a consent link's secret (0022)", () => {
   const SECRET = "abcDEF123_-xyz";
   const LINK = `http://localhost:5173/consent#${SECRET}`;
@@ -592,6 +671,7 @@ describe("the case's messages (the Sent to the client card)", () => {
         status: "DELIVERED",
         error: null,
         createdAt: message.createdAt.toISOString(),
+        sendAfter: null,
         sentAt: sentAt.toISOString(),
         deliveredAt: deliveredAt.toISOString(),
         readAt: null,

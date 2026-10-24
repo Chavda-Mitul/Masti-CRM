@@ -12,7 +12,7 @@ import { visaTimingsFormSchema, type VisaTimingsFormValues } from '../masters/sc
 import type { VisaSettings } from '../masters/types'
 import { type HelpLines, VISA_SETTINGS_HELP as HELP } from './help'
 
-type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passportValidity' | 'childAge' | 'passportsArrive'>
+type TimingKey = Exclude<keyof VisaTimingsFormValues, 'collectionCheck' | 'passportValidity' | 'childAge' | 'passportsArrive' | 'priceMessage'>
 
 /** Each check a case comes back due for, in the order a case meets them, with what its days count from. */
 const CHECKS: { key: TimingKey; what: string; from: string }[] = [
@@ -35,6 +35,7 @@ const formValues = (s: VisaSettings): VisaTimingsFormValues => ({
   passportValidity: s.passportValidity,
   childAge: s.childAge,
   passportsArrive: s.passportsArrive,
+  priceMessage: s.priceMessage,
 }) as VisaTimingsFormValues
 
 const days = (n: number) => `${n} office day${n === 1 ? '' : 's'}`
@@ -44,6 +45,8 @@ const PASSPORT_VALIDITY = 'A passport must still run, after the trip comes back'
 const ADULT_FROM = 'A traveller counts as an adult from'
 const PASSPORTS_ARRIVE = 'Passports reach our office after the decision'
 const workingDays = (n: number) => `${n} working day${n === 1 ? '' : 's'}`
+const PRICE_WAITS = '“Your price” waits before it goes'
+const waitText = (n: number) => (n === 0 ? 'No wait: it goes at once' : `${n} minute${n === 1 ? '' : 's'}`)
 
 /** The ⓘ next to a setting, with what it's for in plain words (help.ts). */
 function Help({ topic, lines }: { topic: string; lines: HelpLines }) {
@@ -210,7 +213,7 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
 
       <section className="card pad master-card">
         <h2 className="h2">Client messages</h2>
-        <p className="muted small">What the automatic WhatsApp messages tell the client. A change applies to the next message sent.</p>
+        <p className="muted small">What the automatic WhatsApp messages tell the client, and when. A change applies to the next message.</p>
         <table className="table">
           <thead>
             <tr>
@@ -230,6 +233,19 @@ function SettingsForm({ settings }: { settings: VisaSettings }) {
                   <span className="muted small">working days</span>
                 </div>
                 {errors.passportsArrive?.workingDays && <div className="field-error">{errors.passportsArrive.workingDays.message}</div>}
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>{PRICE_WAITS}</strong> <Help topic={PRICE_WAITS} lines={HELP.priceMessage} />
+                <div className="muted small">after the case’s price is first saved</div>
+              </td>
+              <td>
+                <div className="unit-input">
+                  <input className="input" type="number" min={0} max={1439} style={{ width: 90 }} aria-label={`${PRICE_WAITS}: minutes`} {...register('priceMessage.waitMinutes', { valueAsNumber: true })} />
+                  <span className="muted small">minutes</span>
+                </div>
+                {errors.priceMessage?.waitMinutes && <div className="field-error">{errors.priceMessage.waitMinutes.message}</div>}
               </td>
             </tr>
           </tbody>
@@ -300,6 +316,12 @@ function SettingsView({ settings: s }: { settings: VisaSettings }) {
               {PASSPORTS_ARRIVE} <Help topic={PASSPORTS_ARRIVE} lines={HELP.passportsArrive} />
             </dt>
             <dd>about {workingDays(s.passportsArrive.workingDays)}</dd>
+          </div>
+          <div>
+            <dt>
+              {PRICE_WAITS} <Help topic={PRICE_WAITS} lines={HELP.priceMessage} />
+            </dt>
+            <dd>{waitText(s.priceMessage.waitMinutes)}</dd>
           </div>
         </dl>
       </section>

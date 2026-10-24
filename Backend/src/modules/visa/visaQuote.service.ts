@@ -4,7 +4,7 @@ import { assertFresh, staleError } from "../../lib/changes";
 import { fieldError } from "../../lib/httpError";
 import { quoteTotals, rupeesText, type QuoteLineAmounts } from "../../lib/money";
 import { VISA_PRICE } from "../messages/messages.seed";
-import { queueMessage } from "../messages/messages.service";
+import { queueMessage, rewordWaitingMessage } from "../messages/messages.service";
 import type { Actor } from "../users/user";
 import { INVOICED, loadCase, lockCase } from "./caseLock";
 import type { SaveQuoteInput } from "./visa.schemas";
@@ -128,18 +128,25 @@ export async function saveQuote(caseNo: string, input: SaveQuoteInput, actor: Ac
       },
       tx,
     );
-    // Message 2, "Your price": the first time the case has a price. A later change sends nothing; the invoice
-    // (message 7) carries the final amount.
-    if (!before) {
-      const { gstRatePercent } = (await getVisaSettings(tx)).invoice;
-      const { totalPaise } = quoteTotals(input.lines.map(amountsOf), input.serviceChargePaise, gstRatePercent);
-      const basics = await visaMessageBasics(tx, enquiry.id);
+    // Message 2, "Your price": the first time the case has a price, after visa.priceMessage's wait ⚠️, so an invoice
+    // raised meanwhile goes instead (docs/decisions/0021-whatsapp-outbox.md Amendment 8). A change during the wait
+    // words it again with the new total; a later one sends nothing, as the invoice (message 7) carries the final amount.
+    const settings = await getVisaSettings(tx);
+    const { totalPaise } = quoteTotals(input.lines.map(amountsOf), input.serviceChargePaise, settings.invoice.gstRatePercent);
+    const basics = await visaMessageBasics(tx, enquiry.id);
+    const key = `${VISA_PRICE}:${enquiry.id}`;
+    const variables = { ...basics.variables, total: rupeesText(totalPaise) };
+    if (before) {
+      await rewordWaitingMessage(tx, key, variables);
+    } else {
+      const wait = settings.priceMessage.waitMinutes;
       await queueMessage(tx, {
         template: VISA_PRICE,
         enquiryId: enquiry.id,
-        key: `${VISA_PRICE}:${enquiry.id}`,
+        key,
         clientId: basics.clientId,
-        variables: { ...basics.variables, total: rupeesText(totalPaise) },
+        variables,
+        ...(wait > 0 ? { sendAfter: new Date(Date.now() + wait * 60_000) } : {}),
       });
     }
   });

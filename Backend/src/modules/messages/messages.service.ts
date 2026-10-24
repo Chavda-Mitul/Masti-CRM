@@ -16,7 +16,8 @@ import { ONE_TIME_CODE_TEMPLATES } from "./messages.seed";
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
 // on WhatsApp, and a message never goes twice: a try that never came back is marked failed, not repeated. A message can
 // carry one of its case's files, which the provider fetches through the CRM's own short-lived link
-// (docs/decisions/0025-evisa-after-decision.md, part 2; messageFiles.ts).
+// (docs/decisions/0025-evisa-after-decision.md, part 2; messageFiles.ts). A message can wait before it goes, and while
+// it waits a later change can reword it or drop it (Amendment 8).
 
 /** A message that couldn't go within this long isn't sent at all: its news would be stale. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -48,6 +49,11 @@ export interface NewMessage {
    * PDF. The provider fetches it through the CRM's own short-lived link, made at each try.
    */
   attachmentId?: string;
+  /**
+   * Held back until then (0021 Amendment 8): "Your price" waits, so an invoice raised meanwhile goes instead. Until it
+   * goes, rewordWaitingMessage and dropWaitingMessages can still change it.
+   */
+  sendAfter?: Date;
 }
 
 /**
@@ -91,6 +97,7 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
         toMobile: input.toMobile ?? client.mobile,
         ...(problem ? withoutSecrets(words) : words),
         idempotencyKey: input.key,
+        sendAfter: input.sendAfter ?? null,
         ...(problem ? { status: "FAILED" as const, error: problem, failedAt: new Date() } : {}),
       },
     ],
@@ -98,7 +105,48 @@ export async function queueMessage(tx: Db, input: NewMessage): Promise<void> {
   });
   if (count === 0) return;
   if (problem) await auditOutcome(tx, { id, clientId: input.clientId, template }, { status: "FAILED", error: problem });
-  else await queueJob(tx, QUEUES.whatsappSend, { messageId: id }, { id });
+  else await queueJob(tx, QUEUES.whatsappSend, { messageId: id }, { id, ...(input.sendAfter ? { startAfter: input.sendAfter } : {}) });
+}
+
+/**
+ * The message queued under `key`, worded again with new values while it still waits (0021 Amendment 8): a price
+ * changed during "Your price"'s wait goes out as the new one. One that went, or is going, stays as it is.
+ */
+export async function rewordWaitingMessage(tx: Db, key: string, variables: Record<string, string>): Promise<void> {
+  const [message] = await lockWaiting(tx, { idempotencyKey: key });
+  if (!message) return;
+  try {
+    const filled = fill(message.template.body, variables);
+    await tx.outboundMessage.update({ where: { id: message.id }, data: { body: filled.body, variables: filled.variables } });
+  } catch (err) {
+    // Its wording gained a value the change doesn't give: it keeps the words it was queued with.
+    logger.error({ key, problem: err instanceof Error ? err.message : String(err) }, "A waiting WhatsApp message couldn't be worded again; it keeps its first words.");
+  }
+}
+
+/**
+ * The case's messages still waiting, or those of one wording, not sent after all (0021 Amendment 8): SKIPPED with the
+ * reason, and audited. An invoice raised during "Your price"'s wait goes instead of it; a case cancelled meanwhile
+ * sends none. Their send jobs then find them settled and send nothing.
+ */
+export async function dropWaitingMessages(tx: Db, of: { enquiryId: string; template?: string }, reason: string): Promise<void> {
+  const waiting = await lockWaiting(tx, { enquiryId: of.enquiryId, ...(of.template ? { template: { code: of.template } } : {}) });
+  for (const message of waiting) {
+    await tx.outboundMessage.update({ where: { id: message.id }, data: { status: "SKIPPED", error: reason, ...withoutSecrets(message) } });
+    await auditOutcome(tx, message, { status: "SKIPPED", error: reason });
+  }
+}
+
+/**
+ * The messages still in their wait (queued, not with the provider, their time not come yet), locked as claim() locks
+ * one: a try can't take a message while it's changed here, and one a try took first is no longer waiting.
+ */
+async function lockWaiting(tx: Db, where: Prisma.OutboundMessageWhereInput) {
+  const waiting = { status: "QUEUED" as const, sendingAt: null, sendAfter: { gt: new Date() } };
+  const ids = (await tx.outboundMessage.findMany({ where: { ...where, ...waiting }, select: { id: true }, orderBy: { id: "asc" } })).map((m) => m.id);
+  if (ids.length === 0) return [];
+  await tx.$queryRaw`SELECT "id" FROM "OutboundMessage" WHERE "id" = ANY(${ids}::text[]) ORDER BY "id" FOR UPDATE`;
+  return tx.outboundMessage.findMany({ where: { id: { in: ids }, ...waiting }, include: { template: true }, orderBy: { id: "asc" } });
 }
 
 /** The template's words with every {{placeholder}} filled, and the values it used. Throws for a placeholder with no value. */

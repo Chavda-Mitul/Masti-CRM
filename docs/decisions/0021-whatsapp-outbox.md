@@ -316,6 +316,30 @@ lead decided that every upload goes, a replacement too.
   `<code>:<file id>`, with `{{traveller_name}}` as the case shows them (the passport name, else "Adult 1").
 - **Messages 22 and 23** are our drafts ⚠️, for Masti's approval with the others (M1).
 
+## Amendment 8 (24 Oct 2026): "Your price" waits, and the invoice goes instead
+
+The client got both "Your price" (message 2) and the invoice (message 7) when staff saved the price and raised the
+invoice minutes apart; on VISA-2026-0002 they went 3 seconds apart. The project lead decided:
+
+1. **Message 2 waits ⚠️ 10 minutes** after the price is first saved.
+   - It's `visa.priceMessage.waitMinutes`, in Settings → Visa → Client messages, set by the Head or the Visa HOD.
+   - Whole minutes; 0 sends it at once.
+   - Under 24 hours, since a message that can't go within 24 hours isn't sent.
+2. **During the wait:**
+   - **an invoice raised** (main or additional) drops it: "The invoice went instead.";
+   - **a price change** words it again with the new total;
+   - **a cancelled case** drops it: "The case was cancelled."
+
+   Once its time has come, nothing changes it.
+3. **How it works:**
+   - `queueMessage` takes `sendAfter`, kept on `OutboundMessage.sendAfter` (migration
+     `20261024160000_message_send_after`) and given to the send job as `startAfter`.
+   - `rewordWaitingMessage` and `dropWaitingMessages` act only on a message still in its wait: queued, not being tried,
+     its time not come. They lock it as a try does.
+   - A dropped message is SKIPPED with the reason and audited `message.skipped`; its job then sends nothing.
+4. **On the case:** "Sent to the client" shows a waiting message as "Goes at 12:20 pm", and a skipped one as "Not sent"
+   with its reason under it.
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.

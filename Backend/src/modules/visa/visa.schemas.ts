@@ -110,6 +110,19 @@ export const childAgeSchema = z.object({ adultFrom: z.number().int().min(1).max(
 export const passportsArriveSchema = z.object({ workingDays: z.number().int().min(1).max(30) });
 
 /**
+ * How long "Your price" (message 2) waits before it goes (docs/decisions/0021-whatsapp-outbox.md Amendment 8), so an
+ * invoice raised meanwhile goes instead. 0 sends it at once. Under 24 hours: a message that can't go within 24 hours
+ * isn't sent at all.
+ */
+export const priceMessageSchema = z.object({
+  waitMinutes: z
+    .number()
+    .int("Whole minutes only.")
+    .min(0, "0 at least.")
+    .max(1439, "Under 24 hours (1,439 minutes): a message that can't go within 24 hours isn't sent."),
+});
+
+/**
  * The covering letter's print (docs/decisions/0019-covering-letters.md Decision 11): the blank space at the top of the
  * first page for the client's letterhead, in millimetres. The print page's "Plain paper" leaves it out.
  */
@@ -217,6 +230,7 @@ export const visaSettingsSchema = z.object({
   passportValidity: passportValiditySchema,
   childAge: childAgeSchema,
   passportsArrive: passportsArriveSchema,
+  priceMessage: priceMessageSchema,
   documentReminders: documentRemindersSchema,
   coveringLetter: coveringLetterSettingSchema,
 });
@@ -285,6 +299,7 @@ export type DocketEmailSetting = z.infer<typeof docketEmailSettingSchema>;
 export type PassportValiditySetting = z.infer<typeof passportValiditySchema>;
 export type ChildAgeSetting = z.infer<typeof childAgeSchema>;
 export type PassportsArriveSetting = z.infer<typeof passportsArriveSchema>;
+export type PriceMessageSetting = z.infer<typeof priceMessageSchema>;
 export type DocumentRemindersSetting = z.infer<typeof documentRemindersSchema>;
 export type CoveringLetterSetting = z.infer<typeof coveringLetterSettingSchema>;
 export type MakeCoveringLetterInput = z.infer<typeof makeCoveringLetterSchema>;

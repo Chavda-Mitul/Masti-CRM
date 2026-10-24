@@ -13,11 +13,12 @@ import {
   VISA_INVOICE,
   VISA_PARTLY_APPROVED,
   VISA_PASSPORTS_BACK,
+  VISA_PRICE,
   VISA_REFUSAL_LETTER,
   VISA_REFUSED,
   VISA_VISA_COPY,
 } from "../messages/messages.seed";
-import { queueMessage } from "../messages/messages.service";
+import { dropWaitingMessages, queueMessage } from "../messages/messages.service";
 
 // What every visa message says about its case (docs/whatsapp-visa-messages.md): {{client_name}}, {{visa}},
 // {{case_no}}, {{travellers}}, {{office_phone}} and {{office_address}}. Each step's message adds its own values to
@@ -68,9 +69,11 @@ export async function visaMessageBasics(db: Db, enquiryId: string) {
 
 /**
  * Message 7, "Invoice": one for each invoice raised, the main, the additional or a corrected one, in its transaction,
- * with the invoice's PDF (the project lead, 24 Oct 2026: the words say the bank details are on it).
+ * with the invoice's PDF (the project lead, 24 Oct 2026: the words say the bank details are on it). A "Your price" still
+ * waiting isn't sent: the invoice gives the amount (docs/decisions/0021-whatsapp-outbox.md Amendment 8).
  */
 export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { id: string; invoiceNo: string; totalPaise: number; fileId: string }) {
+  await dropWaitingMessages(tx, { enquiryId, template: VISA_PRICE }, "The invoice went instead.");
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
     template: VISA_INVOICE,

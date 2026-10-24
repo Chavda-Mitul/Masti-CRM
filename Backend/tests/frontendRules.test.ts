@@ -26,7 +26,7 @@ import { PortalLoginOutcome, PortalPasswordSchedule } from "../generated/prisma/
 import * as portalRules from "../src/modules/portalLogins/portalLogins.schemas";
 import { MAX_VENDOR_COUNTRIES } from "../src/modules/vendors/vendors.schemas";
 import { MAX_CHECKLIST_ITEMS, MAX_DOCUMENT_MB, NORMAL_URGENCY, PHOTO_SIDE } from "../src/modules/visaMasters/visaMasters.schemas";
-import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema } from "../src/modules/visa/visa.schemas";
+import { childAgeSchema, collectionCheckSchema, firstFollowUpSchema, passportValiditySchema, priceMessageSchema } from "../src/modules/visa/visa.schemas";
 
 // The client forms repeat some backend rules so they can show errors before saving
 // (Frontend/src/pages/clients/schemas.ts). This keeps the two copies from drifting apart.
@@ -189,6 +189,10 @@ describe.skipIf(!frontendInstalled)("frontend form rules match the backend", () 
     for (const age of [0, 1, 18, 25, 26, 17.5]) {
       const v = { adultFrom: age };
       expect(shape.childAge!.safeParse(v).success, `age ${age}`).toBe(childAgeSchema.safeParse(v).success);
+    }
+    for (const minutes of [0, 10, 1439, 1440, -1, 2.5]) {
+      const v = { waitMinutes: minutes };
+      expect(shape.priceMessage!.safeParse(v).success, `wait ${minutes}`).toBe(priceMessageSchema.safeParse(v).success);
     }
   });
 

@@ -2151,7 +2151,8 @@ enum MessageStatus {
   READ
   /// It didn't go, or the provider reported it undelivered: `error` says why.
   FAILED
-  /// Not sent on purpose: its template is switched off.
+  /// Not sent on purpose, and `error` says why: its template is switched off, or while it waited the invoice went
+  /// instead or its case was cancelled (docs/decisions/0021-whatsapp-outbox.md Amendment 8).
   SKIPPED
 }
 
@@ -2207,6 +2208,9 @@ model OutboundMessage {
   /// Why the last try failed, or why it wasn't delivered, in plain words.
   error                  String?
   createdAt              DateTime        @default(now()) @db.Timestamptz(3)
+  /// Held back until then (docs/decisions/0021-whatsapp-outbox.md Amendment 8): "Your price" waits visa.priceMessage
+  /// ⚠️, so an invoice raised meanwhile goes instead. Empty: it goes at once.
+  sendAfter              DateTime?       @db.Timestamptz(3)
   sentAt                 DateTime?       @db.Timestamptz(3)
   deliveredAt            DateTime?       @db.Timestamptz(3)
   readAt                 DateTime?       @db.Timestamptz(3)
