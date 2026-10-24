@@ -77,7 +77,12 @@ export function HandoverCodeField({ caseNo, disabled, error, onChange }: { caseN
           </>
         ) : (
           <>
-            <span className="hint">It goes to the client’s WhatsApp; they read it out to you.</span>
+            {/* Until Meta allows the code template (Masti's business verified, 0020 Amendment 2), the code goes as plain
+                words, which reach only a client who wrote to us in the last 24 hours: their reply opens that. */}
+            <span className="hint">
+              First ask the client to reply “Hi” to any WhatsApp message from us, so the code can reach them. It goes to their
+              WhatsApp; they read it out to you.
+            </span>
             <button type="button" className="btn" onClick={sendCode} disabled={busy}>
               {send.isPending ? 'Sending…' : 'Send the code'}
             </button>

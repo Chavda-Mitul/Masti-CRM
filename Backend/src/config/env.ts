@@ -83,6 +83,12 @@ const envSchema = z.object({
   ),
   // The language Masti's templates are approved in at Meta: en_US is that of Meta's own hello_world.
   META_TEMPLATE_LANGUAGE: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("en_US")),
+  // The WhatsApp Business Account the templates belong to (App Dashboard → WhatsApp → API Setup): with it,
+  // `npm run whatsapp:templates` makes and switches on Masti's templates (0020 Amendment 2).
+  META_WHATSAPP_BUSINESS_ACCOUNT_ID: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^\d+$/, "Digits only: copy the WhatsApp Business Account ID from the App Dashboard's WhatsApp → API Setup.").optional(),
+  ),
   // Meta's webhook (docs/decisions/0026-whatsapp-webhook.md), which brings delivered/read/failed and clients' messages;
   // both are needed to switch it on. The app's secret (App Dashboard → App settings → Basic), which signs every call:
   // never committed.

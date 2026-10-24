@@ -112,7 +112,7 @@ The work comes in three pieces, one at a time:
    19).*
 3. **Masti's templates** created and approved in WhatsApp Manager, each one's name on its template row. The door code
    (message 16) is an authentication template with a copy-code button, and the consent link may go in a URL button:
-   both need their own components.
+   both need their own components. *Built 24 Oct 2026: Amendment 2. The consent link stays in the words.*
 
 How piece 1 sends:
 - **One request per message** to `https://graph.facebook.com/v26.0/{phone number id}/messages`, with Node's own
@@ -150,4 +150,82 @@ How piece 1 sends:
 
 **Before piece 2:** a permanent token. In Meta Business Settings → Users → System users, add one, give it the app and
 the WhatsApp account, and generate a token with `whatsapp_business_messaging` and `whatsapp_business_management`. It
-goes straight into `Backend/.env`, never into a chat.
+goes straight into `Backend/.env`, never into a chat. *24 Oct 2026: Meta's `debug_token` shows the token in `.env` is
+already a system user's, which never expires. It was pasted in a chat once, so make a new one and revoke it before
+go-live.*
+
+## Amendment 2 (24 Oct 2026): Masti's templates on Meta, and files sent as files
+
+Without an approved template, WhatsApp delivers our words only within 24 hours of the client's last message, and most
+visa messages go out days apart.
+
+**The project lead decided on 24 Oct 2026** to submit all 21 wordings to Meta now, in the current draft's words, before
+Masti approves them (M1). This replaces `PROJECT_KNOWLEDGE.md`'s "they go to Meta after the client approves". When
+Masti changes words, the changed templates are edited, and Meta reviews them again.
+
+1. **One template per wording,** made from the `MessageTemplate` rows (`modules/messages/messageTemplates.ts`, the
+   Meta side in `lib/whatsapp/metaTemplates.ts`):
+   - **The name** is the code with `_` for `.`, e.g. `visa_documents_received`, in `META_TEMPLATE_LANGUAGE`.
+   - **Utility templates:** our words, `parameter_format: "named"`, and a made-up sample for every placeholder
+     (`TEMPLATE_SAMPLES`), which Meta's reviewers read.
+   - **The door code** (`ONE_TIME_CODE_TEMPLATES`) is Meta's **authentication** template: Meta's own words, "<code> is
+     your verification code. This code expires in N minutes.", where N is `field.otpMinutes` ⚠️ at submission. There's
+     no "do not share" line, and there's a **Copy code** button. It's sent with the code twice: in the words and in the
+     button.
+   - **A wording that carries a file** (`TEMPLATES_WITH_FILE`) gets a document header. These are the e-visa, and since
+     24 Oct 2026 the invoice and the credit note (point 4). Its sample is a one-page PDF uploaded through Meta's
+     Resumable Upload API; the app's id comes from the token's `debug_token`.
+   - **Checked first, in plain words:** at most 1,024 characters; no placeholder first, last, or beside another;
+     lowercase names; a sample for each.
+2. **`npm run whatsapp:templates -- submit | check`** (`src/scripts/whatsappTemplates.ts`):
+   - **`submit`** creates each missing template, and changes one whose words differ from ours. It doesn't change one
+     still under review, and says so. Then it runs `check`.
+   - **`check`** switches a wording on (`providerTemplateId` = the template's name) only when Meta has approved it in
+     its current words, and off otherwise. A wording that's off goes as plain words, rather than failing on a mismatch.
+     Each change is audited as `message.template.provider`, with no actor.
+   - Both print a table: on/off, the name, Meta's status, and any reason, note or problem.
+   - Run `check` again after Meta's review (minutes to a day), and after the database is re-seeded.
+   - Twilio's templates stay in its own console.
+3. **Files are sent as files.**
+   - The outbox gives the provider the file's type and `read()`, its bytes from the bucket, besides the link (0025
+     Decision 4).
+   - Meta uploads the file first (`POST /{phone number id}/media`) and names it by the media id, in a document message
+     or a template's header. So it arrives from a laptop, or from a server Meta can't reach.
+   - A failed upload sends nothing, so it's tried again, unless Meta refused the file itself (131053).
+   - Twilio still fetches the link.
+4. **The invoice and the credit note go with their PDF** (the project lead, 24 Oct 2026, reversing 22 Oct's words
+   only). Message 7 says the bank details are on the invoice. `queueInvoiceMessage` and `queueCreditNoteMessage` attach
+   the invoice's or credit note's own file (`Invoice.fileId`, `CreditNote.fileId`), and the wording doesn't change.
+5. **The test command:** with Meta, `template` sends our approved "All documents received" with the samples. Meta
+   allows `hello_world` only from its public test numbers.
+
+| Setting (`Backend/.env`) | Default | Meaning |
+| --- | --- | --- |
+| `META_WHATSAPP_BUSINESS_ACCOUNT_ID` | empty | App Dashboard → WhatsApp → API Setup → WhatsApp Business Account ID. With it, the CRM makes and checks the templates |
+
+**Submitted 24 Oct 2026** (from a freshly seeded worktree database). The 20 utility templates are with Meta for review.
+What Meta said on the way:
+- **Messages 5 and 14 were rejected (`INCORRECT_CATEGORY`)** for "We will send you a code to tell our staff member at
+  the door": an ordinary template may not mention a code. The project lead had the sentence dropped from both. The
+  code itself still comes in message 16. A database seeded before this keeps the old words, so `check` leaves those
+  two off until it's reset and re-seeded.
+- **A change must repeat `parameter_format: "named"`.** Without it Meta rejected the edited words as `INVALID_FORMAT`.
+  `submit` now sends a rejected template again even in our words, so a fixed one is reviewed again.
+- **The door code (message 16) couldn't be made:** "This WhatsApp Business account does not have permission to create
+  message template" (code 10, subcode 2388185). Meta allows authentication templates only for a business it has
+  verified, and some guides add a higher daily limit than 250.
+  - Until then the code goes as plain words, which reach only a client who wrote to Masti in the last 24 hours.
+  - The project lead chose a stopgap. The field app's and the desk handover's code step first say "ask the client to
+    reply 'Hi' to any WhatsApp message from us", which opens those 24 hours.
+  - Remove that line once the code template is switched on.
+- **Masti's business verification** (Meta Business Settings → Security Centre) is now needed for the code template, and
+  to go past 250 clients a day. It needs Masti's business documents (inputs A3).
+
+**Cost:** Meta charges for each utility template message (about ₹0.1–0.2 in India); one inside the 24 hours is free.
+This goes on the running-cost sheet (golden rule 11). Outside production every message goes to the test number.
+
+**Next, each with its own plan:**
+- **Change request 22, the Quotation PDF:** "Your price" (message 2) carries a quotation in the invoice's layout, marked
+  "Not a tax invoice". Its template then gets a document header: an edit and a new review.
+- **"Your price" waits, and is dropped if the invoice comes first:** a wait set in Settings → Visa → Client messages ⚠️
+  (10 minutes). Raising an invoice skips a price message still waiting.

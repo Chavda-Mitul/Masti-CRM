@@ -19,6 +19,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "whatsapp:test": "tsx src/scripts/whatsappTest.ts",
+    "whatsapp:templates": "tsx src/scripts/whatsappTemplates.ts",
     "ai:test": "tsx src/scripts/aiTest.ts"
   },
   "keywords": [],

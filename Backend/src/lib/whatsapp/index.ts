@@ -10,10 +10,13 @@ import { WhatsAppError, type WhatsAppMessage, type WhatsAppProvider, type WhatsA
 
 export {
   WhatsAppError,
+  type ProviderTemplate,
+  type TemplateDraft,
   type WhatsAppEvent,
   type WhatsAppMessage,
   type WhatsAppProvider,
   type WhatsAppStatus,
+  type WhatsAppTemplates,
   type WhatsAppWebhook,
 } from "./types";
 
@@ -46,13 +49,14 @@ function pick(): WhatsAppProvider | null {
       if (!accessToken || !phoneNumberId) {
         throw new WhatsAppError("Meta isn't set up yet: add META_ACCESS_TOKEN and META_PHONE_NUMBER_ID to Backend/.env.", false);
       }
-      const { META_APP_SECRET: appSecret, META_WEBHOOK_VERIFY_TOKEN: verifyToken } = env;
+      const { META_APP_SECRET: appSecret, META_WEBHOOK_VERIFY_TOKEN: verifyToken, META_WHATSAPP_BUSINESS_ACCOUNT_ID: businessAccountId } = env;
       return metaProvider({
         accessToken,
         phoneNumberId,
         templateLanguage,
         ...(appSecret ? { appSecret } : {}),
         ...(verifyToken ? { verifyToken } : {}),
+        ...(businessAccountId ? { businessAccountId } : {}),
       });
     }
   }

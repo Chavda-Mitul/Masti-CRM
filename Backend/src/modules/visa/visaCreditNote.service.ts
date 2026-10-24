@@ -272,8 +272,8 @@ export async function issueCreditNote(
     },
     tx,
   );
-  // Message 18 (docs/whatsapp-visa-messages.md); a retried number rolls it back with the rest.
-  await queueCreditNoteMessage(tx, enquiryId, { id: note.id, creditNoteNo, totalPaise: draft.totalPaise, invoiceNo: inv.invoiceNo });
+  // Message 18 (docs/whatsapp-visa-messages.md), with its PDF; a retried number rolls it back with the rest.
+  await queueCreditNoteMessage(tx, enquiryId, { id: note.id, creditNoteNo, totalPaise: draft.totalPaise, invoiceNo: inv.invoiceNo, fileId: file.id });
   return { creditNoteNo, fileId: file.id };
 }
 

@@ -5,10 +5,12 @@ import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { QUEUES, queueJob } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
+import { getObject } from "../../lib/storage";
 import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } from "../../lib/whatsapp";
 import { hideSecrets, secretValues } from "../../lib/whatsapp/secrets";
 import { maskConsentLinks } from "../consent/consentToken";
-import { newFileLink } from "./messageFiles";
+import { contentTypeOf, newFileLink } from "./messageFiles";
+import { ONE_TIME_CODE_TEMPLATES } from "./messages.seed";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
@@ -140,10 +142,12 @@ export async function deliverMessage(messageId: string, { lastTry }: { lastTry: 
   try {
     const variables = message.variables as Record<string, string>;
     const secrets = secretValues(variables);
+    // A one-time code's template words are the provider's own, around the code (0020 Amendment 2).
+    const oneTimeCode = ONE_TIME_CODE_TEMPLATES.has(message.template.code) ? variables.code : undefined;
     sent = await sendWhatsApp({
       to,
       body: message.body,
-      ...(providerTemplateId ? { template: { id: providerTemplateId, variables } } : {}),
+      ...(providerTemplateId ? { template: { id: providerTemplateId, variables, ...(oneTimeCode ? { oneTimeCode } : {}) } } : {}),
       ...(attachment ? { attachment } : {}),
       ...(secrets.length > 0 ? { secrets } : {}),
     });
@@ -176,8 +180,8 @@ type Claimed = {
   message: OutboundMessage & { template: { code: string } };
   providerTemplateId: string | null;
   sendingAt: Date;
-  /** The file's link for this try, and its name (0025, part 2). */
-  attachment: { url: string; fileName: string } | null;
+  /** The file's link for this try, its name and type, and its bytes for a provider sent the file itself (0025, part 2). */
+  attachment: { url: string; fileName: string; contentType: string; read: () => Promise<Buffer> } | null;
 };
 
 /**
@@ -189,7 +193,7 @@ async function claim(messageId: string): Promise<Claimed | null> {
     await tx.$queryRaw`SELECT "id" FROM "OutboundMessage" WHERE "id" = ${messageId} FOR UPDATE`;
     const message = await tx.outboundMessage.findUnique({
       where: { id: messageId },
-      include: { template: true, attachment: { select: { fileName: true } } },
+      include: { template: true, attachment: { select: { fileName: true, storageKey: true } } },
     });
     // Settled already: a repeated job never sends it again.
     if (!message || message.status !== "QUEUED") return null;
@@ -213,7 +217,11 @@ async function claim(messageId: string): Promise<Claimed | null> {
         ...(link ? { attachmentKeyHash: link.keyHash, attachmentKeyExpiresAt: link.expiresAt } : {}),
       },
     });
-    const attachment = link && message.attachment ? { url: link.url, fileName: message.attachment.fileName } : null;
+    const file = message.attachment;
+    const attachment =
+      link && file
+        ? { url: link.url, fileName: file.fileName, contentType: contentTypeOf(file.fileName), read: () => getObject(file.storageKey) }
+        : null;
     return { message, providerTemplateId: message.template.providerTemplateId, sendingAt: now, attachment };
   });
 }
