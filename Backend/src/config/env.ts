@@ -83,6 +83,12 @@ const envSchema = z.object({
   ),
   // The language Masti's templates are approved in at Meta: en_US is that of Meta's own hello_world.
   META_TEMPLATE_LANGUAGE: z.preprocess((v) => (v === "" ? undefined : v), z.string().default("en_US")),
+  // Meta's webhook (docs/decisions/0026-whatsapp-webhook.md), which brings delivered/read/failed and clients' messages;
+  // both are needed to switch it on. The app's secret (App Dashboard → App settings → Basic), which signs every call:
+  // never committed.
+  META_APP_SECRET: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  // Any long random text, typed into Meta's Configure Webhooks too: Meta gives it back when it checks our address.
+  META_WEBHOOK_VERIFY_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   // Outside production every client message goes to this phone instead (docs/decisions/0021-whatsapp-outbox.md): yours
   // (with Twilio's sandbox, joined to it). Needed outside production when WHATSAPP_PROVIDER is twilio or meta; refused
   // in production.
@@ -205,6 +211,12 @@ if (isProduction && !env.PUBLIC_APP_URL.startsWith("https://")) {
 }
 if (isProduction && env.WHATSAPP_PROVIDER === "off") {
   console.warn("WHATSAPP_PROVIDER is off: clients get no WhatsApp messages, and each one is marked failed.");
+}
+if (isProduction && env.WHATSAPP_PROVIDER === "meta" && (!env.META_APP_SECRET || !env.META_WEBHOOK_VERIFY_TOKEN)) {
+  console.warn(
+    "Meta's webhook isn't set up (META_APP_SECRET and META_WEBHOOK_VERIFY_TOKEN): messages stay \"sent\", never delivered, " +
+      "read or failed, and clients' own messages reach no one.",
+  );
 }
 
 if (isProduction && env.AI_PROVIDER === "fake") {

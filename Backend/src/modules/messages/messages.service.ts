@@ -306,7 +306,7 @@ async function auditOutcome(
  * learns of them.
  */
 export async function checkMessageStatus(messageId: string, check: number): Promise<void> {
-  const message = await prisma.outboundMessage.findUnique({ where: { id: messageId }, include: { template: { select: { code: true } } } });
+  const message = await prisma.outboundMessage.findUnique({ where: { id: messageId } });
   if (!message?.providerMessageId || !message.sentAt || (message.status !== "SENT" && message.status !== "DELIVERED")) return;
   const provider = whatsAppProvider();
   // A message carried by another provider than today's can't be asked about.
@@ -318,27 +318,46 @@ export async function checkMessageStatus(messageId: string, check: number): Prom
   } catch (err) {
     logger.warn({ err, messageId }, "Couldn't ask where a WhatsApp message has got to; asking again at the next check.");
   }
-  const now = new Date();
-  const status = answer?.status;
-  const error = answer?.error ?? null;
-  const data: Prisma.OutboundMessageUpdateManyMutationInput | null =
-    status === "FAILED"
-      ? { status: "FAILED", error: error ?? "It wasn't delivered.", failedAt: now }
-      : status === "READ"
-        ? { status: "READ", readAt: now, deliveredAt: message.deliveredAt ?? now }
-        : status === "DELIVERED" && message.status === "SENT"
-          ? { status: "DELIVERED", deliveredAt: now }
-          : null;
   const next = checkAt(message.sentAt, check + 1);
 
   await prisma.$transaction(async (tx) => {
-    if (data) {
-      const { count } = await tx.outboundMessage.updateMany({ where: { id: messageId, status: message.status }, data });
-      if (count === 0) return;
-      if (status === "FAILED") await auditOutcome(tx, message, { status: "FAILED", error: error ?? "It wasn't delivered." });
-    }
-    if (status !== "READ" && status !== "FAILED" && next) {
-      await queueJob(tx, QUEUES.whatsappStatus, { messageId, check: check + 1 }, { startAfter: next });
-    }
+    const settled = await recordStatus(tx, messageId, answer && { ...answer, at: new Date() });
+    if (!settled && next) await queueJob(tx, QUEUES.whatsappStatus, { messageId, check: check + 1 }, { startAfter: next });
   });
+}
+
+/** Where a provider says a sent message has got to, and when: by its own clock when it says (a webhook), else now. */
+export interface StatusReport {
+  status: WhatsAppStatus;
+  /** Why it wasn't delivered, in plain words, when it failed. */
+  error: string | null;
+  at: Date;
+}
+
+/**
+ * Records a provider's report on a sent message, from a status check or a webhook (docs/decisions/0026-whatsapp-webhook.md):
+ * forward only, sent → delivered → read, or failed with its reason (audited). A repeated report, or one that comes late
+ * (delivered after read), changes nothing. The row is locked, so two reports arriving together can't undo each other.
+ * True once the message is settled (read, failed, or not a sent message at all), when no later report can change it.
+ */
+export async function recordStatus(tx: Db, messageId: string, report: StatusReport | null): Promise<boolean> {
+  await tx.$queryRaw`SELECT "id" FROM "OutboundMessage" WHERE "id" = ${messageId} FOR UPDATE`;
+  const message = await tx.outboundMessage.findUnique({ where: { id: messageId }, include: { template: { select: { code: true } } } });
+  if (!message || (message.status !== "SENT" && message.status !== "DELIVERED")) return true;
+  const change = report && statusChange(message, report);
+  if (!change) return false;
+  await tx.outboundMessage.update({ where: { id: messageId }, data: change });
+  if (change.status === "FAILED") await auditOutcome(tx, message, { status: "FAILED", error: change.error });
+  return change.status !== "DELIVERED";
+}
+
+/** What a report changes on a sent or delivered message, or null when it changes nothing. */
+function statusChange(
+  message: Pick<OutboundMessage, "status" | "deliveredAt">,
+  { status, error, at }: StatusReport,
+): { status: "FAILED"; error: string; failedAt: Date } | { status: "READ"; readAt: Date; deliveredAt: Date } | { status: "DELIVERED"; deliveredAt: Date } | null {
+  if (status === "FAILED") return { status: "FAILED", error: error ?? "It wasn't delivered.", failedAt: at };
+  if (status === "READ") return { status: "READ", readAt: at, deliveredAt: message.deliveredAt ?? at };
+  if (status === "DELIVERED" && message.status === "SENT") return { status: "DELIVERED", deliveredAt: at };
+  return null;
 }

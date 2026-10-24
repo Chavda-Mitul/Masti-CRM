@@ -1337,7 +1337,7 @@ This is the biggest technical unknown (§16.2).
 
 | Service | Used for | Status / notes |
 |---|---|---|
-| **WhatsApp Business API** (through a BSP) | All client messages, reminders, consent links, collection-boy jobs | ✅ Required. Needs Masti's Meta Business Manager, number and business verification, plus Meta-approved templates. About 35 paise/msg; ₹30–40k/month is acceptable. **Long lead time: start in week 1.** **20 Oct 2026 (project lead):** Twilio for now (its sandbox while we build), behind a swappable sender, `src/lib/whatsapp/` (`docs/decisions/0020-whatsapp-sending.md`); the provider for go-live is still M2. **23 Oct 2026 (project lead):** Meta's Cloud API directly, no BSP (`WHATSAPP_PROVIDER=meta`, 0020 Amendment 1); delivery ticks need Meta's webhook (next piece). |
+| **WhatsApp Business API** (through a BSP) | All client messages, reminders, consent links, collection-boy jobs | ✅ Required. Needs Masti's Meta Business Manager, number and business verification, plus Meta-approved templates. About 35 paise/msg; ₹30–40k/month is acceptable. **Long lead time: start in week 1.** **20 Oct 2026 (project lead):** Twilio for now (its sandbox while we build), behind a swappable sender, `src/lib/whatsapp/` (`docs/decisions/0020-whatsapp-sending.md`); the provider for go-live is still M2. **23 Oct 2026 (project lead):** Meta's Cloud API directly, no BSP (`WHATSAPP_PROVIDER=meta`, 0020 Amendment 1); delivered, read and failed come through Meta's webhook (`docs/decisions/0026-whatsapp-webhook.md`), which needs the Meta app published (a privacy-policy link on Masti's website). |
 | **SMS / OTP** provider | Fallback reminders, the consent link, OTPs (handover, terms acceptance) | ✅ Required. Indian SMS needs DLT registration (sender ID, templates). |
 | **Email** (SMTP / Google Workspace) | Vendor dispatch emails, invoices | ✅ |
 | **Google Drive / OneDrive** | Store documents; the CRM keeps links | ✅ The folder structure and owner are ❓ |
@@ -1488,7 +1488,7 @@ Present these to Shivanshu around day 3–4, as short decision records (the opti
    - how masters drive behaviour
    - the permissions model
 3. Hosting recommendation for Masti's account, with a monthly cost, plus our dev and staging setup until handover.
-4. WhatsApp BSP and template strategy. **Started 20 Oct 2026:** Twilio for now, behind a sender that can change provider (0020). **23 Oct 2026:** switched to Meta's Cloud API directly, with Masti's own number +91 88855 52064 "Masti Travels" (0020 Amendment 1); Twilio stays selectable. That number is off the WhatsApp Business app, so clients' replies reach no one until the CRM takes them in (Meta's webhook).
+4. WhatsApp BSP and template strategy. **Started 20 Oct 2026:** Twilio for now, behind a sender that can change provider (0020). **23 Oct 2026:** switched to Meta's Cloud API directly, with Masti's own number +91 88855 52064 "Masti Travels" (0020 Amendment 1); Twilio stays selectable. That number is off the WhatsApp Business app, so clients' replies reach no one until the CRM takes them in. **Meta's webhook (0026, 24 Oct 2026)** keeps them, tied to the case they answer; showing them on the case is next (change request 19).
 5. SMS/OTP provider.
 6. Click-to-login approach, after the spike. *21 Oct 2026: our own Chrome helper, as a trial (0024); Shivanshu approves once it passes.*
 7. Field-staff device: phone or tablet, PWA or WhatsApp-only.

@@ -2,13 +2,20 @@ import { env } from "../../config/env";
 import { logOnlyProvider } from "./logOnly";
 import { metaProvider } from "./meta";
 import { twilioProvider } from "./twilio";
-import { WhatsAppError, type WhatsAppMessage, type WhatsAppProvider } from "./types";
+import { WhatsAppError, type WhatsAppMessage, type WhatsAppProvider, type WhatsAppWebhook } from "./types";
 
 // The only way the CRM sends WhatsApp (CLAUDE.md rule 7, docs/decisions/0020-whatsapp-sending.md). Callers say what to
 // send; WHATSAPP_PROVIDER in .env picks who carries it. Another provider is one more file in this folder, one more case
 // below and one more name in env.ts.
 
-export { WhatsAppError, type WhatsAppMessage, type WhatsAppProvider, type WhatsAppStatus } from "./types";
+export {
+  WhatsAppError,
+  type WhatsAppEvent,
+  type WhatsAppMessage,
+  type WhatsAppProvider,
+  type WhatsAppStatus,
+  type WhatsAppWebhook,
+} from "./types";
 
 let chosen: WhatsAppProvider | null | undefined;
 
@@ -39,9 +46,30 @@ function pick(): WhatsAppProvider | null {
       if (!accessToken || !phoneNumberId) {
         throw new WhatsAppError("Meta isn't set up yet: add META_ACCESS_TOKEN and META_PHONE_NUMBER_ID to Backend/.env.", false);
       }
-      return metaProvider({ accessToken, phoneNumberId, templateLanguage });
+      const { META_APP_SECRET: appSecret, META_WEBHOOK_VERIFY_TOKEN: verifyToken } = env;
+      return metaProvider({
+        accessToken,
+        phoneNumberId,
+        templateLanguage,
+        ...(appSecret ? { appSecret } : {}),
+        ...(verifyToken ? { verifyToken } : {}),
+      });
     }
   }
+}
+
+/**
+ * The webhook of the provider WHATSAPP_PROVIDER names (docs/decisions/0026-whatsapp-webhook.md), with the provider's
+ * name. Null when WhatsApp is off, isn't set up, or its provider has no webhook set up.
+ */
+export function whatsAppWebhook(): { provider: string; webhook: WhatsAppWebhook } | null {
+  let provider: WhatsAppProvider | null;
+  try {
+    provider = whatsAppProvider();
+  } catch {
+    return null;
+  }
+  return provider?.webhook ? { provider: provider.name, webhook: provider.webhook } : null;
 }
 
 /** Sends one message. Throws a WhatsAppError with a short reason when it can't, for the caller to record. */

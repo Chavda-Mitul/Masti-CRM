@@ -346,49 +346,51 @@ enum ClientKind {
 /// Completed before invoicing; which fields are required is the clients.invoiceReadiness setting.
 /// Never deleted: enquiries and invoices will point here.
 model Client {
-  id             String            @id @default(uuid())
-  kind           ClientKind        @default(INDIVIDUAL)
+  id              String            @id @default(uuid())
+  kind            ClientKind        @default(INDIVIDUAL)
   /// +91XXXXXXXXXX. The lookup key, the WhatsApp number, and the match key for the Excel import.
-  mobile         String            @unique
+  mobile          String            @unique
   /// The person's name, or the company's. Required (0004 Amendment); a database check also refuses a blank one.
   /// Integrations and the Excel import must supply one too (e.g. the WhatsApp profile name).
-  name           String
+  name            String
   /// CORPORATE only (database check): the person we deal with.
-  contactPerson  String?
+  contactPerson   String?
   /// Stored lowercased.
-  email          String?
-  addressLine    String?
+  email           String?
+  addressLine     String?
   /// "Vesu"
-  area           String?
-  city           String?
+  area            String?
+  city            String?
   /// GST state code ("24" = Gujarat). Decides the place of supply on invoices.
-  stateCode      String?           @db.Char(2)
-  pincode        String?           @db.Char(6)
+  stateCode       String?           @db.Char(2)
+  pincode         String?           @db.Char(6)
   /// Uppercase AAAAA9999A. Typed in by staff; not verified (PAN verification is Q23, out of scope).
-  pan            String?
+  pan             String?
   /// Uppercase, 15 characters. Characters 3–12 equal pan when both are set (database check).
-  gstin          String?
+  gstin           String?
   /// The client's code in Masti's accounting software ✅.
-  accountingCode String?           @unique
-  billingCycleId Int
-  paymentHabitId Int?
+  accountingCode  String?           @unique
+  billingCycleId  Int
+  paymentHabitId  Int?
   /// The service sets the IST date; the Excel import may set an earlier one. The default is today in India too.
-  clientSince    DateTime          @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
-  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  clientSince     DateTime          @default(dbgenerated("(timezone('Asia/Kolkata'::text, now()))::date")) @db.Date
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
   /// Also the optimistic-lock token: PATCH sends back the updatedAt it read.
-  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
   /// Null when created by the WhatsApp bot, a website form or the import.
-  createdById    String?
-  billingCycle   BillingCycle      @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
-  paymentHabit   PaymentHabit?     @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
-  createdBy      User?             @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  phones         ClientPhone[]
-  members        ClientMember[]
-  notes          ClientNote[]
-  documents      ClientDocument[]
-  enquiries      Enquiry[]
+  createdById     String?
+  billingCycle    BillingCycle      @relation(fields: [billingCycleId], references: [id], onDelete: Restrict)
+  paymentHabit    PaymentHabit?     @relation(fields: [paymentHabitId], references: [id], onDelete: Restrict)
+  createdBy       User?             @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  phones          ClientPhone[]
+  members         ClientMember[]
+  notes           ClientNote[]
+  documents       ClientDocument[]
+  enquiries       Enquiry[]
   /// What the CRM has sent them (docs/decisions/0021-whatsapp-outbox.md).
-  messages       OutboundMessage[]
+  messages        OutboundMessage[]
+  /// What they wrote to Masti's WhatsApp number (docs/decisions/0026-whatsapp-webhook.md).
+  inboundMessages InboundMessage[]
 
   @@index([name])
   @@index([pan])
@@ -1186,6 +1188,8 @@ model Enquiry {
   creditNotes     CreditNote[]
   /// The client's messages about it (docs/decisions/0021-whatsapp-outbox.md).
   messages        OutboundMessage[]
+  /// What the client wrote back about it (docs/decisions/0026-whatsapp-webhook.md).
+  inboundMessages InboundMessage[]
   /// The AI calls made for it (docs/decisions/0023-ai.md).
   aiCalls         AiCall[]
   /// Consent links sent from it (docs/decisions/0022-consent-form.md).
@@ -2158,7 +2162,8 @@ model OutboundMessage {
   attempts               Int             @default(0)
   /// Set while a try is with the provider. A try that never came back isn't repeated: the message may have gone.
   sendingAt              DateTime?       @db.Timestamptz(3)
-  /// Who carried it ("twilio", "log") and their id for it, which delivery updates refer to.
+  /// Who carried it ("twilio", "meta", "log") and their id for it, which delivery updates refer to: a provider's webhook
+  /// finds the message by the two (docs/decisions/0026-whatsapp-webhook.md).
   provider               String?
   providerMessageId      String?
   /// The number it went to: outside production, always WHATSAPP_TEST_NUMBER.
@@ -2184,8 +2189,41 @@ model OutboundMessage {
   enquiry                Enquiry?        @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   attachment             CaseFile?       @relation(fields: [attachmentId], references: [id], onDelete: Restrict)
 
+  @@unique([provider, providerMessageId])
   @@index([clientId, createdAt])
   @@index([enquiryId, createdAt])
+  /// A client's message is matched to the last one we sent to their number (0026).
+  @@index([sentTo, sentAt])
+}
+
+/// A client's own WhatsApp message to Masti's number, brought by the provider's webhook
+/// (docs/decisions/0026-whatsapp-webhook.md). Tied to the case it answers when that can be told.
+model InboundMessage {
+  id                       String   @id @default(uuid())
+  /// Who brought it ("meta") and their id for it: a call the provider makes again saves nothing new.
+  provider                 String
+  providerMessageId        String
+  /// Who wrote: +91XXXXXXXXXX, or + and the digits for a number outside India.
+  fromMobile               String
+  /// The client it's from, when the message it answers or their number tells.
+  clientId                 String?
+  /// The case it's about: that of the message it answers, or of the last one we sent to that number.
+  enquiryId                String?
+  /// "text", "image", "document", "audio", "button", "reaction"…, as the provider names it.
+  type                     String
+  /// What they wrote: the text, a file's caption, the button they tapped or the emoji. Empty for a photo without words.
+  text                     String?
+  /// The provider's id for our message they replied or reacted to.
+  replyToProviderMessageId String?
+  /// When they sent it, by the provider's clock.
+  receivedAt               DateTime @db.Timestamptz(3)
+  createdAt                DateTime @default(now()) @db.Timestamptz(3)
+  client                   Client?  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  enquiry                  Enquiry? @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerMessageId])
+  @@index([enquiryId, receivedAt])
+  @@index([clientId, receivedAt])
 }
 
 // ---------------------------------------------------------------------------
