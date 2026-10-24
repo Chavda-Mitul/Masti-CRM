@@ -5,7 +5,7 @@ import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { VISA_EVISA_PARTLY_APPROVED, VISA_EVISA_REFUSED, VISA_HANDED_OVER, VISA_PARTLY_APPROVED, VISA_REFUSED } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { codeConfirmed, evisaCase, type Agent } from "./visaHelpers";
+import { codeConfirmed, evisaCase, PNG, type Agent } from "./visaHelpers";
 
 // E-visas after the decision, part 5 (docs/decisions/0025-evisa-after-decision.md): refused e-visas. The decision gets
 // message 20 (everyone refused) or 21 (some), with no passport lines. When everyone is refused there's nothing to send:
@@ -84,11 +84,11 @@ describe("everyone refused", () => {
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.decision.record", entityId: c.id } });
     expect(entry.after).toMatchObject({ stage: "DELIVERED", status: "CLOSED", dueAt: null, confirmedWarnings: [CLOSES_CASE] });
 
-    // A closed case can't change, and there's nothing to send.
+    // A closed case can't change, and there's no e-visa to add.
     const again = await changeToRefused(processor, c.caseNo, adult);
     expect(again.status).toBe(409);
-    const { updatedAt } = await load(processor, c.caseNo);
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/send-evisa`).send({ updatedAt })).status).toBe(409);
+    const evisa = await processor.post(`/api/visa/cases/${c.caseNo}/travellers/${adult}/evisa`).set("Content-Type", "image/png").send(PNG);
+    expect(evisa.status).toBe(409);
   });
 
   it("with passports held: no warning; due for their handover; the delivery boy can be booked; the desk hands them back", async () => {
@@ -130,7 +130,7 @@ describe("everyone refused", () => {
 });
 
 describe("some refused", () => {
-  it("gets message 21 with no passport lines, and waits for the e-visa to be sent", async () => {
+  it("gets message 21 with no passport lines, and waits for the approved traveller's e-visa", async () => {
     const { c, processor } = await evisaCase({ outcomes: ["APPROVED", "REFUSED"] });
     const [message] = await sent(VISA_EVISA_PARTLY_APPROVED);
     expect(message!.body).toContain(
@@ -139,7 +139,7 @@ describe("some refused", () => {
     expect(message!.body).not.toMatch(/passport/i);
     expect(await sent(VISA_PARTLY_APPROVED)).toHaveLength(0);
     expect(await load(processor, c.caseNo)).toMatchObject({ stage: { code: "DECISION" }, status: "OPEN" });
-    expect(await nextStepOf(processor, c.caseNo)).toBe("Send the e-visa");
+    expect(await nextStepOf(processor, c.caseNo)).toBe("Upload the e-visa");
   });
 });
 

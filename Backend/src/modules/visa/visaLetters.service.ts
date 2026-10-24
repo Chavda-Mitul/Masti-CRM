@@ -12,14 +12,15 @@ import { decisionFileLimit, travellerFilePdf } from "./travellerFiles";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import { queueTravellerFileMessage } from "./visaMessages";
 
 // Visa Step 6, a traveller's letter (docs/decisions/0012-visa-decision.md): a refused traveller's refusal letter
 // (Decision 4), or an approved paper visa's visa copy, the passport's visa page or the approval letter (amended 24 Oct
 // 2026, change request 21, part 2). Kept as one PDF with the case's files in the private bucket (rule 4); a photo
 // becomes a one-page PDF (travellerFiles.ts). Optional, and added any time once decided, whatever the case's status: a
-// letter often comes back inside the passport. A newer upload is the current one; older ones stay as proof. A
-// traveller whose outcome changes keeps their files, which the case then doesn't show. Opened like any case file
-// (openCaseFile).
+// letter often comes back inside the passport. Each upload goes to the client on WhatsApp with its PDF (messages 22
+// and 23, part 3), a replacement too. A newer upload is the current one; older ones stay as proof. A traveller whose
+// outcome changes keeps their files, which the case then doesn't show. Opened like any case file (openCaseFile).
 
 export type LetterKind = "REFUSAL_LETTER" | "VISA_COPY";
 
@@ -81,8 +82,9 @@ function letterFileName(caseNo: string, name: string, kind: LetterKind) {
 
 /**
  * Saves a traveller's letter: one real PDF (a photo turned into one), its pages counted, in the private bucket under a
- * key no other upload shares. The bucket upload happens before the case lock, so a slow upload never holds the case.
- * Under the lock the checks are repeated; if they fail now, the row isn't saved and the object is removed again.
+ * key no other upload shares, and sends it to the client (message 22 or 23) in the same transaction. The bucket upload
+ * happens before the case lock, so a slow upload never holds the case. Under the lock the checks are repeated; if they
+ * fail now, the row isn't saved, nothing is sent and the object is removed again.
  */
 export async function uploadLetter(caseNo: string, travellerId: string, kind: LetterKind, contentType: ScanType, bytes: Buffer, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, KINDS[kind].rule);
@@ -126,6 +128,7 @@ export async function uploadLetter(caseNo: string, travellerId: string, kind: Le
         },
         tx,
       );
+      await queueTravellerFileMessage(tx, enquiry.id, { id: file.id, kind, travellerName: traveller.label });
     });
   } catch (err) {
     // Nothing points at the object: remove it so the bucket holds only files the CRM knows. Best effort.

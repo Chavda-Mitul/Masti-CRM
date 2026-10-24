@@ -173,8 +173,9 @@ Masti changes words, the changed templates are edited, and Meta reviews them aga
      no "do not share" line, and there's a **Copy code** button. It's sent with the code twice: in the words and in the
      button.
    - **A wording that carries a file** (`TEMPLATES_WITH_FILE`) gets a document header. These are the e-visa, and since
-     24 Oct 2026 the invoice and the credit note (point 4). Its sample is a one-page PDF uploaded through Meta's
-     Resumable Upload API; the app's id comes from the token's `debug_token`.
+     24 Oct 2026 the invoice and the credit note (point 4), and the refusal letter and the visa copy (messages 22 and
+     23, change request 21 part 3). Its sample is a one-page PDF uploaded through Meta's Resumable Upload API; the
+     app's id comes from the token's `debug_token`.
    - **Checked first, in plain words:** at most 1,024 characters; no placeholder first, last, or beside another;
      lowercase names; a sample for each.
 2. **`npm run whatsapp:templates -- submit | check`** (`src/scripts/whatsappTemplates.ts`):

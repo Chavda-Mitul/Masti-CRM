@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderTemplate, TemplateDraft, WhatsAppTemplates } from "../src/lib/whatsapp";
 import { metaTemplateName, metaTemplateRequest, metaTemplates } from "../src/lib/whatsapp/metaTemplates";
 import { syncTemplates, templateDraft, templateProblems } from "../src/modules/messages/messageTemplates";
-import { FIELD_DOOR_CODE, MESSAGE_TEMPLATES, VISA_DOCUMENTS_RECEIVED, VISA_EVISA_READY, VISA_PRICE } from "../src/modules/messages/messages.seed";
+import {
+  FIELD_DOOR_CODE,
+  MESSAGE_TEMPLATES,
+  VISA_DOCUMENTS_RECEIVED,
+  VISA_EVISA_READY,
+  VISA_PRICE,
+  VISA_REFUSAL_LETTER,
+  VISA_VISA_COPY,
+} from "../src/modules/messages/messages.seed";
 import { prisma, resetDb } from "./helpers";
 
 // The CRM's wordings as Meta's templates (docs/decisions/0020-whatsapp-sending.md Amendment 2): made from each
@@ -73,12 +81,14 @@ describe("the wordings as Meta takes them", () => {
     });
   });
 
-  it("finds nothing WhatsApp would refuse in any of the CRM's 21 wordings, and has a sample for every value", () => {
-    expect(MESSAGE_TEMPLATES).toHaveLength(21);
+  it("finds nothing WhatsApp would refuse in any of the CRM's 23 wordings, and has a sample for every value", () => {
+    expect(MESSAGE_TEMPLATES).toHaveLength(23);
     for (const template of MESSAGE_TEMPLATES) {
       expect({ code: template.code, problems: templateProblems(templateDraft(template, 10)) }).toEqual({ code: template.code, problems: [] });
     }
-    expect(templateDraft(MESSAGE_TEMPLATES.find((t) => t.code === VISA_EVISA_READY)!, 10).withDocument).toBe(true);
+    for (const code of [VISA_EVISA_READY, VISA_REFUSAL_LETTER, VISA_VISA_COPY]) {
+      expect({ code, withDocument: templateDraft(MESSAGE_TEMPLATES.find((t) => t.code === code)!, 10).withDocument }).toEqual({ code, withDocument: true });
+    }
   });
 
   it("says in plain words what WhatsApp would refuse", () => {
@@ -198,7 +208,7 @@ describe("switching the wordings on", () => {
     expect((await row(FIELD_DOOR_CODE)).providerTemplateId).toBeNull();
     expect(reports.find((r) => r.code === VISA_PRICE)).toMatchObject({ on: false, status: "APPROVED", note: "Approved, but in older words: submit again." });
     expect(reports.find((r) => r.code === FIELD_DOOR_CODE)).toMatchObject({ on: false, status: "PENDING" });
-    expect(reports.filter((r) => r.status === "NOT SUBMITTED")).toHaveLength(18);
+    expect(reports.filter((r) => r.status === "NOT SUBMITTED")).toHaveLength(MESSAGE_TEMPLATES.length - 3);
     const entries = await prisma.auditLog.findMany({ where: { action: "message.template.provider" } });
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ entityType: "MessageTemplate", actorId: null, after: { providerTemplateId: "visa_documents_received" } });
@@ -221,7 +231,7 @@ describe("switching the wordings on", () => {
 
     const submitted = submit.mock.calls.map(([d, existing]) => ({ code: d.code, existing: existing?.id ?? null }));
     expect(submitted).toContainEqual({ code: VISA_PRICE, existing: "id-price" });
-    expect(submitted.filter((s) => s.existing === null)).toHaveLength(18);
+    expect(submitted.filter((s) => s.existing === null)).toHaveLength(MESSAGE_TEMPLATES.length - 3);
     expect(submitted.map((s) => s.code)).not.toContain(VISA_DOCUMENTS_RECEIVED);
     expect(submitted.map((s) => s.code)).not.toContain(FIELD_DOOR_CODE);
     expect(reports.find((r) => r.code === FIELD_DOOR_CODE)!.note).toMatch(/while Meta reviews the old ones/);

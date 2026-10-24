@@ -10,6 +10,7 @@ import type { ChangeDecisionInput, RecordDecisionInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { travellerLabel } from "./visaCase";
+import { evisasAllIn, evisaState, finishEvisas, heldBooklets } from "./visaEvisaDone";
 import { deliverCase } from "./visaHandover.service";
 import { queueDecisionMessage } from "./visaMessages";
 
@@ -64,6 +65,12 @@ const CLOSES_CASE: Warning = {
   message: "Everyone is refused and we hold no passports: saving closes the case, and a closed case can't be changed.",
 };
 
+/** The same warning when a change leaves every approved traveller's e-visa already sent (change request 21 part 3). */
+const EVISAS_CLOSE_CASE: Warning = {
+  code: "CASE_CLOSES",
+  message: "Every approved traveller's e-visa has gone and we hold no passports: saving closes the case, and a closed case can't be changed.",
+};
+
 /** The file went in: at the embassy (0011 Decision 3), or online for an e-visa. */
 function assertSubmitted(g: Gathered) {
   if (!g.submittedAt && !g.submittedOnlineAt) throw conflict("Mark it submitted at the embassy first.");
@@ -93,7 +100,8 @@ function checkOne(name: string, number: string, o: ChangeDecisionInput) {
 /**
  * Once the passports are received (0013 Decision 5), an approved traveller's change carries the sticker check again,
  * Matches or Doesn't match, so a corrected number or date can be marked as matching (amended 19 Oct 2026). Before then,
- * and for a refused traveller, there's no sticker to check. An e-visa is checked on its row, beside its PDF (0025).
+ * and for a refused traveller, there's no sticker to check. An e-visa has none: it goes to the client as uploaded
+ * (change request 21 part 3).
  */
 function checkSticker(g: Gathered, name: string, o: ChangeDecisionInput) {
   const checking = !!g.passportsReceivedAt && o.outcome === "APPROVED";
@@ -102,7 +110,7 @@ function checkSticker(g: Gathered, name: string, o: ChangeDecisionInput) {
     const why = g.passportsReceivedAt
       ? `${name} was refused: there's no sticker to check.`
       : g.submittedOnlineAt
-        ? "An e-visa is checked on its row, beside its PDF."
+        ? "An e-visa has no sticker to check."
         : "The sticker is checked once the passports are received.";
     throw fieldError("decision", why);
   }
@@ -242,13 +250,13 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
  * back until the handover (amended 19 Oct 2026): the outcome, or just an approved one's number or dates, each optional
  * and added here after recording (amended 23 Oct 2026); a number already elsewhere, or dates that don't cover the trip,
  * warn first when they change (lib/warnings.ts). Once the passports are received, an approved traveller's change carries
- * the sticker check (checkSticker); a refused one's is cleared. An e-visa's check (0025) stands while the entry stays as
- * it was, and is cleared when it changes: the PDF must be looked at against it again. In one transaction under the case
- * lock: the traveller's entry, the case's updatedAt and the audit (visa.decision.change, with the old and new values).
- * It sends the case's updatedAt from when the dialog opened,
- * so a save after someone else's change is refused (409 STALE) instead of undoing it (amended 19 Oct 2026). The case's
- * step, due time and "recorded by" stay, except that an e-visa the change leaves with everyone refused, and no passports
- * held, moves on to Delivered and closes, after a warning (0025, part 5). A save that changes nothing writes nothing.
+ * the sticker check (checkSticker); a refused one's is cleared. In one transaction under the case lock: the traveller's
+ * entry, the case's updatedAt and the audit (visa.decision.change, with the old and new values). It sends the case's
+ * updatedAt from when the dialog opened, so a save after someone else's change is refused (409 STALE) instead of undoing
+ * it (amended 19 Oct 2026). The case's step, due time and "recorded by" stay, except for an e-visa the change leaves with
+ * nothing to send: with everyone refused and no passports held it moves on to Delivered and closes (0025, part 5); with
+ * every approved traveller's e-visa already gone it's finished as the last upload would finish it (visaEvisaDone.ts,
+ * change request 21 part 3). Either close is warned first. A save that changes nothing writes nothing.
  */
 export async function changeDecision(caseNo: string, travellerId: string, input: ChangeDecisionInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, DECIDED);
@@ -271,6 +279,15 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
   /** An e-visa this change leaves with everyone refused, and no passports held, closes (0025, part 5). */
   const closing = (g: Gathered) =>
     g.travellers.some((x) => x.outcome !== "REFUSED") && closesCase(g, g.travellers.map((x) => (x.id === travellerId ? input : x)));
+  /**
+   * An e-visa this change leaves with every approved traveller's e-visa already sent, and no passports held: finishing
+   * it closes it (change request 21 part 3).
+   */
+  const finishingCloses = async (db: Db, g: Gathered) => {
+    if (!g.submittedOnlineAt) return false;
+    const s = await evisaState(db, enquiry.id);
+    return evisasAllIn(s, (x) => (x.id === travellerId ? input.outcome : x.outcome)) && heldBooklets(s) === 0;
+  };
   /** The warnings for this change, for what it changes: what's unchanged was confirmed when it was saved. */
   const warningsFor = async (db: Db, g: Gathered) => {
     const before = g.travellers.find((x) => x.id === travellerId);
@@ -282,6 +299,7 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
       ...(await decisionWarnings(db, enquiry.id, g, numberChanged ? [input] : [])),
       ...(datesChanged ? tripWarnings(g, [{ travellerId, ...input }]) : []),
       ...(closing(g) ? [CLOSES_CASE] : []),
+      ...((await finishingCloses(db, g)) ? [EVISAS_CLOSE_CASE] : []),
     ];
   };
   const pre = await gather(prisma, enquiry.id);
@@ -314,10 +332,8 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
     const same = was.outcome === entry.outcome && was.visaNo === entry.visaNo && was.validFrom === entry.validFrom && was.validTo === entry.validTo;
     const now = {
       ...entry,
-      // Checked again once received; an e-visa's stands while its entry does (0025); a refused traveller has none (the
-      // database's CHECK).
-      stickerCheck:
-        g.passportsReceivedAt && input.outcome === "APPROVED" ? (input.stickerCheck ?? null) : g.submittedOnlineAt && same ? row.stickerCheck : null,
+      // Checked again once received; a refused traveller has none (the database's CHECK), and an e-visa none at all.
+      stickerCheck: g.passportsReceivedAt && input.outcome === "APPROVED" ? (input.stickerCheck ?? null) : null,
     };
     if (same && was.stickerCheck === now.stickerCheck) return;
 
@@ -334,7 +350,12 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
     // The case moves on too, so a page or dialog opened before this change can't save over it.
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { updatedAt: new Date() } });
     // Nothing left to send or hand back: on to Delivered, closed, as when recorded so (0025, part 5).
-    const closed = closing(g) ? (await deliverCase(tx, locked, actor, "everyone was refused", { evisa: true })).closes : false;
+    let closed = closing(g) ? (await deliverCase(tx, locked, actor, "everyone was refused", { evisa: true })).closes : false;
+    // Every approved traveller's e-visa already went: finished as the last upload would finish it (change request 21).
+    if (g.submittedOnlineAt && !closed) {
+      const s = await evisaState(tx, enquiry.id);
+      if (evisasAllIn(s)) closed = (await finishEvisas(tx, locked, s, actor)).closes;
+    }
     await audit(
       {
         actorId: actor.user.id,

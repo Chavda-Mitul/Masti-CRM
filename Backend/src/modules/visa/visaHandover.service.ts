@@ -76,7 +76,7 @@ export function assertInStock(g: Gathered, c: { status: string; stage: { code: s
   if (c.status !== "CANCELLED") {
     if (!evisa) throw conflict("Only a cancelled case's passports are handed back before they go to the vendor.");
     // An e-visa's passports go back once nothing is left to send: it went to the client, or everyone was refused (0025).
-    if (c.stage.code !== "DECISION" || !evisaDone(g)) throw conflict("Send the e-visa first: the passports go back after it.");
+    if (c.stage.code !== "DECISION" || !evisaDone(g)) throw conflict("Upload every approved traveller's e-visa first: the passports go back after it.");
   }
   const stock = { current: g.bookletsCurrent ?? 0, old: g.bookletsOld ?? 0 };
   if (stock.current + stock.old === 0) throw conflict("No booklets were counted in for this case: there's nothing to hand back.");

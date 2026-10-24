@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, istToday } from "../src/lib/dates";
 import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { VISA_PARTLY_APPROVED, VISA_VISA_COPY } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { jpegOf } from "./imageFiles";
@@ -105,6 +106,28 @@ describe("the visa copy", () => {
     const res = await upload(processor, c.caseNo, adult, await pdf(1));
     expect(res.status).toBe(200);
     expect((res.body.case as CaseDto).travellers[0]!.visaCopy!.copies).toBe(3);
+    // Each went to the client, the closed and cancelled case's too (change request 21 part 3).
+    expect(await prisma.outboundMessage.count({ where: { template: { code: VISA_VISA_COPY } } })).toBe(3);
+  });
+});
+
+describe("the message to the client (change request 21 part 3)", () => {
+  it("each upload sends message 23 with its PDF, keyed by the file, after the decision's message: a replacement too", async () => {
+    const { c, processor, adult } = await decidedCase();
+    const first = (await upload(processor, c.caseNo, adult, await pdf(1))).body.case.travellers[0].visaCopy as FileDto;
+    const second = (await upload(processor, c.caseNo, adult, jpegOf(400, 300), "image/jpeg")).body.case.travellers[0].visaCopy as FileDto;
+    const sent = await prisma.outboundMessage.findMany({ where: { template: { code: VISA_VISA_COPY } }, orderBy: { createdAt: "asc" } });
+    expect(sent.map((m) => m.attachmentId)).toEqual([first.id, second.id]);
+    expect(sent[0]).toMatchObject({
+      idempotencyKey: `${VISA_VISA_COPY}:${first.id}`,
+      enquiryId: c.id,
+      clientId: c.client.id,
+      status: "QUEUED",
+      variables: expect.objectContaining({ traveller_name: "Rakesh Mehta", case_no: c.caseNo }),
+    });
+    expect(sent[0]!.body).toContain(`A copy of Rakesh Mehta's France tourist visa (${c.caseNo}) is attached for your records.`);
+    const decision = await prisma.outboundMessage.findFirstOrThrow({ where: { template: { code: VISA_PARTLY_APPROVED } } });
+    expect(decision.createdAt.getTime()).toBeLessThanOrEqual(sent[0]!.createdAt.getTime());
   });
 });
 

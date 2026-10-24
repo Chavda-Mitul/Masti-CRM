@@ -66,10 +66,16 @@ export const DECIDED: StepRule = {
 };
 
 /**
- * An approved e-visa's PDF and its check (docs/decisions/0025-evisa-after-decision.md): at Decision, on an open case.
- * An e-visa never reaches Passport back.
+ * An approved e-visa's PDF (docs/decisions/0025-evisa-after-decision.md), sent to the client when it's uploaded (change
+ * request 21 part 3): at Decision, or once Delivered for a corrected one, whatever the status. Until every approved
+ * e-visa has gone the case must still be open at Decision: the last one finishes it (visaEvisa.service.ts). An e-visa
+ * never reaches Passport back.
  */
-export const CHECKING_EVISA: StepRule = { stages: ["DECISION"], wrongStage: "The e-visa is added once the decision is recorded." };
+export const EVISA_FILES: StepRule = {
+  stages: ["DECISION", "DELIVERED"],
+  anyStatus: true,
+  wrongStage: "The e-visa is added once the decision is recorded.",
+};
 
 /**
  * Step 7 (docs/decisions/0013-visa-passport-back.md Decision 3): "Passports on the way back", from Decision, or at

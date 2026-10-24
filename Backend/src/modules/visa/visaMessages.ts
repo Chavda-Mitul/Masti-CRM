@@ -13,7 +13,9 @@ import {
   VISA_INVOICE,
   VISA_PARTLY_APPROVED,
   VISA_PASSPORTS_BACK,
+  VISA_REFUSAL_LETTER,
   VISA_REFUSED,
+  VISA_VISA_COPY,
 } from "../messages/messages.seed";
 import { queueMessage } from "../messages/messages.service";
 
@@ -203,20 +205,34 @@ export function fitList(items: string[], maxChars = LIST_MAX_CHARS): string {
   return kept.join("; ") + more(items.length - kept.length);
 }
 
+/** The message each of a traveller's files after the decision goes in: 22, 23, or 19 for an e-visa. */
+const TRAVELLER_FILE_MESSAGE = {
+  REFUSAL_LETTER: VISA_REFUSAL_LETTER,
+  VISA_COPY: VISA_VISA_COPY,
+  EVISA: VISA_EVISA_READY,
+} as const;
+
 /**
- * Message 19, "Your e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): one approved traveller's e-visa,
- * with its PDF, in the transaction of "Send the e-visa". Once per traveller, as an e-visa is sent once. The e-visa's
- * number and dates aren't in the words: they're optional (0012, amended 23 Oct 2026), and printed on the PDF.
+ * A traveller's file after the decision, sent to the client with its PDF in the transaction that saves it
+ * (docs/decisions/0012-visa-decision.md Decision 3, change request 21 part 3): the refusal letter (message 22), the
+ * visa copy (23) or the e-visa (19, docs/decisions/0025-evisa-after-decision.md). Keyed by the file, so a replacement
+ * goes too. An e-visa's number and dates aren't in the words: they're optional (0012, amended 23 Oct 2026), and printed
+ * on the PDF.
  */
-export async function queueEvisaMessage(tx: Db, enquiryId: string, traveller: { id: string; name: string; fileId: string }) {
+export async function queueTravellerFileMessage(
+  tx: Db,
+  enquiryId: string,
+  file: { id: string; kind: keyof typeof TRAVELLER_FILE_MESSAGE; travellerName: string },
+) {
+  const template = TRAVELLER_FILE_MESSAGE[file.kind];
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
-    template: VISA_EVISA_READY,
+    template,
     enquiryId,
-    key: `${VISA_EVISA_READY}:${traveller.id}`,
+    key: `${template}:${file.id}`,
     clientId: basics.clientId,
-    attachmentId: traveller.fileId,
-    variables: { ...basics.variables, traveller_name: traveller.name },
+    attachmentId: file.id,
+    variables: { ...basics.variables, traveller_name: file.travellerName },
   });
 }
 

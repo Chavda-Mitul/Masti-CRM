@@ -14,14 +14,14 @@ const WORDS: Record<LetterKind, { chip: string; none: string; upload: string; sa
     chip: 'Refusal letter',
     none: 'No refusal letter yet',
     upload: 'Upload letter',
-    saved: 'Refusal letter saved.',
+    saved: 'Refusal letter sent to the client.',
     failed: 'Couldn’t upload the letter. Please try again.',
   },
   VISA_COPY: {
     chip: 'Visa copy',
     none: 'No visa copy yet',
     upload: 'Upload visa copy',
-    saved: 'Visa copy saved.',
+    saved: 'Visa copy sent to the client.',
     failed: 'Couldn’t upload the visa copy. Please try again.',
   },
 }
@@ -31,8 +31,8 @@ const WORDS: Record<LetterKind, { chip: string; none: string; upload: string; sa
  * traveller's refusal letter (Decision 4), or an approved paper visa's visa copy, the passport's visa page or the
  * approval letter (amended 24 Oct 2026, change request 21). A scanned PDF, or a photo kept as one, kept privately and
  * opened through a link that works for a few minutes. Optional, and uploaded any time once decided, whatever the case's
- * status (a letter often comes back inside the passport). A newer upload becomes the current one and older ones are
- * kept.
+ * status (a letter often comes back inside the passport). Each upload goes to the client on WhatsApp (part 3). A newer
+ * upload becomes the current one, and goes too; older ones are kept.
  */
 export function TravellerFileLine({
   visaCase: c,
@@ -65,7 +65,7 @@ export function TravellerFileLine({
     upload.mutate(
       { travellerId: t.id, kind, file: picked },
       {
-        onSuccess: () => toast({ tone: 'ok', message: file ? 'New copy saved. The earlier one is kept.' : words.saved }),
+        onSuccess: () => toast({ tone: 'ok', message: file ? 'New copy sent to the client. The earlier one is kept.' : words.saved }),
         onError: (err) => toast({ tone: 'bad', message: errorText(err) ?? words.failed }),
       },
     )

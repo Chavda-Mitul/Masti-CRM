@@ -2,9 +2,10 @@
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: recording
   the decision (15 Oct 2026, component 1); changing a traveller's decision (16 Oct 2026, component 2); the refusal
-  letter (16 Oct 2026, component 3). A "Built" note is added under each part as its component lands. **Amended 23 Oct
-  2026** ([change request 21](../change-requests.md), part 1): recording takes no typing; the number and dates are
-  optional, added with Change (Decision 3).
+  letter (16 Oct 2026, component 3). A "Built" note is added under each part as its component lands. **Amended 23–24
+  Oct 2026** ([change request 21](../change-requests.md), parts 1–3, all built): recording takes no typing; the number
+  and dates are optional, added with Change; each traveller's file is added in the dialog or on the card, and goes to
+  the client on WhatsApp (Decision 3).
 - **Date:** 15 Oct 2026
 - **Scope:** recording whether each traveller's visa was approved or refused, from the moment the file was submitted
   (at the embassy, or online for an e-visa) until the passports start back (Step 7):
@@ -120,6 +121,36 @@ the Decision card. Nothing is sent to the client yet: that's part 3.
 - **Saving the dialog:** the decision saves first, then each picked file is uploaded in turn, since the server checks
   the outcome. One toast says what was saved, or which file to add on the card. Changing a traveller's outcome in the
   dialog drops the file picked for them.
+
+**Amended 24 Oct 2026 (project lead, change request 21, part 3): each file goes to the client.** Every upload of these
+files, in the dialog or on the card, goes to the client on WhatsApp with its own message, the file attached
+([0025](0025-evisa-after-decision.md) Decision 4).
+
+| File | Message ⚠️ (our drafts, for M1) | Its words |
+| --- | --- | --- |
+| Refusal letter | 22, "Refusal letter" (`visa.refusal_letter`) | Dear {{client_name}}, The refusal letter for {{traveller_name}}'s {{visa}} ({{case_no}}) is attached. Please call us on {{office_phone}}: we will explain the reason and what can be done next. – Masti Tours & Travels |
+| Visa copy | 23, "Your visa copy" (`visa.visa_copy`) | Dear {{client_name}}, A copy of {{traveller_name}}'s {{visa}} ({{case_no}}) is attached for your records. – Masti Tours & Travels |
+| E-visa | 19, "Your e-visa" ([0025](0025-evisa-after-decision.md), unchanged) | "Good news! … The e-visa is attached. …" |
+
+- **Every upload goes,** a replacement too (decided 24 Oct 2026), so each message is keyed per file
+  (`<code>:<file id>`). It goes whatever the case's status, as the upload is allowed then: a refusal letter can come
+  back after the case closed.
+- **Queued with the file,** by `queueTravellerFileMessage` (`visaMessages.ts`), in the upload's transaction: a file
+  that isn't saved sends nothing.
+- **The order:** the dialog saves the decision first, so its message, if any (10–12, or 20–21 for an e-visa), is queued
+  before the files'. A message that fails and is retried can still arrive after a later one, so each file's words
+  stand on their own.
+- **E-visas go at once:** no check and no "Send the e-visa →"; the upload that completes the approved travellers'
+  e-visas moves the case on ([0025](0025-evisa-after-decision.md) Amendment 1). The table above changes for the e-visa:
+  at Decision on an open case until every approved one has gone; after that a corrected one, at Decision or Delivered,
+  whatever the status.
+- **Screen:**
+  - the dialog says each file goes to the client on WhatsApp, and for an e-visa that the case closes, or waits for the
+    passports we hold, once every approved e-visa has gone
+  - after saving: "Sending 2 files to the client…", then "2 files sent to the client." or which ones didn't go, to add
+    on the card
+  - on the card: "Refusal letter sent to the client.", "Visa copy sent to the client.", or for a replacement "New copy
+    sent to the client. The earlier one is kept."
 
 ### 4. A refused traveller: the refusal letter
 

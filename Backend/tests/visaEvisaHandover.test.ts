@@ -9,9 +9,10 @@ import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { codeConfirmed, decidedCase, evisaCase, lastDoorCode, type Agent } from "./visaHelpers";
 
 // E-visas after the decision, part 4 (docs/decisions/0025-evisa-after-decision.md): handing back the passports we hold.
-// An e-visa's passports never go to a vendor, so booklets counted in at intake stay at our office. Once the e-visa is
-// sent (part 3), they go back as any other: at the desk, by whoever is there, or with the delivery boy; the count must
-// match the intake, and the case is then Delivered and closed. A cancelled e-visa's go back at the office only.
+// An e-visa's passports never go to a vendor, so booklets counted in at intake stay at our office. Once every approved
+// traveller's e-visa has gone (part 3; each as it's uploaded since change request 21), they go back as any other: at the
+// desk, by whoever is there, or with the delivery boy; the count must match the intake, and the case is then Delivered
+// and closed. A cancelled e-visa's go back at the office only.
 
 beforeEach(async () => {
   await resetDb();
@@ -60,28 +61,27 @@ async function cancel(agent: Agent, caseNo: string) {
   return agent.post(`/api/enquiries/${caseNo}/cancel`).send({ reasonId: await reason("TRIP_CANCELLED"), updatedAt });
 }
 
-/** Neha's e-visa (Rakesh and Aarav approved) with 2 + 0 booklets held; sent too unless `sent` is false. */
+/** Uploads a traveller's e-visa, which goes to the client at once (change request 21 part 3). */
+async function sendEvisa(agent: Agent, caseNo: string, travellerId: string) {
+  const up = await agent.post(`/api/visa/cases/${caseNo}/travellers/${travellerId}/evisa`).set("Content-Type", "application/pdf").send(await pdf());
+  expect(up.status).toBe(200);
+}
+
+/** Neha's e-visa (Rakesh and Aarav approved) with 2 + 0 booklets held; both e-visas sent, or only Rakesh's if `sent` is false. */
 async function evisaHeld({ sent = true } = {}) {
   const e = await evisaCase();
   await holdPassports(e.c.id);
-  for (const id of [e.adult, e.child]) {
-    const up = await e.processor.post(`/api/visa/cases/${e.c.caseNo}/travellers/${id}/evisa`).set("Content-Type", "application/pdf").send(await pdf());
-    const fileId = (up.body.case as CaseDto).travellers.find((t) => t.id === id)!.evisa!.id;
-    expect((await e.processor.put(`/api/visa/cases/${e.c.caseNo}/travellers/${id}/evisa-check`).send({ fileId, check: "MATCHES" })).status).toBe(200);
-  }
-  if (sent) {
-    const { updatedAt } = await load(e.processor, e.c.caseNo);
-    expect((await e.processor.post(`/api/visa/cases/${e.c.caseNo}/send-evisa`).send({ updatedAt })).status).toBe(200);
-  }
+  await sendEvisa(e.processor, e.c.caseNo, e.adult);
+  if (sent) await sendEvisa(e.processor, e.c.caseNo, e.child);
   return e;
 }
 
 describe("at the desk", () => {
-  it("waits for the e-visa to be sent: the passports go back after it", async () => {
+  it("waits for every approved e-visa to be sent: the passports go back after them", async () => {
     const { c, processor } = await evisaHeld({ sent: false });
     const early = await photo(processor, c.caseNo);
     expect(early.status).toBe(409);
-    expect(early.body.message).toBe("Send the e-visa first: the passports go back after it.");
+    expect(early.body.message).toBe("Upload every approved traveller's e-visa first: the passports go back after it.");
   });
 
   it("once sent: counted against the intake, then Delivered and closed, with message 15 and the audit", async () => {
@@ -106,8 +106,8 @@ describe("at the desk", () => {
     const kiran = await loginAs("kiran@masti.test");
     expect((await kiran.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(403);
 
-    const { updatedAt } = await load(processor, c.caseNo);
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/send-evisa`).send({ updatedAt })).status).toBe(200);
+    // Aarav's, the last approved one, goes: the passports are now in our stock.
+    await sendEvisa(processor, c.caseNo, (await load(processor, c.caseNo)).travellers[1]!.id);
     expect((await kiran.get(`/api/visa/cases/${c.caseNo}`)).status).toBe(200);
     const res = await handOver(kiran, c.caseNo);
     expect(res.status).toBe(200);

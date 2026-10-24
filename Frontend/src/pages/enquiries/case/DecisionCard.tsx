@@ -14,8 +14,9 @@ import { TravellerFileLine } from './TravellerFileLine'
  * client know), and whoever can act on the case can correct a traveller's entry or add the number and dates (Change,
  * Decision 6; "Add sticker no." while there are none), at Passport back too until the handover. A refused traveller's
  * refusal letter, and an approved paper visa's visa copy (amended 24 Oct 2026, change request 21), are uploaded and
- * opened on their row, at any step and status once decided (Decision 4). An approved e-visa's PDF is uploaded and
- * checked against the passport on its row (docs/decisions/0025-evisa-after-decision.md).
+ * opened on their row, at any step and status once decided (Decision 4). An approved e-visa's PDF is uploaded on its
+ * row (docs/decisions/0025-evisa-after-decision.md). Each upload goes to the client on WhatsApp (change request 21
+ * part 3).
  */
 export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -25,10 +26,12 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const online = !!c.submittedOnline
   const canAct = !!me && canActOnCase(me, { department: c.department.code, owner: c.owner })
   // At Decision, or at Passport back until the handover (amended 19 Oct 2026), to put a sticker that doesn't match right.
-  // An e-visa sent to the client stays as it went (0025, part 3).
+  // An e-visa whose e-visas have all gone stays as it went (0025, part 3).
   const canChange = canAct && (c.stage.code === 'DECISION' || c.stage.code === 'PASSPORT_BACK') && c.status === 'OPEN' && !c.evisaSent
-  // An e-visa's PDF and its check (0025), at Decision on an open case, until it's sent.
-  const canEvisa = canAct && c.stage.code === 'DECISION' && c.status === 'OPEN' && !c.evisaSent
+  // An e-visa's PDF (0025): at Decision on an open case until every approved one has gone; after that a corrected one,
+  // whatever the case's status, once Delivered too (change request 21 part 3). As the server's EVISA_FILES.
+  const canEvisa =
+    canAct && (c.evisaSent ? c.stage.code === 'DECISION' || c.stage.code === 'DELIVERED' : c.stage.code === 'DECISION' && c.status === 'OPEN')
   const traveller = c.travellers.find((t) => t.id === changing)
 
   return (
@@ -73,7 +76,7 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
           </div>
         )
       })}
-      {/* "Send the e-visa" (0025, part 3): who sent the approved travellers' e-visas to the client, and when. */}
+      {/* Every approved traveller's e-visa has gone to the client (0025, part 3; each as uploaded, change request 21). */}
       {c.evisaSent && (
         <div className="kv">
           <span>
@@ -90,9 +93,10 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
             {dayTime(c.dueAt)}
             {c.owner && ` · ${firstName(c.owner.name)}`}
           </span>
-          {/* An e-visa's passports never left the office (0008 Decision 11): its PDFs go to the client, then any
-              passports we hold go back; with everyone refused there's nothing to send (0025, parts 3–5). */}
-          <strong>{!c.submittedOnline ? 'Check the passports are on their way back' : evisaDone(c) ? 'Hand back the passports' : 'Send the e-visa'}</strong>
+          {/* An e-visa's passports never left the office (0008 Decision 11): its PDFs go to the client as they're
+              uploaded, then any passports we hold go back; with everyone refused there's nothing to send (0025, parts
+              3–5; change request 21 part 3). */}
+          <strong>{!c.submittedOnline ? 'Check the passports are on their way back' : evisaDone(c) ? 'Hand back the passports' : 'Upload the e-visa'}</strong>
         </div>
       )}
       {traveller && <ChangeDecisionDialog visaCase={c} traveller={traveller} onClose={() => setChanging(null)} />}

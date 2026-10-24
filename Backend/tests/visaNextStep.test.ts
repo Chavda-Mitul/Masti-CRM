@@ -8,9 +8,9 @@ import { appointmentsHeld, aWednesday, decidedCase, dispatchCase, makeInvoiceabl
 
 // The enquiries list's next step follows the case at Steps 6–7, as the case page's header button does (visaNextStep):
 // the passports' way back (docs/decisions/0013-visa-passport-back.md Decisions 3–5), an e-visa, whose passports
-// never left the office (Decision 4) and whose PDFs are sent instead (0025, part 3; visaEvisaSend.test.ts), and a short
-// return, held until the rest come in or the shortfall is cleared (Decision 5, amended). Every other step shows the
-// step's own next step.
+// never left the office (Decision 4) and whose PDFs go to the client as they're uploaded (0025 Amendment 1;
+// visaEvisaGoes.test.ts), and a short return, held until the rest come in or the shortfall is cleared (Decision 5,
+// amended). Every other step shows the step's own next step.
 
 beforeEach(async () => {
   await resetDb();
@@ -135,11 +135,11 @@ describe("the enquiries list's next step at Steps 6–7", () => {
     expect((await row(processor, c.caseNo)).nextStep).toBe("Mark received");
   });
 
-  it("asks for an e-visa at Decision to be sent to the client: its passports never left the office (0025)", async () => {
+  it("asks for an e-visa to be uploaded at Decision: its passports never left the office (0025)", async () => {
     const { c, processor } = await eVisaDecided();
     expect(await row(processor, c.caseNo)).toMatchObject({
       stage: { code: "DECISION", nextStepLabel: "Passports on the way back" },
-      nextStep: "Send the e-visa",
+      nextStep: "Upload the e-visa",
     });
   });
 

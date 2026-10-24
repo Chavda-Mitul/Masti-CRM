@@ -217,6 +217,6 @@ async function samplePdf(): Promise<Uint8Array> {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const page = pdf.addPage([595, 842]);
   page.drawText("Masti Tours & Travels", { x: 72, y: 760, size: 18, font });
-  page.drawText("Sample document: a client's e-visa, invoice or credit note goes here.", { x: 72, y: 730, size: 11, font });
+  page.drawText("Sample document: a client's e-visa, visa copy, refusal letter, invoice or credit note goes here.", { x: 72, y: 730, size: 11, font });
   return pdf.save();
 }

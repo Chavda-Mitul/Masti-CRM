@@ -40,9 +40,9 @@ export function visaNextStep(stage: Pick<DepartmentStage, "code" | "nextStepLabe
     if (!visa.vendorReceivedAt) return "Confirm vendor got it";
     if (!visa.submittedAt) return "Get the file number";
   }
-  // An e-visa's passports never left the office: it's sent (unless everyone was refused), then any we hold go back
-  // (0025, parts 3–5).
-  if (stage.code === "DECISION" && visa.submittedOnlineAt) return evisaDone(visa) ? "Hand back the passports" : "Send the e-visa";
+  // An e-visa's passports never left the office: each approved traveller's e-visa goes as it's uploaded (unless everyone
+  // was refused), then any passports we hold go back (0025, parts 3–5; change request 21 part 3).
+  if (stage.code === "DECISION" && visa.submittedOnlineAt) return evisaDone(visa) ? "Hand back the passports" : "Upload the e-visa";
   if (stage.code === "PASSPORT_BACK") {
     // Only a recalled file reaches Passport back before its passports are on the way.
     if (!visa.passportsInTransitAt) return "Passports on the way back";

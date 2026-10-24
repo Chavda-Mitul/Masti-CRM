@@ -14,8 +14,9 @@ import { fileSize } from './pdfFiles'
  * was submitted. Each traveller is Approved or Refused (demo screen 11), with nothing typed (amended 23 Oct 2026, change
  * request 21): an approved one's sticker number (an e-visa's number) and dates are added later with Change on the
  * Decision card. Each traveller can also get their file, if staff have it (part 2): the refusal letter, the visa copy or
- * the e-visa, a PDF, JPG or PNG. Saving moves the case to Step 6 · Decision, then uploads the files one at a time: the
- * server needs the outcome first.
+ * the e-visa, a PDF, JPG or PNG, each sent to the client on WhatsApp (part 3). Saving moves the case to Step 6 ·
+ * Decision, then uploads the files one at a time: the server needs the outcome first, and the decision's own message
+ * goes before them. The last approved traveller's e-visa finishes an e-visa case.
  */
 export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
@@ -77,21 +78,25 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
         toast({ tone: 'ok', message: recorded })
         return
       }
-      toast({ tone: 'info', message: `${recorded} Saving ${picked.length === 1 ? 'the file' : `${picked.length} files`}…` })
+      toast({ tone: 'info', message: `${recorded} Sending ${picked.length === 1 ? 'the file' : `${picked.length} files`} to the client…` })
       // One at a time. The dialog has gone by now (the case is at Decision), but each upload still updates the case.
       const failed: string[] = []
+      let latest = saved
       for (const p of picked) {
         try {
-          await upload.mutateAsync({ travellerId: p.travellerId, kind: p.kind, file: p.file })
+          latest = await upload.mutateAsync({ travellerId: p.travellerId, kind: p.kind, file: p.file })
         } catch (err) {
           const why = errorText(err)
           failed.push(`${p.name}’s ${DECISION_FILE_LABEL[p.kind].toLowerCase()}${why ? ` (${why})` : ''}`)
         }
       }
+      // The last approved traveller's e-visa finishes the case: closed, or the passports we hold go back next.
+      const finished = !saved.evisaSent && latest.evisaSent
+      const next = !finished ? '' : latest.status === 'CLOSED' ? ' The case is delivered and closed.' : ' Every e-visa has gone: hand back the passports next.'
       if (failed.length === 0) {
-        toast({ tone: 'ok', message: picked.length === 1 ? 'File saved.' : `${picked.length} files saved.` })
+        toast({ tone: 'ok', message: `${picked.length === 1 ? 'File sent' : `${picked.length} files sent`} to the client.${next}` })
       } else {
-        toast({ tone: 'warn', message: `Not saved: ${failed.join('; ')}. Add ${failed.length === 1 ? 'it' : 'them'} on the Decision card.` })
+        toast({ tone: 'warn', message: `Not sent: ${failed.join('; ')}. Add ${failed.length === 1 ? 'it' : 'them'} on the Decision card.${next}` })
       }
     }
     void save(false)
@@ -109,7 +114,8 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
           <p className="muted small" style={{ margin: 0 }}>
             Approved or Refused, per traveller. Saving moves the case to Decision. The {numberWords(online)} and dates can be added later on the
             Decision card. If you have it, add each traveller’s refusal letter or {online ? 'e-visa' : 'visa copy'}: a PDF, JPG or PNG up to{' '}
-            {c.decisionFileMaxMb} MB. It can also be added later on the card.
+            {c.decisionFileMaxMb} MB. Each file goes to the client on WhatsApp; it can also be added later on the card.
+            {online && ' Once every approved traveller’s e-visa has gone, the case closes, or waits for the passports we hold to go back.'}
           </p>
 
           {c.travellers.map((t) => {

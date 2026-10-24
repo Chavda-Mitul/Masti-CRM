@@ -39,8 +39,6 @@ import {
   updateTripSchema,
   updateVisaCaseSchema,
   updateVisaSettingsSchema,
-  sendEvisaSchema,
-  setEvisaCheckSchema,
   setRemindersSchema,
   setUrgencySchema,
   saveSubmissionSchema,
@@ -61,7 +59,6 @@ import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as decisionService from "./visaDecision.service";
 import * as lettersService from "./visaLetters.service";
 import * as evisaService from "./visaEvisa.service";
-import * as evisaSendService from "./visaEvisaSend.service";
 import * as creditNoteService from "./visaCreditNote.service";
 import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
@@ -580,30 +577,6 @@ router.post("/cases/:caseNo/travellers/:travellerId/evisa", visaEdit, async (req
   const { maxBytes, tooBig } = await evisaService.evisaLimit(caseNo, travellerId, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
   res.json({ case: await evisaService.uploadEvisa(caseNo, travellerId, contentType, bytes, actor) });
-});
-
-/**
- * What stands in the way of "Send the e-visa" (0025, part 3), who gets a message with which file, and what happens to
- * the case: it closes, or it's due for the handover when we hold passports.
- */
-router.get("/cases/:caseNo/send-evisa/check", visaView, async (req, res) => {
-  res.json(await evisaSendService.sendEvisaCheck(caseNoParam.parse(req.params.caseNo), currentUser(req)));
-});
-
-/**
- * "Send the e-visa" (0025, part 3): each approved traveller's e-visa goes to the client on WhatsApp; the case closes, or
- * waits for the handover. 409 SEND_BLOCKED with details.blockers until every approved traveller's PDF is marked Matches.
- */
-router.post("/cases/:caseNo/send-evisa", visaEdit, async (req, res) => {
-  const body = sendEvisaSchema.parse(req.body);
-  res.json({ case: await evisaSendService.sendEvisa(caseNoParam.parse(req.params.caseNo), body, actorOf(req)) });
-});
-
-/** The e-visa checked against the passport (0025, part 1): Matches, Doesn't match, or null to undo. 409 on a newer PDF. */
-router.put("/cases/:caseNo/travellers/:travellerId/evisa-check", visaEdit, async (req, res) => {
-  const body = setEvisaCheckSchema.parse(req.body);
-  const caseNo = caseNoParam.parse(req.params.caseNo);
-  res.json({ case: await evisaService.setEvisaCheck(caseNo, idParam.parse(req.params.travellerId), body, actorOf(req)) });
 });
 
 /**

@@ -1406,7 +1406,7 @@ button.tick:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
 }
-/* An approved traveller's number and dates, and for an e-visa its PDF and check under them (0025). */
+/* An approved traveller's number and dates, and under them the e-visa (0025) or the visa copy (change request 21). */
 .decision-detail {
   display: flex;
   flex-direction: column;
@@ -1418,10 +1418,6 @@ button.tick:focus-visible {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-.evisa-mismatch {
-  flex-basis: 100%;
-  color: var(--bad);
 }
 
 /* Part 6: how documents arrive, booklets */
