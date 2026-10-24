@@ -2,6 +2,7 @@ import { prisma } from "../../config/prisma";
 import { boss, QUEUES } from "../../lib/jobs";
 import { seedMessageTemplates } from "./messages.seed";
 import { checkMessageStatus, deliverMessage, giveUpMessage } from "./messages.service";
+import { recordLaterStatus, type LaterStatus } from "./whatsappWebhook.service";
 
 // The outbox's jobs (docs/decisions/0021-whatsapp-outbox.md), run by pg-boss inside the server. One job at a time each:
 // messages come a few a minute, far below anything WhatsApp limits.
@@ -25,5 +26,8 @@ export async function registerMessageWorkers(): Promise<void> {
   });
   await boss.work<{ messageId: string; check: number }>(QUEUES.whatsappStatus, async (jobs) => {
     for (const job of jobs) await checkMessageStatus(job.data.messageId, job.data.check);
+  });
+  await boss.work<LaterStatus>(QUEUES.whatsappStatusLater, async (jobs) => {
+    for (const job of jobs) await recordLaterStatus(job.data);
   });
 }

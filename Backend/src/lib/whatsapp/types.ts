@@ -54,4 +54,46 @@ export interface WhatsAppProvider {
   send(message: WhatsAppMessage): Promise<{ providerMessageId: string }>;
   /** Asks where a message has got to, for providers that answer (others only report back through a webhook). */
   checkStatus?(providerMessageId: string): Promise<{ status: WhatsAppStatus; error: string | null }>;
+  /** What the provider reports through its webhook, for providers that have one and are set up for it (0026). */
+  webhook?: WhatsAppWebhook;
 }
+
+/**
+ * A provider's webhook (docs/decisions/0026-whatsapp-webhook.md): the address it calls with what happened to our
+ * messages and with the clients' own. Everything provider-specific (the set-up check, the signature, the shape) stays
+ * behind this.
+ */
+export interface WhatsAppWebhook {
+  /** The provider checking our address while it's set up: the answer it expects, or null to turn it away. */
+  handshake(query: Record<string, unknown>): string | null;
+  /** What one call reports, in the CRM's words; null when the call didn't come from the provider (a bad signature). */
+  events(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): WhatsAppEvent[] | null;
+}
+
+/** One thing a provider's webhook reports, in the CRM's words: the same for every provider. */
+export type WhatsAppEvent =
+  | {
+      kind: "status";
+      /** The provider's id for one of our messages. */
+      providerMessageId: string;
+      status: "DELIVERED" | "READ" | "FAILED";
+      /** Why it wasn't delivered, in plain words; null unless it failed. */
+      error: string | null;
+      /** When it happened, by the provider's clock. */
+      at: Date;
+    }
+  | {
+      kind: "incoming";
+      /** The provider's id for the client's message: a call the provider makes again brings the same one. */
+      providerMessageId: string;
+      /** Who wrote: +91XXXXXXXXXX, or + and the digits for a number outside India. */
+      from: string;
+      /** "text", "image", "document", "audio", "button", "reaction"…, as the provider names it. */
+      type: string;
+      /** What they wrote: the text, a file's caption, the button they tapped, the emoji. Null for a photo without words. */
+      text: string | null;
+      /** The provider's id for our message they replied or reacted to, when they did. */
+      replyTo: string | null;
+      /** When they sent it, by the provider's clock. */
+      at: Date;
+    };

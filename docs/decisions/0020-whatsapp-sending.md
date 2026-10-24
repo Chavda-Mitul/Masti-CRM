@@ -90,7 +90,8 @@ hours of the tester's last message to the sandbox.
    from the CRM's own short-lived link.*
 4. **The consent "I agree" link** (message 4, filling the consent flag from 0006).
 5. **Delivered and read ticks:** Twilio's status webhook, checked with the Auth Token. It needs a public address
-   (ngrok on a laptop). *With Meta it's Meta's webhook: Amendment 1, piece 2.*
+   (ngrok on a laptop). *With Meta it's Meta's webhook: Amendment 1, piece 2, built in
+   [0026](0026-whatsapp-webhook.md).*
 
 ## Amendment 1 (23 Oct 2026): Meta's Cloud API directly
 
@@ -107,6 +108,8 @@ The work comes in three pieces, one at a time:
 1. **Sending (built):** `src/lib/whatsapp/meta.ts`, `WHATSAPP_PROVIDER=meta`.
 2. **Delivered, read and failed:** Meta's webhook. It needs its own decision record (an address with no login), a public
    https address (a tunnel on a laptop), and the Meta app published: an unpublished app gets only test webhooks.
+   *Built 23–24 Oct 2026: [0026](0026-whatsapp-webhook.md), which also keeps clients' own messages (change request
+   19).*
 3. **Masti's templates** created and approved in WhatsApp Manager, each one's name on its template row. The door code
    (message 16) is an authentication template with a copy-code button, and the consent link may go in a URL button:
    both need their own components.
