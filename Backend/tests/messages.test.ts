@@ -401,6 +401,18 @@ describe("the door code (message 16, amendment 6)", () => {
     expect(after.variables).toEqual({ code: "••••••", minutes: "10" });
   });
 
+  it("goes as the provider's code template once one is approved, with the code for the provider's own words (0020 amendment 2)", async () => {
+    await prisma.messageTemplate.update({ where: { code: FIELD_DOOR_CODE }, data: { providerTemplateId: "field_door_code" } });
+    const { m } = await codeQueued("code:template");
+    await deliverMessage(m.id, { lastTry: false });
+    expect(stub.provider!.send).toHaveBeenCalledExactlyOnceWith({
+      to: "+919825041234",
+      body: WORDS(CODE),
+      template: { id: "field_door_code", variables: { code: CODE, minutes: "10" }, oneTimeCode: CODE },
+      secrets: [CODE],
+    });
+  });
+
   it("is forgotten when it won't go too", async () => {
     stub.provider!.send.mockRejectedValueOnce(new WhatsAppError("That number isn't on WhatsApp, or isn't written correctly.", false));
     const { m } = await codeQueued("code:failed");

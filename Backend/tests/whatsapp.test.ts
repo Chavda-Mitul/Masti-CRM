@@ -336,6 +336,28 @@ describe("Meta", () => {
     expect(asked().message).toEqual({ ...request, type: "template", template: { name: "hello_world", language: { code: "en_US" } } });
   });
 
+  it("sends a one-time code as Meta's authentication template: the code in its words and in its Copy code button", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM7"));
+    await metaProvider(meta).send({
+      to,
+      body: "482915 is your verification code.\n\nThis code expires in 10 minutes.",
+      template: { id: "field_door_code", variables: { code: "482915", minutes: "10" }, oneTimeCode: "482915" },
+      secrets: ["482915"],
+    });
+    expect(asked().message).toEqual({
+      ...request,
+      type: "template",
+      template: {
+        name: "field_door_code",
+        language: { code: "en_US" },
+        components: [
+          { type: "body", parameters: [{ type: "text", text: "482915" }] },
+          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "482915" }] },
+        ],
+      },
+    });
+  });
+
   it("puts a file in the document header of an approved template", async () => {
     fetchMock.mockResolvedValue(taken("wamid.HBgM6"));
     const url = "https://crm.masti.in/api/public/message-files/m1/evisa.pdf?key=k";

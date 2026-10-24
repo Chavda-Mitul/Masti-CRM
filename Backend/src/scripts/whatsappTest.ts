@@ -1,20 +1,20 @@
 import { normaliseMobile } from "../lib/contact";
 import { dayLabel, istTimestamp, istToday } from "../lib/dates";
 import { sendWhatsApp, whatsAppProvider, type WhatsAppMessage, type WhatsAppStatus } from "../lib/whatsapp";
+import { metaTemplateName } from "../lib/whatsapp/metaTemplates";
+import { TEMPLATE_SAMPLES } from "../modules/messages/messageTemplates";
+import { VISA_DOCUMENTS_RECEIVED } from "../modules/messages/messages.seed";
 
 // npm run whatsapp:test -- 98250 41234 [template | media <https link to a file>]
 // Sends one test WhatsApp through WHATSAPP_PROVIDER to check the set-up (docs/decisions/0020-whatsapp-sending.md). It
 // sends our own words, which WhatsApp delivers only within 24 hours of that phone's last message to us; "template" sends
-// an approved sample template instead, which goes at any time (Twilio's sandbox sample, or Meta's hello_world, which
-// needs META_TEMPLATE_LANGUAGE=en_US and goes only from Meta's public test numbers); "media" adds the file at that
-// link, which the provider fetches (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words, not --template:
-// PowerShell's npm drops flags after --. On a server: node dist/src/scripts/whatsappTest.js
+// an approved template instead, which goes at any time: Twilio's sandbox sample, or with Meta our own "All documents
+// received" with its sample values, once `npm run whatsapp:templates` has it approved (0020 Amendment 2); "media" adds
+// the file at that link, which the provider fetches (docs/decisions/0025-evisa-after-decision.md, part 2). Plain words,
+// not --template: PowerShell's npm drops flags after --. On a server: node dist/src/scripts/whatsappTest.js
 
 /** Twilio's sample template in every sandbox: "Your appointment is coming up on {{1}} at {{2}}". */
 const SANDBOX_TEMPLATE = "HXb5b62575e6e4ff6129ad7c8efe1f983e";
-
-/** Meta's sample template in every WhatsApp account, in English (US), with no values. */
-const META_TEMPLATE = "hello_world";
 
 const WAIT_SECONDS = 30;
 
@@ -45,9 +45,14 @@ async function main(): Promise<number> {
 
   const day = dayLabel(istToday());
   const time = istTimestamp().slice(11, 16);
+  const { client_name, visa, case_no } = TEMPLATE_SAMPLES;
   const sample: WhatsAppMessage =
     provider.name === "meta"
-      ? { to, body: "Hello World (Meta's sample template)", template: { id: META_TEMPLATE, variables: {} } }
+      ? {
+          to,
+          body: `All documents received (a sample: ${client_name}, ${visa}, ${case_no})`,
+          template: { id: metaTemplateName(VISA_DOCUMENTS_RECEIVED), variables: { client_name: client_name!, visa: visa!, case_no: case_no! } },
+        }
       : {
           to,
           body: `Your appointment is coming up on ${day} at ${time}`,

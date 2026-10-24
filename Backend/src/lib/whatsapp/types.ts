@@ -12,8 +12,10 @@ export interface WhatsAppMessage {
   /**
    * The Meta-approved template as the provider knows it (Twilio: the Content SID, "HX…"; Meta: the template's name),
    * with a value for each of its {{placeholders}}, keyed as the template names them ("1", "2" or "client_name").
+   * `oneTimeCode`: it's a one-time-code template (the door code), whose words the provider writes itself around this
+   * code (0020 Amendment 2).
    */
-  template?: { id: string; variables: Record<string, string> };
+  template?: { id: string; variables: Record<string, string>; oneTimeCode?: string };
   /**
    * One file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): a link the provider fetches it
    * from, which works for a short while only (its key is a secret), and the file's name. Twilio takes one only with our
@@ -56,6 +58,46 @@ export interface WhatsAppProvider {
   checkStatus?(providerMessageId: string): Promise<{ status: WhatsAppStatus; error: string | null }>;
   /** What the provider reports through its webhook, for providers that have one and are set up for it (0026). */
   webhook?: WhatsAppWebhook;
+  /** Its templates, for providers whose templates the CRM can make (Meta: 0020 Amendment 2). */
+  templates?: WhatsAppTemplates;
+}
+
+/** One of the CRM's wordings, as a provider's template is made from it (0020 Amendment 2). */
+export interface TemplateDraft {
+  /** The CRM's code for it: "visa.documents_received". */
+  code: string;
+  /** The words, with {{placeholders}}. */
+  body: string;
+  /** "authentication": a one-time code, whose words the provider writes itself (the door code). Else "utility". */
+  kind: "utility" | "authentication";
+  /** It carries a PDF (the e-visa), so the template has a document header. */
+  withDocument: boolean;
+  /** An example for each placeholder, which the provider's reviewers read. */
+  samples: Record<string, string>;
+  /** An authentication template's minutes: how long the code works. */
+  codeMinutes?: number;
+}
+
+/** A provider's template for one of the CRM's wordings, as it stands. */
+export interface ProviderTemplate {
+  /** The name messages are sent with (Meta: the template's name). */
+  name: string;
+  /** The provider's own id for it, which a change is sent to. */
+  id: string;
+  /** As the provider says it: APPROVED, PENDING, REJECTED, PAUSED, DISABLED… Only an approved one can be sent. */
+  status: string;
+  /** Why it was rejected or held back, when it was. */
+  reason: string | null;
+  /** Its words (or a code's minutes, its document header) are the draft's: an approved one can go out for it. */
+  current: boolean;
+}
+
+/** Making and reading a provider's templates. */
+export interface WhatsAppTemplates {
+  /** Each draft's template at the provider, by the draft's code; null where it has none yet. */
+  find(drafts: TemplateDraft[]): Promise<Map<string, ProviderTemplate | null>>;
+  /** Creates the draft's template, or changes the existing one to the draft's words. Throws a WhatsAppError. */
+  submit(draft: TemplateDraft, existing: ProviderTemplate | null): Promise<void>;
 }
 
 /**

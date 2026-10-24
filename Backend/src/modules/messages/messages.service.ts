@@ -9,6 +9,7 @@ import { sendWhatsApp, whatsAppProvider, WhatsAppError, type WhatsAppStatus } fr
 import { hideSecrets, secretValues } from "../../lib/whatsapp/secrets";
 import { maskConsentLinks } from "../consent/consentToken";
 import { newFileLink } from "./messageFiles";
+import { ONE_TIME_CODE_TEMPLATES } from "./messages.seed";
 
 // The WhatsApp outbox (docs/decisions/0021-whatsapp-outbox.md). queueMessage writes a message in the transaction of the
 // change it reports and queues the "whatsapp-send" job, which deliverMessage runs once that commits. A save never waits
@@ -140,10 +141,12 @@ export async function deliverMessage(messageId: string, { lastTry }: { lastTry: 
   try {
     const variables = message.variables as Record<string, string>;
     const secrets = secretValues(variables);
+    // A one-time code's template words are the provider's own, around the code (0020 Amendment 2).
+    const oneTimeCode = ONE_TIME_CODE_TEMPLATES.has(message.template.code) ? variables.code : undefined;
     sent = await sendWhatsApp({
       to,
       body: message.body,
-      ...(providerTemplateId ? { template: { id: providerTemplateId, variables } } : {}),
+      ...(providerTemplateId ? { template: { id: providerTemplateId, variables, ...(oneTimeCode ? { oneTimeCode } : {}) } } : {}),
       ...(attachment ? { attachment } : {}),
       ...(secrets.length > 0 ? { secrets } : {}),
     });

@@ -1,4 +1,6 @@
 import { metaFailure } from "./metaErrors";
+import { GRAPH_API } from "./metaGraph";
+import { metaTemplates } from "./metaTemplates";
 import { metaWebhook } from "./metaWebhook";
 import { NOT_REACHED, WhatsAppError, type WhatsAppMessage, type WhatsAppProvider } from "./types";
 
@@ -18,10 +20,9 @@ export interface MetaSettings {
   appSecret?: string;
   /** The word Meta's Configure Webhooks is given, and gives back when it checks our address. */
   verifyToken?: string;
+  /** The WhatsApp Business Account the templates belong to: with it, the CRM makes them (metaTemplates.ts). */
+  businessAccountId?: string;
 }
-
-/** The Graph API version this file is written for (v26.0, July 2026). Meta keeps each version for about two years. */
-const GRAPH_API = "https://graph.facebook.com/v26.0";
 
 /** Meta is given this long to answer, well inside the send job's 2 minutes (src/lib/jobs.ts), as Twilio is. */
 const TIMEOUT_MS = 30_000;
@@ -40,10 +41,11 @@ interface Refused {
 }
 
 export function metaProvider(settings: MetaSettings): WhatsAppProvider {
-  const { appSecret, verifyToken, phoneNumberId } = settings;
+  const { appSecret, verifyToken, phoneNumberId, businessAccountId, accessToken, templateLanguage } = settings;
   return {
     name: "meta",
     ...(appSecret && verifyToken ? { webhook: metaWebhook({ appSecret, verifyToken, phoneNumberId }) } : {}),
+    ...(businessAccountId ? { templates: metaTemplates({ accessToken, businessAccountId, language: templateLanguage }) } : {}),
     async send(message) {
       let response: Response;
       try {
@@ -72,6 +74,22 @@ function requestFor(message: WhatsAppMessage, language: string): Record<string, 
   const { template, attachment } = message;
   // Meta takes the number with its country code and without the +.
   const request = { messaging_product: "whatsapp", recipient_type: "individual", to: message.to.replace(/^\+/, "") };
+  if (template?.oneTimeCode) {
+    // Meta writes an authentication template's words itself; the code goes in them and in its Copy code button.
+    const code = [{ type: "text", text: template.oneTimeCode }];
+    return {
+      ...request,
+      type: "template",
+      template: {
+        name: template.id,
+        language: { code: language },
+        components: [
+          { type: "body", parameters: code },
+          { type: "button", sub_type: "url", index: "0", parameters: code },
+        ],
+      },
+    };
+  }
   if (template) {
     const components = [
       // The file goes in the template's document header, approved by Meta with the template.

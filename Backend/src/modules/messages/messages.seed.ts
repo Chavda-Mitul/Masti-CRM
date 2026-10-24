@@ -83,6 +83,15 @@ export const VISA_EVISA_READY = "visa.evisa_ready";
 export const VISA_EVISA_REFUSED = "visa.evisa_refused";
 export const VISA_EVISA_PARTLY_APPROVED = "visa.evisa_partly_approved";
 
+/**
+ * The wordings that are a one-time code (0020 Amendment 2): their template's words are the provider's own (Meta's
+ * authentication template), and the code goes in them and in a Copy code button.
+ */
+export const ONE_TIME_CODE_TEMPLATES: ReadonlySet<string> = new Set([FIELD_DOOR_CODE]);
+
+/** The wordings whose message carries one of the case's files, so their template has a document header (0020 Amendment 2). */
+export const TEMPLATES_WITH_FILE: ReadonlySet<string> = new Set([VISA_EVISA_READY]);
+
 export const MESSAGE_TEMPLATES = [
   {
     code: VISA_DOCUMENTS_RECEIVED,
