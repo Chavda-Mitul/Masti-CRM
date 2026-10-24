@@ -17,9 +17,10 @@ import { visaMessageBasics } from "./visaMessages";
 import { collectionWarnings } from "./visaWarnings";
 
 // Visa Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md). "Vendor got it, papers checked" (Decision 2) is
-// confirmed per file, on its own case page, by whoever can act on the case. The file then comes back due when the vendor
-// submits it: the earliest traveller's appointment still to come, or the next open office day at 11:00 ⚠️
-// (visa.submissionCheck). An e-visa has no vendor, so it has nothing to confirm.
+// confirmed per file, on its own case page, by whoever can act on the case. The file then comes back due to ask the
+// vendor for the file number: the next open office day after the earliest traveller's appointment still to come (after
+// today, with none), at 11:00 ⚠️ (visa.submissionCheck, amendment 1). An e-visa has no vendor, so it has nothing to
+// confirm.
 //
 // Then "Submitted at the embassy" (Decisions 3 and 4): the vendor's file number, the embassy and the expected collection
 // date, saved together and changeable while the file is at Step 5. The date can't be one the embassy is closed (its
@@ -48,16 +49,20 @@ async function gather(db: Db, enquiryId: string) {
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /**
- * When the file comes back due after "Vendor got it": the earliest appointment still to come, when the vendor submits
- * it; with none, the next open office day at 11:00 ⚠️.
+ * When the file comes back due after "Vendor got it", to ask the vendor for the file number: `visa.submissionCheck`
+ * (the next open office day at 11:00 ⚠️) counted from the day of the earliest appointment still to come, when the vendor
+ * submits it, or from today with none. It was the appointment itself, before the vendor has the number (amendment 1,
+ * 24 Oct 2026).
  */
 async function dueAfterReceipt(db: Db, g: Gathered) {
   const now = Date.now();
   const appointments = g.travellers.map((t) => t.appointmentAt).filter((at): at is Date => !!at && at.getTime() > now);
+  const timing = (await getVisaSettings(db)).submissionCheck;
   if (appointments.length) {
-    return { dueAt: new Date(Math.min(...appointments.map((at) => at.getTime()))), dueReason: "APPOINTMENT" as const };
+    const appointmentDay = istToday(new Date(Math.min(...appointments.map((at) => at.getTime()))));
+    return { dueAt: await dueOnOfficeDay(timing, db, appointmentDay), dueReason: "APPOINTMENT" as const };
   }
-  return { dueAt: await dueOnOfficeDay((await getVisaSettings(db)).submissionCheck, db), dueReason: "NEXT_DAY" as const };
+  return { dueAt: await dueOnOfficeDay(timing, db), dueReason: "NEXT_DAY" as const };
 }
 
 /**
@@ -82,8 +87,8 @@ export async function vendorReceivedCheck(caseNo: string, user: UserWithDepartme
 
 /**
  * "Vendor got it, papers checked" (Decision 2). In one transaction: who and when are stamped on this file only, it
- * comes back due at the appointment (or the next office day), and it's audited. The other files in its docket don't
- * change.
+ * comes back due the office day after the appointment (or after today), and it's audited. The other files in its docket
+ * don't change.
  */
 export async function markVendorReceived(caseNo: string, input: VendorReceivedInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, WITH_VENDOR);

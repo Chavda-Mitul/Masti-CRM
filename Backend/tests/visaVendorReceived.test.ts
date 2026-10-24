@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { addDays, addMonths, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { addDays, addMonths, istDateTimeToUtc, istToday, isoWeekday, toDbDate } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { dispatchCase, holdCaseLock, makeInvoiceable, mastiReady, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // Visa Step 5, "Vendor got it, papers checked" (docs/decisions/0011-visa-at-vendor.md Decision 2): confirmed per file. The
-// file then comes back due at the earliest appointment still to come, or the next open office day at 11:00 ⚠️.
+// file then comes back due to ask the vendor for the file number: the next open office day at 11:00 ⚠️ after the
+// earliest appointment still to come, or after today with none (amendment 1).
 
 beforeEach(async () => {
   await resetDb();
@@ -68,18 +70,20 @@ async function appointments(c: { id: string }, at: (Date | null)[]) {
 }
 
 describe("Vendor got it, papers checked (Decision 2)", () => {
-  it("is recorded on this file only, due back at the earliest appointment still to come", async () => {
+  it("is recorded on this file only, due back the office day after the earliest appointment still to come", async () => {
     const { mehta, shah, processor } = await dispatchedTwo();
-    const soonest = istDateTimeToUtc(addDays(istToday(), 3), "14:00");
-    await appointments(mehta, [istDateTimeToUtc(addDays(istToday(), -1), "10:00"), soonest]);
+    const soonest = addDays(istToday(), 3);
+    await appointments(mehta, [istDateTimeToUtc(addDays(istToday(), -1), "10:00"), istDateTimeToUtc(soonest, "14:00")]);
+    // The day after the appointment, at the setting's 11:00, not the appointment itself: the vendor has the number by then.
+    const due = istDateTimeToUtc(addDays(soonest, 1), "11:00").toISOString();
     const shahBefore = await load(processor, shah.caseNo);
 
-    expect((await check(processor, mehta.caseNo)).body).toEqual({ dueAt: soonest.toISOString(), dueReason: "APPOINTMENT" });
+    expect((await check(processor, mehta.caseNo)).body).toEqual({ dueAt: due, dueReason: "APPOINTMENT" });
     const res = await received(processor, mehta.caseNo);
     expect(res.status).toBe(200);
     const after = res.body.case as CaseDto;
     expect(after.stage.code).toBe("AT_VENDOR");
-    expect(after.dueAt).toBe(soonest.toISOString());
+    expect(after.dueAt).toBe(due);
     expect(after.vendorReceived).toMatchObject({ by: { name: "Neha Joshi" } });
 
     const other = await load(processor, shah.caseNo);
@@ -87,7 +91,22 @@ describe("Vendor got it, papers checked (Decision 2)", () => {
 
     const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.vendorReceived" } });
     expect(row).toMatchObject({ entityType: "Enquiry", entityId: mehta.id, clientId: mehta.client.id });
-    expect(row.after).toMatchObject({ dueAt: soonest.toISOString(), dueReason: "APPOINTMENT", docketNo: expect.stringMatching(/^D-/) });
+    expect(row.after).toMatchObject({ dueAt: due, dueReason: "APPOINTMENT", docketNo: expect.stringMatching(/^D-/) });
+  });
+
+  it("skips the office's closed days after the appointment: a Saturday appointment is followed up on Monday", async () => {
+    await seedHolidays(prisma); // the weekly Sunday off
+    const { mehta, processor } = await dispatchedTwo();
+    // The first Saturday at least two days away, so the appointment is still to come.
+    let saturday = addDays(istToday(), 2);
+    while (isoWeekday(saturday) !== 6) saturday = addDays(saturday, 1);
+    await appointments(mehta, [istDateTimeToUtc(saturday, "09:30"), null]);
+    const monday = istDateTimeToUtc(addDays(saturday, 2), "11:00").toISOString();
+
+    expect((await check(processor, mehta.caseNo)).body).toEqual({ dueAt: monday, dueReason: "APPOINTMENT" });
+    const res = await received(processor, mehta.caseNo);
+    expect(res.status).toBe(200);
+    expect((res.body.case as CaseDto).dueAt).toBe(monday);
   });
 
   it("with no appointment to come, the next open office day at the setting's time, skipping an office holiday", async () => {

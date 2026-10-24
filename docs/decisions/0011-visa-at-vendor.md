@@ -3,7 +3,9 @@
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: "Vendor got
   it" (15 Oct 2026, component 1); submitted at the embassy, with the collection date (15 Oct 2026, component 2); correcting a wrong invoice with a credit
   note and its replacement (15 Oct 2026, components 3a–3c); recall (15 Oct 2026, components 4a–4b); the additional
-  invoice (15 Oct 2026, components 5a–5c). A "Built" note is added under each part as its component lands.
+  invoice (15 Oct 2026, components 5a–5c). A "Built" note is added under each part as its component lands. Amendment
+  1, vendor follow-ups (24 Oct 2026, three parts): part 1, the file-number check the office day after the appointment,
+  built 24 Oct 2026; parts 2 and 3 next.
 - **Date:** 15 Oct 2026
 - **Scope:** everything from the vendor having the parcel (or an e-visa going in online) until the decision is
   recorded (Step 6):
@@ -18,6 +20,50 @@
   - [0005](0005-system-masters.md): the `Embassy` master and the holiday calendar; §2 left the case's embassy to this
     record
   - [0007](0007-visa-file-prep.md): each traveller's appointment
+
+## Amendment 1 (24 Oct 2026, project lead): vendor follow-ups
+
+**The ask:** while a paper file is at the vendor, the processor gets a proper follow-up with the vendor at two moments:
+after the embassy appointment ("Did you submit? What's the file number?") and before the expected collection date ("Is
+it ready? Are you collecting it on the day?"). It shows on the Follow-ups page, and the processor records what the
+vendor said from a list, with the next follow-up. Until now the case came back due at those moments (Decisions 2 and
+4), but a matured case is off the follow-up desk ([0006](0006-visa-documents.md) amendment 9), and Log call offers only
+the client's answers. The meeting and demo screen 10 already say "the follow-up desk is reminded a day before to check
+with the vendor", so it's in scope, not a change request. It answers M39 (b) and (c).
+
+**Decided (project lead, 24 Oct 2026):**
+
+| Question | Answer |
+| --- | --- |
+| The file number | Due the **next open office day after the appointment day, at 11:00** ⚠️ (`visa.submissionCheck`), not at the appointment itself: the vendor is still at the embassy then, and sends the number after submitting. With no appointment still to come, counted from "Vendor got it", as before |
+| The collection | Unchanged: **1 open office day before the expected collection date, at 11:00** ⚠️ (`visa.collectionCheck`, Decision 4) |
+| Where | On the **Follow-ups page**, as well as Today, the lists and the case |
+| What's recorded | **What the vendor said**, from a list, and the next follow-up (Log call), like the client's calls |
+
+**In three parts, one at a time:**
+1. **The file-number timing** (built, below).
+2. **Files at the vendor on the Follow-ups page:**
+   - The desk keeps a matured visa file while it's at the vendor (not an e-visa).
+   - Its row says what to ask and whom to call: the vendor's name and mobile.
+   - The lists and Today say "Check with the vendor" for a submitted file, instead of "Record the decision".
+3. **The vendor's answers in Log call:**
+   - Each What happened and Next step value says who the call is with: Client or Vendor.
+   - Vendor values are seeded ⚠️.
+   - At Step 5, Log call lists and accepts only the vendor values.
+
+**Defaults added when building (24 Oct 2026; say if any is wrong):** with the travellers' appointments on different
+days, the file-number check follows the earliest still to come, as the file can be marked submitted from that day.
+
+**Built (24 Oct 2026), part 1:**
+- **Due time:** `dueAfterReceipt` (`visaAtVendor.service.ts`) takes `visa.submissionCheck` through `dueOnOfficeDay`,
+  counted from the day of the earliest appointment still to come (today, with none). `dueReason` keeps `APPOINTMENT` /
+  `NEXT_DAY`, so the check endpoint and the audit keep their shape.
+- **Screen:**
+  - The Vendor got it dialog says "…Fri 23 Oct, 11:00, after the embassy appointment, to get the file number".
+  - In Settings → Visa, "Get the file number from the vendor" counts "after the embassy appointment, or after Vendor got
+    it when none is still to come", and its ⓘ gives both examples.
+- **Tests** (`visaVendorReceived.test.ts`): it's due the office day after the earliest appointment still to come, and a
+  Saturday appointment is followed up on Monday, past the weekly Sunday off.
 
 ## Context
 
@@ -64,7 +110,8 @@ tested, checked in the browser and committed before the next starts:
 - **Due next: the appointment.** **Decided 15 Oct 2026 (project lead):** the vendor submits at the embassy appointment
   booked in Step 3. So the case comes back due at the earliest traveller's appointment still to come. With no
   appointment (the visa needs none, or it has passed), it's due the next open office day at 11:00 ⚠️: the setting
-  `visa.submissionCheck` → `{ afterDays: 1, at: "11:00" }`.
+  `visa.submissionCheck` → `{ afterDays: 1, at: "11:00" }`. *Changed 24 Oct 2026 by amendment 1: the same setting,
+  counted from the appointment day, so it's due the next open office day after the appointment, at 11:00.*
 - **E-visas have no vendor:** they skip this, and the With the vendor card isn't shown for them.
 
 **Built 15 Oct 2026** (component 1):
@@ -418,7 +465,7 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 
 | What | Seeded with |
 | --- | --- |
-| `visa.submissionCheck` (no appointment) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
+| `visa.submissionCheck` (the file number: from the appointment day, or from Vendor got it with none; amendment 1) | `{ afterDays: 1, at: "11:00" }` ⚠️ |
 | `visa.collectionCheck` (the collection reminder) | `{ daysBefore: 1, at: "11:00" }` ⚠️ |
 | The file number format | capitals, digits, "-" and "/", 3–40 ⚠️ (in the code and a CHECK) |
 | `visa.creditNote` (the credit-note series) | `{ prefix: "MCN", digits: 8, startAt: 1 }` ⚠️ |
@@ -439,5 +486,5 @@ back to check the portal (`visa.onlineCheck`). To confirm with Masti (M39).
 
 - **M38 (accountant):** is GST charged on an additional charge (urgent fee, photos), or are some pass-through fees?
   And when an HOD's refund on a recall includes the service charge, should its GST be reversed?
-- **M39:** the e-visa flow at Step 5, and the timings: due at the appointment after "Vendor got it", reminded the day
-  before the collection date.
+- **M39 (a):** the e-visa flow at Step 5. The timings, (b) and (c), were answered by the project lead on 24 Oct 2026
+  (amendment 1).
