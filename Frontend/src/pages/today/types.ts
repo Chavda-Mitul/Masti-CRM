@@ -27,6 +27,23 @@ export interface UpNextRow {
   dueAt: string
 }
 
+/** Current and old passport booklets. */
+export interface Booklets {
+  current: number
+  old: number
+}
+
+/**
+ * The passport booklets we hold, office-wide (amendment 3): in our office, with the vendors, on the way back, and
+ * missing from short returns (not yet found or cleared).
+ */
+export interface PassportStock {
+  inOffice: Booklets
+  withVendors: Booklets
+  onTheWayBack: Booklets
+  missing: Booklets
+}
+
 /** One person's day: the banner's sentence and the tiles. */
 export interface TodaySummary {
   /** Whose cases: everyone's (the Head), whole departments (an HOD, with their names), or the person's own. */
@@ -49,4 +66,6 @@ export interface TodaySummary {
    * lost (cancelled) or still open, which add up to queriesIn; and the top 3 reasons they were lost, most first.
    */
   businessLost: { queriesIn: number; booked: number; lost: number; stillOpen: number; reasons: { name: string; count: number }[] }
+  /** The passport booklets we hold (amendment 3): for the Head and the Visa HOD only, null for everyone else. */
+  passportStock: PassportStock | null
 }

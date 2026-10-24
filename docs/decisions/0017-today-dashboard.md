@@ -5,11 +5,14 @@
   …" cards (component 3); the notice board and its card on Today (component 4); the visa team's login popup
   (component 5). **Amended 21 Oct 2026:** New enquiries count from a fixed 18:00, with no setting (see *Amendment 1*).
   **Amended 23 Oct 2026:** Business lost counts cancelled cases as lost and has its numbers (see *Amendment 2*).
+  **Amended 24 Oct 2026:** a card with the passport booklets we hold, for the Head and the Visa HOD (change
+  request 23, see *Amendment 3*).
 - **Date:** 19 Oct 2026
 - **Scope:** everyone's home page, `/` (demo screen 01, PROJECT_KNOWLEDGE.md §12.1):
   - the banner: the date, the greeting and the day's sentence
   - four tiles: Due today, Running late, New enquiries, Cross-sell to answer
   - Up next, open enquiries by department, business lost this month, money to collect
+  - the passport booklets we hold, for the Head and the Visa HOD (*Amendment 3*)
   - the notice board (its card here and its own page) and the visa team's login popup
 - **Builds on:**
   - [0002](0002-user-types.md): field staff have their run on `/tasks`, not Today
@@ -50,6 +53,39 @@ report's "Why we lost them"). So Decision 5 is replaced; the project lead chose:
 - **No LOST status:** `EnquiryStatus` loses `LOST`, which nothing ever set (migration `20261023200000_no_lost_status`),
   and `EnquiryReasonKind` won't get one (0006 Decision 7).
 - To confirm with Vimal: M52.
+
+## Amendment 3 (24 Oct 2026, project lead): the passport booklets we hold
+
+Vimal asked, through the project lead, to see on Today how many passport booklets Masti holds and how many have left
+the office, the count going down as soon as a docket is sent. The case pages record every movement, case by case;
+nothing added them up. It's change request 23. The project lead chose (24 Oct 2026):
+
+1. **Only the Head and the Visa HOD see it.** It counts the whole office, not the person's cases (Decision 1 doesn't
+   apply), so staff, who see only their own cases, don't get it (`passportStock` is null for them).
+2. **Where every booklet is,** by the rules the case pages already use (`TO_HAND_BACK` and `heldAtOffice` in
+   `enquiries/visibility.ts`, `bookletsSent` and `heldShort` in `visa/shortfall.ts`), so the card can't disagree with
+   them (`visa/passportStock.ts`):
+   - **In our office:** counted in at intake (Step 2's Save, or the collection boy's pickup) and not sent: before
+     dispatch (a docket still open counts as here), a cancelled case's still to hand back, an e-visa's (it never goes
+     to a vendor); or back from the vendor, as counted at "Mark received", plus "Received the rest".
+   - **With vendors:** in a docket marked **Dispatched**, a recalled file's too, as the docket counted them (the
+     current booklets, else one per traveller, and the old ones).
+   - **On the way back:** marked in transit, not yet received.
+   - **Missing:** what a short return still misses, until the rest come in or the shortfall is cleared. Shown only
+     when there are some, in red.
+   - Handed back to the client, at the desk or at the door, a case leaves the count. The booklets the delivery boy
+     carries count as in the office until his handover is done: the app has no "left for delivery" moment.
+3. **A case whose booklets nobody counted isn't counted** before dispatch: the count stays optional (0006 amendment
+   23). Once dispatched, it counts as the docket did. Whether the count should be required before a docket goes is
+   Vimal's (M53).
+4. **The card** (`GET /api/today` → `passportStock { inOffice, withVendors, onTheWayBack, missing }`, each
+   `{ current, old }`): "Passport booklets", the office's total ("5 in our office", "4 current + 1 old"), then "Out of
+   the office": With vendors, On the way back and Missing, each as "current + old" and the total. In the right-hand
+   column, after Open enquiries; rechecked every minute with the page.
+5. **Built in two parts:** the card (part 1, 24 Oct 2026), then the list behind the numbers: which cases hold the
+   booklets, how many each, and since when (part 2, planned when its turn comes).
+
+- To confirm with Vimal: M53.
 
 ## Context
 
@@ -239,5 +275,7 @@ team"):
 - **M32 (Q28):** what staff, HODs and Vimal should see on the home screen. Decision 1 stands until then.
 - **The 18:00 cut-off ⚠️:** Masti's own "evening". Fixed in the code since Amendment 1, so another time is a code change.
 - **M52:** Vimal to confirm Amendment 2: cancelled = lost, booked = invoice raised, the month's new enquiries.
+- **M53:** Vimal to confirm Amendment 3: who sees the passport card, when booklets leave the office count, and that
+  uncounted cases aren't in it.
 - **Q24 (the IVS feed) and Q25 (weather, automatic alerts):** until then, the board's two cards say what they wait for,
   and IVS news is posted by hand "From the IVS visa-news feed".

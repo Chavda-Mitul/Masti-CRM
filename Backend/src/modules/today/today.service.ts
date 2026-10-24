@@ -11,6 +11,7 @@ import { getHolidaySettings } from "../holidays/holidays.settings";
 import { holidayItem, newHolidaysWhere, noticeItem } from "../notices/feed";
 import { noticeInclude } from "../notices/notice";
 import type { UserWithDepartments } from "../users/user";
+import { passportStock } from "../visa/passportStock";
 
 // The Today page: one person's day (docs/decisions/0017-today-dashboard.md). In India time:
 // - Running late: due before now
@@ -138,7 +139,8 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
   const midnight = istDateTimeToUtc(addDays(istToday(now), 1), "00:00");
   const due = (dueAt: { gte?: Date; lt: Date }): Prisma.EnquiryWhereInput => ({ AND: [where, needsSomeone, { dueAt }] });
 
-  const [dueToday, late, oldest, newEnquiries, upNext, open, notices, lost] = await Promise.all([
+  const seesStock = user.type === "HEAD" || isHodOf(user, "VISA");
+  const [dueToday, late, oldest, newEnquiries, upNext, open, notices, lost, passports] = await Promise.all([
     prisma.enquiry.count({ where: due({ gte: now, lt: midnight }) }),
     prisma.enquiry.count({ where: due({ lt: now }) }),
     prisma.enquiry.aggregate({ where: due({ lt: now }), _min: { dueAt: true } }),
@@ -156,6 +158,7 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
       now,
     ),
     businessLost(where, now),
+    seesStock ? passportStock() : null,
   ]);
   return {
     scope,
@@ -191,5 +194,6 @@ export async function todaySummary(user: UserWithDepartments, now: Date = new Da
     })),
     notices,
     businessLost: lost,
+    passportStock: passports,
   };
 }

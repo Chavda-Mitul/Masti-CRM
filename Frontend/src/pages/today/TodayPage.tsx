@@ -8,12 +8,14 @@ import { MoneyToCollectCard } from './ComesWithCards'
 import { DepartmentBarsCard } from './DepartmentBarsCard'
 import { greetingNow, heroLine, longToday, newSinceLabel, oldestLabel, scopeLabel } from './labels'
 import { NoticeBoardCard } from './NoticeBoardCard'
+import { PassportStockCard } from './PassportStockCard'
 import { useToday } from './queries'
 import { UpNextCard } from './UpNextCard'
 
 /**
  * Today, everyone's home page (docs/decisions/0017-today-dashboard.md, demo screen 01): the day's sentence, four tiles,
- * then two columns: Up next and Business lost; open enquiries by department, the notice board and Money to collect.
+ * then two columns: Up next and Business lost; open enquiries by department, the passport booklets we hold (the Head
+ * and the Visa HOD only, amendment 3), the notice board and Money to collect.
  */
 export function TodayPage() {
   const { data: me } = useMe()
@@ -61,6 +63,7 @@ export function TodayPage() {
           </div>
           <div className="today-col">
             <DepartmentBarsCard day={day} />
+            {day?.passportStock && <PassportStockCard stock={day.passportStock} />}
             <NoticeBoardCard day={day} />
             <MoneyToCollectCard />
           </div>
