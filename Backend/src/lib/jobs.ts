@@ -18,7 +18,7 @@ export const QUEUES = {
   whatsappStatusLater: "whatsapp-status-later",
   /** Every 15 minutes: queues the visa pending-document reminders that are due (message 3). */
   visaDocumentReminders: "visa-document-reminders",
-  /** After "File ready": combines the visa case's scans into its saved file (0008 Amendment 1). */
+  /** After "Mark documents complete" and "File ready": combines the visa case's scans into its saved file (0008 Amendment 1). */
   visaCombineScans: "visa-combine-scans",
 } as const;
 

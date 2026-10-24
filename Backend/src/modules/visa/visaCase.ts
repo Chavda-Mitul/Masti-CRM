@@ -19,6 +19,9 @@ import { decisionFileMaxMb } from "./travellerFiles";
 /** The steps documents are collected in: the Reminders card shows there (0006 amendment 19). */
 export const COLLECTING_STAGES = ["ENQUIRY", "DOCUMENTS"];
 
+/** The steps the scans are combined into the saved file in (0008 Amendment 1): the case shows how that went. */
+const COMBINING_STAGES = ["FILE_PREPARATION", "DISPATCH"];
+
 /**
  * Whether the case would get a pending-document reminder now (0006 amendment 19): reminders on in Settings and on the
  * case, the case open and still collecting, and a paper the client brings still pending (what we arrange is never
@@ -111,9 +114,11 @@ export const visaCaseInclude = {
   owner: personSelect,
   createdBy: personSelect,
   reason: { select: { id: true, code: true, name: true, kind: true } },
-  /** The current final file (0007 Decision 8): the newest upload. Older ones are counted, not loaded. */
-  files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, include: { uploadedBy: personSelect } },
-  _count: { select: { files: { where: { kind: "FINAL_FILE" } } } },
+  /**
+   * The saved files (0007 Decision 8), newest first: the newest is the current one. A case has a handful, so all are
+   * loaded: the copy made from the scans (0008 Amendment 1) is shown even when a newer upload replaced it.
+   */
+  files: { where: { kind: "FINAL_FILE" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], include: { uploadedBy: personSelect } },
   /** The tax invoices (0009), newest first: the last of the chain, then any it replaced (0011 Decision 5). */
   invoices: {
     orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
@@ -281,12 +286,12 @@ export function scanTravellersOf(
 }
 
 /**
- * Docket & dispatch (0008 Amendment 1): how many papers need a scan, whose are missing, and the saved file made from them
- * once it is (the newest saved file, when the CRM made it).
+ * File preparation and Docket & dispatch (0008 Amendment 1): how many papers need a scan, whose are missing, and the
+ * saved file made from them once it is (the newest copy the CRM made, even if an upload replaced it since).
  */
 function combinedScansOf(row: VisaCaseRow, travellers: TravellerRow[], scans: CurrentScans) {
-  const { found, missing } = scansForFile(scanTravellersOf(travellers), scans, row.createdAt);
-  const file = row.files[0];
+  const { found, missing } = scansForFile(scanTravellersOf(travellers), scans);
+  const file = row.files.find((f) => f.scanCount !== null);
   return {
     needed: found.length + missing.reduce((n, m) => n + m.papers.length, 0),
     missing,
@@ -598,7 +603,7 @@ export function toVisaCaseDto(
           uploadedBy: finalFile.uploadedBy,
         }
       : null,
-    finalFileCopies: row._count.files,
+    finalFileCopies: row.files.length,
     finalFileMaxMb,
     /** The largest refusal letter, visa copy or e-visa taken (travellerFiles.ts): the page checks it first. */
     decisionFileMaxMb: decisionFileMaxMb(finalFileMaxMb),
@@ -615,8 +620,8 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
-    /** The scans combined into the saved file (0008 Amendment 1), or what's missing: at Docket & dispatch only. */
-    combinedScans: row.stage.code === "DISPATCH" ? combinedScansOf(row, visa.travellers, scans) : null,
+    /** The scans combined into the saved file (0008 Amendment 1), or what's missing: during file preparation and at Docket & dispatch. */
+    combinedScans: COMBINING_STAGES.includes(row.stage.code) ? combinedScansOf(row, visa.travellers, scans) : null,
     /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
     submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
     /** "Send the e-visa" (0025, part 3): who sent each approved traveller's e-visa to the client, and when. */

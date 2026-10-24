@@ -3,7 +3,7 @@
 - **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
   courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c); e-visas, "Submitted online" (15 Oct 2026,
   component 5). Step 4 is complete. A "Built" note sits under each part. Amendment 1, the scans combined into the
-  saved file: built 23 Oct 2026.
+  saved file: built 23 Oct 2026, changed 24 Oct 2026 (combined at "Mark documents complete"; the newest scan counts).
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
   - grouping ready cases into dockets, per vendor
@@ -71,6 +71,36 @@ Step 3; this reuses the vault's scans instead and leaves the Step 3 upload alone
 - **Tests:** `visaCombineScans.test.ts` (the queued job, the order and pages, the audit, missing scans, which scans
   count, Combine again and who may, the wrong step and a postponed case, made once, a job and a press racing, a broken
   or password-protected scan, e-visas, the photo pages) and `images.test.ts` (the orientation).
+
+**Changed 24 Oct 2026 (project lead, after trying it):** the scans had been saved in Step 2, yet Step 3's Saved file
+card still asked for an upload. "File ready" (the end of Step 3) needs the saved file first, so the combined copy
+came too late to spare it. And a returning client's scans from an earlier case didn't count (VISA-2026-0004 had none).
+
+| Question | Now |
+| --- | --- |
+| When | **At "Mark documents complete"** (the end of Step 2), so File preparation starts with the saved file and File ready needs no upload. "File ready" still tries again if it couldn't. **Combine again** works during File preparation (on the Saved file card) and at Docket & dispatch. |
+| Which scans count | **The person's newest scan of each paper,** saved on this case or an earlier one: a passport scanned last trip counts. A paper ticked On file still uses the copy it came from. The "Scan not saved" warning (0016 Decision 7) is unchanged. |
+
+**Defaults added when building (24 Oct 2026; say if any is wrong):**
+- **The file is saved as whoever pressed** "Mark documents complete" (or File ready, or Combine again).
+- **An upload by hand after it** is the current saved file, as any newer upload is; the case still shows the combined
+  copy, and it isn't made again.
+- **On the Saved file card** (Step 3): "Made from the 8 scans on file." under a combined file, or "Combining…", the
+  missing list, or "Scans not combined yet." with Combine again. Uploading by hand works as before.
+- **Cases already past "Mark documents complete"** before this change get no job; Combine again on the Saved file card
+  makes theirs.
+
+**Built (24 Oct 2026):**
+- `mature` (`visaSteps.service.ts`) queues `visa-combine-scans` in its transaction, like `markFileReady`.
+- The job and Combine again take the step rule `COMBINING` (`caseLock.ts`: File preparation or Docket & dispatch).
+- `scansForFile` takes each person's current scan, with no date check.
+- The case DTO sends `combinedScans` during File preparation too. `file` is the newest copy the CRM made, even under a
+  newer upload; the saved files are all loaded now (a handful per case) rather than counted.
+- **Screen:** the Saved file card shows `CombinedScansLine` during File preparation (`inSavedFile`). The page checks
+  again every 3 seconds for a minute after "Mark documents complete", as after File ready.
+- **Tests:** `visaCombineScans.test.ts` adds the job queued at maturity, the saved file made at File preparation (File
+  ready then passes without an upload), an upload after it, Combine again by the Visa HOD before a processor has it, and
+  an earlier case's scan counting.
 
 ## Context
 
