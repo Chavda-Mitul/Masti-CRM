@@ -56,7 +56,8 @@ export const VISA_DELIVERY_VISIT = "visa.delivery_visit";
 export const VISA_HANDED_OVER = "visa.handed_over";
 
 /**
- * Message 16: the boy at the client's door asks for their code (docs/decisions/0015-field-staff-app.md Decision 4). Meta
+ * Message 16: the boy at the client's door asks for their code (docs/decisions/0015-field-staff-app.md Decision 4), and so
+ * does the desk at the office handover (docs/decisions/0014-visa-delivered.md Decision 2, amended 23 Oct 2026). Meta
  * fixes an authentication template's words, so it names neither Masti nor the visit; {{code}} is the client's alone.
  */
 export const FIELD_DOOR_CODE = "field.door_code";
@@ -283,7 +284,7 @@ export const MESSAGE_TEMPLATES = [
   },
   {
     code: FIELD_DOOR_CODE,
-    name: "Code at the door",
+    name: "One-time code",
     body: ["{{code}} is your verification code.", "", "This code expires in {{minutes}} minutes."].join("\n"),
   },
   {

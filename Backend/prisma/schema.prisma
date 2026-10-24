@@ -105,6 +105,7 @@ model User {
   visaEvisasSent        VisaCase[]              @relation("VisaCaseEvisaSentBy")
   visaShortfallsCleared VisaCase[]              @relation("VisaCaseShortfallClearedBy")
   visaHandovers         VisaHandover[]          @relation("VisaHandoverBy")
+  handoverCodesSent     HandoverCode[]          @relation("HandoverCodeSentBy")
   caseFilesUploaded     CaseFile[]              @relation("CaseFileUploadedBy")
   clientDocsUploaded    ClientDocument[]        @relation("ClientDocumentUploadedBy")
   docketsCreated        Docket[]                @relation("DocketCreatedBy")
@@ -1437,6 +1438,8 @@ model VisaCase {
   quote                   VisaQuote?
   /// Step 8 (0014): the passports handed back to the client; null until then.
   handover                VisaHandover?
+  /// The client's code for a handover at the office (0014 Decision 2, amended 23 Oct 2026); null until one is sent.
+  handoverCode            HandoverCode?
 
   @@index([offeringId])
   @@index([urgencyId])
@@ -1515,9 +1518,10 @@ enum HandoverMode {
 
 /// The passports handed back to the client (docs/decisions/0014-visa-delivered.md), once per case, never changed: how,
 /// when and by whom; the booklets counted (the service keeps them equal to the stock count, Decision 4); who collected
-/// them, a traveller on the case or someone else by name (exactly one); and the photo of that person. At the client's
-/// door (mode DELIVERY, 0015 phase 5) it points at the boy's field job, which holds the client's code, his selfie and
-/// the place (checked in the migration).
+/// them, a traveller on the case or someone else by name (exactly one); the photo of that person; and the client's
+/// one-time code, which every handover needs (Decision 2, amended 23 Oct 2026). At the client's door (mode DELIVERY,
+/// 0015 phase 5) it points at the boy's field job, which holds his selfie and the place, and the code's proof is copied
+/// from it (checked in the migration).
 model VisaHandover {
   enquiryId           String             @id
   mode                HandoverMode
@@ -1528,6 +1532,9 @@ model VisaHandover {
   receiverTravellerId String?
   receiverName        String?
   receiverPhotoId     String             @unique
+  /// The client's code: the number it went to, and when the client confirmed it (no later than the handover).
+  codeSentTo          String
+  codeConfirmedAt     DateTime           @db.Timestamptz(3)
   /// The delivery boy's job, at the door (mode DELIVERY), and only then.
   fieldJobId          String?            @unique
   visaCase            VisaCase           @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
@@ -1538,6 +1545,25 @@ model VisaHandover {
 
   @@index([byId])
   @@index([receiverTravellerId])
+}
+
+/// The client's one-time code for a handover at the office (docs/decisions/0014-visa-delivered.md Decision 2, amended
+/// 23 Oct 2026), as the delivery boy's at the door (0015 Decision 4): one per case, replaced by each new one. Only its
+/// hash (sha256 of "handover:<case id>" and the code), when and where it went and who sent it, until when it works, the
+/// wrong tries, and when the client confirmed it. Checks in the migration.
+model HandoverCode {
+  enquiryId   String    @id
+  hash        String
+  sentAt      DateTime  @db.Timestamptz(3)
+  sentTo      String
+  sentById    String
+  expiresAt   DateTime  @db.Timestamptz(3)
+  tries       Int       @default(0) @db.SmallInt
+  confirmedAt DateTime? @db.Timestamptz(3)
+  visaCase    VisaCase  @relation(fields: [enquiryId], references: [enquiryId], onDelete: Restrict)
+  sentBy      User      @relation("HandoverCodeSentBy", fields: [sentById], references: [id], onDelete: Restrict)
+
+  @@index([sentById])
 }
 
 /// How a consent came to be on file (docs/decisions/0022-consent-form.md, part 3).

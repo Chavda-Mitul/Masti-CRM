@@ -27,7 +27,7 @@ import { fitList, namesText, passportCountText } from "../src/modules/visa/visaM
 import { sendDueReminders } from "../src/modules/visa/visaReminders.service";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, PNG, receivedCase, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { aWednesday, codeConfirmed, decidedCase, dispatchCase, makeInvoiceable, mastiReady, PNG, receivedCase, recalledCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The visa messages (docs/whatsapp-visa-messages.md; docs/decisions/0021-whatsapp-outbox.md amendments 3 to 6): 1 the
 // document list, 2 the price, 3 the pending-documents reminder, 5 the collection visit, 7 the invoice, 8 file
@@ -504,6 +504,7 @@ describe("message 15, passports handed over", () => {
     const { c, processor, adult } = await receivedCase();
     const photo = (await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo;
     const { updatedAt } = await caseOf(processor, c.caseNo);
+    await codeConfirmed(c.caseNo);
     const res = await processor
       .post(`/api/visa/cases/${c.caseNo}/handover`)
       .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: adult }, photoId: photo.id, updatedAt });

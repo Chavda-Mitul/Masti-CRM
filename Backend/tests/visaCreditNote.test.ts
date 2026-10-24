@@ -5,7 +5,7 @@ import { getObject } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { dispatchCase, makeInvoiceable, mastiReady, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { codeConfirmed, dispatchCase, makeInvoiceable, mastiReady, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // Correcting a wrong invoice (docs/decisions/0011-visa-at-vendor.md Decision 5): a WHOLE credit note cancels it,
 // giving back everything it charged, its GST included; the invoice itself is never changed.
@@ -382,6 +382,7 @@ describe("after the handover (Delivered, closed)", () => {
     const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
     const photoId = (await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo.id;
     const before = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case as { updatedAt: string };
+    await codeConfirmed(c.caseNo);
     const res = await processor
       .post(`/api/visa/cases/${c.caseNo}/handover`)
       .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: adult }, photoId, updatedAt: before.updatedAt });

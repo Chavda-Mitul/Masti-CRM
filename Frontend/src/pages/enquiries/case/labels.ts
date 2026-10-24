@@ -1,5 +1,5 @@
 import { formatDate } from '../../../lib/format'
-import type { CaseDocument, CaseTraveller, DocumentRequirement, ReceivedAs, TravellerDecision, VisaCase } from '../types'
+import type { CaseDocument, CaseTraveller, DocumentRequirement, MessageStatus, ReceivedAs, TravellerDecision, VisaCase } from '../types'
 
 // Wording shared by the case page's cards (demo screen 07 ⚠️).
 
@@ -50,6 +50,34 @@ export function weekdayDay(iso: string): string {
   const parts = DAY_TIME.formatToParts(new Date(iso))
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
   return `${part('weekday')} ${part('day')} ${part('month')}`
+}
+
+/** "12:06", in India time: when something happened today, such as the client's code being sent or confirmed. */
+export function clockTime(iso: string): string {
+  const parts = DAY_TIME.formatToParts(new Date(iso))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('hour')}:${part('minute')}`
+}
+
+/**
+ * Where the client's one-time code's WhatsApp has got to (decided 22 Oct 2026), at the door (0015 Decision 4) or the
+ * office handover (0014 Decision 2, amended 23 Oct 2026). A bad one ends with what to do next there (`next`).
+ */
+export function codeStatus(m: { status: MessageStatus; error: string | null }, next: { failed: string; skipped: string }): { text: string; bad: boolean } {
+  switch (m.status) {
+    case 'QUEUED':
+      return { text: 'WhatsApp: sending…', bad: false }
+    case 'SENT':
+      return { text: 'WhatsApp: sent', bad: false }
+    case 'DELIVERED':
+      return { text: 'WhatsApp: delivered', bad: false }
+    case 'READ':
+      return { text: 'WhatsApp: read by the client', bad: false }
+    case 'FAILED':
+      return { text: `WhatsApp couldn’t send it${m.error ? `: ${m.error}` : ''}. ${next.failed}`, bad: true }
+    case 'SKIPPED':
+      return { text: `WhatsApp didn’t send it: this message is switched off. ${next.skipped}`, bad: true }
+  }
 }
 
 const LONG_DATE = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })

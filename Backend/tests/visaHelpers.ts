@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { addDays, addMonths, isoWeekday, istDateTimeToUtc, istToday, toDbDate } from "../src/lib/dates";
+import { codeHash } from "../src/lib/oneTimeCode";
 import { gstinChecksumOk } from "../src/lib/shared.schemas";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { FIELD_DOOR_CODE } from "../src/modules/messages/messages.seed";
@@ -417,4 +418,25 @@ export async function lastDoorCode() {
   const code = ((await doorCodeMessages()).at(-1)?.variables as Record<string, string> | undefined)?.code;
   if (!code) throw new Error("No door code queued");
   return code;
+}
+
+/**
+ * The client confirmed the office handover's code today (docs/decisions/0014-visa-delivered.md Decision 2, amended 23
+ * Oct 2026), straight in the database: for tests about something else, so no message 16 is queued. Sending and
+ * checking it are visaHandoverCode.test.ts's.
+ */
+export async function codeConfirmed(caseNo: string) {
+  const { id: enquiryId, client } = await prisma.enquiry.findUniqueOrThrow({ where: { caseNo }, select: { id: true, client: { select: { mobile: true } } } });
+  const { id: sentById } = await prisma.user.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
+  const now = Date.now();
+  const code = {
+    hash: codeHash(`handover:${enquiryId}`, "123456"),
+    sentAt: new Date(now - 60_000),
+    sentTo: client.mobile,
+    sentById,
+    expiresAt: new Date(now + 9 * 60_000),
+    tries: 0,
+    confirmedAt: new Date(now - 1000),
+  };
+  await prisma.handoverCode.upsert({ where: { enquiryId }, create: { enquiryId, ...code }, update: code });
 }

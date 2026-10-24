@@ -41,6 +41,7 @@ import type {
   LogFollowUpBody,
   FieldJob,
   FieldStaff,
+  HandoverCode,
   ReceivedAs,
   StickerCheck,
   VisaCase,
@@ -78,6 +79,7 @@ export const enquiryKeys = {
   invoiceCheck: (caseNo: string) => ['enquiries', 'invoice-check', caseNo.toUpperCase()] as const,
   cancelInvoiceCheck: (caseNo: string, invoiceNo?: string) => ['enquiries', 'cancel-invoice-check', caseNo.toUpperCase(), invoiceNo ?? 'main'] as const,
   recallCheck: (caseNo: string) => ['enquiries', 'recall-check', caseNo.toUpperCase()] as const,
+  handoverCode: (caseNo: string) => ['enquiries', 'handover-code', caseNo.toUpperCase()] as const,
   additionalInvoiceCheck: (caseNo: string) => ['enquiries', 'additional-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
@@ -613,7 +615,54 @@ export function useUploadHandoverPhoto(caseNo: string) {
   })
 }
 
-/** "Hand over to the client" at the office (0014): the case is Delivered and closes. 400 under `booklets`, `receiver` or `photoId`. */
+/** The client's code is on its way: its WhatsApp not yet delivered or failed, and the code not confirmed or expired. */
+function codeOnItsWay(code: HandoverCode | null | undefined) {
+  if (!code || code.confirmedAt || Date.parse(code.expiresAt) <= Date.now()) return false
+  return code.message?.status === 'QUEUED' || code.message?.status === 'SENT'
+}
+
+/**
+ * Where the client's code for the handover at the office stands (0014 Decision 2, amended 23 Oct 2026; null until one
+ * is sent), read when the dialog opens. While it's on its way, every 5 seconds, so the desk sees it go, arrive, or fail.
+ */
+export function useHandoverCode(caseNo: string) {
+  return useQuery({
+    queryKey: enquiryKeys.handoverCode(caseNo),
+    queryFn: async () => (await api<{ code: HandoverCode | null }>(`/visa/cases/${encodeURIComponent(caseNo)}/handover/code`)).code,
+    staleTime: 0,
+    refetchInterval: (query) => (codeOnItsWay(query.state.data) ? 5_000 : false),
+  })
+}
+
+/** Sending or checking the code: its answer is where the code stands; refused, it's read again. */
+function useHandoverCodeSave<V>(caseNo: string, save: (path: string, vars: V) => Promise<{ code: HandoverCode | null }>) {
+  const queryClient = useQueryClient()
+  const path = `/visa/cases/${encodeURIComponent(caseNo)}/handover/code`
+  return useMutation({
+    mutationFn: async (vars: V) => (await save(path, vars)).code,
+    onSuccess: (code) => {
+      queryClient.setQueryData(enquiryKeys.handoverCode(caseNo), code)
+      // A new code is a new message on the case's "Sent to the client" card (without the code).
+      void queryClient.invalidateQueries({ queryKey: enquiryKeys.caseMessages(caseNo) })
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: enquiryKeys.handoverCode(caseNo) }),
+  })
+}
+
+/** "Send the code": a new one-time code to the client's WhatsApp. */
+export function useSendHandoverCode(caseNo: string) {
+  return useHandoverCodeSave<void>(caseNo, (path) => api(path, { method: 'POST' }))
+}
+
+/** "Check" the code the client reads out. 400 under `code`. */
+export function useCheckHandoverCode(caseNo: string) {
+  return useHandoverCodeSave(caseNo, (path, code: string) => api(`${path}/check`, { method: 'POST', body: { code } }))
+}
+
+/**
+ * "Hand over to the client" at the office (0014): the case is Delivered and closes. 400 under `booklets`, `receiver`,
+ * `photoId` or `code`.
+ */
 export function useHandOver(caseNo: string) {
   return useCaseAction<{
     mode: 'OFFICE'

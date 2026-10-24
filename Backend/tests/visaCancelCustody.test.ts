@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { aWednesday, decidedCase, dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { aWednesday, codeConfirmed, decidedCase, dispatchCase, makeInvoiceable, mastiReady, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // A cancelled case's passports still come back (docs/decisions/0006-visa-documents.md amendment 15). Cancel stays
 // possible at every step, but a file that went to the vendor can still be taken back, sent on its way back (and its days
@@ -73,6 +73,7 @@ async function receive(agent: Agent, caseNo: string, stickers: { travellerId: st
 async function handOver(agent: Agent, caseNo: string) {
   const c = await load(agent, caseNo);
   const photoId = (await agent.post(`/api/visa/cases/${caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo.id;
+  await codeConfirmed(caseNo);
   return agent
     .post(`/api/visa/cases/${caseNo}/handover`)
     .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: c.travellers[0]!.id }, photoId, updatedAt: c.updatedAt });
@@ -232,6 +233,7 @@ describe("before dispatch: passports held at our office are handed back (compone
     const { updatedAt } = await load(agent, caseNo);
     const photo = await agent.post(`/api/visa/cases/${caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG);
     if (photo.status !== 200) return photo;
+    await codeConfirmed(caseNo);
     return agent
       .post(`/api/visa/cases/${caseNo}/handover`)
       .send({ mode: "OFFICE", booklets, receiver: { name: "Sunita Mehta" }, photoId: photo.body.photo.id, updatedAt });

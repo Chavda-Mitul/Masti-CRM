@@ -1,11 +1,22 @@
 import { z } from "zod";
 
 // Fields several modules' schemas validate the same way: the client's and Masti's own PAN, GSTIN and state, a person's
-// name (clients, vendors), a time of day (settings, time slots) and the soft-warning confirmation. Zod only, like every
-// *.schemas.ts, so any module's schemas may import it and it can later be shared with the frontend.
+// name (clients, vendors), a time of day (settings, time slots), the soft-warning confirmation and the client's one-time
+// code. Zod only, like every *.schemas.ts, so any module's schemas may import it and it can later be shared with the
+// frontend.
 
 /** Saving again past a soft warning (Backend/src/lib/warnings.ts): false on the first try. */
 export const confirmWarnings = z.boolean().default(false);
+
+const SIX_DIGITS = "Type the 6 digits the client reads out.";
+
+/**
+ * The code the client reads out (Backend/src/lib/oneTimeCode.ts), at the door (0015 Decision 4) or the office handover
+ * (0014 Decision 2, amended 23 Oct 2026): six digits. A typo in the form isn't counted as a wrong try.
+ */
+export const oneTimeCodeSchema = z.object({
+  code: z.string(SIX_DIGITS).trim().regex(/^\d{6}$/, SIX_DIGITS),
+});
 
 /** GST state codes (statutory, not business config). Decides the place of supply on invoices. */
 export const GST_STATES = [

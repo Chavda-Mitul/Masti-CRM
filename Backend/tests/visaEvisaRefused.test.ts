@@ -5,7 +5,7 @@ import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { VISA_EVISA_PARTLY_APPROVED, VISA_EVISA_REFUSED, VISA_HANDED_OVER, VISA_PARTLY_APPROVED, VISA_REFUSED } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { evisaCase, type Agent } from "./visaHelpers";
+import { codeConfirmed, evisaCase, type Agent } from "./visaHelpers";
 
 // E-visas after the decision, part 5 (docs/decisions/0025-evisa-after-decision.md): refused e-visas. The decision gets
 // message 20 (everyone refused) or 21 (some), with no passport lines. When everyone is refused there's nothing to send:
@@ -58,6 +58,7 @@ async function handOver(agent: Agent, caseNo: string) {
   // Read first: a request awaited inside another's .send(...) breaks supertest.
   const c = await load(agent, caseNo);
   const photoId = (await agent.post(`/api/visa/cases/${caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo?.id;
+  await codeConfirmed(caseNo);
   return agent
     .post(`/api/visa/cases/${caseNo}/handover`)
     .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: c.travellers[0]!.id }, updatedAt: c.updatedAt, photoId });

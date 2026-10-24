@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, prisma, resetDb } from "./helpers";
-import { decidedCase, recalledCase, visaStaff, type Agent } from "./visaHelpers";
+import { codeConfirmed, decidedCase, recalledCase, visaStaff, type Agent } from "./visaHelpers";
 
 // A short return (docs/decisions/0013-visa-passport-back.md Decision 5, amended 17 Oct 2026): fewer booklets came back
 // than went out. The handover, its photo and booking the delivery boy wait until "Received the rest" makes up the count,
@@ -75,6 +75,7 @@ async function handOver(agent: Agent, caseNo: string, booklets: Booklets, photoI
   // Read first: a request awaited inside another's .send(...) breaks supertest.
   const c = await load(agent, caseNo);
   const id = photoId ?? (await photo(agent, caseNo)).body.photo.id;
+  await codeConfirmed(caseNo);
   return agent
     .post(`/api/visa/cases/${caseNo}/handover`)
     .send({ mode: "OFFICE", booklets, receiver: { travellerId: c.travellers[0]!.id }, photoId: id, updatedAt: c.updatedAt });

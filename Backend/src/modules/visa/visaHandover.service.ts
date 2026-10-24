@@ -24,7 +24,8 @@ import { queueHandoverMessage } from "./visaMessages";
 // Visa Step 8, delivered (docs/decisions/0014-visa-delivered.md). At the office (component 1): whoever is at the desk,
 // any Visa staff with EDIT, who can open a case while its passports are in our stock (Decision 5), counts the booklets
 // (they must match our stock, Decision 4), records who collected them (a traveller, or someone else by name) and takes
-// their photo (Decisions 3 and 6), whatever the case's status (Decision 7). The case moves to Delivered and closes; a
+// their photo (Decisions 3 and 6), once the client confirmed with their one-time code (Decision 2, amended 23 Oct 2026;
+// visaHandoverCode.service.ts), whatever the case's status (Decision 7). The case moves to Delivered and closes; a
 // cancelled one stays cancelled. The photo is uploaded as soon as it's taken; "Hand over" links it. A short return is
 // settled first (0013 Decision 5, amended 17 Oct 2026). Before dispatch, a cancelled case's passports held at our
 // office (counted in at intake) are handed back the same way, against the intake count; that case stays at its step
@@ -176,6 +177,19 @@ async function checkPhoto(db: Db, enquiryId: string, photoId: string) {
 }
 
 /**
+ * The client confirmed their code today (India): a confirmation from another day doesn't count, as the door's is good
+ * only on its stop's day (Decision 2, amended 23 Oct 2026).
+ */
+export const confirmedToday = (code: { confirmedAt: Date | null } | null, now = new Date()) => !!code?.confirmedAt && istToday(code.confirmedAt) === istToday(now);
+
+/** The client's code for this handover, confirmed today: where it went and when (Decision 2, amended 23 Oct 2026). */
+async function confirmedCode(db: Db, enquiryId: string) {
+  const code = await db.handoverCode.findUnique({ where: { enquiryId }, select: { sentTo: true, confirmedAt: true } });
+  if (!code?.confirmedAt || !confirmedToday(code)) throw fieldError("code", "The client hasn't confirmed with the code yet.");
+  return { sentTo: code.sentTo, confirmedAt: code.confirmedAt };
+}
+
+/**
  * The passports are back with the client (Decision 7), in the caller's transaction: the case moves to Delivered with no
  * due time (handed back before dispatch, a cancelled case stays at its step: 0006 amendment 15); an open or postponed
  * case closes (its reason and resume date cleared), a cancelled one stays cancelled; and any job still booked for the
@@ -206,11 +220,12 @@ export async function deliverCase(
 }
 
 /**
- * "Hand over to the client" at the office (Decisions 3–7), by any Visa staff with EDIT, whatever the case's status. In
- * one transaction under the case lock: the handover (how, when, who handed over, the booklets, who collected them,
- * their photo); the move to Delivered with no due time; an open or postponed case closes (its reason and resume date
- * cleared), a cancelled one stays cancelled; a delivery booked for the boy is called off (0015); and the audit
- * (visa.handover). Handed back before dispatch, a cancelled case stays at its step, with no due time (0006 amendment 15).
+ * "Hand over to the client" at the office (Decisions 3–7), by any Visa staff with EDIT, whatever the case's status, once
+ * the client confirmed with their code today (Decision 2, amended 23 Oct 2026). In one transaction under the case lock:
+ * the handover (how, when, who handed over, the booklets, who collected them, their photo, the code's proof); the move to
+ * Delivered with no due time; an open or postponed case closes (its reason and resume date cleared), a cancelled one
+ * stays cancelled; a delivery booked for the boy is called off (0015); and the audit (visa.handover). Handed back before
+ * dispatch, a cancelled case stays at its step, with no due time (0006 amendment 15).
  */
 export async function handOver(caseNo: string, input: HandOverInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, HANDING_OVER);
@@ -218,6 +233,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
   const pre = await gather(prisma, enquiry.id);
   checkHandover(pre, assertInStock(pre, enquiry), input);
   await checkPhoto(prisma, enquiry.id, input.photoId);
+  await confirmedCode(prisma, enquiry.id);
   checkWarnings(await receiverWarnings(prisma, pre, input.receiver), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
@@ -226,6 +242,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
     const g = await gather(tx, enquiry.id);
     const receiver = checkHandover(g, assertInStock(g, locked), input);
     await checkPhoto(tx, enquiry.id, input.photoId);
+    const code = await confirmedCode(tx, enquiry.id);
     const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
 
     const beforeDispatch = PRE_DISPATCH.includes(locked.stage.code);
@@ -245,6 +262,8 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
         receiverTravellerId: input.receiver.travellerId ?? null,
         receiverName: input.receiver.name ?? null,
         receiverPhotoId: input.photoId,
+        codeSentTo: code.sentTo,
+        codeConfirmedAt: code.confirmedAt,
       },
     });
     await audit(
@@ -264,6 +283,7 @@ export async function handOver(caseNo: string, input: HandOverInput, actor: Acto
           receiver,
           receiverIsTraveller: !!input.receiver.travellerId,
           photoId: input.photoId,
+          code,
           ...(fieldJobsCancelled.length > 0 ? { fieldJobsCancelled } : {}),
           ...confirmedWarningsNote(confirmed),
         },

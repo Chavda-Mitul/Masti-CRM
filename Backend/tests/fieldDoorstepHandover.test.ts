@@ -4,7 +4,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { VISA_HANDED_OVER } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { doorCodeMessages, lastDoorCode, receivedCase, type Agent } from "./visaHelpers";
+import { codeConfirmed, doorCodeMessages, lastDoorCode, receivedCase, type Agent } from "./visaHelpers";
 
 // The field staff app, phase 5 (docs/decisions/0015-field-staff-app.md Decision 4): the handover at the client's door.
 // The client's code (on WhatsApp, message 16), the booklets matching our stock, who receives them and their photo, his
@@ -103,6 +103,7 @@ describe("the handover at the door (phase 5)", () => {
     expect(res.status).toBe(200);
     expect(res.body.stop).toMatchObject({ status: "DONE" });
 
+    const done = await prisma.fieldJob.findUniqueOrThrow({ where: { id: delivery.id } });
     expect(await prisma.visaHandover.findUniqueOrThrow({ where: { enquiryId: c.id } })).toMatchObject({
       mode: "DELIVERY",
       byId: ramesh.id,
@@ -112,8 +113,15 @@ describe("the handover at the door (phase 5)", () => {
       receiverName: null,
       receiverPhotoId: receiverPhoto.id,
       fieldJobId: delivery.id,
+      // The code's proof, copied from his job, as the office's handover keeps its own (0014 Decision 2, amended 23 Oct 2026).
+      codeSentTo: "+919825041234",
+      codeConfirmedAt: done.otpConfirmedAt,
     });
-    expect(await prisma.fieldJob.findUniqueOrThrow({ where: { id: delivery.id } })).toMatchObject({
+    expect((await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case.handover.code).toEqual({
+      sentTo: "+91••••••1234",
+      confirmedAt: done.otpConfirmedAt!.toISOString(),
+    });
+    expect(done).toMatchObject({
       status: "DONE",
       bookletsCurrent: 2,
       bookletsOld: 0,
@@ -191,6 +199,7 @@ describe("the handover at the door (phase 5)", () => {
     // The client turns up at the office meanwhile: the office's handover calls his delivery off.
     const officePhoto = (await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG)).body.photo.id;
     const { updatedAt } = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+    await codeConfirmed(c.caseNo);
     const office = await processor
       .post(`/api/visa/cases/${c.caseNo}/handover`)
       .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: adult }, photoId: officePhoto, updatedAt });
