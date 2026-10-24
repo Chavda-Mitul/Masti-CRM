@@ -4,6 +4,7 @@ import { audit } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { fromDbDate, istDateTimeToUtc } from "../../lib/dates";
 import { conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { queueJob, QUEUES } from "../../lib/jobs";
 import { logger } from "../../lib/logger";
 import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
 import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
@@ -14,6 +15,7 @@ import type { CheckCaseDocumentInput, FileReadyInput, SetVendorInput, UpdateAppl
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, fileSafeFamilyName, travellerLabel } from "./visaCase";
+import type { CombineScansJob } from "./visaCombineScans.service";
 import { appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
 // Visa Step 3, file preparation (docs/decisions/0007-visa-file-prep.md): the processor's check of each paper, each
@@ -348,7 +350,8 @@ function describeMissing(m: FileReadyMissing, country: string): string[] {
  * checked under the case's lock, in the same transaction as the move, so a check or a pick changed at the same moment
  * either lands first and is seen, or waits and is then refused. The case moves to Docket & dispatch, due now, and stays
  * with its processor; who and when are stamped. Step 3 is read-only after this, because every Step 3 write needs File
- * preparation. A case nobody owns yet is refused: Step 4 is the processor's work.
+ * preparation. A case nobody owns yet is refused: Step 4 is the processor's work. Once it commits, a job combines the
+ * case's scans into the saved file (0008 Amendment 1, visaCombineScans.service.ts).
  */
 export async function markFileReady(caseNo: string, input: FileReadyInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, PREPARING);
@@ -410,6 +413,8 @@ export async function markFileReady(caseNo: string, input: FileReadyInput, actor
       },
       tx,
     );
+    // The case's scans, combined into the saved file once this commits (0008 Amendment 1), as the presser's.
+    await queueJob(tx, QUEUES.visaCombineScans, { enquiryId: enquiry.id, userId: actor.user.id } satisfies CombineScansJob);
   });
   return getVisaCaseById(enquiry.id);
 }

@@ -212,6 +212,16 @@ export interface CaseFile {
 }
 
 /**
+ * The case's scans combined into its saved file at Docket & dispatch (docs/decisions/0008-visa-docket-dispatch.md
+ * Amendment 1): how many papers need a scan, whose scans are missing (then nothing is combined), and the file once made.
+ */
+export interface CombinedScans {
+  needed: number
+  missing: { traveller: string; papers: string[] }[]
+  file: { id: string; scanCount: number; pageCount: number; at: string; by: PersonRef } | null
+}
+
+/**
  * Whether the consent form's details are filled in (docs/decisions/0022-consent-form.md, part 1): staff fill them in by
  * asking the client, for life. filledAt stays null until the form is saved. The form itself loads on its own.
  */
@@ -752,6 +762,8 @@ export interface VisaCase {
   docket: CaseDocket | null
   /** While it isn't in one: the vendor's shared open docket it would join, if that holds any files. */
   openDocket: { docketNo: string; caseCount: number } | null
+  /** The scans combined into the saved file (0008 Amendment 1), or what's missing: at Docket & dispatch only. */
+  combinedScans: CombinedScans | null
   /** An e-visa's "Submitted online" (0008 Decision 11): who and when, instead of a docket. */
   submittedOnline: { at: string; by: PersonRef | null } | null
   /** "Send the e-visa" (0025, part 3): who sent the approved travellers' e-visas to the client, and when. */
