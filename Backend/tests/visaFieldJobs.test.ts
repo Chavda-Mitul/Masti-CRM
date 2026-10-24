@@ -5,7 +5,7 @@ import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { decidedCase, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
+import { codeConfirmed, decidedCase, receivedCase, saveCase, visaStaff, type Agent } from "./visaHelpers";
 
 // The field staff app, phase 1 (docs/decisions/0015-field-staff-app.md): booking the collection boy to pick a case's
 // documents up at Steps 1–2. The boy (an active FIELD user), an open office day and a time slot from the list; the
@@ -404,6 +404,7 @@ describe("Book the delivery boy (phase 2)", () => {
     const photo = await processor.post(`/api/visa/cases/${c.caseNo}/handover/photo`).set("Content-Type", "image/jpeg").send(JPEG);
     expect(photo.status).toBe(200);
     const seen = (await processor.get(`/api/visa/cases/${c.caseNo}`)).body.case;
+    await codeConfirmed(c.caseNo);
     const handed = await processor.post(`/api/visa/cases/${c.caseNo}/handover`).send({
       mode: "OFFICE",
       booklets: { current: 2, old: 0 },

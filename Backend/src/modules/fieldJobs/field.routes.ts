@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { HttpError } from "../../lib/httpError";
 import { readBody } from "../../lib/readBody";
+import { oneTimeCodeSchema } from "../../lib/shared.schemas";
 import { actorOf, currentUser, requireAuth, requirePasswordChanged, requireUserType } from "../../middleware/auth";
-import { checkOtpSchema, handOverAtDoorSchema, markDoneSchema, markFailedSchema, myRunQuerySchema } from "./field.schemas";
+import { handOverAtDoorSchema, markDoneSchema, markFailedSchema, myRunQuerySchema } from "./field.schemas";
 import {
   checkOtp,
   getMyStop,
@@ -52,7 +53,7 @@ router.post("/jobs/:jobId/otp", async (req, res) => {
 
 /** "Check" the code the client reads out. */
 router.post("/jobs/:jobId/otp/check", async (req, res) => {
-  const { code } = checkOtpSchema.parse(req.body);
+  const { code } = oneTimeCodeSchema.parse(req.body);
   res.json(await checkOtp(req.params.jobId, code, actorOf(req)));
 });
 

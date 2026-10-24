@@ -320,7 +320,10 @@ export interface FieldStaff {
   mobile: string
 }
 
-/** The passports handed back to the client (docs/decisions/0014-visa-delivered.md): how, when and by whom, the booklets, who collected them, their photo. */
+/**
+ * The passports handed back to the client (docs/decisions/0014-visa-delivered.md): how, when and by whom, the booklets,
+ * who collected them, their photo, and the client's code (Decision 2, amended 23 Oct 2026).
+ */
 export interface Handover {
   mode: 'OFFICE' | 'DELIVERY'
   at: string
@@ -328,8 +331,25 @@ export interface Handover {
   booklets: { current: number; old: number }
   receiver: { name: string; travellerId: string | null }
   photo: { id: string; fileName: string } | null
-  /** At the door (0015 phase 5): the delivery boy's job, whose proof (the code, his selfie, the place) is on the case's field jobs. */
+  /** Where the client's code went (masked, "+91••••••1299") and when they confirmed it, at the office or the door. */
+  code: { sentTo: string; confirmedAt: string }
+  /** At the door (0015 phase 5): the delivery boy's job, whose proof (his selfie, the place) is on the case's field jobs. */
   fieldJobId: string | null
+}
+
+/**
+ * The client's one-time code for the handover at the office (0014 Decision 2, amended 23 Oct 2026), as the delivery
+ * boy's at the door: where it went, until when it works, when another may be sent, when the client confirmed it (today
+ * only), and where its WhatsApp has got to.
+ */
+export interface HandoverCode {
+  /** The client's WhatsApp number it went to, masked: "+91••••••1299". */
+  sentTo: string
+  sentAt: string
+  expiresAt: string
+  resendAt: string
+  confirmedAt: string | null
+  message: { status: MessageStatus; error: string | null } | null
 }
 
 /** An approved traveller's visa sticker against the passport's name and dates, when received (0013 Decision 5). */

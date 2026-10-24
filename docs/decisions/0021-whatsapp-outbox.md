@@ -271,7 +271,7 @@ Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The projec
 
 | # | Template code · title | Sent when | At most once per |
 | --- | --- | --- | --- |
-| 16 | `field.door_code` · Code at the door | the boy presses "Send the code" or "Send a new code" (`sendOtp`), at a pickup or a delivery | code |
+| 16 | `field.door_code` · One-time code (was "Code at the door"; renamed 23 Oct 2026) | the boy presses "Send the code" or "Send a new code" (`sendOtp`), at a pickup or a delivery; or the desk does, at a handover at the office (`sendHandoverCode`, [0014](0014-visa-delivered.md) Decision 2, amended 23 Oct 2026) | code |
 | 17 | `client.documents_kept` · We keep a copy | a scan is saved for the client (`saveClientScan`: the client page, or a case's checklist) | client, ever |
 | 18 | `visa.credit_note` · Credit note | a credit note is issued (`issueCreditNote`: a wrong invoice, a recall, a cancelled case's refund) | credit note |
 

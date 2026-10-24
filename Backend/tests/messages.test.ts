@@ -389,7 +389,7 @@ describe("the door code (message 16, amendment 6)", () => {
     const { staff, c, m } = await codeQueued("code:1");
     expect(m.body).toBe(WORDS(CODE));
     const card = (await staff.get(`/api/visa/cases/${c.caseNo}/messages`)).body.messages as { title: string; body: string }[];
-    expect(card.find((x) => x.title === "Code at the door")!.body).toBe(WORDS("••••••"));
+    expect(card.find((x) => x.title === "One-time code")!.body).toBe(WORDS("••••••"));
     expect(JSON.stringify(card)).not.toContain(CODE);
 
     await deliverMessage(m.id, { lastTry: false });

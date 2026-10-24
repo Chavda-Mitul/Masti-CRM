@@ -29,6 +29,29 @@
   align-items: center;
   gap: 8px;
 }
+/* The client's one-time code at the desk (Decision 2, amended 23 Oct 2026): Send, then the 6 digits and Check. */
+.handover-code {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.handover-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.handover-code-row .input {
+  width: 150px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+.handover-code-done {
+  color: var(--ok);
+  font-weight: 600;
+}
 .handover-card {
   display: flex;
   flex-direction: column;

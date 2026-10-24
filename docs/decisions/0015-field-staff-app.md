@@ -63,6 +63,10 @@ Google Maps link: no maps account, key or cost.
 
 ### 4. Proof: an OTP from the client, at both ends
 
+**Amended 23 Oct 2026** (project lead; [0014](0014-visa-delivered.md) Decision 2, amended): the office handover asks for
+the client's code too, with the same message 16 and the same `field` setting's rules (minutes, wrong tries, the wait),
+now in `Backend/src/lib/oneTimeCode.ts` for both. His screens are unchanged.
+
 **Amended 22 Oct 2026** (project lead; [0021](0021-whatsapp-outbox.md) Amendment 6): the code goes on **WhatsApp** to
 the client's main number, with no email fallback.
 - **The message:** message 16 of `docs/whatsapp-visa-messages.md`, in Meta's fixed words: "482913 is your verification
