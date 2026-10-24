@@ -5,9 +5,9 @@ import { logger } from "../../lib/logger";
 import { addPhotoPage, embedPhoto, photoTurn } from "../../lib/photoPdf";
 import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
 
-// The case's scans combined into its saved file at Docket & dispatch (docs/decisions/0008-visa-docket-dispatch.md
-// Amendment 1): which scan each paper goes in with, what's missing, and the PDF itself. The case page (visaCase.ts) and
-// the combining (visaCombineScans.service.ts) both ask scansForFile, so the card never promises what the job refuses.
+// The case's scans combined into its saved file (docs/decisions/0008-visa-docket-dispatch.md Amendment 1): which scan
+// each paper goes in with, what's missing, and the PDF itself. The case page (visaCase.ts) and the combining
+// (visaCombineScans.service.ts) both ask scansForFile, so the card never promises what the job refuses.
 
 /** A paper on a traveller's checklist, as scansForFile reads it. */
 export interface PaperScanRow {
@@ -39,18 +39,17 @@ export interface MissingScans {
 }
 
 /**
- * Every paper that came in needs a scan from this case, in the travellers' order and then the checklist's. Papers we
- * arrange (Made), Not needed and still Pending ones are left out: there's nothing to scan. `found` is empty when no
- * paper came in.
+ * Every paper that came in needs a scan, in the travellers' order and then the checklist's. Papers we arrange (Made),
+ * Not needed and still Pending ones are left out: there's nothing to scan. `found` is empty when no paper came in.
  */
-export function scansForFile(travellers: TravellerScanRow[], current: CurrentScans, caseCreatedAt: Date) {
+export function scansForFile(travellers: TravellerScanRow[], current: CurrentScans) {
   const found: FoundScan[] = [];
   const missing: MissingScans[] = [];
   for (const t of travellers) {
     const lacking: string[] = [];
     for (const d of t.documents) {
       if (d.status !== "RECEIVED") continue;
-      const scanId = scanOfPaper(d, t.memberId, current, caseCreatedAt);
+      const scanId = scanOfPaper(d, t.memberId, current);
       if (scanId) found.push({ traveller: t.label, paper: d.name, scanId });
       else lacking.push(d.name);
     }
@@ -60,14 +59,13 @@ export function scansForFile(travellers: TravellerScanRow[], current: CurrentSca
 }
 
 /**
- * An On file paper goes in with the copy it was printed from. An Original or a Xerox goes in with the traveller's current
- * scan of it, if that was saved since the case was opened: a copy from an earlier trip doesn't count, as for "Scan not
- * saved" (0016 Decision 7). An unnamed traveller has no scans. Null when there's none.
+ * An On file paper goes in with the copy it was printed from. An Original or a Xerox goes in with the traveller's newest
+ * scan of it, saved on this case or an earlier one (decided 24 Oct 2026: a returning client's passport scanned last trip
+ * counts). An unnamed traveller has no scans. Null when there's none.
  */
-function scanOfPaper(d: PaperScanRow, memberId: string | null, current: CurrentScans, since: Date) {
+function scanOfPaper(d: PaperScanRow, memberId: string | null, current: CurrentScans) {
   if (d.receivedAs === "ON_FILE") return d.clientDocumentId;
-  const scan = memberId ? current.get(scanKey(memberId, d.documentId)) : undefined;
-  return scan && scan.uploadedAt >= since ? scan.id : null;
+  return (memberId && current.get(scanKey(memberId, d.documentId))?.id) || null;
 }
 
 /** "2 scans missing — Rakesh Mehta: Bank statement; Aarav Mehta: Passport" */

@@ -4,6 +4,7 @@ import { audit, auditMany } from "../../lib/audit";
 import { assertFresh, definedOnly, onlyChanged, pick } from "../../lib/changes";
 import { fromDbDate, istToday, toDbDate } from "../../lib/dates";
 import { badRequest, conflict, fieldError, HttpError, notFound } from "../../lib/httpError";
+import { queueJob, QUEUES } from "../../lib/jobs";
 import { rethrowUnique } from "../../lib/prismaErrors";
 import { checkWarnings, confirmedWarningsNote, type Warning } from "../../lib/warnings";
 import { currentScan } from "../clients/clientDocuments.service";
@@ -23,6 +24,7 @@ import type {
 import { getVisaCaseById } from "./visa.service";
 import { dueOnOfficeDay, getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import type { CombineScansJob } from "./visaCombineScans.service";
 import { visaMessageBasics } from "./visaMessages";
 import { ageWarnings, appointmentSelect, appointmentWarnings, namedAppointments, passportWarnings, travellerPapersSelect } from "./visaWarnings";
 
@@ -406,7 +408,8 @@ async function missingForMaturity(db: Db, enquiryId: string) {
  *
  * The checklist is checked under the case's lock, in the same transaction as the move (lockCase), so a paper
  * un-ticked at the same moment either lands first and stops it, or waits and is then refused. The client's "All
- * documents received" WhatsApp is queued in that transaction too.
+ * documents received" WhatsApp is queued in that transaction too, and so is the job that combines the case's scans
+ * into its saved file (0008 Amendment 1, changed 24 Oct 2026), so File preparation can start with it.
  */
 export async function mature(caseNo: string, input: MatureCaseInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, COLLECTING);
@@ -452,6 +455,8 @@ export async function mature(caseNo: string, input: MatureCaseInput, actor: Acto
       key: `${VISA_DOCUMENTS_RECEIVED}:${enquiry.id}`,
       ...(await visaMessageBasics(tx, enquiry.id)),
     });
+    // The case's scans, combined into the saved file once this commits (0008 Amendment 1), as the presser's.
+    await queueJob(tx, QUEUES.visaCombineScans, { enquiryId: enquiry.id, userId: actor.user.id } satisfies CombineScansJob);
   });
   return getVisaCaseById(enquiry.id);
 }

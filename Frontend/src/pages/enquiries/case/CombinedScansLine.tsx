@@ -4,7 +4,7 @@ import { useMe } from '../../../auth/useAuth'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
-import { COMBINING_FOR_MS, combiningScans, useCombineScans, useOpenCaseFile } from '../queries'
+import { COMBINING_FOR_MS, combiningScans, combiningSince, useCombineScans, useOpenCaseFile } from '../queries'
 import type { CombinedScans, VisaCase } from '../types'
 
 /** "2 missing — Rakesh Mehta: Bank statement; Aarav Mehta: Passport" */
@@ -24,28 +24,33 @@ function useRenderAgainAt(at: number | null) {
 }
 
 /**
- * The case's scans combined into its saved file (docs/decisions/0008-visa-docket-dispatch.md Amendment 1), on the Docket
- * and Submit online cards at Docket & dispatch. "File ready" combines them on its own when every paper that came in has a
- * scan from this case; the combined PDF becomes the newest saved file. This line shows the file, with Open; or whose
- * scans are missing, when nothing was combined; and "Combine again", for whoever can act on the case, once they're all
- * there. The Step 3 upload is unchanged: the processor's own PDF stays as an earlier copy.
+ * The case's scans combined into its saved file (docs/decisions/0008-visa-docket-dispatch.md Amendment 1): in the Saved
+ * file card during file preparation (`inSavedFile`), and on the Docket and Submit online cards at Docket & dispatch.
+ * "Mark documents complete" (and "File ready" again) combines them on its own when every paper that came in has a scan,
+ * the person's newest on file; the combined PDF becomes the newest saved file. This line shows the file, with Open (the
+ * Saved file card shows it itself); or whose scans are missing, when nothing was combined; and "Combine again", for
+ * whoever can act on the case, once they're all there. Uploading a PDF by hand works as before.
  */
-export function CombinedScansLine({ visaCase: c }: { visaCase: VisaCase }) {
+export function CombinedScansLine({ visaCase: c, inSavedFile = false }: { visaCase: VisaCase; inSavedFile?: boolean }) {
   const { data: me } = useMe()
   const toast = useToast()
   const combine = useCombineScans(c.caseNo)
   const open = useOpenCaseFile(c.caseNo)
   const combining = combiningScans(c)
-  useRenderAgainAt(combining && c.fileReadyAt ? Date.parse(c.fileReadyAt) + COMBINING_FOR_MS : null)
+  const since = combiningSince(c)
+  useRenderAgainAt(combining && since ? Date.parse(since) + COMBINING_FOR_MS : null)
   const s = c.combinedScans
   if (!s) return null
 
   if (s.file) {
     const file = s.file
+    const scans = `${file.scanCount} ${file.scanCount === 1 ? 'scan' : 'scans'}`
+    // The Saved file card shows the file itself: just say where it came from, unless an upload replaced it since.
+    if (inSavedFile && c.finalFile?.id === file.id) return <p className="muted small combined-scans-note">Made from the {scans} on file.</p>
     return (
       <div className="combined-scans">
         <p className="small">
-          <strong>Scans combined into the saved file</strong> · {file.scanCount} {file.scanCount === 1 ? 'scan' : 'scans'}, {file.pageCount}{' '}
+          <strong>Scans combined into the saved file</strong> · {scans}, {file.pageCount}{' '}
           {file.pageCount === 1 ? 'page' : 'pages'} · {formatDateTime(file.at)}
         </p>
         <button type="button" className="btn btn-sm" onClick={() => open(file.id)}>

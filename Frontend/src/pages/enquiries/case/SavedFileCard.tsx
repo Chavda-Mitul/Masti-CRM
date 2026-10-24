@@ -9,6 +9,7 @@ import { useToast } from '../../../lib/toast'
 import { useMasterList } from '../../settings/masters/queries'
 import { useOpenCaseFile, useSetVendor, useUploadFinalFile } from '../queries'
 import type { CaseVendor, VisaCase } from '../types'
+import { CombinedScansLine } from './CombinedScansLine'
 import { fileSize, pdfProblem } from './pdfFiles'
 
 /**
@@ -16,7 +17,8 @@ import { fileSize, pdfProblem } from './pdfFiles'
  * it went to the vendor, one PDF, in the private document store. The processor, the HOD or the Head uploads it during
  * File preparation; a newer upload becomes the current one and older ones are kept. Anyone who can open the case can
  * open the file, through a link that works for a few minutes. The vendor it goes to is picked at the bottom, as in the
- * demo.
+ * demo. When every paper has a scan, "Mark documents complete" makes the saved file from them (0008 Amendment 1): the
+ * line under the buttons says so, or which scans are missing, with "Combine again".
  */
 export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -101,6 +103,8 @@ export function SavedFileCard({ visaCase: c }: { visaCase: VisaCase }) {
           </>
         )}
       </div>
+      {/* At Docket & dispatch the Docket card shows this instead. */}
+      {c.stage.code === 'FILE_PREPARATION' && <CombinedScansLine visaCase={c} inSavedFile />}
 
       <VendorRow visaCase={c} editable={editable} />
       {c.fileReadyAt && (
