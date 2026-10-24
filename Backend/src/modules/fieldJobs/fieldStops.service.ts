@@ -1,4 +1,4 @@
-import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "../../../generated/prisma/client";
 import type { MessageStatus } from "../../../generated/prisma/enums";
 import { prisma, type Db } from "../../config/prisma";
@@ -8,6 +8,7 @@ import { badRequest, conflict, fieldError, notFound } from "../../lib/httpError"
 import { checkWarnings, confirmedWarningsNote } from "../../lib/warnings";
 import { imageType, type ImageType } from "../../lib/images";
 import { logger } from "../../lib/logger";
+import { checkCode, codeExpiresAt, codeHash, codeResendAt, maskMobile, newCode, resendRefusal } from "../../lib/oneTimeCode";
 import { MB } from "../../lib/pdf";
 import { deleteObject, putObject } from "../../lib/storage";
 import { evisaDone } from "../enquiries/visibility";
@@ -144,9 +145,6 @@ export async function listMyJobs(userId: string, asked: string | undefined) {
   };
 }
 
-/** "+91••••••1299": enough for the client to know which phone, not the whole number. */
-const maskMobile = (mobile: string) => (mobile.length > 7 ? `${mobile.slice(0, 3)}${"•".repeat(mobile.length - 7)}${mobile.slice(-4)}` : "•••");
-
 /** The code's WhatsApp message (message 16): one per code sent. */
 const codeMessageKey = (jobId: string, sentAt: Date) => `${FIELD_DOOR_CODE}:${jobId}:${sentAt.toISOString()}`;
 
@@ -165,7 +163,7 @@ function otpState(
     sentTo: maskMobile(j.otpSentTo),
     sentAt: j.otpSentAt,
     expiresAt: j.otpExpiresAt,
-    resendAt: new Date(j.otpSentAt.getTime() + settings.otpResendSeconds * 1000),
+    resendAt: codeResendAt(j.otpSentAt, settings),
     confirmedAt: j.otpConfirmedAt,
     message,
   };
@@ -287,12 +285,8 @@ export async function markFailed(jobId: string, input: MarkFailedInput, actor: A
 }
 
 // ---------------------------------------------------------------------------
-// The client's one-time code (Decision 4)
+// The client's one-time code (Decision 4; lib/oneTimeCode.ts, shared with the office handover)
 // ---------------------------------------------------------------------------
-
-/** Only a hash of the code is kept: sha256 of the job and the code. */
-const hashCode = (jobId: string, code: string) => createHash("sha256").update(`${jobId}:${code}`).digest("hex");
-const sameHash = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /**
  * "Send the code" (Decision 4, amended 22 Oct 2026): a new 6-digit code to the client's WhatsApp, their main number,
@@ -303,18 +297,18 @@ const sameHash = (a: string, b: string) => a.length === b.length && timingSafeEq
  */
 export async function sendOtp(jobId: string, actor: Actor) {
   const settings = await getFieldSettings();
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const code = newCode();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + settings.otpMinutes * 60_000);
+  const expiresAt = codeExpiresAt(now, settings);
   await prisma.$transaction(async (tx) => {
     const locked = await lockMyJob(tx, jobId, actor);
     if (locked.otpConfirmedAt) throw conflict("The client has already confirmed with the code.");
-    const readyAt = locked.otpSentAt ? locked.otpSentAt.getTime() + settings.otpResendSeconds * 1000 : 0;
-    if (readyAt > now.getTime()) throw conflict(`Wait ${Math.ceil((readyAt - now.getTime()) / 1000)} seconds, then send a new code.`);
+    const wait = resendRefusal(locked.otpSentAt, settings, now);
+    if (wait) throw conflict(wait);
     const { mobile } = locked.enquiry.client;
     await tx.fieldJob.update({
       where: { id: jobId },
-      data: { otpHash: hashCode(jobId, code), otpSentAt: now, otpSentTo: mobile, otpExpiresAt: expiresAt, otpTries: 0 },
+      data: { otpHash: codeHash(jobId, code), otpSentAt: now, otpSentTo: mobile, otpExpiresAt: expiresAt, otpTries: 0 },
     });
     await audit(
       { actorId: actor.user.id, action: "field.otp.send", entityType: "FieldJob", entityId: jobId, clientId: locked.enquiry.clientId, after: { to: mobile, expiresAt }, ip: actor.ip },
@@ -344,15 +338,13 @@ export async function checkOtp(jobId: string, code: string, actor: Actor) {
     const job = await lockMyJob(tx, jobId, actor);
     if (job.otpConfirmedAt) return null;
     if (!job.otpHash || !job.otpExpiresAt) throw conflict("Send the code first.");
-    if (job.otpExpiresAt <= now) return "This code has expired. Send a new one.";
-    if (job.otpTries >= settings.otpTries) return "Too many wrong tries. Send a new code.";
+    const check = checkCode({ hash: job.otpHash, expiresAt: job.otpExpiresAt, tries: job.otpTries }, jobId, code, settings, now);
+    if (check.result === "refused") return check.message;
     const entry = { actorId: actor.user.id, entityType: "FieldJob", entityId: jobId, clientId: job.enquiry.clientId, ip: actor.ip };
-    if (!sameHash(job.otpHash, hashCode(jobId, code))) {
-      const tries = job.otpTries + 1;
-      const left = settings.otpTries - tries;
-      await tx.fieldJob.update({ where: { id: jobId }, data: { otpTries: tries } });
-      await audit({ ...entry, action: "field.otp.wrong", after: { tries, left } }, tx);
-      return left > 0 ? `That's not the code. ${left} ${left === 1 ? "try" : "tries"} left.` : "That's not the code, and that was the last try. Send a new code.";
+    if (check.result === "wrong") {
+      await tx.fieldJob.update({ where: { id: jobId }, data: { otpTries: check.tries } });
+      await audit({ ...entry, action: "field.otp.wrong", after: { tries: check.tries, left: check.left } }, tx);
+      return check.message;
     }
     await tx.fieldJob.update({ where: { id: jobId }, data: { otpConfirmedAt: now } });
     await audit({ ...entry, action: "field.otp.confirm", after: { confirmedAt: now, sentTo: job.otpSentTo } }, tx);
@@ -538,7 +530,7 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
     const job = await lockMyJob(tx, jobId, actor);
     assertDelivery(job);
     const { enquiry } = job;
-    if (!job.otpConfirmedAt) throw conflict("The client hasn't confirmed with the code yet.");
+    if (!job.otpConfirmedAt || !job.otpSentTo) throw conflict("The client hasn't confirmed with the code yet.");
     const g = await gatherHandover(tx, enquiry.id);
     const receiver = checkHandover(g, assertInStock(g, enquiry), input);
     const confirmed = checkWarnings(await receiverWarnings(tx, g, input.receiver), input.confirmWarnings);
@@ -575,6 +567,9 @@ export async function handOverAtDoor(jobId: string, input: HandOverAtDoorInput, 
         receiverTravellerId: input.receiver.travellerId ?? null,
         receiverName: input.receiver.name ?? null,
         receiverPhotoId: input.photoId,
+        // The client's code, as at the office (0014 Decision 2, amended 23 Oct 2026): the job's proof.
+        codeSentTo: job.otpSentTo,
+        codeConfirmedAt: job.otpConfirmedAt,
         fieldJobId: jobId,
       },
     });

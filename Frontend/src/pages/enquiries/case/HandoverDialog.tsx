@@ -4,9 +4,10 @@ import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useWarningGuard } from '../../../lib/useWarningGuard'
-import { useHandOver } from '../queries'
+import { useHandOver, useHandoverCode } from '../queries'
 import type { VisaCase } from '../types'
 import { FieldJobDialog } from './FieldJobDialog'
+import { HandoverCodeField } from './HandoverCodeField'
 import { bookletsText, heldAtOffice, stockOf } from './labels'
 import { PhotoCapture, type UploadedPhoto } from './PhotoCapture'
 
@@ -14,17 +15,19 @@ import { PhotoCapture, type UploadedPhoto } from './PhotoCapture'
 const SOMEONE_ELSE = 'someone-else'
 
 /**
- * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 3–7), for whoever is at the
+ * "Hand over to the client" at the office (docs/decisions/0014-visa-delivered.md Decisions 2–7), for whoever is at the
  * desk: the booklets counted again into blank boxes (they must match our stock, or it's refused: find what's missing
- * first), who collected them (a traveller, or someone else by name) and a photo of that person. Saving it closes the
- * case. "Our delivery boy" books him instead, or changes his booking (0015 phase 2); the doorstep handover itself is his
- * (phase 5). A cancelled case's passports held at our office before dispatch are handed back here too, against the
- * intake count, at the office only (docs/decisions/0006-visa-documents.md amendment 15, component 3).
+ * first), who collected them (a traveller, or someone else by name), the client's one-time code (no code, no handover:
+ * Decision 2, amended 23 Oct 2026) and a photo of that person. Saving it closes the case. "Our delivery boy" books him
+ * instead, or changes his booking (0015 phase 2); the doorstep handover itself is his (phase 5). A cancelled case's
+ * passports held at our office before dispatch are handed back here too, against the intake count, at the office only
+ * (docs/decisions/0006-visa-documents.md amendment 15, component 3).
  */
 export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const { data: me } = useMe()
   const toast = useToast()
   const hand = useHandOver(c.caseNo)
+  const codeConfirmed = !!useHandoverCode(c.caseNo).data?.confirmedAt
   // A child picked as who collected: check, then hand over anyway.
   const guard = useWarningGuard()
   const stock = stockOf(c)
@@ -50,6 +53,7 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
     else if (!matches) missing.booklets = `Count again: our stock has ${bookletsText(stock)}. Find what’s missing before handing over.`
     if (!who) missing.receiver = 'Pick who collected the passports.'
     else if (who === SOMEONE_ELSE && !name.trim()) missing.receiver = 'Enter the name of the person collecting.'
+    if (!codeConfirmed) missing.code = 'The client hasn’t confirmed with the code yet.'
     if (!photo) missing.photoId = 'Take a photo of the person collecting.'
     setErrors(missing)
     if (!counted || !who || !photo || Object.keys(missing).length) return
@@ -186,6 +190,8 @@ export function HandoverDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
           </div>
           {errors.receiver && <span className="field-error">{errors.receiver}</span>}
         </div>
+
+        <HandoverCodeField caseNo={c.caseNo} disabled={busy} error={errors.code} onChange={() => fixed('code')} />
 
         <div className="field">
           <span className="lbl">Photo of the person collecting<RequiredMark /></span>

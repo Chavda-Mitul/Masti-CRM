@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { HttpError } from "../../lib/httpError";
 import { readBody } from "../../lib/readBody";
+import { oneTimeCodeSchema } from "../../lib/shared.schemas";
 import { actorOf, currentUser, requireAuth, requireDepartment, requirePasswordChanged, requireUserType } from "../../middleware/auth";
 import { isScanType } from "../clients/clients.schemas";
 import {
@@ -66,6 +67,7 @@ import * as invoiceService from "./visaInvoice.service";
 import * as onlineService from "./visaOnline.service";
 import * as passportsBackService from "./visaPassportsBack.service";
 import * as handoverService from "./visaHandover.service";
+import * as handoverCodeService from "./visaHandoverCode.service";
 import * as fieldJobService from "./visaFieldJobs.service";
 import { listFieldStaff } from "../fieldJobs/fieldJobs.service";
 import * as portalService from "./visaPortal.service";
@@ -106,9 +108,12 @@ router.post("/cases/:caseNo/portal/open", visaView, async (req, res) => {
   res.status(201).json(await portalService.openCasePortal(caseNoParam.parse(req.params.caseNo), actorOf(req)));
 });
 
-/** The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first. */
+/**
+ * The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first, and what
+ * the client wrote back, newest first (docs/decisions/0026-whatsapp-webhook.md Amendment 1).
+ */
 router.get("/cases/:caseNo/messages", visaView, async (req, res) => {
-  res.json({ messages: await caseMessagesService.getCaseMessages(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+  res.json(await caseMessagesService.getCaseMessages(caseNoParam.parse(req.params.caseNo), currentUser(req)));
 });
 
 // Step 2 (docs/decisions/0006-visa-documents.md). The service also requires the case's owner, its HOD or the Head.
@@ -478,9 +483,29 @@ router.post("/cases/:caseNo/handover/photo", visaEdit, async (req, res) => {
 });
 
 /**
- * "Hand over to the client" at the office (0014 Decisions 3–7): the booklets counted (they must match our stock), who
- * collected them and their photo; by any Visa staff with EDIT, whatever the case's status. The case is Delivered and
- * closes (a cancelled one stays cancelled). 400 under `booklets`, `receiver` or `photoId`.
+ * The client's one-time code for the handover at the office (0014 Decision 2, amended 23 Oct 2026): where it stands
+ * (null until one is sent), for anyone who may hand the passports over.
+ */
+router.get("/cases/:caseNo/handover/code", visaEdit, async (req, res) => {
+  res.json(await handoverCodeService.getHandoverCode(caseNoParam.parse(req.params.caseNo), actorOf(req)));
+});
+
+/** "Send the code": a new one to the client's WhatsApp. 409 within the wait, or once the client confirmed today. */
+router.post("/cases/:caseNo/handover/code", visaEdit, async (req, res) => {
+  res.json(await handoverCodeService.sendHandoverCode(caseNoParam.parse(req.params.caseNo), actorOf(req)));
+});
+
+/** "Check" the code the client reads out. 400 under `code`: a typo, a wrong code (counted), expired, too many tries. */
+router.post("/cases/:caseNo/handover/code/check", visaEdit, async (req, res) => {
+  const { code } = oneTimeCodeSchema.parse(req.body);
+  res.json(await handoverCodeService.checkHandoverCode(caseNoParam.parse(req.params.caseNo), code, actorOf(req)));
+});
+
+/**
+ * "Hand over to the client" at the office (0014 Decisions 2–7): the booklets counted (they must match our stock), who
+ * collected them and their photo, once the client confirmed with their code today; by any Visa staff with EDIT,
+ * whatever the case's status. The case is Delivered and closes (a cancelled one stays cancelled). 400 under
+ * `booklets`, `receiver`, `photoId` or `code`.
  */
 router.post("/cases/:caseNo/handover", visaEdit, async (req, res) => {
   const body = handOverSchema.parse(req.body);

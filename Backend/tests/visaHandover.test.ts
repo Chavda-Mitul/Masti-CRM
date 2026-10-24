@@ -7,7 +7,7 @@ import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { decidedCase, PNG, recalledCase, receivedCase, type Agent } from "./visaHelpers";
+import { codeConfirmed, decidedCase, PNG, recalledCase, receivedCase, type Agent } from "./visaHelpers";
 
 // Visa Step 8, the office handover (docs/decisions/0014-visa-delivered.md, component 1): whoever is at the desk (any Visa
 // staff with EDIT, who can open a case while its passports are in our stock) counts the booklets (they must match our
@@ -51,6 +51,7 @@ async function handOver(agent: Agent, caseNo: string, body: Body = {}) {
   // Read first: a request awaited inside another's .send(...) breaks supertest.
   const c = await load(agent, caseNo);
   const photoId = "photoId" in body ? body.photoId : (await photo(agent, caseNo)).body.photo.id;
+  await codeConfirmed(caseNo);
   return agent
     .post(`/api/visa/cases/${caseNo}/handover`)
     .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: c.travellers[0]!.id }, updatedAt: c.updatedAt, ...body, photoId });
@@ -285,9 +286,22 @@ describe("the database", () => {
     await expect(file({ kind: "FINAL_FILE", pageCount: null })).rejects.toThrow(/CaseFile_size_and_pages/);
     const pic = await file({ kind: "RECEIVER_PHOTO", pageCount: null });
 
+    const at = new Date();
     const handover = (data: Record<string, unknown>) =>
       prisma.visaHandover.create({
-        data: { enquiryId: c.id, mode: "OFFICE", at: new Date(), byId: neha.id, bookletsCurrent: 2, bookletsOld: 0, receiverTravellerId: adult, receiverPhotoId: pic.id, ...data } as never,
+        data: {
+          enquiryId: c.id,
+          mode: "OFFICE",
+          at,
+          byId: neha.id,
+          bookletsCurrent: 2,
+          bookletsOld: 0,
+          receiverTravellerId: adult,
+          receiverPhotoId: pic.id,
+          codeSentTo: "+919825041234",
+          codeConfirmedAt: new Date(at.getTime() - 60_000),
+          ...data,
+        } as never,
       });
     await expect(handover({ receiverName: "Sunita Patel" })).rejects.toThrow(/VisaHandover_one_receiver/);
     await expect(handover({ receiverTravellerId: null })).rejects.toThrow(/VisaHandover_one_receiver/);
@@ -295,9 +309,13 @@ describe("the database", () => {
     // A handover at the door, and only one, points at the boy's job (0015 phase 5).
     await expect(handover({ mode: "DELIVERY" })).rejects.toThrow(/VisaHandover_field_job/);
     await expect(handover({ bookletsCurrent: 0 })).rejects.toThrow(/VisaHandover_booklets_range/);
+    // The client's code (Decision 2, amended 23 Oct 2026): confirmed no later than the handover, sent to a number.
+    await expect(handover({ codeConfirmedAt: new Date(at.getTime() + 1000) })).rejects.toThrow(/VisaHandover_code/);
+    await expect(handover({ codeSentTo: " " })).rejects.toThrow(/VisaHandover_code/);
     await handover({});
-    // The photo is required for both kinds of handover (0015 phase 5).
+    // The photo is required for both kinds of handover (0015 phase 5), and so is the code.
     await expect(prisma.$executeRaw`UPDATE "VisaHandover" SET "receiverPhotoId" = NULL`).rejects.toThrow(/receiverPhotoId/);
+    await expect(prisma.$executeRaw`UPDATE "VisaHandover" SET "codeConfirmedAt" = NULL`).rejects.toThrow(/codeConfirmedAt/);
 
     await expect(prisma.enquiry.update({ where: { id: c.id }, data: { status: "CLOSED", dueAt: new Date() } })).rejects.toThrow(/Enquiry_closed_not_due/);
   });

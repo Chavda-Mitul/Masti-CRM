@@ -83,7 +83,7 @@ describe("the client's code", () => {
 
     // The case's "Sent to the client" card shows the message without the code, even while it waits to go.
     const card = (await aarti.get(`/api/visa/cases/${c.caseNo}/messages`)).body.messages as { title: string; body: string }[];
-    expect(card.find((m) => m.title === "Code at the door")!.body).toBe("•••••• is your verification code.\n\nThis code expires in 10 minutes.");
+    expect(card.find((m) => m.title === "One-time code")!.body).toBe("•••••• is your verification code.\n\nThis code expires in 10 minutes.");
     expect(JSON.stringify(card)).not.toContain(code);
 
     const soon = await send(boy, pickup.id);

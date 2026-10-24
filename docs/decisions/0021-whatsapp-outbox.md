@@ -132,6 +132,8 @@ now" and "Money on this case". The project lead chose these three on 21 Oct 2026
 The messages come from their own request, `GET /api/visa/cases/:caseNo/messages`, for anyone who can open the case
 (`findVisibleCase`). They aren't part of the case itself, so the card can refresh without reloading the case that the
 page's forms are built from. They come oldest first, like a chat. The sending details stay on the server.
+*Since 24 Oct 2026 the same request also brings what the client wrote back, shown under the card as "The client
+wrote", and the card checks every minute when nothing is on its way ([0026](0026-whatsapp-webhook.md) Amendment 1).*
 
 Not here: the client page's "WhatsApp messages sent". A client-wide list needs its own rule, because staff who can open
 one of a client's cases mustn't read messages about the others. "Send again" for a failed message isn't here either:
@@ -271,7 +273,7 @@ Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The projec
 
 | # | Template code · title | Sent when | At most once per |
 | --- | --- | --- | --- |
-| 16 | `field.door_code` · Code at the door | the boy presses "Send the code" or "Send a new code" (`sendOtp`), at a pickup or a delivery | code |
+| 16 | `field.door_code` · One-time code (was "Code at the door"; renamed 23 Oct 2026) | the boy presses "Send the code" or "Send a new code" (`sendOtp`), at a pickup or a delivery; or the desk does, at a handover at the office (`sendHandoverCode`, [0014](0014-visa-delivered.md) Decision 2, amended 23 Oct 2026) | code |
 | 17 | `client.documents_kept` · We keep a copy | a scan is saved for the client (`saveClientScan`: the client page, or a case's checklist) | client, ever |
 | 18 | `visa.credit_note` · Credit note | a credit note is issued (`issueCreditNote`: a wrong invoice, a recall, a cancelled case's refund) | credit note |
 

@@ -3,7 +3,8 @@
 - **Status:** decided (17 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: the office
   handover (17 Oct 2026, component 1). A "Built" note is added under each part as its component lands. *A sent e-visa's
   passports, held at our office since intake, are handed over the same way, from Decision (22 Oct 2026,
-  [0025](0025-evisa-after-decision.md) Decision 6).*
+  [0025](0025-evisa-after-decision.md) Decision 6).* *Every handover at the office asks for the client's one-time code
+  on WhatsApp too (23 Oct 2026, Decision 2 amended; built).*
 - **Date:** 17 Oct 2026
 - **Scope:** handing the passports back to the client once they're in our stock (Step 7), and closing the file:
   - the client collects at our office
@@ -58,6 +59,48 @@ Each component is planned in plan mode, built, tested, checked in the browser an
 client by email until one is connected. It's needed only at the doorstep (component 4). What happens for a client with
 no email is decided when component 4 is planned. *(The doorstep moved to 0015. For the pickup, 0015 Decision 4, 17 Oct
 2026: no code, no pickup. For the delivery, 0015 Decision 4, the same day: no code, no handover.)*
+
+**Amended 23 Oct 2026 (project lead): the code at the office too.** The code goes on WhatsApp now (0015 Decision 4,
+amended 22 Oct 2026), and the meeting ✅ asked for the OTP "even if he comes himself", so the desk asks for it as the
+delivery boy does at the door. Not a change request.
+- **Every desk handover:** the client collecting at Step 8, a cancelled case's passports handed back before dispatch
+  (0006 amendment 15), and an e-visa's held passports (0025). They share one dialog.
+- **No code, no handover.** No skip and no override: the passports stay with us until the client confirms.
+- **The code goes to the client's main number,** whoever collects: the client confirms who gets their passports.
+- **The same rules and message as at the door:** message 16 ("482913 is your verification code. This code expires in
+  10 minutes.") and the `field` setting ⚠️ (10 minutes, 5 wrong tries, 60 s before another). Meta fixes the message's
+  minutes, so the door and the desk need one number.
+- **A confirmation counts on its day (India time)**, as the door's counts only on its stop's day: a handover on another
+  day needs a new code.
+- **Sending and checking don't change the case** (its updatedAt stays, as for the photo), so an open page doesn't go
+  stale; each send, wrong try and confirmation is audited.
+
+**Built 24 Oct 2026** (migration `20261024120000_handover_code`; the dev database is reset and seeded, as earlier
+handovers have no code):
+- **Data:** `HandoverCode`, one per case and replaced by each new one: only the code's hash (sha256 of
+  "handover:<case id>" and the code), when and where it went, who sent it, until when it works, the wrong tries and when
+  the client confirmed it (CHECK `HandoverCode_times`). Every `VisaHandover` keeps the proof, `codeSentTo` and
+  `codeConfirmedAt` (NOT NULL; CHECK `VisaHandover_code`: confirmed no later than the handover). At the door they're
+  copied from the boy's job.
+- **The code's rules** live in `lib/oneTimeCode.ts`, shared with the door (`fieldStops.service.ts`): a new code, its
+  hash, the masked number, the wait, and the expired / too many tries / wrong try answers. The 6-digit schema is
+  `oneTimeCodeSchema` in `lib/shared.schemas.ts`.
+- `GET /api/visa/cases/:caseNo/handover/code` (where it stands: the masked number, sent, works until, another from,
+  confirmed today, the WhatsApp's status), `POST …/handover/code` ("Send the code": 409 within the wait or once
+  confirmed today; audited `visa.handover.code.send`; message 16 queued in the same transaction) and
+  `POST …/handover/code/check` `{ code }` (400 under `code`; a wrong try is counted and audited
+  `visa.handover.code.wrong`, the right one `visa.handover.code.confirm`). All Visa EDIT, under the handover's rule
+  (`HANDING_OVER`, any status, any Visa staff with EDIT, the passports in our stock), under the case lock.
+- `POST …/handover` is refused with 400 under `code` ("The client hasn't confirmed with the code yet.") until the code is
+  confirmed today; the handover and its audit keep `code { sentTo, confirmedAt }`, and the case sends
+  `handover.code { sentTo (masked), confirmedAt }`.
+- Message 16 is renamed "One-time code" on the case's "Sent to the client" card (the template's code stays
+  `field.door_code`); staff see it without the code, as before.
+- **Screen:** the handover dialog's **Code from the client \*** between who collected and the photo: **Send the code**,
+  then "Sent on WhatsApp to +91••••••1299 at 12:05. Ask the client to read it out.", where the WhatsApp has got to
+  (every 5 seconds while it's on its way), the 6 digits and **Check**, **Send a new code**, and once right "✓ Confirmed
+  by the client at 12:06". The **Handed back to the client** card shows "Code from the client · Confirmed · 12:06" and
+  where it went, for both kinds of handover.
 
 ### 3. At the office: what's recorded
 
@@ -155,7 +198,8 @@ intake count, and stays at its step (amendment 15, component 3).
 
 ## Still needed from Masti
 
-- **M14 / Q12:** confirm the handover steps (we build booklets, OTP, receiver photo, selfie with place and time).
+- **M14 / Q12:** confirm the handover steps (we build booklets, OTP, receiver photo, selfie with place and time; the
+  OTP at the office too, 23 Oct 2026).
 - **Q3:** the delivery boy's device (we build a phone web page).
 - **M2:** the SMS / WhatsApp accounts (the OTP goes by email until then).
 - **M15 / Q38:** whether Sundays and office holidays block deliveries (seeded: yes).

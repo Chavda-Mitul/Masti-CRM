@@ -389,7 +389,7 @@ describe("the door code (message 16, amendment 6)", () => {
     const { staff, c, m } = await codeQueued("code:1");
     expect(m.body).toBe(WORDS(CODE));
     const card = (await staff.get(`/api/visa/cases/${c.caseNo}/messages`)).body.messages as { title: string; body: string }[];
-    expect(card.find((x) => x.title === "Code at the door")!.body).toBe(WORDS("••••••"));
+    expect(card.find((x) => x.title === "One-time code")!.body).toBe(WORDS("••••••"));
     expect(JSON.stringify(card)).not.toContain(CODE);
 
     await deliverMessage(m.id, { lastTry: false });
@@ -602,7 +602,41 @@ describe("the case's messages (the Sent to the client card)", () => {
     const staff = await visaStaff();
     const c = await saveCase(staff);
     await dropDocumentList();
-    expect((await list(staff, c.caseNo)).body).toEqual({ messages: [] });
+    expect((await list(staff, c.caseNo)).body).toEqual({ messages: [], replies: [] });
+  });
+
+  it("lists what the client wrote back, newest first, saying who wrote when it wasn't their own number (0026 amendment 1)", async () => {
+    const { staff, c } = await caseWithMessage();
+    env.WHATSAPP_TEST_NUMBER = "+919000000001";
+    const reply = (n: number, data: { fromMobile?: string; type?: string; text?: string; enquiryId?: string }) =>
+      prisma.inboundMessage.create({
+        data: {
+          provider: "meta",
+          providerMessageId: `wamid.R${n}`,
+          fromMobile: "+919825041234",
+          clientId: c.client.id,
+          enquiryId: c.id,
+          type: "text",
+          receivedAt: new Date(Date.now() - (10 - n) * 60_000),
+          ...data,
+        },
+      });
+    const own = await reply(1, { text: "Thank you! When will the passports come back?" });
+    const tester = await reply(2, { fromMobile: "+919000000001", type: "image" });
+    const family = await reply(3, { fromMobile: "+919876500001", type: "document", text: "My passport scan" });
+    // Another case of the same client: its replies stay on that case.
+    const other = await saveCase(staff);
+    await reply(4, { enquiryId: other.id, text: "About the other trip" });
+
+    const res = await list(staff, c.caseNo);
+    expect(res.status).toBe(200);
+    expect(res.body.replies).toEqual([
+      { id: family.id, type: "document", text: "My passport scan", receivedAt: family.receivedAt.toISOString(), from: "+919876500001" },
+      { id: tester.id, type: "image", text: null, receivedAt: tester.receivedAt.toISOString(), from: "test" },
+      { id: own.id, type: "text", text: "Thank you! When will the passports come back?", receivedAt: own.receivedAt.toISOString(), from: null },
+    ]);
+    expect(Object.keys(res.body.replies[0])).not.toContain("providerMessageId");
+    expect(res.body.messages).toHaveLength(1);
   });
 
   it("shows only to whoever can open the case", async () => {

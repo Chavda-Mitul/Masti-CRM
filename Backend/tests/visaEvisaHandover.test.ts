@@ -6,7 +6,7 @@ import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { VISA_HANDED_OVER } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
-import { decidedCase, evisaCase, lastDoorCode, type Agent } from "./visaHelpers";
+import { codeConfirmed, decidedCase, evisaCase, lastDoorCode, type Agent } from "./visaHelpers";
 
 // E-visas after the decision, part 4 (docs/decisions/0025-evisa-after-decision.md): handing back the passports we hold.
 // An e-visa's passports never go to a vendor, so booklets counted in at intake stay at our office. Once the e-visa is
@@ -48,6 +48,7 @@ async function handOver(agent: Agent, caseNo: string, body: Record<string, unkno
   // Read first: a request awaited inside another's .send(...) breaks supertest.
   const c = await load(agent, caseNo);
   const photoId = (await photo(agent, caseNo)).body.photo?.id;
+  await codeConfirmed(caseNo);
   return agent
     .post(`/api/visa/cases/${caseNo}/handover`)
     .send({ mode: "OFFICE", booklets: { current: 2, old: 0 }, receiver: { travellerId: c.travellers[0]!.id }, updatedAt: c.updatedAt, photoId, ...body });

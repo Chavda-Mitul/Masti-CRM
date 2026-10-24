@@ -1,26 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { issueText } from '../../lib/apiErrors'
+import { codeStatus } from '../enquiries/case/labels'
 import { digits, timeOf, type TypedBooklets } from './labels'
 import { useCheckOtp, useSendOtp } from './queries'
 import type { OtpState } from './types'
 
-/** Where the code's WhatsApp has got to, in his words (decided 22 Oct 2026). A bad one tells him what to do next. */
-function codeStatus(m: NonNullable<OtpState['message']>): { text: string; bad: boolean } {
-  switch (m.status) {
-    case 'QUEUED':
-      return { text: 'WhatsApp: sending…', bad: false }
-    case 'SENT':
-      return { text: 'WhatsApp: sent', bad: false }
-    case 'DELIVERED':
-      return { text: 'WhatsApp: delivered', bad: false }
-    case 'READ':
-      return { text: 'WhatsApp: read by the client', bad: false }
-    case 'FAILED':
-      return { text: `WhatsApp couldn’t send it${m.error ? `: ${m.error}` : ''}. Send a new code, or call the office.`, bad: true }
-    case 'SKIPPED':
-      return { text: 'WhatsApp didn’t send it: this message is switched off. Call the office.', bad: true }
-  }
-}
+/** What he does when the code's WhatsApp doesn't go (decided 22 Oct 2026). */
+const CODE_NEXT = { failed: 'Send a new code, or call the office.', skipped: 'Call the office.' }
 
 // The steps at the client's door (docs/decisions/0015-field-staff-app.md Decision 4; demo screen 14), shared by the
 // pickup (PickupSteps) and the delivery (DeliverySteps).
@@ -87,7 +73,7 @@ export function CodeStep({ n, jobId, otp, disabled }: { n: number; jobId: string
   const checkOtp = useCheckOtp(jobId)
   const busy = disabled || sendOtp.isPending || checkOtp.isPending
   const confirmedAt = otp?.confirmedAt ?? null
-  const status = confirmedAt === null && otp?.message ? codeStatus(otp.message) : null
+  const status = confirmedAt === null && otp?.message ? codeStatus(otp.message, CODE_NEXT) : null
   const problem = issueText(checkOtp.error ?? sendOtp.error)
   const send = () => {
     checkOtp.reset()
