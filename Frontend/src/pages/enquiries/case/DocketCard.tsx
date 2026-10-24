@@ -6,6 +6,7 @@ import { istParts, istToday } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useAddToDocket, useTakeOutOfDocket } from '../queries'
 import type { CaseDocket, DocketKind, VisaCase } from '../types'
+import { CombinedScansLine } from './CombinedScansLine'
 import { dayMonth, passportTotal } from './labels'
 
 /** The demo's two-way switch ⚠️ (screen 09). */
@@ -159,6 +160,8 @@ export function DocketCard({ visaCase: c }: { visaCase: VisaCase }) {
       )}
 
       {!d && vendorProblem && <div className="alert alert-warn">{vendorProblem}</div>}
+
+      <CombinedScansLine visaCase={c} />
 
       <p className="muted small" style={{ margin: 0 }}>
         A file can’t leave without its invoice. The invoice is built from the price quoted at the start — nobody types amounts — and can never be

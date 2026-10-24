@@ -18,6 +18,8 @@ export const QUEUES = {
   whatsappStatusLater: "whatsapp-status-later",
   /** Every 15 minutes: queues the visa pending-document reminders that are due (message 3). */
   visaDocumentReminders: "visa-document-reminders",
+  /** After "File ready": combines the visa case's scans into its saved file (0008 Amendment 1). */
+  visaCombineScans: "visa-combine-scans",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -41,6 +43,9 @@ const QUEUE_SETTINGS: [QueueName, QueueSettings][] = [
   [QUEUES.whatsappStatusLater, { retryLimit: 1, retryDelay: 60, expireInSeconds: 60 }],
   // A sweep that fails isn't tried again: the next one, 15 minutes later, catches up on whatever was due.
   [QUEUES.visaDocumentReminders, { retryLimit: 0, expireInSeconds: 600 }],
+  // A try the bucket or the database fails is tried again after about half a minute, 1 and 2 minutes; one that hasn't
+  // finished in 5 minutes counts as stuck. Scans missing isn't an error: the job ends, and the case shows what's missing.
+  [QUEUES.visaCombineScans, { retryLimit: 3, retryDelay: 30, retryBackoff: true, expireInSeconds: 300 }],
 ];
 
 export const boss = new PgBoss({
