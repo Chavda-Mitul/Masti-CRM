@@ -490,7 +490,9 @@ describe("message 14, the delivery visit", () => {
     expect((await bookVisit(processor, c.caseNo, ramesh.id, "DELIVERY")).status).toBe(200);
     const [first] = await sent(VISA_DELIVERY_VISIT);
     expect(first!.body).toContain(`Our staff member Ramesh will bring your passports for ${c.caseNo} on ${dayLabel(await visitDay())}, 4–6 pm, to: ${HOME}.`);
-    expect(first!.body).toContain("they will take a photo of the person receiving the passports.");
+    expect(first!.body).toContain("Please be available with your phone. Our staff member will take a photo of the person receiving the passports.");
+    // No word of the code, which Meta refuses in an ordinary template (0020 Amendment 2).
+    expect(first!.body).not.toContain("code");
     expect(first!.body).toContain(`To change the time, call us on ${PHONE}.`);
 
     const morning = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "MORNING" } });
