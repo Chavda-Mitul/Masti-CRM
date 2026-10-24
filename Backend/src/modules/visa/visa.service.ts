@@ -41,6 +41,7 @@ import {
   COVERING_LETTER_KEY,
   PASSPORT_VALIDITY_KEY,
   PASSPORTS_ARRIVE_KEY,
+  PRICE_MESSAGE_KEY,
   ASSIGN_CHECK_KEY,
   DISPATCH_CHECK_KEY,
   HANDOVER_CHECK_KEY,
@@ -352,7 +353,7 @@ export async function getSettings() {
  * upload; a docket prefix to the next new docket; a sticker size to the next print; the GST rate to the quotes' preview
  * (and later to the next invoice); the vendor-confirm timing and slip-number lengths to the next dispatch; the portal
  * check's timing to the next "Submitted online"; the file-number check's to the next "Vendor got it"; the collection
- * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the photo limit to the next receiver photo; the vendor email's wording to the next email; the document reminders at once, to every open case's next reminder; the passports' arrival estimate to the next decision message; the letterhead space to the next covering letter printed. Only the keys sent and changed are written, each audited on its own.
+ * reminder's to the next save of a collection date; the passports-back check's to the next decision; the arrival check's to the next "Passports on the way back"; the handover check's to the next "Mark received"; the photo limit to the next receiver photo; the vendor email's wording to the next email; the document reminders at once, to every open case's next reminder; the passports' arrival estimate to the next decision message; the price message's wait to the next case priced; the letterhead space to the next covering letter printed. Only the keys sent and changed are written, each audited on its own.
  */
 export async function updateSettings(input: UpdateVisaSettingsInput, actor: Actor) {
   if (!isHodOf(actor.user, VISA)) throw forbidden("Only the Head or the Visa HOD can change visa settings.");
@@ -380,6 +381,7 @@ export async function updateSettings(input: UpdateVisaSettingsInput, actor: Acto
     { key: PASSPORT_VALIDITY_KEY, before: before.passportValidity, after: input.passportValidity },
     { key: CHILD_AGE_KEY, before: before.childAge, after: input.childAge },
     { key: PASSPORTS_ARRIVE_KEY, before: before.passportsArrive, after: input.passportsArrive },
+    { key: PRICE_MESSAGE_KEY, before: before.priceMessage, after: input.priceMessage },
     { key: DOCUMENT_REMINDERS_KEY, before: before.documentReminders, after: input.documentReminders },
     { key: COVERING_LETTER_KEY, before: before.coveringLetter, after: input.coveringLetter },
   ].filter((c) => c.after && JSON.stringify(c.after) !== JSON.stringify(c.before));

@@ -6,6 +6,7 @@ import { addMonths, fromDbDate, istDateTimeToUtc, istToday, toDbDate } from "../
 import { conflict, fieldError, forbidden, notFound } from "../../lib/httpError";
 import { canOwnCases, isHodOf, type DepartmentCode } from "../auth/permissions";
 import { blockedDays, nextOpenDay } from "../holidays/blockedDays";
+import { dropWaitingMessages } from "../messages/messages.service";
 import { withDepartments, type Actor, type UserWithDepartments } from "../users/user";
 import { dueOnOfficeDay, getVisaSettings } from "../visa/visa.settings";
 import { cancelBookedFieldJobs } from "../fieldJobs/fieldJobs.service";
@@ -213,7 +214,11 @@ export async function cancel(caseNo: string, input: CancelInput, actor: Actor) {
     { status: "CANCELLED", reasonId: input.reasonId, resumeOn: null, dueAt },
     "enquiry.cancel",
     actor,
-    async (tx) => ({ ...(await hold(tx)), ...(handBack ? { toHandBack: true } : {}) }),
+    async (tx) => {
+      // A message still waiting to go ("Your price") isn't sent once the client has dropped the case (0021 Amendment 8).
+      await dropWaitingMessages(tx, { enquiryId: enquiry.id }, "The case was cancelled.");
+      return { ...(await hold(tx)), ...(handBack ? { toHandBack: true } : {}) };
+    },
   );
 }
 

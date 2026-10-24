@@ -19,6 +19,8 @@ export function toMessageDto(row: OutboundMessage & { template: Pick<MessageTemp
     status: row.status,
     error: row.error,
     createdAt: row.createdAt,
+    /** When a message held back goes ("Your price", 0021 Amendment 8); null when it went at once. */
+    sendAfter: row.sendAfter,
     sentAt: row.sentAt,
     deliveredAt: row.deliveredAt,
     readAt: row.readAt,

@@ -167,6 +167,8 @@ export interface VisaSettings {
   childAge: { adultFrom: number }
   /** About how many working days after the decision the passports reach our office, as messages 10–12 say (22 Oct 2026). */
   passportsArrive: { workingDays: number }
+  /** How long "Your price" (message 2) waits, so an invoice raised meanwhile goes instead; 0 sends it at once (0021 amendment 8). */
+  priceMessage: { waitMinutes: number }
 }
 
 /** 409 DUPLICATE from the holidays API. */

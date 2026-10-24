@@ -81,4 +81,9 @@ export const VISA_SETTINGS_HELP: Record<keyof VisaTimingsFormValues | 'timings',
     ['Good to know', 'It goes to the client as it is, so use the time it usually takes. An e-visa gets no decision message yet.'],
     ['Example (2 working days)', '“Your passports should reach our office in about 2 working days.”'],
   ],
+  priceMessage: [
+    ['What it’s for', 'When a case’s price is first saved, the client gets “Your price” on WhatsApp. It waits this long first, so a price corrected in the meantime goes out right.'],
+    ['Good to know', 'If the invoice is raised during the wait, only the invoice goes, as it gives the amount. If the case is cancelled during the wait, it isn’t sent. 0 sends it at once.'],
+    ['Example (10 minutes)', 'Price saved at 12:10 → “Your price” goes at 12:20, unless the invoice was raised before then.'],
+  ],
 }

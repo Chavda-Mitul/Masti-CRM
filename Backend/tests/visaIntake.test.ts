@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addDays, addMonths, istDateTimeToUtc, istToday } from "../src/lib/dates";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
-import { FIRST_FOLLOW_UP_KEY } from "../src/modules/visa/visa.settings";
+import { FIRST_FOLLOW_UP_KEY, PRICE_MESSAGE_KEY } from "../src/modules/visa/visa.settings";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { app, createUser, loginAs, prisma, request, resetDb } from "./helpers";
 import { maturedCase } from "./visaHelpers";
@@ -405,6 +405,7 @@ describe("intake dropdowns and settings", () => {
       passportValidity: { monthsAfterReturn: 6 },
       childAge: { adultFrom: 18 },
       passportsArrive: { workingDays: 2 },
+      priceMessage: { waitMinutes: 10 },
       documentReminders: { enabled: true, everyDays: 2, sendAt: "11:00", channel: "WHATSAPP" },
       coveringLetter: { letterheadMm: 45 },
     });
@@ -417,6 +418,21 @@ describe("intake dropdowns and settings", () => {
     expect(res.body.settings.firstFollowUp).toEqual({ afterDays: 2, at: "10:00" });
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "setting.update" } });
     expect(entry).toMatchObject({ entityId: FIRST_FOLLOW_UP_KEY, before: { afterDays: 1, at: "11:00" }, after: { afterDays: 2, at: "10:00" } });
+  });
+
+  it("lets the Visa HOD set how long \"Your price\" waits: whole minutes, from 0 to under 24 hours, audited (0021 amendment 8)", async () => {
+    await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
+    const hod = await loginAs("riya@masti.test");
+    for (const waitMinutes of [-1, 2.5, 1440]) {
+      expect((await hod.put("/api/visa/settings").send({ priceMessage: { waitMinutes } })).status).toBe(400);
+    }
+    expect((await hod.put("/api/visa/settings").send({ priceMessage: { waitMinutes: 1439 } })).body.settings.priceMessage).toEqual({ waitMinutes: 1439 });
+    expect((await hod.put("/api/visa/settings").send({ priceMessage: { waitMinutes: 0 } })).body.settings.priceMessage).toEqual({ waitMinutes: 0 });
+    const entries = await prisma.auditLog.findMany({ where: { action: "setting.update", entityId: PRICE_MESSAGE_KEY }, orderBy: { id: "asc" } });
+    expect(entries.map((e) => [e.before, e.after])).toEqual([
+      [{ waitMinutes: 10 }, { waitMinutes: 1439 }],
+      [{ waitMinutes: 1439 }, { waitMinutes: 0 }],
+    ]);
   });
 
   it("lets the Visa HOD manage enquiry sources; codes never change", async () => {

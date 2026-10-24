@@ -130,7 +130,9 @@ const SENT_FOR_MS = 15 * 60_000
 
 function onItsWay(m: CaseMessage) {
   const since = (iso: string | null) => (iso ? Date.now() - Date.parse(iso) : Infinity)
-  return (m.status === 'QUEUED' && since(m.createdAt) < QUEUED_FOR_MS) || (m.status === 'SENT' && since(m.sentAt) < SENT_FOR_MS)
+  // One that waits ("Your price", 0021 amendment 8) is on its way only once its time has come.
+  const queued = since(m.sendAfter ?? m.createdAt)
+  return (m.status === 'QUEUED' && queued >= 0 && queued < QUEUED_FOR_MS) || (m.status === 'SENT' && since(m.sentAt) < SENT_FOR_MS)
 }
 
 /**

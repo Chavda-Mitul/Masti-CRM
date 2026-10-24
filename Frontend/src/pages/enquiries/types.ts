@@ -834,7 +834,10 @@ export interface VisaCase {
   createdAt: string
 }
 
-/** Where a message to the client has got to (0021). SKIPPED: its wording is switched off. */
+/**
+ * Where a message to the client has got to (0021). SKIPPED: not sent on purpose, `error` says why: its wording is
+ * switched off, or while it waited the invoice went instead or the case was cancelled (amendment 8).
+ */
 export type MessageStatus = 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'SKIPPED'
 
 /** One message on the case's "Sent to the client" card (0021), oldest first. Times are ISO. */
@@ -850,6 +853,8 @@ export interface CaseMessage {
   /** Why it didn't go or wasn't delivered, in plain words. */
   error: string | null
   createdAt: string
+  /** When a message held back goes: "Your price" waits (0021 amendment 8). Null when it went at once. */
+  sendAfter: string | null
   sentAt: string | null
   deliveredAt: string | null
   readAt: string | null

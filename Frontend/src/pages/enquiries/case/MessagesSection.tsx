@@ -8,7 +8,8 @@ import { dayMonth } from './labels'
 
 /**
  * "Sent to the client" (demo screen 06, 0021): every WhatsApp the CRM sent about this case, oldest first, with where it
- * has got to and the file it carried (0025); a failed one says why. Clicking a message shows its words, exactly as
+ * has got to and the file it carried (0025); a failed one says why. One that waits says when it goes, and one not sent
+ * on purpose says why (0021 amendment 8: "The invoice went instead."). Clicking a message shows its words, exactly as
  * sent. Under it, "The client wrote" (0026 amendment 1): their replies, newest first, once there are any. It checks
  * again by itself: often while a message is on its way, otherwise every minute.
  */
@@ -67,6 +68,7 @@ function MessageRow({ message: m }: { message: CaseMessage }) {
       </button>
       {m.attachment && <p className="message-file muted small">File: {m.attachment.fileName}</p>}
       {m.status === 'FAILED' && m.error && <p className="message-error small">{m.error}</p>}
+      {m.status === 'SKIPPED' && m.error && <p className="message-reason muted small">{m.error}</p>}
       {open && <p className="message-body">{m.body}</p>}
     </li>
   )
@@ -76,7 +78,8 @@ function MessageRow({ message: m }: { message: CaseMessage }) {
 function statusOf(m: CaseMessage): { word: string; tone: 'ok' | 'wait' | 'bad' } {
   switch (m.status) {
     case 'QUEUED':
-      return { word: 'Waiting to send', tone: 'wait' }
+      // "Your price" waits before it goes, so an invoice raised meanwhile can go instead (0021 amendment 8).
+      return { word: m.sendAfter && Date.parse(m.sendAfter) > Date.now() ? `Goes at ${istTime(new Date(m.sendAfter))}` : 'Waiting to send', tone: 'wait' }
     case 'SENT':
       return { word: 'Sent', tone: 'ok' }
     case 'DELIVERED':
@@ -87,7 +90,8 @@ function statusOf(m: CaseMessage): { word: string; tone: 'ok' | 'wait' | 'bad' }
       // Twilio can refuse a message it first took: it went, then wasn't delivered.
       return { word: m.sentAt ? 'Not delivered' : 'Not sent', tone: 'bad' }
     case 'SKIPPED':
-      return { word: 'Not sent: switched off', tone: 'wait' }
+      // Why, under the line: switched off, the invoice went instead, or the case was cancelled.
+      return { word: 'Not sent', tone: 'wait' }
   }
 }
 

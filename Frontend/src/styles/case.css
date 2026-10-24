@@ -1128,6 +1128,10 @@
   margin: 2px 0 0 18px;
   overflow-wrap: anywhere;
 }
+/* Why a message wasn't sent on purpose (0021 amendment 8), under its line. */
+.message-reason {
+  margin: 2px 0 0 18px;
+}
 .message-body {
   margin: 8px 0 0 18px;
   padding: 10px 12px;

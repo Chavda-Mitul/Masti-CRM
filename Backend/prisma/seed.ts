@@ -39,6 +39,7 @@ import {
   DEFAULT_PASSPORT_VALIDITY,
   DEFAULT_CHILD_AGE,
   DEFAULT_COVERING_LETTER,
+  DEFAULT_PRICE_MESSAGE,
   DEFAULT_VENDOR_CONFIRM,
   DOCKET_EMAIL_KEY,
   DOCUMENT_REMINDERS_KEY,
@@ -62,6 +63,7 @@ import {
   PASSPORT_VALIDITY_KEY,
   CHILD_AGE_KEY,
   COVERING_LETTER_KEY,
+  PRICE_MESSAGE_KEY,
   VENDOR_CONFIRM_KEY,
 } from "../src/modules/visa/visa.settings";
 import { COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS, DEFAULT_INVOICE_TERMS, INVOICE_TERMS_KEY } from "../src/modules/company/company.settings";
@@ -140,7 +142,7 @@ async function main() {
   // follow-up (0011 Decision 6) ⚠️, the check after the decision (0012 Decision 7) ⚠️, the check on the day passports are expected back (0013
   // Decision 3) ⚠️, when a matured case is due to be assigned (0006, amended 16 Oct 2026) ⚠️, the handover check once
   // the passports are received (0013 Decision 5) ⚠️, the receiver photo's size limit (0014 Decision 6) ⚠️, the covering
-  // letter's letterhead space (0019 Decision 11) ⚠️, and Masti's own details.
+  // letter's letterhead space (0019 Decision 11) ⚠️, "Your price"'s wait (0021 Amendment 8) ⚠️, and Masti's own details.
   for (const [key, value] of [
     [DOCKET_KEY, DEFAULT_DOCKET],
     [STICKER_KEY, DEFAULT_STICKER],
@@ -163,6 +165,7 @@ async function main() {
     [AWB_KEY, DEFAULT_AWB],
     [DOCKET_EMAIL_KEY, DEFAULT_DOCKET_EMAIL],
     [DOCUMENT_REMINDERS_KEY, DEFAULT_DOCUMENT_REMINDERS],
+    [PRICE_MESSAGE_KEY, DEFAULT_PRICE_MESSAGE],
     [COMPANY_DETAILS_KEY, DEFAULT_COMPANY_DETAILS],
     [INVOICE_TERMS_KEY, DEFAULT_INVOICE_TERMS],
   ] as const) {

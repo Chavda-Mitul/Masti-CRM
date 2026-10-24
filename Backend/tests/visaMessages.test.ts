@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, addMonths, dayLabel, istDateTimeToUtc, istToday, timeLabel, toDbDate } from "../src/lib/dates";
+import { boss, QUEUES } from "../src/lib/jobs";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { nextOpenDay } from "../src/modules/holidays/blockedDays";
 import { seedHolidays } from "../src/modules/holidays/holidays.seed";
@@ -22,7 +23,7 @@ import {
   VISA_REFUSED,
   VISA_SUBMITTED,
 } from "../src/modules/messages/messages.seed";
-import { DOCUMENT_REMINDERS_KEY } from "../src/modules/visa/visa.settings";
+import { DOCUMENT_REMINDERS_KEY, PRICE_MESSAGE_KEY } from "../src/modules/visa/visa.settings";
 import { fitList, namesText, passportCountText } from "../src/modules/visa/visaMessages";
 import { sendDueReminders } from "../src/modules/visa/visaReminders.service";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
@@ -112,17 +113,79 @@ describe("message 1, the document list", () => {
 });
 
 describe("message 2, the price", () => {
-  it("goes the first time the case has a price; a later change sends nothing", async () => {
+  /** The case's one price message. */
+  const priceMessage = async () => (await sent(VISA_PRICE))[0]!;
+  const sendJob = async (messageId: string) => (await boss.findJobs(QUEUES.whatsappSend, { data: { messageId } }))[0]!;
+
+  it("waits 10 minutes after the first price; a change during the wait words it again, a later one changes nothing", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    const before = Date.now();
+    expect((await quote(staff, c.caseNo)).status).toBe(200);
+    const m = await priceMessage();
+    expect(m.body).toContain(`The price for your France tourist visa (${c.caseNo}) is ₹6,000 for 2 travellers, including all fees and taxes.`);
+    expect(m.body).toContain(`call us on ${PHONE}.`);
+    expect(m.status).toBe("QUEUED");
+    expect(m.sendAfter!.getTime()).toBeGreaterThanOrEqual(before + minutes(10));
+    expect(m.sendAfter!.getTime()).toBeLessThanOrEqual(Date.now() + minutes(10));
+    expect(Math.abs((await sendJob(m.id)).startAfter.getTime() - m.sendAfter!.getTime())).toBeLessThan(1000);
+
+    // Corrected during the wait: the client gets the new total.
+    expect((await quote(staff, c.caseNo, 60_000)).status).toBe(200);
+    expect(await sent(VISA_PRICE)).toHaveLength(1);
+    expect((await priceMessage()).body).toContain("is ₹6,118 for 2 travellers");
+
+    // Once its time has come, a change sends nothing and changes nothing: the invoice (message 7) carries the final amount.
+    await prisma.outboundMessage.update({ where: { id: m.id }, data: { sendAfter: new Date(Date.now() - 1000) } });
+    expect((await quote(staff, c.caseNo, 70_000)).status).toBe(200);
+    expect(await sent(VISA_PRICE)).toHaveLength(1);
+    expect((await priceMessage()).body).toContain("is ₹6,118 for 2 travellers");
+  });
+
+  it("goes at once when the wait is set to 0", async () => {
+    const value = { waitMinutes: 0 };
+    await prisma.setting.upsert({ where: { key: PRICE_MESSAGE_KEY }, update: { value }, create: { key: PRICE_MESSAGE_KEY, value } });
     const staff = await visaStaff();
     const c = await saveCase(staff);
     expect((await quote(staff, c.caseNo)).status).toBe(200);
-    const [m] = await sent(VISA_PRICE);
-    expect(m!.body).toContain(`The price for your France tourist visa (${c.caseNo}) is ₹6,000 for 2 travellers, including all fees and taxes.`);
-    expect(m!.body).toContain(`call us on ${PHONE}.`);
+    const m = await priceMessage();
+    expect(m).toMatchObject({ status: "QUEUED", sendAfter: null });
+    expect((await sendJob(m.id)).startAfter.getTime()).toBeLessThanOrEqual(Date.now());
+  });
 
-    // The invoice (message 7) carries the final amount.
-    expect((await quote(staff, c.caseNo, 60_000)).status).toBe(200);
-    expect(await sent(VISA_PRICE)).toHaveLength(1);
+  it("isn't sent when the invoice is raised during the wait: the invoice goes instead", async () => {
+    await mastiReady();
+    const aarti = await visaStaff();
+    const c = await saveCase(aarti);
+    await makeInvoiceable(aarti, c);
+    expect((await raise(aarti, c.caseNo)).status).toBe(200);
+    const m = await priceMessage();
+    expect(m).toMatchObject({ status: "SKIPPED", error: "The invoice went instead." });
+    expect(await prisma.auditLog.count({ where: { action: "message.skipped", entityId: m.id } })).toBe(1);
+    expect(await sent(VISA_INVOICE)).toHaveLength(1);
+  });
+
+  it("still goes when the invoice is raised after its time has come", async () => {
+    await mastiReady();
+    const aarti = await visaStaff();
+    const c = await saveCase(aarti);
+    await makeInvoiceable(aarti, c);
+    await prisma.outboundMessage.updateMany({ where: { template: { code: VISA_PRICE } }, data: { sendAfter: new Date(Date.now() - 1000) } });
+    expect((await raise(aarti, c.caseNo)).status).toBe(200);
+    expect((await priceMessage()).status).toBe("QUEUED");
+    expect(await sent(VISA_INVOICE)).toHaveLength(1);
+  });
+
+  it("isn't sent when the case is cancelled during the wait; a message that went at once still goes", async () => {
+    const staff = await visaStaff();
+    const c = await saveCase(staff);
+    expect((await quote(staff, c.caseNo)).status).toBe(200);
+    const reasonId = (await prisma.enquiryReason.findUniqueOrThrow({ where: { code: "TRIP_CANCELLED" } })).id;
+    const updatedAt = (await prisma.enquiry.findUniqueOrThrow({ where: { id: c.id } })).updatedAt.toISOString();
+    expect((await staff.post(`/api/enquiries/${c.caseNo}/cancel`).send({ reasonId, updatedAt })).status).toBe(200);
+    expect(await priceMessage()).toMatchObject({ status: "SKIPPED", error: "The case was cancelled." });
+    // The document list (message 1) didn't wait.
+    expect((await sent(VISA_DOCUMENT_LIST))[0]!.status).toBe("QUEUED");
   });
 });
 
