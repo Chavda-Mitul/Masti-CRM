@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { EnquiryStatus } from "../../../generated/prisma/enums";
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { fileNamePart } from "../../lib/fileNames";
@@ -7,34 +8,40 @@ import { logger } from "../../lib/logger";
 import { deleteObject, putObject } from "../../lib/storage";
 import type { ScanType } from "../clients/clients.schemas";
 import type { Actor } from "../users/user";
-import { CHECKING_EVISA, loadCase, lockCase } from "./caseLock";
+import { EVISA_FILES, loadCase, lockCase } from "./caseLock";
 import { decisionFileLimit, travellerFilePdf } from "./travellerFiles";
-import type { SetEvisaCheckInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
 import { countTravellers, travellerLabel } from "./visaCase";
+import { evisasAllIn, evisaState, finishEvisas } from "./visaEvisaDone";
+import { queueTravellerFileMessage } from "./visaMessages";
 
-// E-visas after the decision, part 1 (docs/decisions/0025-evisa-after-decision.md): at Decision, each approved
-// traveller's e-visa, as the portal issued it (or a photo of it, turned into a one-page PDF: change request 21, part 2,
-// travellerFiles.ts), is kept as one PDF with the case's files in the private bucket (rule 4),
-// then checked against the passport and what was recorded at Step 6: Matches or Doesn't match. The check reuses the
-// sticker's (VisaCaseTraveller.stickerCheck): an e-visa never reaches Step 7, where a sticker is checked. A newer
-// upload is the current one, older ones stay as proof, and a newer upload clears the check: it needs a new look. By
-// whoever can act on the case, while it's open. Opened like any case file (openCaseFile).
+// E-visas after the decision (docs/decisions/0025-evisa-after-decision.md): each approved traveller's e-visa, as the
+// portal issued it, or a photo of it turned into a one-page PDF (change request 21 part 2, travellerFiles.ts), is kept
+// as one PDF with the case's files in the private bucket (rule 4), and goes to the client on WhatsApp as soon as it's
+// uploaded (message 19; change request 21 part 3: no check, no "Send the e-visa"). The upload that sends the last
+// approved traveller's finishes the case (visaEvisaDone.ts). A newer upload is the current one and goes too; older
+// ones stay as proof. After that, a corrected e-visa can still be uploaded and sent: it changes nothing else. By
+// whoever can act on the case. Opened like any case file (openCaseFile).
 
-/** The traveller, if the case is an e-visa and they're on it and approved, with the name the case shows them by. */
-async function approvedTraveller(db: Db, enquiryId: string, travellerId: string) {
+/**
+ * The traveller, if the case is an e-visa and they're on it and approved, with the name the case shows them by. Until
+ * every approved e-visa has gone, the case must be open: the last upload moves it on.
+ */
+async function approvedTraveller(db: Db, enquiry: { id: string; status: EnquiryStatus }, travellerId: string) {
   const visa = await db.visaCase.findUniqueOrThrow({
-    where: { enquiryId },
+    where: { enquiryId: enquiry.id },
     select: {
       submittedOnlineAt: true,
       evisaSentAt: true,
-      travellers: { select: { id: true, position: true, isChild: true, name: true, outcome: true, stickerCheck: true } },
+      travellers: { select: { id: true, position: true, isChild: true, name: true, outcome: true } },
     },
   });
   if (!visa.submittedOnlineAt) throw conflict("This visa has a sticker, not an e-visa: it's checked when the passports come back.");
-  // What went to the client stays as it went (part 3).
-  if (visa.evisaSentAt) throw conflict("The e-visa has gone to the client: it can't change now.");
+  if (!visa.evisaSentAt) {
+    if (enquiry.status === "POSTPONED") throw conflict("This case is postponed. Resume it first.");
+    if (enquiry.status !== "OPEN") throw conflict("This case is closed, so it can't change.");
+  }
   const t = visa.travellers.find((x) => x.id === travellerId);
   if (!t) throw notFound("Traveller not found on this case.");
   const label = t.name ?? travellerLabel(t, countTravellers(visa.travellers).adults);
@@ -47,7 +54,7 @@ function currentEvisa(db: Db, travellerId: string) {
   return db.caseFile.findFirst({
     where: { travellerId, kind: "EVISA" },
     orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
-    select: { id: true, fileName: true },
+    select: { id: true },
   });
 }
 
@@ -57,8 +64,8 @@ function currentEvisa(db: Db, travellerId: string) {
  * memory.
  */
 export async function evisaLimit(caseNo: string, travellerId: string, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, CHECKING_EVISA);
-  await approvedTraveller(prisma, enquiry.id, travellerId);
+  const enquiry = await loadCase(caseNo, actor, EVISA_FILES);
+  await approvedTraveller(prisma, enquiry, travellerId);
   return decisionFileLimit((await getVisaSettings()).finalFile.maxMb);
 }
 
@@ -70,23 +77,24 @@ function evisaFileName(caseNo: string, name: string) {
 
 /**
  * Saves an approved traveller's e-visa: one real PDF (a photo turned into one), its pages counted, in the private
- * bucket under a key no other upload shares. The key ends in the file's name, so the link the client's WhatsApp gets
- * (part 2) shows it. The bucket upload happens before the case lock, so a slow upload never holds the case. Under the
- * lock the checks are repeated; if they fail now, the row isn't saved and the object is removed again. The traveller's
- * check is cleared: the new PDF hasn't been looked at.
+ * bucket under a key no other upload shares, and sends it to the client (message 19) in the same transaction. The key
+ * ends in the file's name, as a WhatsApp document's name once came from its link. The bucket upload happens before the
+ * case lock, so a slow upload never holds the case. Under the lock the checks are repeated; if they fail now, the row
+ * isn't saved, nothing is sent and the object is removed again. When this was the last approved traveller's e-visa,
+ * the case is finished: Delivered and closed, or due for the passports' handover.
  */
 export async function uploadEvisa(caseNo: string, travellerId: string, contentType: ScanType, bytes: Buffer, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, CHECKING_EVISA);
+  const enquiry = await loadCase(caseNo, actor, EVISA_FILES);
   const { pdf, pageCount, photo } = await travellerFilePdf(bytes, contentType, (await getVisaSettings()).finalFile.maxMb);
-  const t = await approvedTraveller(prisma, enquiry.id, travellerId);
+  const t = await approvedTraveller(prisma, enquiry, travellerId);
   const fileName = evisaFileName(enquiry.caseNo, t.label);
   const storageKey = `cases/${enquiry.id}/evisa/${randomUUID()}/${fileName}`;
   await putObject(storageKey, pdf, "application/pdf");
 
   try {
     await prisma.$transaction(async (tx) => {
-      await lockCase(tx, enquiry.id, actor, CHECKING_EVISA);
-      const traveller = await approvedTraveller(tx, enquiry.id, travellerId);
+      const locked = await lockCase(tx, enquiry.id, actor, EVISA_FILES);
+      const traveller = await approvedTraveller(tx, locked, travellerId);
       const previous = await currentEvisa(tx, travellerId);
       const file = await tx.caseFile.create({
         data: {
@@ -100,7 +108,6 @@ export async function uploadEvisa(caseNo: string, travellerId: string, contentTy
           uploadedById: actor.user.id,
         },
       });
-      if (traveller.stickerCheck) await tx.visaCaseTraveller.update({ where: { id: travellerId }, data: { stickerCheck: null } });
       await audit(
         {
           actorId: actor.user.id,
@@ -116,7 +123,6 @@ export async function uploadEvisa(caseNo: string, travellerId: string, contentTy
             pageCount,
             storageKey,
             replaces: previous?.id ?? null,
-            checkCleared: traveller.stickerCheck,
             // Sent as a photo, and kept as the PDF it made.
             ...(photo ? { photo } : {}),
           },
@@ -124,50 +130,15 @@ export async function uploadEvisa(caseNo: string, travellerId: string, contentTy
         },
         tx,
       );
+      await queueTravellerFileMessage(tx, enquiry.id, { id: file.id, kind: "EVISA", travellerName: traveller.label });
+      // The last approved traveller's e-visa has gone: the case moves on, as "Send the e-visa" once moved it.
+      const state = await evisaState(tx, enquiry.id);
+      if (evisasAllIn(state)) await finishEvisas(tx, locked, state, actor);
     });
   } catch (err) {
     // Nothing points at the object: remove it so the bucket holds only files the CRM knows. Best effort.
     await deleteObject(storageKey).catch((cleanupErr: unknown) => logger.error({ err: cleanupErr, storageKey }, "Couldn't remove an unsaved upload."));
     throw err;
   }
-  return getVisaCaseById(enquiry.id);
-}
-
-/**
- * The traveller's current e-visa checked against the passport and what was recorded at Step 6: Matches, Doesn't match,
- * or null to undo a mis-click. Refused unless the PDF looked at is still the current one. Like the processor's paper
- * checks (0007 Decision 3), it doesn't move the case's updatedAt, so it never makes someone else's open page stale.
- * Saving the same check again writes nothing.
- */
-export async function setEvisaCheck(caseNo: string, travellerId: string, input: SetEvisaCheckInput, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, CHECKING_EVISA);
-  const check = async (db: Db) => {
-    const t = await approvedTraveller(db, enquiry.id, travellerId);
-    const file = await currentEvisa(db, travellerId);
-    if (!file) throw conflict(`Upload ${t.label}'s e-visa first, then check it.`);
-    if (file.id !== input.fileId) throw conflict("A newer e-visa was uploaded: open it and check again.");
-    return { t, file };
-  };
-  await check(prisma);
-
-  await prisma.$transaction(async (tx) => {
-    await lockCase(tx, enquiry.id, actor, CHECKING_EVISA);
-    const { t, file } = await check(tx);
-    if (t.stickerCheck === input.check) return;
-    await tx.visaCaseTraveller.update({ where: { id: travellerId }, data: { stickerCheck: input.check } });
-    await audit(
-      {
-        actorId: actor.user.id,
-        action: "visa.evisa.check",
-        entityType: "VisaCaseTraveller",
-        entityId: travellerId,
-        clientId: enquiry.clientId,
-        before: { traveller: t.label, check: t.stickerCheck },
-        after: { traveller: t.label, check: input.check, fileId: file.id, fileName: file.fileName },
-        ip: actor.ip,
-      },
-      tx,
-    );
-  });
   return getVisaCaseById(enquiry.id);
 }

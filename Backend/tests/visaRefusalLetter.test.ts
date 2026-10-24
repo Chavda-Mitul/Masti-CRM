@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, addMonths, istToday, toDbDate } from "../src/lib/dates";
 import { bucket, getObject, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
+import { VISA_PARTLY_APPROVED, VISA_REFUSAL_LETTER } from "../src/modules/messages/messages.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { jpegOf, pngOf } from "./imageFiles";
@@ -164,6 +165,33 @@ describe("the refusal letter (Decision 4)", () => {
     expect((res.body.case as CaseDto).travellers[1]!.refusalLetter!.copies).toBe(2);
     // Changing the decision still needs the case open, at Decision.
     expect((await change(processor, c.caseNo, child, { outcome: "APPROVED", visaNo: "0182 4472", validFrom: FROM, validTo: TO })).status).toBe(409);
+  });
+});
+
+describe("the message to the client (change request 21 part 3)", () => {
+  const sent = () => prisma.outboundMessage.findMany({ where: { template: { code: VISA_REFUSAL_LETTER } }, orderBy: { createdAt: "asc" } });
+
+  it("each upload sends message 22 with its PDF, after the decision's message: a replacement too, whatever the case's status", async () => {
+    const { c, processor, adult, child } = await decidedCase();
+    const first = (await upload(processor, c.caseNo, child, await pdf(1))).body.case.travellers[1].refusalLetter as LetterDto;
+    const [message] = await sent();
+    expect(message).toMatchObject({
+      idempotencyKey: `${VISA_REFUSAL_LETTER}:${first.id}`,
+      enquiryId: c.id,
+      clientId: c.client.id,
+      attachmentId: first.id,
+      status: "QUEUED",
+      variables: expect.objectContaining({ traveller_name: "Aarav Mehta", case_no: c.caseNo }),
+    });
+    expect(message!.body).toContain(`The refusal letter for Aarav Mehta's France tourist visa (${c.caseNo}) is attached.`);
+    const decision = await prisma.outboundMessage.findFirstOrThrow({ where: { template: { code: VISA_PARTLY_APPROVED } } });
+    expect(decision.createdAt.getTime()).toBeLessThanOrEqual(message!.createdAt.getTime());
+
+    // A replacement goes too, on a cancelled case as well; a refused upload sends nothing.
+    await prisma.enquiry.update({ where: { id: c.id }, data: { status: "CANCELLED", reasonId: await reason("TRIP_CANCELLED"), resumeOn: null, dueAt: null } });
+    const second = (await upload(processor, c.caseNo, child, await pdf(2))).body.case.travellers[1].refusalLetter as LetterDto;
+    expect((await upload(processor, c.caseNo, adult, await pdf(1))).status).toBe(409);
+    expect((await sent()).map((m) => m.attachmentId)).toEqual([first.id, second.id]);
   });
 });
 

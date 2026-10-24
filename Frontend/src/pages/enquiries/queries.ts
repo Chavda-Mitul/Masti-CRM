@@ -21,7 +21,6 @@ import type {
   CancelInvoiceCheck,
   RecallCheck,
   AdditionalInvoiceCheck,
-  SendEvisaCheck,
   VisaOutcome,
   SubmitOnlineCheck,
   VendorReceivedCheck,
@@ -84,7 +83,6 @@ export const enquiryKeys = {
   additionalInvoiceCheck: (caseNo: string) => ['enquiries', 'additional-invoice-check', caseNo.toUpperCase()] as const,
   dispatchCheck: (caseNo: string) => ['enquiries', 'dispatch-check', caseNo.toUpperCase()] as const,
   submitOnlineCheck: (caseNo: string) => ['enquiries', 'submit-online-check', caseNo.toUpperCase()] as const,
-  sendEvisaCheck: (caseNo: string) => ['enquiries', 'send-evisa-check', caseNo.toUpperCase()] as const,
   vendorReceivedCheck: (caseNo: string) => ['enquiries', 'vendor-received-check', caseNo.toUpperCase()] as const,
   sticker: (caseNo: string) => ['enquiries', 'sticker', caseNo.toUpperCase()] as const,
   /** The covering letter's card, per letter shown; all of a case's under one key, so a case action refreshes them. */
@@ -313,21 +311,15 @@ const DECISION_FILE_PATH: Record<DecisionFileKind, string> = {
 }
 
 /**
- * Uploads a traveller's file after the decision, a PDF, JPEG or PNG (a photo is kept as a one-page PDF): a refused
- * one's refusal letter (0012 Decision 4) or an approved paper visa's visa copy, any time once decided, whatever the
- * case's status; an approved e-visa's e-visa (0025), at Decision, clearing its check. A newer upload becomes the current
- * one; older ones are kept.
+ * Uploads a traveller's file after the decision, a PDF, JPEG or PNG (a photo is kept as a one-page PDF), and sends it to
+ * the client on WhatsApp (change request 21 part 3): a refused one's refusal letter (0012 Decision 4) or an approved
+ * paper visa's visa copy, any time once decided, whatever the case's status; an approved e-visa's e-visa (0025), at
+ * Decision while the case is open, and a corrected one any time after every approved e-visa has gone (the last one
+ * finishes the case). A newer upload becomes the current one, and goes too; older ones are kept.
  */
 export function useUploadDecisionFile(caseNo: string) {
   return useCaseAction<{ travellerId: string; kind: DecisionFileKind; file: File }>(caseNo, (base, { travellerId, kind, file }) =>
     uploadFile(`${base}/travellers/${travellerId}/${DECISION_FILE_PATH[kind]}`, file, decisionFileType(file) ?? file.type),
-  )
-}
-
-/** An e-visa checked against the passport (0025): Matches, Doesn't match, or null to undo. It names the PDF looked at. */
-export function useSetEvisaCheck(caseNo: string) {
-  return useCaseAction<{ travellerId: string; fileId: string; check: StickerCheck | null }>(caseNo, (base, { travellerId, ...body }) =>
-    api(`${base}/travellers/${travellerId}/evisa-check`, { method: 'PUT', body }),
   )
 }
 
@@ -481,20 +473,6 @@ export function useSubmitOnlineCheck(caseNo: string) {
 /** "Submitted online" (0008 Decision 11): an e-visa moves to At vendor, with no docket. */
 export function useSubmitOnline(caseNo: string) {
   return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/submit-online`, { method: 'POST', body }))
-}
-
-/** What blocks "Send the e-visa" (0025, part 3), who gets which file, and whether the case closes or waits for the handover. */
-export function useSendEvisaCheck(caseNo: string) {
-  return useQuery({
-    queryKey: enquiryKeys.sendEvisaCheck(caseNo),
-    queryFn: () => api<SendEvisaCheck>(`/visa/cases/${encodeURIComponent(caseNo)}/send-evisa/check`),
-    staleTime: 0,
-  })
-}
-
-/** "Send the e-visa" (0025, part 3): each approved traveller's e-visa goes to the client; the case closes, or waits for the handover. */
-export function useSendEvisa(caseNo: string) {
-  return useCaseAction<{ updatedAt: string }>(caseNo, (base, body) => api(`${base}/send-evisa`, { method: 'POST', body }))
 }
 
 /** When a file the vendor got comes back due, and why then (0011 Decision 2). */

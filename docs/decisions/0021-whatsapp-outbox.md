@@ -298,6 +298,22 @@ Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The projec
 - **Message 18:** `{{credit_note_no}}`, `{{amount}}` (the credit note's total) and `{{invoice_no}}`, keyed per credit
   note. A number retry rolls it back with the note. Change request 13.
 
+## Amendment 7 (24 Oct 2026): a traveller's file after the decision
+
+Change request 21, part 3 ([0012](0012-visa-decision.md) Decision 3, amended 24 Oct 2026): each traveller's file goes
+to the client with its own message, the file attached ([0025](0025-evisa-after-decision.md) Decision 4). The project
+lead decided that every upload goes, a replacement too.
+
+| # | Template code · title | Sent when | At most once per |
+| --- | --- | --- | --- |
+| 22 | `visa.refusal_letter` · Refusal letter | a refused traveller's refusal letter is uploaded (`uploadLetter`), whatever the case's status | file |
+| 23 | `visa.visa_copy` · Your visa copy | an approved traveller's visa copy is uploaded (`uploadLetter`), whatever the case's status | file |
+| 19 | `visa.evisa_ready` · Your e-visa | an approved traveller's e-visa is uploaded (`uploadEvisa`), no longer at "Send the e-visa" ([0025](0025-evisa-after-decision.md) Amendment 1) | file (was traveller) |
+
+- **`queueTravellerFileMessage`** (`visaMessages.ts`) queues all three in the upload's transaction, keyed
+  `<code>:<file id>`, with `{{traveller_name}}` as the case shows them (the passport name, else "Adult 1").
+- **Messages 22 and 23** are our drafts ⚠️, for Masti's approval with the others (M1).
+
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.

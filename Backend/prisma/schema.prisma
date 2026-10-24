@@ -1401,8 +1401,9 @@ model VisaCase {
   passportsReceivedById   String?
   bookletsBackCurrent     Int?                   @db.SmallInt
   bookletsBackOld         Int?                   @db.SmallInt
-  /// "Send the e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): each approved traveller's e-visa went to
-  /// the client on WhatsApp, by whom and when. Both set together, and only on an e-visa (checked in the migration).
+  /// Every approved traveller's e-visa has gone to the client on WhatsApp (docs/decisions/0025-evisa-after-decision.md,
+  /// part 3; since its Amendment 1, each as it's uploaded): set by the upload that sent the last one, by whom and when.
+  /// Both set together, and only on an e-visa (checked in the migration).
   evisaSentAt             DateTime?              @db.Timestamptz(3)
   evisaSentById           String?
   /// A short return cleared rather than found (0013 Decision 5, amended 17 Oct 2026): when, by whom and why, from the
@@ -1462,8 +1463,8 @@ enum VisaOutcome {
 }
 
 /// An approved traveller's visa sticker, checked against the passport's name, and the number and dates if they were
-/// recorded, when the passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). For an e-visa, its
-/// PDF checked against the passport and anything recorded at Step 6 (docs/decisions/0025-evisa-after-decision.md).
+/// recorded, when the passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). An e-visa has none:
+/// it goes to the client as uploaded (change request 21 part 3).
 enum StickerCheck {
   MATCHES
   MISMATCH
@@ -1493,8 +1494,8 @@ model VisaCaseTraveller {
   visaNo             String?
   validFrom          DateTime?          @db.Date
   validTo            DateTime?          @db.Date
-  /// Checked when the passports are received (0013 Decision 5); an e-visa's, once its PDF is uploaded at Decision, and
-  /// cleared by a newer PDF (0025). Only an approved traveller has one (checked in the migration); null until checked.
+  /// Checked when the passports are received (0013 Decision 5). Only an approved traveller has one (checked in the
+  /// migration); null until checked, and always for an e-visa (change request 21 part 3).
   stickerCheck       StickerCheck?
   visaCase           VisaCase           @relation(fields: [caseId], references: [enquiryId], onDelete: Restrict)
   member             ClientMember?      @relation(fields: [memberId], references: [id], onDelete: Restrict)

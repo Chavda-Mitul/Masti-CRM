@@ -433,7 +433,7 @@ describe("messages 10–12, the decision", () => {
   });
 
   // Its refusals get messages 20 and 21 (visaEvisaRefused.test.ts).
-  it("isn't sent for an approved e-visa: each e-visa goes with Send the e-visa (message 19)", async () => {
+  it("isn't sent for an approved e-visa: each e-visa goes as it's uploaded (message 19)", async () => {
     const { c, neha } = await eVisa();
     expect((await submitOnline(neha, c.caseNo)).status).toBe(200);
     const travellers = await prisma.visaCaseTraveller.findMany({ where: { caseId: c.id }, orderBy: { position: "asc" } });

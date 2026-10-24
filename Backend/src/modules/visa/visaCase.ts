@@ -619,7 +619,10 @@ export function toVisaCaseDto(
     combinedScans: row.stage.code === "DISPATCH" ? combinedScansOf(row, visa.travellers, scans) : null,
     /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
     submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
-    /** "Send the e-visa" (0025, part 3): who sent each approved traveller's e-visa to the client, and when. */
+    /**
+     * Every approved traveller's e-visa has gone to the client (0025; each as it's uploaded since change request 21
+     * part 3): who uploaded the last one, and when.
+     */
     evisaSent: visa.evisaSentAt && { at: visa.evisaSentAt, by: visa.evisaSentBy },
     /** Step 5 (0011 Decision 2): "Vendor got it, papers checked", who and when. */
     vendorReceived: visa.vendorReceivedAt && { at: visa.vendorReceivedAt, by: visa.vendorReceivedBy },
@@ -731,8 +734,8 @@ export function toVisaCaseDto(
           validTo: t.validTo && fromDbDate(t.validTo),
         },
         /**
-         * An approved traveller's sticker, checked when the passports were received (0013 Decision 5); an e-visa's PDF,
-         * checked at Decision (0025). Null until checked.
+         * An approved traveller's sticker, checked when the passports were received (0013 Decision 5). Null until
+         * checked; an e-visa has none (change request 21 part 3).
          */
         stickerCheck: t.stickerCheck,
         /** The refusal letter (0012 Decision 4): the current upload, shown only while the traveller is refused. */

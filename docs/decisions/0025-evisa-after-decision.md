@@ -2,6 +2,8 @@
 
 - **Status:** decided 22 Oct 2026: Vimal said yes to M39 (d), and the project lead answered the details the same day.
   Built in 5 parts, one at a time (Decision 1): all five built (22 Oct 2026). A "Built" note is under each part.
+  **Amended 24 Oct 2026** (Amendment 1, [change request 21](../change-requests.md) part 3): no check against the
+  passport and no "Send the e-visa →"; each e-visa goes to the client when it's uploaded. Built the same day.
 - **Date:** 22 Oct 2026
 - **Scope:** what follows an e-visa's decision at Step 6, until the case closes:
   - each approved traveller's e-visa PDF, and its check against the passport
@@ -17,6 +19,50 @@
   - [0020](0020-whatsapp-sending.md) and [0021](0021-whatsapp-outbox.md): WhatsApp through Twilio, and the outbox
 - **Not in the demo:** [change request 14](../change-requests.md). Shivanshu checks whether it's paid.
 
+## Amendment 1 (24 Oct 2026, project lead, change request 21 part 3): each e-visa goes when it's uploaded
+
+**The ask** ([change request 21](../change-requests.md)): each traveller's file goes to the client with its own
+message, after the decision's. An approved e-visa's file is the e-visa itself.
+
+**Decided (project lead, 23–24 Oct 2026):**
+- **No check and no button.** The Matches / Doesn't match check (Decision 3) and "Send the e-visa →" (Decision 5) are
+  removed. This reverses the lead's decision 1, "a mismatch blocks sending". Message 19 already asks the client to call
+  us if anything on the e-visa doesn't match the passport.
+- **Each upload goes at once,** from the Decision card or from "Record the decision" ([0012](0012-visa-decision.md)
+  Decision 3, amended 24 Oct 2026): message 19 with that PDF. A replacement goes too, so the message is keyed per file;
+  it was one per traveller.
+- **The last one moves the case on,** as "Send the e-visa" did: once every approved traveller's e-visa has gone, the
+  case is Delivered and closed when we hold no passports, or due for their handover (`visa.handoverCheck` ⚠️) when we
+  do.
+- **Change can finish it too,** when it leaves every remaining approved traveller with their e-visa (say, the one still
+  waiting is changed to Refused). When that would close the case, it warns first: "Every approved traveller's e-visa
+  has gone and we hold no passports: saving closes the case, and a closed case can't be changed."
+- **Afterwards** Change is still refused ("The e-visa has gone to the client: the decision can't change now."), but a
+  **corrected e-visa** can be uploaded at Decision or Delivered, whatever the status, even once the case is closed. It
+  goes to the client and changes nothing else.
+
+**Built 24 Oct 2026:**
+- **`visaEvisaDone.ts`** replaces `visaEvisaSend.service.ts`:
+  - `evisasAllIn`: every approved traveller has an e-visa
+  - `finishEvisas`: who and when (`evisaSentAt`, `evisaSentById`), then `deliverCase(…, { evisa: true })` or the due
+    time, audited as `visa.evisa.sent`
+  - `uploadEvisa` queues message 19 in its transaction (`queueTravellerFileMessage`, keyed
+    `visa.evisa_ready:<file id>`) and finishes the case after the last one; `changeDecision` finishes it too
+- **The step rule** `CHECKING_EVISA` becomes `EVISA_FILES`: Decision or Delivered, any status. Until every e-visa has
+  gone, the case must be open: "This case is postponed. Resume it first." or "This case is closed, so it can't change."
+- **Removed:** `GET …/send-evisa/check`, `POST …/send-evisa` and `PUT …/travellers/:id/evisa-check`, with their
+  schemas, and Change keeping an e-visa's check. `checkSticker` says "An e-visa has no sticker to check." **No
+  migration:** `evisaSentAt` now means that every approved e-visa has gone.
+- **Words:** the next step in the lists is "Upload the e-visa" (was "Send the e-visa"). Until then the handover says
+  "Upload every approved traveller's e-visa first: the passports go back after it."
+- **Screen:**
+  - no Matches buttons, and no "Send the e-visa →" or its dialog
+  - an upload says "E-visa sent to the client." (a replacement: "New copy sent to the client. The earlier one is
+    kept."), adding "The case is delivered and closed." or "Every e-visa has gone: hand back the passports next." when
+    it was the last
+  - with passports held, the header then shows "Hand back the passports →" (Decision 6)
+- **Tests:** `visaEvisaGoes.test.ts` replaces `visaEvisaSend.test.ts`.
+
 ## Context
 
 | Source | What it says |
@@ -30,6 +76,7 @@
 **Decided by the project lead (22 Oct 2026):**
 
 1. **A mismatch blocks sending.** Every approved traveller's e-visa must be marked Matches before it goes to the client.
+   *Reversed 24 Oct 2026 (Amendment 1): there's no check, and each e-visa goes when it's uploaded.*
 2. **The PDF goes on WhatsApp now,** through Twilio, as a session message (no template): like every message today, it
    reaches a client who wrote to us in the last 24 hours. An approved template with a document comes with M1.
 3. **Passports we hold** (booklets counted at intake): the case closes only after the usual handover (count, who
@@ -50,6 +97,9 @@ Each part is planned in plan mode, built, tested, checked in the browser and mer
 | 4 | **Handing back passports we hold** for an e-visa that was sent: the office handover and the delivery boy, against the intake count. |
 | 5 | **Refused e-visas:** e-visa versions of messages 11 and 12 (no passport lines) at the decision. When everyone is refused, the case closes on its own, or goes to the handover. The Record dialog warns first: a closed case can't be changed. |
 
+*Since 24 Oct 2026 (Amendment 1): part 1's check and part 3's button are gone. Each e-visa goes to the client when it's
+uploaded, and the last one moves the case on.*
+
 ### 2. The e-visa PDF (part 1)
 
 - **One PDF per approved traveller,** as the portal issued it, kept with the case's files in the private bucket (rule 4)
@@ -58,7 +108,9 @@ Each part is planned in plan mode, built, tested, checked in the browser and mer
   "Record the decision". The limit is the shared `decisionFileMaxMb`, the same 16 MB rule.*
 - **A newer upload becomes the current one;** older ones stay as proof. Kept when the traveller is changed to Refused,
   and shown again if they're approved again.
-- **When:** at Decision, on an open case, by whoever can act on it (its processor, the Visa HOD, the Head).
+- **When:** at Decision, on an open case, by whoever can act on it (its processor, the Visa HOD, the Head). *Since
+  Amendment 1: once every approved traveller's e-visa has gone, a corrected one can still be uploaded, at Decision or
+  Delivered, whatever the status, and it goes too.*
 - **The limit** is 16 MB ⚠️, under WhatsApp's 20 MB, or the final file's limit (`visa.finalFile.maxMb`) when that's
   lower.
 - **Its name** is `VISA-2026-0001_Rakesh-Mehta_evisa.pdf` ⚠️. The storage key ends in it
@@ -84,6 +136,8 @@ Each part is planned in plan mode, built, tested, checked in the browser and mer
   it and when, Open, and Upload e-visa / Replace.
 
 ### 3. Its check against the passport (part 1)
+
+*Removed 24 Oct 2026 (Amendment 1): there's no check any more. `stickerCheck` is the paper sticker's again (Step 7).*
 
 - **Matches or Doesn't match:** the PDF against the passport (name, passport number) and what was recorded at Step 6
   (the e-visa number and dates). *Since 23 Oct 2026 the number and dates are optional, added with Change
@@ -144,6 +198,10 @@ S3 pre-signed one.
 
 ### 5. "Send the e-visa" (part 3)
 
+*Replaced 24 Oct 2026 (Amendment 1): there's no button. Each e-visa goes with message 19 when it's uploaded, and the
+upload that completes the approved travellers' e-visas does what "Then" says below. Afterwards Change is still refused,
+but a corrected e-visa can be uploaded, and it goes too.*
+
 - **When:** at Decision, on an open case, by whoever can act on it, once every approved traveller's PDF is uploaded and
   marked **Matches** (a mismatch blocks it, the lead's decision 1). Refused travellers need nothing here (part 5).
 - **What goes:** message 19, **"Your e-visa"** ⚠️ (our draft, for M1), one per approved traveller, each carrying their
@@ -189,7 +247,8 @@ S3 pre-signed one.
   - at the desk, by any Visa staff with EDIT, who can open the case for it
   - or with the delivery boy, at the door
   - the count must match the intake, then the case is **Delivered** and closes, with message 15
-  - before it's sent: "Send the e-visa first: the passports go back after it."
+  - before it's sent: "Send the e-visa first: the passports go back after it." *Since Amendment 1: "Upload every
+    approved traveller's e-visa first: the passports go back after it."*
 - **A cancelled e-visa** at Step 5 or 6 with passports held is "to hand back" like a case cancelled before dispatch: it
   stays on its owner's Open list, due for it, and goes back at the office only, staying cancelled at its step.
 - **Paper files are unchanged:** at Steps 5–6 their passports are with the vendor and come back through Passport back
@@ -228,7 +287,8 @@ S3 pre-signed one.
     > Dear {{client_name}}, The decision on your {{visa}} ({{case_no}}) has come. Good news: it is approved for
     > {{approved_names}}, and we will send the e-visa here shortly. We are sorry that it was refused for
     > {{refused_names}}. Please call us on {{office_phone}} to talk about the refusal. – Masti Tours & Travels
-  - **Everyone approved:** none at the decision; message 19 brings each e-visa when it's sent (Decision 5).
+  - **Everyone approved:** none at the decision; message 19 brings each e-visa when it's sent (Decision 5; since
+    Amendment 1, when it's uploaded).
 - **Everyone refused** leaves nothing to send:
   - **No passports held:** the case moves to **Delivered** and **closes** at once, as a sent e-visa with none held
     (Decision 5).

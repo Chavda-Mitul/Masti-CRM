@@ -17,7 +17,6 @@ import { PassportsBackDialog } from './PassportsBackDialog'
 import { ReceivePassportsDialog } from './ReceivePassportsDialog'
 import { PostponeCancelDialog } from './PostponeCancelDialog'
 import { RecallDialog } from './RecallDialog'
-import { SendEvisaDialog } from './SendEvisaDialog'
 import { ShortfallDialog } from './ShortfallDialog'
 import { SubmissionDialog } from './SubmissionDialog'
 import { SubmitOnlineDialog } from './SubmitOnlineDialog'
@@ -103,7 +102,6 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
   const [handing, setHanding] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
   const [settling, setSettling] = useState(false)
-  const [sendingEvisa, setSendingEvisa] = useState(false)
   const canAct = me ? canActOnCase(me, { department: c.department.code, owner: c.owner }) : false
   // Cancelled with its passports still out: only their way back works (0006 amendment 15).
   const winding = windingDown(c)
@@ -241,29 +239,18 @@ function NextStepButton({ visaCase: c }: { visaCase: VisaCase }) {
     )
   }
   // An e-visa's passports never left the office (0013 Decision 4): its approved travellers' PDFs go to the client
-  // instead (docs/decisions/0025-evisa-after-decision.md, part 3). Once sent, the passports we hold go back (part 4);
-  // with everyone refused, there's nothing to send first (part 5).
+  // instead, each as it's uploaded on the Decision card (docs/decisions/0025-evisa-after-decision.md; change request 21
+  // part 3), so the header has no button for them. Once all have gone, the passports we hold go back (part 4); with
+  // everyone refused, there's nothing to send first (part 5). Never on to "Passports on the way back" below.
   if (c.stage.code === 'DECISION' && c.submittedOnline) {
     // Its passports held at our office since intake: handed back by whoever is at the desk (part 4).
-    if (evisaDone(c)) {
-      if (!me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
-      return (
-        <>
-          <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
-            Hand back the passports →
-          </button>
-          {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
-        </>
-      )
-    }
-    const approved = c.travellers.some((t) => t.decision?.outcome === 'APPROVED')
-    if (!approved || c.status !== 'OPEN' || !canAct) return null
+    if (!evisaDone(c) || !me || !canHandOver(me, { department: c.department.code, inStock: passportsInStock(c) })) return null
     return (
       <>
-        <button type="button" className="btn btn-primary" onClick={() => setSendingEvisa(true)}>
-          Send the e-visa →
+        <button type="button" className="btn btn-primary" onClick={() => setHanding(true)}>
+          Hand back the passports →
         </button>
-        {sendingEvisa && <SendEvisaDialog visaCase={c} onClose={() => setSendingEvisa(false)} />}
+        {handing && <HandoverDialog visaCase={c} onClose={() => setHanding(false)} />}
       </>
     )
   }

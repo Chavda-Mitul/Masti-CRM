@@ -463,13 +463,9 @@ export const takeOutOfDocketSchema = matureCaseSchema;
 /** "Submitted online" (Decision 11), for an e-visa: sends the case's updatedAt, like "Add to docket". */
 export const submitOnlineSchema = matureCaseSchema;
 
-/** "Send the e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): sends the case's updatedAt, likewise. */
-export const sendEvisaSchema = matureCaseSchema;
-
 export type AddToDocketInput = z.infer<typeof addToDocketSchema>;
 export type TakeOutOfDocketInput = z.infer<typeof takeOutOfDocketSchema>;
 export type SubmitOnlineInput = z.infer<typeof submitOnlineSchema>;
-export type SendEvisaInput = z.infer<typeof sendEvisaSchema>;
 
 // ---------------------------------------------------------------------------
 // Step 5, at the vendor (docs/decisions/0011-visa-at-vendor.md)
@@ -579,16 +575,6 @@ export const changeDecisionSchema = z.object({
   stickerCheck: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullish(),
   updatedAt: z.iso.datetime("Reload and try again."),
   confirmWarnings,
-});
-
-/**
- * An approved e-visa traveller's e-visa checked against the passport and what was recorded at Step 6
- * (docs/decisions/0025-evisa-after-decision.md): Matches, Doesn't match, or null to undo. It names the PDF that was
- * looked at, so a newer upload is never marked unseen.
- */
-export const setEvisaCheckSchema = z.object({
-  fileId: z.string().trim().min(1, "Open the e-visa and check it again.").max(64),
-  check: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullable(),
 });
 
 /**
@@ -720,7 +706,6 @@ export type ChangeFieldJobInput = z.infer<typeof changeFieldJobSchema>;
 export type BookFieldJobInput = z.infer<typeof bookFieldJobSchema>;
 export type SendPassportsBackInput = z.infer<typeof sendPassportsBackSchema>;
 export type ChangeDecisionInput = z.infer<typeof changeDecisionSchema>;
-export type SetEvisaCheckInput = z.infer<typeof setEvisaCheckSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
 export type RecallInput = z.infer<typeof recallSchema>;
 export type VendorReceivedInput = z.infer<typeof vendorReceivedSchema>;

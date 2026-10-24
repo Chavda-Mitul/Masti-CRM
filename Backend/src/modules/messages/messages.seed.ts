@@ -69,9 +69,9 @@ export const CLIENT_DOCUMENTS_KEPT = "client.documents_kept";
 export const VISA_CREDIT_NOTE = "visa.credit_note";
 
 /**
- * Message 19: an approved e-visa traveller's e-visa, with its PDF, one per traveller ("Send the e-visa",
- * docs/decisions/0025-evisa-after-decision.md part 3). Ours, beyond the demo (change request 14); Masti approves its
- * words with the others (M1).
+ * Message 19: an approved e-visa traveller's e-visa, with its PDF (docs/decisions/0025-evisa-after-decision.md part 3).
+ * Since change request 21 (part 3) it goes when the e-visa is uploaded, one per upload, a corrected one too. Ours,
+ * beyond the demo (change request 14); Masti approves its words with the others (M1).
  */
 export const VISA_EVISA_READY = "visa.evisa_ready";
 
@@ -82,6 +82,15 @@ export const VISA_EVISA_READY = "visa.evisa_ready";
  */
 export const VISA_EVISA_REFUSED = "visa.evisa_refused";
 export const VISA_EVISA_PARTLY_APPROVED = "visa.evisa_partly_approved";
+
+/**
+ * Messages 22 and 23: a refused traveller's refusal letter, and an approved paper visa's visa copy, each with its PDF,
+ * when it's uploaded, a replacement too (docs/decisions/0012-visa-decision.md Decision 3, change request 21 part 3).
+ * The decision's own message (10–12, 20–21) goes first; these words stand on their own, as a retry can reorder them.
+ * Ours, beyond the demo; Masti approves their words with the others (M1).
+ */
+export const VISA_REFUSAL_LETTER = "visa.refusal_letter";
+export const VISA_VISA_COPY = "visa.visa_copy";
 
 export const MESSAGE_TEMPLATES = [
   {
@@ -348,6 +357,30 @@ export const MESSAGE_TEMPLATES = [
       "The decision on your {{visa}} ({{case_no}}) has come. Good news: it is approved for {{approved_names}}, and we will send the e-visa here shortly. We are sorry that it was refused for {{refused_names}}.",
       "",
       "Please call us on {{office_phone}} to talk about the refusal.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_REFUSAL_LETTER,
+    name: "Refusal letter",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "The refusal letter for {{traveller_name}}'s {{visa}} ({{case_no}}) is attached.",
+      "",
+      "Please call us on {{office_phone}}: we will explain the reason and what can be done next.",
+      "",
+      "– Masti Tours & Travels",
+    ].join("\n"),
+  },
+  {
+    code: VISA_VISA_COPY,
+    name: "Your visa copy",
+    body: [
+      "Dear {{client_name}},",
+      "",
+      "A copy of {{traveller_name}}'s {{visa}} ({{case_no}}) is attached for your records.",
       "",
       "– Masti Tours & Travels",
     ].join("\n"),
