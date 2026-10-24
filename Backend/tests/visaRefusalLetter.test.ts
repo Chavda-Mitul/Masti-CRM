@@ -2,16 +2,17 @@ import { HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addDays, addMonths, istToday, toDbDate } from "../src/lib/dates";
-import { bucket, s3 } from "../src/lib/storage";
+import { bucket, getObject, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { jpegOf, pngOf } from "./imageFiles";
 import { decidedCase, holdCaseLock, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // Visa Step 6, the refusal letter (docs/decisions/0012-visa-decision.md Decision 4): a refused traveller's letter,
-// scanned as one PDF and kept in the test bucket (MinIO, emptied by globalSetup). Optional; added any time once the
-// traveller is refused, whatever the case's status. A newer upload is current; a traveller changed to Approved keeps
-// their letters, which the case then doesn't show.
+// scanned as one PDF, or a phone's JPEG or PNG kept as a one-page PDF (change request 21, part 2), in the test bucket
+// (MinIO, emptied by globalSetup). Optional; added any time once the traveller is refused, whatever the case's status.
+// A newer upload is current; a traveller changed to Approved keeps their letters, which the case then doesn't show.
 
 beforeEach(async () => {
   await resetDb();
@@ -93,6 +94,32 @@ describe("the refusal letter (Decision 4)", () => {
     expect(await prisma.auditLog.count({ where: { action: "visa.file.open", entityId: row.id } })).toBe(1);
   });
 
+  it("keeps a JPEG or PNG photo as a one-page PDF, named and stored like any letter, the photo noted in the audit", async () => {
+    const { c, processor, child } = await decidedCase();
+    // A phone photo shot on its side (EXIF 6): turned upright onto a portrait page.
+    const res = await upload(processor, c.caseNo, child, jpegOf(400, 300, 6), "image/jpeg");
+    expect(res.status).toBe(200);
+    const letter = (res.body.case as CaseDto).travellers[1]!.refusalLetter!;
+    expect(letter).toMatchObject({ fileName: `${c.caseNo}_Aarav-Mehta_refusal.pdf`, pageCount: 1, copies: 1 });
+    const row = await prisma.caseFile.findUniqueOrThrow({ where: { id: letter.id } });
+    expect(row.storageKey).toMatch(new RegExp(`^cases/${c.id}/refusal/[0-9a-f-]{36}\\.pdf$`));
+    const stored = await getObject(row.storageKey);
+    expect(row.sizeBytes).toBe(stored.length);
+    expect(await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: row.storageKey }))).toMatchObject({ ContentType: "application/pdf" });
+    const page = (await PDFDocument.load(stored)).getPage(0).getSize();
+    expect(page.height).toBeGreaterThan(page.width);
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.file.upload", entityId: row.id } });
+    expect(entry.after).toMatchObject({ kind: "REFUSAL_LETTER", pageCount: 1, photo: "image/jpeg" });
+
+    const png = await upload(processor, c.caseNo, child, pngOf(40, 30), "image/png");
+    expect(png.status).toBe(200);
+    expect((png.body.case as CaseDto).travellers[1]!.refusalLetter).toMatchObject({ pageCount: 1, copies: 2 });
+    // A PDF sent as a PDF isn't marked as a photo.
+    const plain = await upload(processor, c.caseNo, child, await pdf(1));
+    const plainEntry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.file.upload", entityId: (plain.body.case as CaseDto).travellers[1]!.refusalLetter!.id } });
+    expect(plainEntry.after).not.toHaveProperty("photo");
+  });
+
   it("makes a newer upload the current letter and keeps the older one", async () => {
     const { c, processor, child } = await decidedCase();
     const first = (await upload(processor, c.caseNo, child, await pdf(1))).body.case.travellers[1].refusalLetter as LetterDto;
@@ -141,7 +168,7 @@ describe("the refusal letter (Decision 4)", () => {
 });
 
 describe("what is refused", () => {
-  it("before the decision, an approved traveller, another case's traveller, and anything that isn't a good PDF", async () => {
+  it("before the decision, an approved traveller, another case's traveller, and anything that isn't a good PDF or photo", async () => {
     const { c, processor, adult, child } = await decidedCase({ decided: false });
     const early = await upload(processor, c.caseNo, child, await pdf(1));
     expect(early.status).toBe(409);
@@ -160,8 +187,17 @@ describe("what is refused", () => {
     expect(await bad(Buffer.alloc(0), /Pick the PDF/)).toBe(400);
     expect(await bad(Buffer.from("just some text"), /isn't a PDF/)).toBe(400);
     expect(await bad(Buffer.from("%PDF-1.7\nthis is not really a pdf"), /can't be opened/)).toBe(400);
-    expect((await processor.post(`/api/visa/cases/${other.c.caseNo}/travellers/${other.child}/refusal-letter`).send({ file: "x" })).status).toBe(415);
+    // A photo must be what it's sent as, and readable.
+    expect(await bad(Buffer.alloc(0), /Pick the file/, "image/jpeg")).toBe(400);
+    expect(await bad(await pdf(1), /isn't a PNG/, "image/png")).toBe(400);
+    expect(await bad(jpegOf(40, 30), /isn't a PNG/, "image/png")).toBe(400);
+    expect(await bad(Buffer.from([0xff, 0xd8, 0xff, 0x00]), /can't be read/, "image/jpeg")).toBe(400);
+    const json = await processor.post(`/api/visa/cases/${other.c.caseNo}/travellers/${other.child}/refusal-letter`).send({ file: "x" });
+    expect(json.status).toBe(415);
+    expect(json.body.message).toBe("Upload a PDF, JPEG or PNG.");
 
+    // The limit is WhatsApp's 16 MB ⚠️, under the final file's 50 (part 3 sends the letter), or the final file's when lower.
+    expect(await bad(Buffer.concat([await pdf(1), Buffer.alloc(16.2 * 1024 * 1024)]), /over 16 MB/)).toBe(413);
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     expect((await (await loginAs("riya@masti.test")).put("/api/visa/settings").send({ finalFile: { maxMb: 1 } })).status).toBe(200);
     const big = Buffer.concat([await pdf(1), Buffer.alloc(1.2 * 1024 * 1024)]);

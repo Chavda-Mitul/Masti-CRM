@@ -1,29 +1,51 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { errorBody, errorText } from '../../../lib/apiErrors'
 import { useToast } from '../../../lib/toast'
 import { useWarningGuard } from '../../../lib/useWarningGuard'
-import { useRecordDecision } from '../queries'
+import { useRecordDecision, useUploadDecisionFile } from '../queries'
 import type { VisaCase } from '../types'
 import { DecisionRow } from './DecisionRow'
+import { DECISION_FILE_ACCEPT, DECISION_FILE_LABEL, decisionFileKind, decisionFileProblem, type DecisionFileKind } from './decisionFiles'
 import { emptyRow, numberWords, rowProblem, type DecisionRowValue } from './decisionValues'
+import { fileSize } from './pdfFiles'
 
 /**
  * "Record the decision" (docs/decisions/0012-visa-decision.md Decision 6): one form for the whole family once the file
  * was submitted. Each traveller is Approved or Refused (demo screen 11), with nothing typed (amended 23 Oct 2026, change
  * request 21): an approved one's sticker number (an e-visa's number) and dates are added later with Change on the
- * Decision card. Saving moves the case to Step 6 · Decision.
+ * Decision card. Each traveller can also get their file, if staff have it (part 2): the refusal letter, the visa copy or
+ * the e-visa, a PDF, JPG or PNG. Saving moves the case to Step 6 · Decision, then uploads the files one at a time: the
+ * server needs the outcome first.
  */
 export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
   const record = useRecordDecision(c.caseNo)
+  const upload = useUploadDecisionFile(c.caseNo)
   // An e-visa where everyone is refused and we hold no passports closes the case (0025, part 5): check, then save.
   const guard = useWarningGuard()
+  const online = !!c.submittedOnline
   const [rows, setRows] = useState<Record<string, DecisionRowValue>>(() => Object.fromEntries(c.travellers.map((t) => [t.id, emptyRow])))
+  // Each traveller's file, picked here and uploaded once the decision is saved.
+  const [files, setFiles] = useState<Record<string, File | null>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const clearError = (id: string) => {
+    if (errors[id]) setErrors(Object.fromEntries(Object.entries(errors).filter(([key]) => key !== id)))
+  }
   const setRow = (id: string, patch: Partial<DecisionRowValue>) => {
     setRows({ ...rows, [id]: { ...rows[id]!, ...patch } })
+    // Another outcome needs another file (a refusal letter, not a visa copy): the one picked goes.
+    if (patch.outcome && patch.outcome !== rows[id]!.outcome && files[id]) setFiles({ ...files, [id]: null })
     // The row's message goes once it's touched; Save checks it again.
-    if (errors[id]) setErrors(Object.fromEntries(Object.entries(errors).filter(([key]) => key !== id)))
+    clearError(id)
+  }
+  const pickFile = (id: string, picked: File | null) => {
+    const problem = picked && decisionFileProblem(picked, c.decisionFileMaxMb)
+    if (problem) {
+      setErrors({ ...errors, [id]: problem })
+      return
+    }
+    setFiles({ ...files, [id]: picked })
+    clearError(id)
   }
 
   const press = () => {
@@ -35,23 +57,44 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
     setErrors(missing)
     if (Object.keys(missing).length) return
     const outcomes = c.travellers.map((t) => ({ travellerId: t.id, outcome: rows[t.id]!.outcome! }))
-    const send = (confirmWarnings: boolean) =>
-      record.mutate(
-        { outcomes, updatedAt: c.updatedAt, ...(confirmWarnings ? { confirmWarnings } : {}) },
-        {
-          onSuccess: (saved) => {
-            const approved = outcomes.filter((o) => o.outcome === 'APPROVED').length
-            // An e-visa with everyone refused and no passports held has nothing left to do (0025, part 5).
-            const closed = saved.status === 'CLOSED' ? ' The case is closed.' : ''
-            toast({ tone: 'ok', message: `Decision recorded: ${approved} approved, ${outcomes.length - approved} refused.${closed}` })
-            onClose()
-          },
-          onError: (err) => {
-            guard.intercept(err, () => send(true))
-          },
-        },
-      )
-    send(false)
+    const approved = outcomes.filter((o) => o.outcome === 'APPROVED').length
+    const picked = c.travellers.flatMap((t) => {
+      const file = files[t.id]
+      return file ? [{ travellerId: t.id, name: t.name ?? t.label, kind: decisionFileKind(rows[t.id]!.outcome!, online), file }] : []
+    })
+    const save = async (confirmWarnings: boolean) => {
+      let saved: VisaCase
+      try {
+        saved = await record.mutateAsync({ outcomes, updatedAt: c.updatedAt, ...(confirmWarnings ? { confirmWarnings } : {}) })
+      } catch (err) {
+        guard.intercept(err, () => void save(true))
+        return
+      }
+      // An e-visa with everyone refused and no passports held has nothing left to do (0025, part 5).
+      const recorded = `Decision recorded: ${approved} approved, ${outcomes.length - approved} refused.${saved.status === 'CLOSED' ? ' The case is closed.' : ''}`
+      onClose()
+      if (picked.length === 0) {
+        toast({ tone: 'ok', message: recorded })
+        return
+      }
+      toast({ tone: 'info', message: `${recorded} Saving ${picked.length === 1 ? 'the file' : `${picked.length} files`}…` })
+      // One at a time. The dialog has gone by now (the case is at Decision), but each upload still updates the case.
+      const failed: string[] = []
+      for (const p of picked) {
+        try {
+          await upload.mutateAsync({ travellerId: p.travellerId, kind: p.kind, file: p.file })
+        } catch (err) {
+          const why = errorText(err)
+          failed.push(`${p.name}’s ${DECISION_FILE_LABEL[p.kind].toLowerCase()}${why ? ` (${why})` : ''}`)
+        }
+      }
+      if (failed.length === 0) {
+        toast({ tone: 'ok', message: picked.length === 1 ? 'File saved.' : `${picked.length} files saved.` })
+      } else {
+        toast({ tone: 'warn', message: `Not saved: ${failed.join('; ')}. Add ${failed.length === 1 ? 'it' : 'them'} on the Decision card.` })
+      }
+    }
+    void save(false)
   }
   const issue = errorBody(record.error)?.issues?.outcomes?.[0]
   const message = issue ?? errorText(record.error)
@@ -64,22 +107,37 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
             Record the decision
           </h2>
           <p className="muted small" style={{ margin: 0 }}>
-            Approved or Refused, per traveller. Saving moves the case to Decision. The {numberWords(!!c.submittedOnline)} and dates can be added
-            later on the Decision card.
+            Approved or Refused, per traveller. Saving moves the case to Decision. The {numberWords(online)} and dates can be added later on the
+            Decision card. If you have it, add each traveller’s refusal letter or {online ? 'e-visa' : 'visa copy'}: a PDF, JPG or PNG up to{' '}
+            {c.decisionFileMaxMb} MB. It can also be added later on the card.
           </p>
 
-          {c.travellers.map((t) => (
-            <DecisionRow
-              key={t.id}
-              name={t.name ?? t.label}
-              row={rows[t.id]!}
-              online={!!c.submittedOnline}
-              details={false}
-              disabled={record.isPending}
-              error={errors[t.id]}
-              onChange={(patch) => setRow(t.id, patch)}
-            />
-          ))}
+          {c.travellers.map((t) => {
+            const name = t.name ?? t.label
+            const outcome = rows[t.id]!.outcome
+            return (
+              <DecisionRow
+                key={t.id}
+                name={name}
+                row={rows[t.id]!}
+                online={online}
+                details={false}
+                disabled={record.isPending}
+                error={errors[t.id]}
+                onChange={(patch) => setRow(t.id, patch)}
+              >
+                {outcome && (
+                  <FilePick
+                    kind={decisionFileKind(outcome, online)}
+                    name={name}
+                    file={files[t.id] ?? null}
+                    disabled={record.isPending}
+                    onPick={(picked) => pickFile(t.id, picked)}
+                  />
+                )}
+              </DecisionRow>
+            )
+          })}
 
           {message && <div className="alert alert-bad">{message}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -94,5 +152,54 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
       </div>
       {guard.modal}
     </>
+  )
+}
+
+/** One traveller's optional file in the dialog: picked here, uploaded once the decision is saved. */
+function FilePick({
+  kind,
+  name,
+  file,
+  disabled,
+  onPick,
+}: {
+  kind: DecisionFileKind
+  name: string
+  file: File | null
+  disabled: boolean
+  onPick: (file: File | null) => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  const label = DECISION_FILE_LABEL[kind]
+  return (
+    <div className="decision-file">
+      <span className="lbl">{label} (optional)</span>
+      {kind === 'VISA_COPY' && <span className="hint">The passport’s visa page, or the approval letter.</span>}
+      {file && (
+        <span className="small">
+          <strong>{file.name}</strong> · {fileSize(file.size)}
+        </span>
+      )}
+      <button type="button" className="btn btn-sm" disabled={disabled} onClick={() => input.current?.click()}>
+        {file ? 'Pick another' : 'Pick file'}
+      </button>
+      {file && (
+        <button type="button" className="btn btn-sm" disabled={disabled} onClick={() => onPick(null)}>
+          Remove
+        </button>
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept={DECISION_FILE_ACCEPT}
+        hidden
+        aria-label={`${label} for ${name}`}
+        onChange={(e) => {
+          const picked = e.target.files?.[0]
+          e.target.value = '' // picking the same file again still triggers a change
+          if (picked) onPick(picked)
+        }}
+      />
+    </div>
   )
 }

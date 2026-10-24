@@ -4,17 +4,19 @@ import { audit } from "../../lib/audit";
 import { fileNamePart } from "../../lib/fileNames";
 import { conflict, notFound } from "../../lib/httpError";
 import { logger } from "../../lib/logger";
-import { MB, pdfPageCount, tooBigMessage } from "../../lib/pdf";
 import { deleteObject, putObject } from "../../lib/storage";
+import type { ScanType } from "../clients/clients.schemas";
 import type { Actor } from "../users/user";
 import { CHECKING_EVISA, loadCase, lockCase } from "./caseLock";
+import { decisionFileLimit, travellerFilePdf } from "./travellerFiles";
 import type { SetEvisaCheckInput } from "./visa.schemas";
 import { getVisaCaseById } from "./visa.service";
 import { getVisaSettings } from "./visa.settings";
-import { countTravellers, evisaMaxMb, travellerLabel } from "./visaCase";
+import { countTravellers, travellerLabel } from "./visaCase";
 
 // E-visas after the decision, part 1 (docs/decisions/0025-evisa-after-decision.md): at Decision, each approved
-// traveller's e-visa, as the portal issued it, is kept as one PDF with the case's files in the private bucket (rule 4),
+// traveller's e-visa, as the portal issued it (or a photo of it, turned into a one-page PDF: change request 21, part 2,
+// travellerFiles.ts), is kept as one PDF with the case's files in the private bucket (rule 4),
 // then checked against the passport and what was recorded at Step 6: Matches or Doesn't match. The check reuses the
 // sticker's (VisaCaseTraveller.stickerCheck): an e-visa never reaches Step 7, where a sticker is checked. A newer
 // upload is the current one, older ones stay as proof, and a newer upload clears the check: it needs a new look. By
@@ -51,14 +53,13 @@ function currentEvisa(db: Db, travellerId: string) {
 
 /**
  * Before the upload is read: the case must be one this user may change once decided, an e-visa, the traveller
- * approved; the limit is WhatsApp's, or the final file's if lower (evisaMaxMb). Refusing here means a wrong upload is
- * never held in memory.
+ * approved; the limit is the decision files' (travellerFiles.ts). Refusing here means a wrong upload is never held in
+ * memory.
  */
 export async function evisaLimit(caseNo: string, travellerId: string, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, CHECKING_EVISA);
   await approvedTraveller(prisma, enquiry.id, travellerId);
-  const maxMb = evisaMaxMb((await getVisaSettings()).finalFile.maxMb);
-  return { maxBytes: maxMb * MB, tooBig: tooBigMessage(maxMb) };
+  return decisionFileLimit((await getVisaSettings()).finalFile.maxMb);
 }
 
 /** "VISA-2026-0001_Aarav-Mehta_evisa.pdf" ⚠️: the case number and the traveller's name, letters and digits only. */
@@ -68,19 +69,19 @@ function evisaFileName(caseNo: string, name: string) {
 }
 
 /**
- * Saves an approved traveller's e-visa: one real PDF, its pages counted, in the private bucket under a key no other
- * upload shares. The key ends in the file's name, so the link the client's WhatsApp gets (part 2) shows it. The bucket
- * upload happens before the case lock, so a slow upload never holds the case. Under the lock the checks are repeated;
- * if they fail now, the row isn't saved and the object is removed again. The traveller's check is cleared: the new PDF
- * hasn't been looked at.
+ * Saves an approved traveller's e-visa: one real PDF (a photo turned into one), its pages counted, in the private
+ * bucket under a key no other upload shares. The key ends in the file's name, so the link the client's WhatsApp gets
+ * (part 2) shows it. The bucket upload happens before the case lock, so a slow upload never holds the case. Under the
+ * lock the checks are repeated; if they fail now, the row isn't saved and the object is removed again. The traveller's
+ * check is cleared: the new PDF hasn't been looked at.
  */
-export async function uploadEvisa(caseNo: string, travellerId: string, bytes: Buffer, actor: Actor) {
+export async function uploadEvisa(caseNo: string, travellerId: string, contentType: ScanType, bytes: Buffer, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, CHECKING_EVISA);
-  const pageCount = await pdfPageCount(bytes);
+  const { pdf, pageCount, photo } = await travellerFilePdf(bytes, contentType, (await getVisaSettings()).finalFile.maxMb);
   const t = await approvedTraveller(prisma, enquiry.id, travellerId);
   const fileName = evisaFileName(enquiry.caseNo, t.label);
   const storageKey = `cases/${enquiry.id}/evisa/${randomUUID()}/${fileName}`;
-  await putObject(storageKey, bytes, "application/pdf");
+  await putObject(storageKey, pdf, "application/pdf");
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -94,7 +95,7 @@ export async function uploadEvisa(caseNo: string, travellerId: string, bytes: Bu
           travellerId,
           storageKey,
           fileName,
-          sizeBytes: bytes.length,
+          sizeBytes: pdf.length,
           pageCount,
           uploadedById: actor.user.id,
         },
@@ -116,6 +117,8 @@ export async function uploadEvisa(caseNo: string, travellerId: string, bytes: Bu
             storageKey,
             replaces: previous?.id ?? null,
             checkCleared: traveller.stickerCheck,
+            // Sent as a photo, and kept as the PDF it made.
+            ...(photo ? { photo } : {}),
           },
           ip: actor.ip,
         },
