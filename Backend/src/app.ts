@@ -19,6 +19,7 @@ import consentPublicRoutes from "./modules/consent/consent.public.routes";
 import consentRoutes from "./modules/consent/consent.routes";
 import holidayRoutes from "./modules/holidays/holidays.routes";
 import messageFilesPublicRoutes from "./modules/messages/messageFiles.public.routes";
+import whatsappWebhookPublicRoutes from "./modules/messages/whatsappWebhook.public.routes";
 import noticeRoutes from "./modules/notices/notices.routes";
 import portalHelperRoutes from "./modules/portalLogins/portalHelper.routes";
 import portalLoginRoutes from "./modules/portalLogins/portalLogins.routes";
@@ -36,6 +37,9 @@ app.set("trust proxy", trustProxySetting());
 app.use(requestLogger);
 app.use(helmet());
 app.use(cors({ origin: env.CLIENT_URL.split(","), credentials: true }));
+// No login: the WhatsApp provider's webhook (docs/decisions/0026-whatsapp-webhook.md). Before the JSON parser, because
+// its signature is over the raw body.
+app.use("/api/public/whatsapp-webhook", whatsappWebhookPublicRoutes);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
