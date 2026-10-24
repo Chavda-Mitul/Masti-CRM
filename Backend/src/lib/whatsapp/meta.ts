@@ -47,12 +47,13 @@ export function metaProvider(settings: MetaSettings): WhatsAppProvider {
     ...(appSecret && verifyToken ? { webhook: metaWebhook({ appSecret, verifyToken, phoneNumberId }) } : {}),
     ...(businessAccountId ? { templates: metaTemplates({ accessToken, businessAccountId, language: templateLanguage }) } : {}),
     async send(message) {
+      const document = message.attachment ? await documentOf(message.attachment, settings) : null;
       let response: Response;
       try {
         response = await fetch(`${GRAPH_API}/${settings.phoneNumberId}/messages`, {
           method: "POST",
           headers: { Authorization: `Bearer ${settings.accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(requestFor(message, settings.templateLanguage)),
+          body: JSON.stringify(requestFor(message, settings.templateLanguage, document)),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
       } catch (error) {
@@ -69,9 +70,43 @@ export function metaProvider(settings: MetaSettings): WhatsAppProvider {
   };
 }
 
+/** A file as a message names it: by the id Meta gave it on upload, or by the link Meta fetches it from. */
+type MetaDocument = { id: string; filename: string } | { link: string; filename: string };
+
+/**
+ * The file, as Meta will take it. With its bytes (`read`) it's uploaded first (POST /{phone number id}/media), so it
+ * arrives even when the CRM's link can't be reached from outside (a laptop, an office-only server); else Meta fetches
+ * the link. Nothing has gone yet, so a failed upload is worth another try unless Meta refused the file itself.
+ */
+async function documentOf(attachment: NonNullable<WhatsAppMessage["attachment"]>, settings: MetaSettings): Promise<MetaDocument> {
+  if (!attachment.read) return { link: attachment.url, filename: attachment.fileName };
+  const type = attachment.contentType ?? "application/pdf";
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", type);
+  form.append("file", new Blob([new Uint8Array(await attachment.read())], { type }), attachment.fileName);
+  let response: Response;
+  try {
+    response = await fetch(`${GRAPH_API}/${settings.phoneNumberId}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${settings.accessToken}` },
+      body: form,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (error) {
+    const cause = (error as { cause?: unknown } | null)?.cause;
+    const text = cause instanceof Error ? cause.message : error instanceof Error ? error.message : String(error);
+    throw new WhatsAppError(`Couldn't send the file to Meta (${text}). Nothing went, so it's tried again.`, true, { cause: error });
+  }
+  const answer = (await response.json().catch(() => null)) as (Refused & { id?: string }) | null;
+  if (!response.ok) throw refusal(response.status, answer);
+  if (!answer?.id) throw new WhatsAppError("Meta took the file but gave no id for it. Nothing went, so it's tried again.", true);
+  return { id: answer.id, filename: attachment.fileName };
+}
+
 /** One message as Meta takes it: the approved template when there is one, else our own words; with the file if any. */
-function requestFor(message: WhatsAppMessage, language: string): Record<string, unknown> {
-  const { template, attachment } = message;
+function requestFor(message: WhatsAppMessage, language: string, document: MetaDocument | null): Record<string, unknown> {
+  const { template } = message;
   // Meta takes the number with its country code and without the +.
   const request = { messaging_product: "whatsapp", recipient_type: "individual", to: message.to.replace(/^\+/, "") };
   if (template?.oneTimeCode) {
@@ -93,9 +128,7 @@ function requestFor(message: WhatsAppMessage, language: string): Record<string, 
   if (template) {
     const components = [
       // The file goes in the template's document header, approved by Meta with the template.
-      ...(attachment
-        ? [{ type: "header", parameters: [{ type: "document", document: { link: attachment.url, filename: attachment.fileName } }] }]
-        : []),
+      ...(document ? [{ type: "header", parameters: [{ type: "document", document }] }] : []),
       ...(Object.keys(template.variables).length > 0 ? [{ type: "body", parameters: bodyValues(template.variables) }] : []),
     ];
     return {
@@ -104,10 +137,8 @@ function requestFor(message: WhatsAppMessage, language: string): Record<string, 
       template: { name: template.id, language: { code: language }, ...(components.length > 0 ? { components } : {}) },
     };
   }
-  // Meta fetches the file from the link, and our words go with it as its caption.
-  if (attachment) {
-    return { ...request, type: "document", document: { link: attachment.url, filename: attachment.fileName, caption: message.body } };
-  }
+  // Our words go with the file as its caption.
+  if (document) return { ...request, type: "document", document: { ...document, caption: message.body } };
   return { ...request, type: "text", text: { body: message.body } };
 }
 

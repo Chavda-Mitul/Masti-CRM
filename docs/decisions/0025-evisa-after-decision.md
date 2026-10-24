@@ -129,6 +129,9 @@ S3 pre-signed one.
 - **Sending:** each try makes a new key (32 random bytes, only its SHA-256 kept), working for 30 minutes ⚠️; an earlier
   try's link stops working. The provider gets `attachment: { url, fileName }`; Twilio sends it as `mediaUrl` with our
   words. A template with a file is refused (not retried). Twilio's 63019 is explained in plain words.
+  *Since 24 Oct 2026 the provider also gets the file's type and `read()`, its bytes from the bucket: Meta uploads the
+  file and sends it by its media id, so the link needn't be reachable from outside. Twilio still fetches the link
+  ([0020](0020-whatsapp-sending.md) Amendment 2).*
 - **The link** (`messageFiles.public.routes.ts`, `GET` and `HEAD /api/public/message-files/:messageId/:fileName?key=`):
   the bytes from the bucket, `Content-Type` from the file's name, `Content-Length`, `inline` with the name,
   `Cache-Control: private, no-store`. Every wrong case (unknown message, no file, wrong or old key) gets the same 404,

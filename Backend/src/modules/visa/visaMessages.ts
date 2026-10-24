@@ -65,10 +65,10 @@ export async function visaMessageBasics(db: Db, enquiryId: string) {
 }
 
 /**
- * Message 7, "Invoice": one for each invoice raised, the main, the additional or a corrected one, in its transaction.
- * Words only for now (the project lead, 22 Oct 2026): staff send the PDF by hand.
+ * Message 7, "Invoice": one for each invoice raised, the main, the additional or a corrected one, in its transaction,
+ * with the invoice's PDF (the project lead, 24 Oct 2026: the words say the bank details are on it).
  */
-export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { id: string; invoiceNo: string; totalPaise: number }) {
+export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { id: string; invoiceNo: string; totalPaise: number; fileId: string }) {
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
     template: VISA_INVOICE,
@@ -76,17 +76,18 @@ export async function queueInvoiceMessage(tx: Db, enquiryId: string, invoice: { 
     key: `${VISA_INVOICE}:${invoice.id}`,
     clientId: basics.clientId,
     variables: { ...basics.variables, invoice_no: invoice.invoiceNo, amount: rupeesText(invoice.totalPaise) },
+    attachmentId: invoice.fileId,
   });
 }
 
 /**
  * Message 18, "Credit note": one for each credit note issued (a wrong invoice cancelled, a recall, a cancelled case's
- * refund), in its transaction. Words only for now (the project lead, 22 Oct 2026): staff send the PDF by hand.
+ * refund), in its transaction, with the credit note's PDF (the project lead, 24 Oct 2026).
  */
 export async function queueCreditNoteMessage(
   tx: Db,
   enquiryId: string,
-  note: { id: string; creditNoteNo: string; totalPaise: number; invoiceNo: string },
+  note: { id: string; creditNoteNo: string; totalPaise: number; invoiceNo: string; fileId: string },
 ) {
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
@@ -95,6 +96,7 @@ export async function queueCreditNoteMessage(
     key: `${VISA_CREDIT_NOTE}:${note.id}`,
     clientId: basics.clientId,
     variables: { ...basics.variables, credit_note_no: note.creditNoteNo, amount: rupeesText(note.totalPaise), invoice_no: note.invoiceNo },
+    attachmentId: note.fileId,
   });
 }
 

@@ -19,9 +19,11 @@ export interface WhatsAppMessage {
   /**
    * One file sent with the words (docs/decisions/0025-evisa-after-decision.md, part 2): a link the provider fetches it
    * from, which works for a short while only (its key is a secret), and the file's name. Twilio takes one only with our
-   * own words; Meta also puts it in the document header of an approved template that has one.
+   * own words; Meta also puts it in the document header of an approved template that has one. `read`, the file's bytes
+   * from storage, is for a provider that is sent the file itself rather than fetching the link (Meta, 0020 Amendment 2),
+   * so it arrives even when the link can't be reached from outside; `contentType` is the file's type.
    */
-  attachment?: { url: string; fileName: string };
+  attachment?: { url: string; fileName: string; contentType?: string; read?: () => Promise<Buffer> };
   /** Values only the client may see (the door code, secrets.ts): a live log hides them. Never sent on. */
   secrets?: readonly string[];
 }

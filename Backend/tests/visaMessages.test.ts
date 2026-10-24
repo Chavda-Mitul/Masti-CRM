@@ -287,6 +287,9 @@ describe("message 7, the invoice", () => {
     const [main] = await sent(VISA_INVOICE);
     expect(main!.body).toContain(`Your invoice MVI00000001 for the France tourist visa (${c.caseNo}) is ready. Amount: ₹6,000.`);
     expect(main!.body).toContain("You can pay by bank transfer or at our office. Our bank details are on the invoice.");
+    // With the invoice's own PDF (24 Oct 2026), whose bank details the words point to.
+    const raised = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001" } });
+    expect(main!.attachmentId).toBe(raised.fileId);
 
     // Cancelled with a credit note, the service charge corrected to ₹600, and raised again.
     const shown = (await aarti.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check`)).body;
@@ -592,7 +595,8 @@ describe("message 18, the credit note", () => {
     expect(cancel.status).toBe(200);
 
     const [m] = await sent(VISA_CREDIT_NOTE);
-    expect(m).toMatchObject({ enquiryId: c.id });
+    const note = await prisma.creditNote.findUniqueOrThrow({ where: { creditNoteNo: "MCN00000001" } });
+    expect(m).toMatchObject({ enquiryId: c.id, attachmentId: note.fileId });
     expect(m!.body).toContain(`We have issued credit note MCN00000001 for ₹6,000 against invoice MVI00000001 (${c.caseNo}).`);
     expect(m!.body).toContain(`For any question, call us on ${PHONE}.`);
 

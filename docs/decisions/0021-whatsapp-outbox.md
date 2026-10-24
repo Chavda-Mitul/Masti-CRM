@@ -157,7 +157,8 @@ group:
 - **D:** messages 16, 17 and 18.
 
 Their other answers:
-- **Invoice and credit note:** the messages (7, 18) go as words only for now, and staff send the PDF by hand.
+- **Invoice and credit note:** the messages (7, 18) go as words only for now, and staff send the PDF by hand. *Since 24
+  Oct 2026 each goes with its PDF ([0020](0020-whatsapp-sending.md) Amendment 2).*
 - **The door code (16):** goes on WhatsApp only.
 - **The file:** its 20 Oct review fixes are applied.
 
@@ -210,7 +211,8 @@ the change it follows, as in Amendment 3.
 - **Message 7:**
   - `{{invoice_no}}` ("MVI00000001", "MVI00000001-A") and `{{amount}}`, the invoice's total as "6,000"
     (`rupeesText`), filled by `queueInvoiceMessage`.
-  - Words only, as the project lead asked: staff send the PDF by hand.
+  - Words only, as the project lead asked: staff send the PDF by hand. *Since 24 Oct 2026 with the invoice's PDF (0020
+    Amendment 2).*
   - Keyed on the invoice's id. When another raise took the number first, the retry rolls the first attempt's message
     back with it, so one goes.
 - **Message 8:**
@@ -266,7 +268,7 @@ change it follows. The project lead decided two things on 22 Oct 2026:
 Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The project lead decided:
 - **Earlier (22 Oct):**
   - The door code goes on WhatsApp only, with no email fallback.
-  - The credit note is words only.
+  - The credit note is words only. *Since 24 Oct 2026 with its PDF (0020 Amendment 2).*
 - **For this group (22 Oct):**
   - One PR.
   - The boy's phone shows where the code's message has got to.
@@ -301,8 +303,8 @@ Group D of Amendment 3, the last of `docs/whatsapp-visa-messages.md`. The projec
 ## Not in this step
 
 - ~~The "Sent to the client" card~~: built, Amendment 1.
-- ~~**The other visa messages**~~: all built, groups A to D, Amendments 3 to 6. Messages 7 and 18 go without their PDF
-  for now.
+- ~~**The other visa messages**~~: all built, groups A to D, Amendments 3 to 6. Messages 7 and 18 go with their PDF
+  since 24 Oct 2026 (0020 Amendment 2).
 - ~~**What follows an e-visa's decision**~~ (M39 (d), answered 22 Oct 2026): built, change request 14
   ([0025](0025-evisa-after-decision.md)): message 19 with each e-visa's PDF, and messages 20 and 21 for refusals.
 - ~~The consent "I agree" link~~: built, 0022 part 2 and Amendment 2.
