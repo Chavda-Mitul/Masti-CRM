@@ -1,4 +1,5 @@
-import type { CaseFile, MessageTemplate, OutboundMessage } from "../../../generated/prisma/client";
+import type { CaseFile, Client, InboundMessage, MessageTemplate, OutboundMessage } from "../../../generated/prisma/client";
+import { env, isProduction } from "../../config/env";
 import { hideSecrets, secretValues } from "../../lib/whatsapp/secrets";
 import { maskConsentLinks } from "../consent/consentToken";
 
@@ -28,3 +29,26 @@ export function toMessageDto(row: OutboundMessage & { template: Pick<MessageTemp
 }
 
 export type MessageDto = ReturnType<typeof toMessageDto>;
+
+/**
+ * A client's own message as the browser sees it (docs/decisions/0026-whatsapp-webhook.md Amendment 1, the card's "The
+ * client wrote"): its words and kind, when it came, and who wrote when it wasn't the client's own number. The
+ * provider's ids stay on the server.
+ */
+export function toReplyDto(row: InboundMessage & { client: Pick<Client, "mobile"> | null }) {
+  return {
+    id: row.id,
+    /** "text", "image", "document", "audio", "reaction"…, as the provider names it. */
+    type: row.type,
+    /** The words: the text, a caption, the button tapped or the emoji. Null for, e.g., a photo without words. */
+    text: row.text,
+    receivedAt: row.receivedAt,
+    /**
+     * Who wrote, when it wasn't the client's main number: "test" outside production (WHATSAPP_TEST_NUMBER, as the card
+     * says "to your test number"), else the number, such as a family member's.
+     */
+    from: row.fromMobile === row.client?.mobile ? null : !isProduction && row.fromMobile === env.WHATSAPP_TEST_NUMBER ? "test" : row.fromMobile,
+  };
+}
+
+export type ReplyDto = ReturnType<typeof toReplyDto>;

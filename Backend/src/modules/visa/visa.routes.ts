@@ -106,9 +106,12 @@ router.post("/cases/:caseNo/portal/open", visaView, async (req, res) => {
   res.status(201).json(await portalService.openCasePortal(caseNoParam.parse(req.params.caseNo), actorOf(req)));
 });
 
-/** The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first. */
+/**
+ * The "Sent to the client" card (docs/decisions/0021-whatsapp-outbox.md): the case's messages, oldest first, and what
+ * the client wrote back, newest first (docs/decisions/0026-whatsapp-webhook.md Amendment 1).
+ */
 router.get("/cases/:caseNo/messages", visaView, async (req, res) => {
-  res.json({ messages: await caseMessagesService.getCaseMessages(caseNoParam.parse(req.params.caseNo), currentUser(req)) });
+  res.json(await caseMessagesService.getCaseMessages(caseNoParam.parse(req.params.caseNo), currentUser(req)));
 });
 
 // Step 2 (docs/decisions/0006-visa-documents.md). The service also requires the case's owner, its HOD or the Head.

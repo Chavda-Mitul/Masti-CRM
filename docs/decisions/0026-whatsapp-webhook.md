@@ -1,7 +1,7 @@
 # 0026 · Meta's webhook: delivered, read, failed, and clients' own messages
 
-- **Status:** decided 23 Oct 2026 (project lead), part 1 of 2 built: the webhook and what it records. Part 2, showing
-  clients' messages on the case, comes next (change request 19).
+- **Status:** decided 23 Oct 2026 (project lead), built in 2 parts: the webhook and what it records (24 Oct 2026), and
+  clients' messages shown on the case (Amendment 1, 24 Oct 2026; change request 19).
 - **Date:** 23 Oct 2026
 - **Scope:** the address Meta calls, how a call is proven to be Meta's, what it records, and how it's set up. Not the
   case card that shows clients' messages (part 2), nor answering them from the CRM.
@@ -96,8 +96,41 @@ file (0025), so it needs this record (CLAUDE.md).
 
 ## Not in this record
 
-- **Showing clients' messages on the case** (change request 19, part 2): its own plan.
 - **Answering from the CRM,** which is free within 24 hours of the client's message; and fetching photos and files
   clients send.
 - **A sign for staff** that a client wrote (like change request 15's red dot).
 - **Twilio's status webhook:** Twilio can still be asked (0021 Decision 5).
+- **Messages tied to no case** (from a number we never wrote to): they're kept, but shown nowhere yet. A client-wide
+  list needs its own rule, as 0021 Amendment 1 says of messages sent.
+
+## Amendment 1 (24 Oct 2026): "The client wrote" on the case
+
+Change request 19, part 2. The project lead chose, on 24 Oct 2026, to **keep "Sent to the client" as it is and add a
+second list under it, "The client wrote"**, rather than one chat-like list.
+
+- **What it shows.** The case's replies, newest first, once there's at least one. Each has a ◆ in the primary colour
+  (our messages keep their status dots), the day and time, and its words, always open: replies are short.
+  - When the sender isn't the client's main number, it says so: "from your test number" (outside production), or
+    "from +91 98765 00001" (a family member's or an extra number).
+  - A reply with no words of its own gets a line in plain words, because the CRM doesn't fetch the files clients send:
+
+    | WhatsApp type | Line shown |
+    | --- | --- |
+    | `image` | Sent a photo: please call to see it |
+    | `document` | Sent a document: please call to see it |
+    | `video` | Sent a video: please call to see it |
+    | `audio` | Sent a voice note: please call to hear it |
+    | `sticker` | Sent a sticker |
+    | `location` | Shared a location |
+    | `contacts` | Shared a contact |
+    | `reaction` | Reacted 👍 (or "Took back a reaction") |
+    | anything else, with no words | Sent something the CRM can't show |
+
+    A file's caption shows as its words, under that line.
+- **Where it comes from.** The card's own request, `GET /api/visa/cases/:caseNo/messages`, now answers
+  `{ messages, replies }`, for whoever can open the case (`findVisibleCase`), as before. Each reply has its `id`,
+  `type`, `text`, `receivedAt` and `from` (`toReplyDto`, `modules/messages/message.ts`). The provider's ids stay on
+  the server.
+- **It updates by itself.** As before it checks every 10 seconds while a message is on its way. Otherwise it now checks
+  **every minute**, where it used to stop, so a reply shows without a reload. Like before, this happens only while the
+  page is in view.
