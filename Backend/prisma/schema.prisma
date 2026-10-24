@@ -1212,7 +1212,8 @@ enum CaseFileKind {
   INVOICE
   /// A credit note against one of its invoices, as issued (docs/decisions/0011-visa-at-vendor.md Decision 5).
   CREDIT_NOTE
-  /// A refused traveller's refusal letter, scanned (docs/decisions/0012-visa-decision.md Decision 4). Has a traveller.
+  /// A refused traveller's refusal letter, scanned (docs/decisions/0012-visa-decision.md Decision 4), or a photo of it
+  /// kept as a one-page PDF (change request 21). Has a traveller.
   REFUSAL_LETTER
   /// A photo of the person the passports were handed to (docs/decisions/0014-visa-delivered.md Decision 3): a JPEG or
   /// PNG, so it has no page count.
@@ -1223,6 +1224,9 @@ enum CaseFileKind {
   /// An approved e-visa traveller's e-visa, as the portal issued it (docs/decisions/0025-evisa-after-decision.md). Has a
   /// traveller.
   EVISA
+  /// An approved paper visa's visa copy: the passport's visa page or the approval letter, a PDF or a photo kept as one
+  /// (docs/decisions/0012-visa-decision.md Decision 3, amended 24 Oct 2026, change request 21). Has a traveller.
+  VISA_COPY
 }
 
 /// A file kept for a case in the private S3-compatible bucket (CLAUDE.md rule 4). Never deleted: a newer upload of the
@@ -1240,8 +1244,9 @@ model CaseFile {
   pageCount    Int?
   uploadedById String
   uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
-  /// The traveller a refusal letter (0012 Decision 4) or an e-visa (0025) is for: set for REFUSAL_LETTER and EVISA and
-  /// only for them (checked in the migration). The service keeps it to a traveller of the same case.
+  /// The traveller a refusal letter (0012 Decision 4), an e-visa (0025) or a visa copy (change request 21) is for: set
+  /// for REFUSAL_LETTER, EVISA and VISA_COPY and only for them (checked in the migration). The service keeps it to a
+  /// traveller of the same case.
   travellerId  String?
   enquiry      Enquiry            @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   uploadedBy   User               @relation("CaseFileUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
@@ -1490,8 +1495,8 @@ model VisaCaseTraveller {
   documents          VisaCaseDocument[]
   quoteLine          VisaQuoteLine?
   invoiceLines       InvoiceLine[]
-  /// Scanned refusal letters (0012 Decision 4) and e-visas (0025), the newest of each kind current; kept when the
-  /// outcome changes.
+  /// Refusal letters (0012 Decision 4), e-visas (0025) and visa copies (change request 21), the newest of each kind
+  /// current; kept when the outcome changes.
   files              CaseFile[]
   /// Handovers where this traveller collected the passports (0014 Decision 3).
   handoversCollected VisaHandover[]

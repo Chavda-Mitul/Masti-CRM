@@ -6,6 +6,7 @@ import { bucket, s3 } from "../src/lib/storage";
 import { seedEnquiryMasters } from "../src/modules/enquiries/enquiries.seed";
 import { seedVisaMasters } from "../src/modules/visaMasters/visaMasters.seed";
 import { createUser, loginAs, prisma, resetDb } from "./helpers";
+import { jpegOf } from "./imageFiles";
 import { decidedCase, evisaCase, holdCaseLock, untilWaitingOnLock, type Agent } from "./visaHelpers";
 
 // E-visas after the decision, part 1 (docs/decisions/0025-evisa-after-decision.md): at Decision, each approved
@@ -29,7 +30,7 @@ interface FileDto {
 }
 interface CaseDto {
   updatedAt: string;
-  evisaMaxMb: number;
+  decisionFileMaxMb: number;
   travellers: { id: string; evisa: FileDto | null; stickerCheck: string | null; decision: { outcome: string; visaNo: string | null } | null }[];
 }
 
@@ -60,6 +61,16 @@ async function change(agent: Agent, caseNo: string, travellerId: string, body: R
 const rakesh = { outcome: "APPROVED", visaNo: "EV-2026/88213", validFrom: FROM, validTo: TO };
 
 describe("the e-visa PDF", () => {
+  it("keeps a photo of the e-visa as a one-page PDF (change request 21, part 2)", async () => {
+    const { c, processor, adult } = await evisaCase();
+    const res = await upload(processor, c.caseNo, adult, jpegOf(300, 400), "image/jpeg");
+    expect(res.status).toBe(200);
+    const evisa = (res.body.case as CaseDto).travellers[0]!.evisa!;
+    expect(evisa).toMatchObject({ fileName: `${c.caseNo}_Rakesh-Mehta_evisa.pdf`, pageCount: 1, copies: 1 });
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.file.upload", entityId: evisa.id } });
+    expect(entry.after).toMatchObject({ kind: "EVISA", pageCount: 1, photo: "image/jpeg" });
+  });
+
   it("stores an approved traveller's PDF: pages counted, named after the case and the traveller, audited, opened by link", async () => {
     const { c, processor, adult } = await evisaCase();
     const file = await pdf(2);
@@ -221,14 +232,17 @@ describe("what is refused", () => {
     expect(await bad(Buffer.alloc(0), /Pick the PDF/)).toBe(400);
     expect(await bad(Buffer.from("just some text"), /isn't a PDF/)).toBe(400);
     expect(await bad(Buffer.from("%PDF-1.7\nthis is not really a pdf"), /can't be opened/)).toBe(400);
-    expect((await processor.post(`/api/visa/cases/${c.caseNo}/travellers/${adult}/evisa`).send({ file: "x" })).status).toBe(415);
+    const json = await processor.post(`/api/visa/cases/${c.caseNo}/travellers/${adult}/evisa`).send({ file: "x" });
+    expect(json.status).toBe(415);
+    expect(json.body.message).toBe("Upload a PDF, JPEG or PNG.");
+    expect(await bad(await pdf(1), /isn't a JPEG/, "image/jpeg")).toBe(400);
     // WhatsApp's limit, though the final file may be bigger…
-    expect((await load(processor, c.caseNo)).evisaMaxMb).toBe(16);
+    expect((await load(processor, c.caseNo)).decisionFileMaxMb).toBe(16);
     expect(await bad(Buffer.concat([await pdf(1), Buffer.alloc(16.2 * 1024 * 1024)]), /over 16 MB/)).toBe(413);
     // …and the final file's when it's lower.
     await createUser({ name: "Riya", email: "riya@masti.test", departments: [{ code: "VISA", role: "HOD" }] });
     expect((await (await loginAs("riya@masti.test")).put("/api/visa/settings").send({ finalFile: { maxMb: 1 } })).status).toBe(200);
-    expect((await load(processor, c.caseNo)).evisaMaxMb).toBe(1);
+    expect((await load(processor, c.caseNo)).decisionFileMaxMb).toBe(1);
     expect(await bad(Buffer.concat([await pdf(1), Buffer.alloc(1.2 * 1024 * 1024)]), /over 1 MB/)).toBe(413);
 
     expect(await prisma.caseFile.count({ where: { kind: "EVISA" } })).toBe(0);

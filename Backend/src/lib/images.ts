@@ -1,5 +1,6 @@
-// The image types the CRM stores (Masti's logo and signature, a receiver's photo at handover), told by their first
-// bytes rather than by what the upload says it is.
+// The image types the CRM stores (Masti's logo and signature, a receiver's photo at handover) or turns into a PDF (a
+// photo of a refusal letter or visa page, lib/photoPdf.ts), told by their first bytes rather than by what the upload
+// says it is.
 
 const SIGNATURES = {
   "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -40,9 +41,26 @@ function pngSize(bytes: Buffer) {
 /** The frame headers that carry a JPEG's size (baseline, progressive…); C4, C8 and CC are other markers. */
 const FRAME_MARKERS = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
 
-/** Walks the JPEG's segments to its frame header. The EXIF block, if any, comes before it. */
+/** A JPEG's size as it shows: turned a quarter (EXIF orientation 5–8), its width and height swap. */
 function jpegSize(bytes: Buffer) {
-  let turned = false;
+  const headers = jpegHeaders(bytes);
+  if (!headers) return null;
+  const { width, height, orientation } = headers;
+  return orientation >= 5 ? { width: height, height: width } : { width, height };
+}
+
+/**
+ * A JPEG's EXIF orientation, 1–8: how the camera stored the picture against how it shows (6: turn it a quarter
+ * clockwise to show it). 1, as stored, when the file doesn't say. PDF viewers ignore it, so a photo kept as a PDF is
+ * turned by it (lib/photoPdf.ts).
+ */
+export function jpegOrientation(bytes: Buffer): number {
+  return jpegHeaders(bytes)?.orientation ?? 1;
+}
+
+/** Walks the JPEG's segments to its frame header: its size as stored, and the EXIF orientation that comes before it. */
+function jpegHeaders(bytes: Buffer) {
+  let orientation = 1;
   let at = 2;
   while (at + 4 <= bytes.length) {
     if (bytes[at] !== 0xff) return null;
@@ -58,30 +76,33 @@ function jpegSize(bytes: Buffer) {
     if (marker === 0xd9 || marker === 0xda) return null; // The end, or the picture itself, before any size.
     const length = bytes.readUInt16BE(at + 2);
     if (length < 2 || at + 2 + length > bytes.length) return null;
-    if (marker === 0xe1) turned ||= exifTurned(bytes.subarray(at + 4, at + 2 + length));
+    if (marker === 0xe1 && orientation === 1) orientation = exifOrientation(bytes.subarray(at + 4, at + 2 + length));
     if (FRAME_MARKERS.has(marker)) {
       if (length < 7) return null;
       const height = bytes.readUInt16BE(at + 5);
       const width = bytes.readUInt16BE(at + 7);
       if (width === 0 || height === 0) return null;
-      return turned ? { width: height, height: width } : { width, height };
+      return { width, height, orientation };
     }
     at += 2 + length;
   }
   return null;
 }
 
-/** Does this APP1 block say the photo shows turned a quarter (EXIF orientation 5–8), so its width and height swap? */
-function exifTurned(app1: Buffer) {
-  if (app1.length < 14 || app1.toString("latin1", 0, 6) !== "Exif\0\0") return false;
+/** The EXIF orientation (1–8) this APP1 block gives, or 1 when it gives none. */
+function exifOrientation(app1: Buffer) {
+  if (app1.length < 14 || app1.toString("latin1", 0, 6) !== "Exif\0\0") return 1;
   const tiff = app1.subarray(6);
   const order = tiff.toString("latin1", 0, 2);
-  if (order !== "II" && order !== "MM") return false;
+  if (order !== "II" && order !== "MM") return 1;
   const u16 = (at: number) => (order === "II" ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at));
   const first = order === "II" ? tiff.readUInt32LE(4) : tiff.readUInt32BE(4);
-  if (first + 2 > tiff.length) return false;
+  if (first + 2 > tiff.length) return 1;
   for (let entry = first + 2, n = u16(first); n > 0 && entry + 12 <= tiff.length; n--, entry += 12) {
-    if (u16(entry) === 0x0112) return u16(entry + 8) >= 5 && u16(entry + 8) <= 8;
+    if (u16(entry) === 0x0112) {
+      const value = u16(entry + 8);
+      return value >= 1 && value <= 8 ? value : 1;
+    }
   }
-  return false;
+  return 1;
 }

@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import { numberLabel, type DecisionRowValue } from './decisionValues'
 
 /**
  * One traveller in "Record the decision" and "Change the decision" (Decisions 3 and 6): the demo's Approved / Refused
- * toggle (green / red, screen 11). Recording stops there (amended 23 Oct 2026, change request 21); Change also takes an
- * approved one's sticker (or e-visa) number and the dates it's valid, each optional.
+ * toggle (green / red, screen 11). Recording adds the traveller's optional file (`children`, change request 21); Change
+ * takes an approved one's sticker (or e-visa) number and the dates it's valid, each optional.
  */
 export function DecisionRow({
   name,
@@ -13,6 +14,7 @@ export function DecisionRow({
   disabled,
   error,
   onChange,
+  children,
 }: {
   name: string
   row: DecisionRowValue
@@ -23,6 +25,8 @@ export function DecisionRow({
   disabled: boolean
   error: string | undefined
   onChange: (patch: Partial<DecisionRowValue>) => void
+  /** Under the outcome, across the row: recording's file picker. */
+  children?: ReactNode
 }) {
   return (
     <div className="decision-row">
@@ -85,6 +89,7 @@ export function DecisionRow({
           </label>
         </div>
       )}
+      {children}
       {error && <span className="field-error decision-error">{error}</span>}
     </div>
   )

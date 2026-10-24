@@ -367,6 +367,11 @@ export interface CaseTraveller {
   refusalLetter: (CaseFile & { copies: number }) | null
   /** An e-visa's current PDF (0025), and how many were uploaded; only while the traveller is approved. */
   evisa: (CaseFile & { copies: number }) | null
+  /**
+   * A paper visa's current visa copy, the passport's visa page or the approval letter (0012, amended 24 Oct 2026), and
+   * how many were uploaded; only while the traveller is approved.
+   */
+  visaCopy: (CaseFile & { copies: number }) | null
   documents: CaseDocument[]
   /** In or made */
   done: number
@@ -739,8 +744,11 @@ export interface VisaCase {
   finalFileCopies: number
   /** The largest PDF the server accepts (setting visa.finalFile). */
   finalFileMaxMb: number
-  /** The largest e-visa PDF the server accepts (0025): WhatsApp's limit, or the final file's if lower. */
-  evisaMaxMb: number
+  /**
+   * The largest refusal letter, visa copy or e-visa the server accepts (change request 21): WhatsApp's limit, or the
+   * final file's if lower.
+   */
+  decisionFileMaxMb: number
   /** The largest scan "Save scan" takes (setting clients.documents). */
   scanMaxMb: number
   /** The submission agent picked during File preparation (0007 Decision 7), or null. */

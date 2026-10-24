@@ -53,7 +53,9 @@ Each part is planned in plan mode, built, tested, checked in the browser and mer
 ### 2. The e-visa PDF (part 1)
 
 - **One PDF per approved traveller,** as the portal issued it, kept with the case's files in the private bucket (rule 4)
-  and opened through a short-lived link, like the refusal letter.
+  and opened through a short-lived link, like the refusal letter. *Since 24 Oct 2026 ([0012](0012-visa-decision.md)
+  Decision 3, change request 21, part 2): a JPG or PNG photo of it too, kept as a one-page PDF. It can also be added in
+  "Record the decision". The limit is the shared `decisionFileMaxMb`, the same 16 MB rule.*
 - **A newer upload becomes the current one;** older ones stay as proof. Kept when the traveller is changed to Refused,
   and shown again if they're approved again.
 - **When:** at Decision, on an open case, by whoever can act on it (its processor, the Visa HOD, the Head).

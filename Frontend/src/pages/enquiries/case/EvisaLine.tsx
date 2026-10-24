@@ -3,13 +3,14 @@ import { useRef } from 'react'
 import { errorText } from '../../../lib/apiErrors'
 import { formatDateTime } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
-import { enquiryKeys, useOpenCaseFile, useSetEvisaCheck, useUploadEvisa } from '../queries'
+import { enquiryKeys, useOpenCaseFile, useSetEvisaCheck, useUploadDecisionFile } from '../queries'
 import type { CaseTraveller, StickerCheck, VisaCase } from '../types'
-import { pdfProblem } from './pdfFiles'
+import { DECISION_FILE_ACCEPT, decisionFileProblem } from './decisionFiles'
 
 /**
  * An approved traveller's e-visa on the Decision card (docs/decisions/0025-evisa-after-decision.md, part 1): the PDF the
- * portal issued, kept privately and opened through a link that works for a few minutes, then checked against the
+ * portal issued, or a photo of it kept as a PDF (change request 21, part 2), kept privately and opened through a link
+ * that works for a few minutes, then checked against the
  * passport and what was recorded at Step 6: Matches or Doesn't match. A newer upload becomes the current one, older ones
  * are kept, and the check is cleared: the new PDF needs a new look. Changed by whoever can act on the case, at Decision;
  * anyone who can open the case sees it.
@@ -17,7 +18,7 @@ import { pdfProblem } from './pdfFiles'
 export function EvisaLine({ visaCase: c, traveller: t, canAct }: { visaCase: VisaCase; traveller: CaseTraveller; canAct: boolean }) {
   const toast = useToast()
   const queryClient = useQueryClient()
-  const upload = useUploadEvisa(c.caseNo)
+  const upload = useUploadDecisionFile(c.caseNo)
   const setCheck = useSetEvisaCheck(c.caseNo)
   const open = useOpenCaseFile(c.caseNo)
   const input = useRef<HTMLInputElement>(null)
@@ -29,13 +30,13 @@ export function EvisaLine({ visaCase: c, traveller: t, canAct }: { visaCase: Vis
   const send = (picked: File | undefined) => {
     if (input.current) input.current.value = '' // picking the same file again still triggers a change
     if (!picked) return
-    const problem = pdfProblem(picked, c.evisaMaxMb)
+    const problem = decisionFileProblem(picked, c.decisionFileMaxMb)
     if (problem) {
       toast({ tone: 'bad', message: problem })
       return
     }
     upload.mutate(
-      { travellerId: t.id, file: picked },
+      { travellerId: t.id, kind: 'EVISA', file: picked },
       {
         onSuccess: () =>
           toast({ tone: 'ok', message: evisa ? 'New copy saved. The earlier one is kept. Check this one against the passport.' : 'E-visa saved. Now check it against the passport.' }),
@@ -83,7 +84,7 @@ export function EvisaLine({ visaCase: c, traveller: t, canAct }: { visaCase: Vis
           <input
             ref={input}
             type="file"
-            accept="application/pdf,.pdf"
+            accept={DECISION_FILE_ACCEPT}
             hidden
             aria-label={`E-visa for ${name}`}
             onChange={(e) => send(e.target.files?.[0])}

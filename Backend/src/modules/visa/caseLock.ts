@@ -113,6 +113,9 @@ export const LETTERS: StepRule = {
   wrongStage: "A refusal letter is added once the decision is recorded.",
 };
 
+/** An approved paper visa's visa copy (0012, amended 24 Oct 2026, change request 21): when a refusal letter is. */
+export const VISA_COPIES: StepRule = { ...LETTERS, wrongStage: "A visa copy is added once the decision is recorded." };
+
 /**
  * The consent form's details (docs/decisions/0022-consent-form.md): not at enquiry (Masti takes consent once the
  * business has reached that far), then alongside processing, until the passports are handed over.
