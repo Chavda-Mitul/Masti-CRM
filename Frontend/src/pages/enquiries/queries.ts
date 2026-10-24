@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
 import type {
   CaseMessage,
+  CaseMessages,
   ClientLookup,
   ConsentDetailsBody,
   ConsentForm,
@@ -109,14 +110,15 @@ function onItsWay(m: CaseMessage) {
 }
 
 /**
- * The case's "Sent to the client" card (0021). While a message is on its way it checks again every 10 seconds (only
- * while the page is in view), so Waiting turns into Sent and then Delivered by itself; then it stops.
+ * The case's "Sent to the client" card (0021) and what the client wrote back (0026 amendment 1). While a message is on
+ * its way it checks again every 10 seconds, so Waiting turns into Sent and then Delivered by itself; otherwise every
+ * minute, so a reply shows without a reload. Only while the page is in view.
  */
 export function useCaseMessages(caseNo: string) {
   return useQuery({
     queryKey: enquiryKeys.caseMessages(caseNo),
-    queryFn: async () => (await api<{ messages: CaseMessage[] }>(`/visa/cases/${encodeURIComponent(caseNo)}/messages`)).messages,
-    refetchInterval: (query) => (query.state.data?.some(onItsWay) ? 10_000 : false),
+    queryFn: () => api<CaseMessages>(`/visa/cases/${encodeURIComponent(caseNo)}/messages`),
+    refetchInterval: (query) => (query.state.data?.messages.some(onItsWay) ? 10_000 : 60_000),
   })
 }
 

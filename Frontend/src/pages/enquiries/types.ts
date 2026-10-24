@@ -835,6 +835,24 @@ export interface CaseMessage {
   toTestNumber: boolean
 }
 
+/** What the client wrote back about the case on WhatsApp (0026 amendment 1), listed under "Sent to the client". */
+export interface CaseReply {
+  id: string
+  /** "text", "image", "document", "audio", "reaction"…, as WhatsApp names it. */
+  type: string
+  /** Their words: the text, a caption, the button they tapped or the emoji. Null for, e.g., a photo without words. */
+  text: string | null
+  receivedAt: string
+  /** Who wrote, when it wasn't the client's main number: "test" (the test number, outside production) or the number. */
+  from: string | null
+}
+
+/** The case's WhatsApp card (0021): what we sent, and what the client wrote back. */
+export interface CaseMessages {
+  messages: CaseMessage[]
+  replies: CaseReply[]
+}
+
 /** The follow-up desk's tabs and its Mine / Whole department switch (0006 Decision 9). */
 export type FollowUpBucket = 'OVERDUE' | 'TODAY' | 'WEEK' | 'POSTPONED'
 export type FollowUpScope = 'MINE' | 'ALL'

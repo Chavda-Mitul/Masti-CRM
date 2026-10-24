@@ -132,6 +132,8 @@ now" and "Money on this case". The project lead chose these three on 21 Oct 2026
 The messages come from their own request, `GET /api/visa/cases/:caseNo/messages`, for anyone who can open the case
 (`findVisibleCase`). They aren't part of the case itself, so the card can refresh without reloading the case that the
 page's forms are built from. They come oldest first, like a chat. The sending details stay on the server.
+*Since 24 Oct 2026 the same request also brings what the client wrote back, shown under the card as "The client
+wrote", and the card checks every minute when nothing is on its way ([0026](0026-whatsapp-webhook.md) Amendment 1).*
 
 Not here: the client page's "WhatsApp messages sent". A client-wide list needs its own rule, because staff who can open
 one of a client's cases mustn't read messages about the others. "Send again" for a failed message isn't here either:

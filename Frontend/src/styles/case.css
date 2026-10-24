@@ -1116,6 +1116,28 @@
   white-space: pre-wrap;
 }
 
+/* The client wrote (0026 amendment 1): their replies, newest first, each marked with a ◆ in the primary colour */
+.reply-head {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+.reply-mark {
+  width: 7px;
+  height: 7px;
+  margin: 6px 1px 0 0;
+  flex-shrink: 0;
+  background: var(--primary);
+  transform: rotate(45deg);
+}
+.reply-kind {
+  margin: 2px 0 0 18px;
+}
+.reply-row .message-body {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
 /* Step 2 actions (part 5): the Step 1 note, naming a traveller, ticking */
 .case-page .alert-info {
   background: var(--primary-tint);
