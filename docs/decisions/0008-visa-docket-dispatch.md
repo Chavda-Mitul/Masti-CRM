@@ -2,7 +2,8 @@
 
 - **Status:** decided (13 Oct 2026, project lead). Built: the Docket card and the Sticker card (13 Oct 2026); the
   courier list, dispatch and the vendor email (14 Oct 2026, components 4a–4c); e-visas, "Submitted online" (15 Oct 2026,
-  component 5). Step 4 is complete. A "Built" note sits under each part.
+  component 5). Step 4 is complete. A "Built" note sits under each part. Amendment 1, the scans combined into the
+  saved file: built 23 Oct 2026.
 - **Date:** 13 Oct 2026
 - **Scope:** everything between "File ready — add to docket" (0007 Decision 9) and the vendor having the parcel:
   - grouping ready cases into dockets, per vendor
@@ -14,6 +15,62 @@
   postpone and cancel).
 - **Depends on:** 0009, the visa invoice (not written yet). Dispatch is never built without it (Decision 1).
 - **Hand-over notes:** `docs/plans/visa-step-4-docket-dispatch.md` (the sources and the questions, answered here).
+
+## Amendment 1 (23 Oct 2026, project lead): the case's scans combined into the saved file
+
+**The ask:** at Docket & dispatch, combine every scan of the case into one PDF and keep it, but only when no scan is
+missing; leave the scan uploads as they are. Until now the saved file (0007 Decision 8) is one PDF the processor scans
+by hand and uploads in Step 3, while Step 2's **Save scan** keeps each paper in the client's vault (0016 Decision 5).
+It isn't in the demo: change request 20. 0007's "Settled after slice 2" turned down per-paper *uploads* merged in
+Step 3; this reuses the vault's scans instead and leaves the Step 3 upload alone.
+
+**Decided (project lead, 23 Oct 2026):**
+
+| Question | Answer |
+| --- | --- |
+| When | **On its own, when the case is marked File ready**, and a **Combine again** button to try later (after an HOD adds a missing scan on the client page) |
+| Which scans count | **Only this case's:** a paper ticked Original or Xerox needs a scan saved since the case was opened, as "Scan not saved" counts it (0016 Decision 7). A paper ticked On file uses the copy it came from. |
+| Where it's kept | **As the saved file:** the newest copy, so the Saved file card shows it. The processor's upload stays as an earlier copy and still opens. |
+| A scan missing | Nothing is made. The card lists whose are missing: "Scans not combined: 2 missing — Rakesh Mehta: Bank statement; Aarav Mehta: Passport." |
+| E-visas | **Combined too.** Their line is on the Submit online card. |
+| The upload screens | **Unchanged:** Step 2's Save scan and the Step 3 upload (the Saved file card). |
+
+**Defaults added when building (23 Oct 2026; say if any is wrong):**
+- **Which papers need a scan:** those that came in (Original, Xerox, On file). What we arrange (Made), Not needed and
+  Pending ones are left out. With none, nothing is made: "No papers came in, so there are no scans to combine."
+- **An unnamed traveller** (not linked to a family member) has no scans, so their papers count as missing.
+- **The order:** travellers in their order, each one's papers in the checklist's order. A PDF scan goes in page by
+  page; a JPG or PNG gets an A4 page of its own, turned to suit it (landscape for a wide photo), upright by a phone's
+  EXIF rotation, shrunk to fit inside an 8 mm edge and never enlarged.
+- **The file:** `VISA-2026-0001_Mehta_scans.pdf` ⚠️, saved as whoever pressed File ready (or Combine again).
+- **Made once:** while a combined copy exists, the job does nothing and Combine again is refused. A newer scan saved
+  later doesn't make another.
+- **A scan that can't be opened, or a password-protected PDF:** nothing is made; Combine again names it ("Rakesh
+  Mehta's Bank statement can't be opened, so the scans can't be combined.").
+- **Nothing waits for it:** the docket is dispatched (or the e-visa submitted) whether or not the scans are combined.
+- **While the minute after File ready lasts,** the card says "Combining the scans into the saved file…" and the page
+  checks again every 3 seconds; then it offers Combine again.
+
+**Built (23 Oct 2026):**
+- **Data:** `CaseFile.scanCount`, the scans a combined saved file was made from (migration
+  `20261024101500_case_file_scan_count`), with a CHECK: only on a `FINAL_FILE`, and above 0.
+- **The job:** "File ready" queues `visa-combine-scans` in its own transaction (`src/lib/jobs.ts`, retried after about
+  half a minute, 1 and 2 minutes on a bucket or database error). `visaCombineScans.service.ts` reads which scan each
+  paper uses (`scansForFile`, `scansPdf.ts`, shared with the case page), builds the PDF with pdf-lib, uploads it, then
+  under the case's lock checks again (still at Docket & dispatch, open, not combined meanwhile) and saves the
+  `CaseFile`, audited `visa.file.combine` (`{ fileName, sizeBytes, pageCount, scanCount, scans, replaces, auto }`).
+  A refusal removes the uploaded object. Scans missing, a scan that won't open, or the case having moved on end the job
+  (logged); other errors are retried.
+- **`POST /api/visa/cases/:caseNo/scans/combine`** ("Combine again"): whoever can act on the case at Docket & dispatch
+  (`DISPATCHING`); 409 `SCANS_MISSING { missing }`, 409 already combined, 400 for a scan that can't be opened.
+- **The case DTO** gains `combinedScans { needed, missing, file }` at Docket & dispatch (null at other steps). `file`
+  is the newest saved file when the CRM made it.
+- **`src/lib/images.ts`** gives a JPEG's EXIF orientation (`jpegOrientation`); the photo shape rule reads it as before.
+- **Screen:** `CombinedScansLine` on the Docket card and the Submit online card: the combined file with **Open**; or the
+  missing list; or "Combining…"; or "Scans not combined yet." with **Combine again**, for whoever can act on the case.
+- **Tests:** `visaCombineScans.test.ts` (the queued job, the order and pages, the audit, missing scans, which scans
+  count, Combine again and who may, the wrong step and a postponed case, made once, a job and a press racing, a broken
+  or password-protected scan, e-visas, the photo pages) and `images.test.ts` (the orientation).
 
 ## Context
 

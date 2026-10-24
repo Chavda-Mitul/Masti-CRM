@@ -8,6 +8,7 @@ import type { ClientSettings } from "../clients/clients.settings";
 import { toStageRef } from "../enquiries/enquiry";
 import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.service";
 import type { DocumentRemindersSetting } from "./visa.schemas";
+import { scansForFile, type PaperScanRow, type TravellerScanRow } from "./scansPdf";
 import { missingBooklets } from "./shortfall";
 import { decisionFileMaxMb } from "./travellerFiles";
 
@@ -265,6 +266,31 @@ export function fileSafeFamilyName(clientName: string | null) {
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
   return { adults: travellers.length - children, children };
+}
+
+/**
+ * The travellers as the scans combined into the saved file read them (0008 Amendment 1, scansPdf.ts): named as the case
+ * shows them ("Child 1" until named), with their papers in the checklist's order.
+ */
+export function scanTravellersOf(
+  travellers: { position: number; isChild: boolean; name: string | null; memberId: string | null; member: { name: string } | null; documents: PaperScanRow[] }[],
+): TravellerScanRow[] {
+  const { adults } = countTravellers(travellers);
+  return travellers.map((t) => ({ label: t.member?.name ?? t.name ?? travellerLabel(t, adults), memberId: t.memberId, documents: t.documents }));
+}
+
+/**
+ * Docket & dispatch (0008 Amendment 1): how many papers need a scan, whose are missing, and the saved file made from them
+ * once it is (the newest saved file, when the CRM made it).
+ */
+function combinedScansOf(row: VisaCaseRow, travellers: TravellerRow[], scans: CurrentScans) {
+  const { found, missing } = scansForFile(scanTravellersOf(travellers), scans, row.createdAt);
+  const file = row.files[0];
+  return {
+    needed: found.length + missing.reduce((n, m) => n + m.papers.length, 0),
+    missing,
+    file: file?.scanCount ? { id: file.id, scanCount: file.scanCount, pageCount: file.pageCount, at: file.uploadedAt, by: file.uploadedBy } : null,
+  };
 }
 
 /** "2 adults, 1 child" */
@@ -588,6 +614,8 @@ export function toVisaCaseDto(
     /** Step 4 (0008): the docket this case is in, or else the vendor's shared open docket it would join. */
     docket: visa.docket && docketOf(visa.docket, row.id),
     openDocket: row.stage.code === "DISPATCH" && !visa.docket ? openDocketOf(visa.vendor) : null,
+    /** The scans combined into the saved file (0008 Amendment 1), or what's missing: at Docket & dispatch only. */
+    combinedScans: row.stage.code === "DISPATCH" ? combinedScansOf(row, visa.travellers, scans) : null,
     /** An e-visa's "Submitted online" (Decision 11): who and when, instead of a docket. */
     submittedOnline: visa.submittedOnlineAt && { at: visa.submittedOnlineAt, by: visa.submittedOnlineBy },
     /** "Send the e-visa" (0025, part 3): who sent each approved traveller's e-visa to the client, and when. */

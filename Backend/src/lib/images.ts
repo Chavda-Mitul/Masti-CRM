@@ -1,6 +1,5 @@
-// The image types the CRM stores (Masti's logo and signature, a receiver's photo at handover) or turns into a PDF (a
-// photo of a refusal letter or visa page, lib/photoPdf.ts), told by their first bytes rather than by what the upload
-// says it is.
+// The image types the CRM stores (Masti's logo and signature, a receiver's photo at handover), told by their first
+// bytes rather than by what the upload says it is.
 
 const SIGNATURES = {
   "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -41,7 +40,7 @@ function pngSize(bytes: Buffer) {
 /** The frame headers that carry a JPEG's size (baseline, progressive…); C4, C8 and CC are other markers. */
 const FRAME_MARKERS = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
 
-/** A JPEG's size as it shows: turned a quarter (EXIF orientation 5–8), its width and height swap. */
+/** A JPEG's size as it shows: EXIF orientations 5–8 turn it a quarter, so its width and height swap. */
 function jpegSize(bytes: Buffer) {
   const headers = jpegHeaders(bytes);
   if (!headers) return null;
@@ -50,9 +49,9 @@ function jpegSize(bytes: Buffer) {
 }
 
 /**
- * A JPEG's EXIF orientation, 1–8: how the camera stored the picture against how it shows (6: turn it a quarter
- * clockwise to show it). 1, as stored, when the file doesn't say. PDF viewers ignore it, so a photo kept as a PDF is
- * turned by it (lib/photoPdf.ts).
+ * How a JPEG must be turned to show upright: its EXIF orientation, 1 (as stored) to 8; 1 when it doesn't say. For
+ * drawing the photo on a PDF page (lib/photoPdf.ts): the scans combined into a visa case's saved file, and a traveller's
+ * file after the decision kept as a PDF.
  */
 export function jpegOrientation(bytes: Buffer): number {
   return jpegHeaders(bytes)?.orientation ?? 1;
@@ -60,7 +59,7 @@ export function jpegOrientation(bytes: Buffer): number {
 
 /** Walks the JPEG's segments to its frame header: its size as stored, and the EXIF orientation that comes before it. */
 function jpegHeaders(bytes: Buffer) {
-  let orientation = 1;
+  let orientation: number | null = null;
   let at = 2;
   while (at + 4 <= bytes.length) {
     if (bytes[at] !== 0xff) return null;
@@ -76,33 +75,33 @@ function jpegHeaders(bytes: Buffer) {
     if (marker === 0xd9 || marker === 0xda) return null; // The end, or the picture itself, before any size.
     const length = bytes.readUInt16BE(at + 2);
     if (length < 2 || at + 2 + length > bytes.length) return null;
-    if (marker === 0xe1 && orientation === 1) orientation = exifOrientation(bytes.subarray(at + 4, at + 2 + length));
+    if (marker === 0xe1) orientation ??= exifOrientation(bytes.subarray(at + 4, at + 2 + length));
     if (FRAME_MARKERS.has(marker)) {
       if (length < 7) return null;
       const height = bytes.readUInt16BE(at + 5);
       const width = bytes.readUInt16BE(at + 7);
       if (width === 0 || height === 0) return null;
-      return { width, height, orientation };
+      return { width, height, orientation: orientation ?? 1 };
     }
     at += 2 + length;
   }
   return null;
 }
 
-/** The EXIF orientation (1–8) this APP1 block gives, or 1 when it gives none. */
+/** The orientation (1–8) this APP1 block gives; null when it isn't EXIF, has none, or gives one outside 1–8. */
 function exifOrientation(app1: Buffer) {
-  if (app1.length < 14 || app1.toString("latin1", 0, 6) !== "Exif\0\0") return 1;
+  if (app1.length < 14 || app1.toString("latin1", 0, 6) !== "Exif\0\0") return null;
   const tiff = app1.subarray(6);
   const order = tiff.toString("latin1", 0, 2);
-  if (order !== "II" && order !== "MM") return 1;
+  if (order !== "II" && order !== "MM") return null;
   const u16 = (at: number) => (order === "II" ? tiff.readUInt16LE(at) : tiff.readUInt16BE(at));
   const first = order === "II" ? tiff.readUInt32LE(4) : tiff.readUInt32BE(4);
-  if (first + 2 > tiff.length) return 1;
+  if (first + 2 > tiff.length) return null;
   for (let entry = first + 2, n = u16(first); n > 0 && entry + 12 <= tiff.length; n--, entry += 12) {
     if (u16(entry) === 0x0112) {
       const value = u16(entry + 8);
-      return value >= 1 && value <= 8 ? value : 1;
+      return value >= 1 && value <= 8 ? value : null;
     }
   }
-  return 1;
+  return null;
 }
