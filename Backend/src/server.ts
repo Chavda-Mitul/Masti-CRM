@@ -6,6 +6,7 @@ import { logger } from "./lib/logger";
 import { deleteExpiredSessions } from "./modules/auth/session";
 import { seedConsentFields, seedConsentWording } from "./modules/consent/consent.seed";
 import { startMessages } from "./modules/messages/messages.worker";
+import { startCombineScans } from "./modules/visa/visaCombineScans.worker";
 import { startVisaReminders } from "./modules/visa/visaReminders.worker";
 
 /** How often expired sessions are swept out of the database. */
@@ -29,6 +30,8 @@ async function main() {
   await startMessages();
   // The visa pending-document reminders, every 15 minutes (message 3, 0021 amendment 3).
   await startVisaReminders();
+  // A visa case's scans combined into its saved file after "File ready" (0008 Amendment 1).
+  await startCombineScans();
   // The consent form needs a wording and fields: the drafts, into a database with none (docs/decisions/0022-consent-form.md).
   await seedConsentWording(prisma);
   await seedConsentFields(prisma);

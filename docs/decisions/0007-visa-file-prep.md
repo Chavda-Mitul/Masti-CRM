@@ -291,6 +291,9 @@ Visa submission agents for now ("Mumbai · Schengen", "Delhi · China"). Hotel v
 
 The first upload in the CRM (golden rule 4: S3-compatible, private, shared through short-lived pre-signed links).
 
+**23 Oct 2026:** at Docket & dispatch the CRM may add a newer copy made from the case's scans, when none is missing
+(0008 Amendment 1, change request 20); the processor's upload stays as an earlier copy. The upload itself is unchanged.
+
 - **One PDF per case,** as in the demo: every page as it went to the vendor.
 - **Uploaded through our API.** The server:
   - streams the PDF to the bucket

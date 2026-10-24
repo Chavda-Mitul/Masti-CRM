@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageSize, imageType } from "../src/lib/images";
+import { imageSize, imageType, jpegOrientation } from "../src/lib/images";
 import { jpegOf, pngOf } from "./imageFiles";
 
 // A photo's size in pixels, read from its headers, for a paper's photo shape (docs/decisions/0016-client-documents.md
@@ -36,5 +36,19 @@ describe("imageSize", () => {
     expect(imageSize(Buffer.from("not a picture at all, just text"), "image/png")).toBeNull();
     expect(imageSize(pngOf(10, 10).subarray(0, 20), "image/png")).toBeNull();
     expect(imageSize(jpegOf(0, 800), "image/jpeg")).toBeNull();
+  });
+});
+
+// How a photo is turned upright when it's put on a page (the scans combined into a visa case's saved file,
+// docs/decisions/0008-visa-docket-dispatch.md Amendment 1).
+describe("jpegOrientation", () => {
+  it("gives the EXIF orientation, or 1 when there's none or it's not one of 1–8", () => {
+    expect(jpegOrientation(jpegOf(900, 700, 6))).toBe(6);
+    expect(jpegOrientation(jpegOf(900, 700, 3))).toBe(3);
+    expect(jpegOrientation(jpegOf(900, 700, 8))).toBe(8);
+    expect(jpegOrientation(jpegOf(900, 700))).toBe(1);
+    expect(jpegOrientation(REAL_JPEG)).toBe(1);
+    expect(jpegOrientation(jpegOf(900, 700, 9))).toBe(1);
+    expect(imageSize(jpegOf(900, 700, 9), "image/jpeg")).toEqual({ width: 900, height: 700 });
   });
 });

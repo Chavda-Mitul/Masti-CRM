@@ -91,11 +91,25 @@ export const enquiryKeys = {
   coveringLetterPrint: (caseNo: string) => ['enquiries', 'covering-letter-print', caseNo.toUpperCase()] as const,
 }
 
-/** One visa case: the case page (Step 2 onwards). */
+/** How long after "File ready" the case page waits for its scans to be combined (0008 Amendment 1): the job takes seconds. */
+export const COMBINING_FOR_MS = 60_000
+
+/** Whether the case's scans are being combined now: marked file ready under a minute ago, every scan there, none made yet. */
+export function combiningScans(c: VisaCase) {
+  const s = c.combinedScans
+  if (!s || s.file || s.missing.length > 0 || s.needed === 0 || !c.fileReadyAt) return false
+  return Date.now() - Date.parse(c.fileReadyAt) < COMBINING_FOR_MS
+}
+
+/**
+ * One visa case: the case page (Step 2 onwards). While its scans are being combined it checks again every 3 seconds, so
+ * the combined file shows by itself.
+ */
 export function useVisaCase(caseNo: string) {
   return useQuery({
     queryKey: enquiryKeys.case(caseNo),
     queryFn: async () => (await api<{ case: VisaCase }>(`/visa/cases/${encodeURIComponent(caseNo)}`)).case,
+    refetchInterval: (query) => (query.state.data && combiningScans(query.state.data) ? 3_000 : false),
   })
 }
 
@@ -305,6 +319,11 @@ export function useSetEvisaCheck(caseNo: string) {
   return useCaseAction<{ travellerId: string; fileId: string; check: StickerCheck | null }>(caseNo, (base, { travellerId, ...body }) =>
     api(`${base}/travellers/${travellerId}/evisa-check`, { method: 'PUT', body }),
   )
+}
+
+/** "Combine again" (0008 Amendment 1): the case's scans into its saved file, when "File ready" couldn't combine them. */
+export function useCombineScans(caseNo: string) {
+  return useCaseAction<void>(caseNo, (base) => api(`${base}/scans/combine`, { method: 'POST' }))
 }
 
 /** Opens one of the case's files in a new tab, through a link that works for a few minutes. */

@@ -50,6 +50,7 @@ import * as visaService from "./visa.service";
 import * as atVendorService from "./visaAtVendor.service";
 import * as caseMessagesService from "./visaCaseMessages.service";
 import * as caseScansService from "./visaCaseScans.service";
+import * as combineScansService from "./visaCombineScans.service";
 import * as consentService from "./visaConsent.service";
 import * as coveringLetterService from "./visaCoveringLetter.service";
 import * as docketService from "./visaDocket.service";
@@ -579,6 +580,14 @@ router.post("/cases/:caseNo/documents/:documentId/scan", visaEdit, async (req, r
 router.get("/cases/:caseNo/documents/:documentId/scan/link", visaView, async (req, res) => {
   const caseNo = caseNoParam.parse(req.params.caseNo);
   res.json(await caseScansService.openCaseScan(caseNo, idParam.parse(req.params.documentId), actorOf(req)));
+});
+
+/**
+ * "Combine again" (0008 Amendment 1): the case's scans, combined into its saved file at Docket & dispatch, when "File
+ * ready" couldn't. 409 SCANS_MISSING with details.missing while a paper has no scan; 409 once combined.
+ */
+router.post("/cases/:caseNo/scans/combine", visaEdit, async (req, res) => {
+  res.json({ case: await combineScansService.combineScansNow(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
 });
 
 /** A short-lived link that opens one of the case's files ({ url, expiresAt }). Opening is audited. */

@@ -353,6 +353,27 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The case's scans combined into the saved file (0008 Amendment 1), on the Docket and Submit online cards. */
+.combined-scans {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.combined-scans p,
+.combined-scans-note {
+  margin: 0;
+}
+.combined-scans-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dispatch-card > :is(.combined-scans, .combined-scans-missing, .combined-scans-note) {
+  margin-top: 12px;
+}
 /* The quote (0009 Decision 2): "Money on this case" in the rail, and its dialog. */
 .money-rows .kv {
   font-size: 13.5px;

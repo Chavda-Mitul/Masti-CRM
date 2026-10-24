@@ -2,6 +2,7 @@ import { canActOnCase } from '../../../auth/permissions'
 import { useMe } from '../../../auth/useAuth'
 import { formatDateTime } from '../../../lib/format'
 import type { VisaCase } from '../types'
+import { CombinedScansLine } from './CombinedScansLine'
 import { dayTime, firstName, liveInvoice } from './labels'
 
 /**
@@ -75,6 +76,7 @@ export function SubmitOnlineCard({ visaCase: c }: { visaCase: VisaCase }) {
           <span className="chip chip-warn chip-sm">Raise invoice first</span>
         )}
       </div>
+      <CombinedScansLine visaCase={c} />
     </section>
   )
 }

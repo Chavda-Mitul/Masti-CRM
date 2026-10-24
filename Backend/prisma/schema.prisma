@@ -1238,6 +1238,9 @@ model CaseFile {
   sizeBytes    Int
   /// A PDF's pages; a photo has none (checked in the migration).
   pageCount    Int?
+  /// A saved file the CRM made from the case's scans at Docket & dispatch (docs/decisions/0008-visa-docket-dispatch.md
+  /// Amendment 1): how many scans went in. Null for an upload; only on a FINAL_FILE (checked in the migration).
+  scanCount    Int?
   uploadedById String
   uploadedAt   DateTime           @default(now()) @db.Timestamptz(3)
   /// The traveller a refusal letter (0012 Decision 4) or an e-visa (0025) is for: set for REFUSAL_LETTER and EVISA and
