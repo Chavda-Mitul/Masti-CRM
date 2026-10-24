@@ -41,8 +41,8 @@ export const VISA_SETTINGS_HELP: Record<keyof VisaTimingsFormValues | 'timings',
   ],
   submissionCheck: [
     ['What it’s for', 'After the vendor gets the file, they submit it at the embassy and give us a file number. This reminds us to ask them for it.'],
-    ['Good to know', 'If the client has an embassy appointment coming up, the reminder comes on that day instead.'],
-    ['Example (1 day · 11:00 AM)', 'Vendor got it on Monday → ask on Tuesday at 11:00 AM.'],
+    ['Good to know', 'If the client has an embassy appointment coming up, the days count from the appointment day instead, since the vendor submits the file there.'],
+    ['Example (1 day · 11:00 AM)', 'Appointment on Thursday → ask on Friday at 11:00 AM. With no appointment: vendor got it on Monday → ask on Tuesday at 11:00 AM.'],
   ],
   recallReturn: [
     ['What it’s for', 'Sometimes we take a file back from the vendor, for example when the client cancels. This reminds us to get the passports and papers back from them.'],

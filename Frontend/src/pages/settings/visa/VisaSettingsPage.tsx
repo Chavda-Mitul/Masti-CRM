@@ -21,7 +21,7 @@ const CHECKS: { key: TimingKey; what: string; from: string }[] = [
   { key: 'dispatchCheck', what: 'Put a ready file in a docket and dispatch it', from: 'after File ready' },
   { key: 'vendorConfirm', what: 'Did the vendor get the docket?', from: 'after dispatch' },
   { key: 'onlineCheck', what: 'Check the e-visa portal', from: 'after Submitted online' },
-  { key: 'submissionCheck', what: 'Get the file number from the vendor', from: 'after Vendor got it, when no appointment is still to come' },
+  { key: 'submissionCheck', what: 'Get the file number from the vendor', from: 'after the embassy appointment, or after Vendor got it when none is still to come' },
   { key: 'recallReturn', what: 'Chase a recalled file’s papers', from: 'after the recall' },
   { key: 'passportsBackCheck', what: 'Are the passports on their way back?', from: 'after the decision' },
   { key: 'arrivalCheck', what: 'Have the passports arrived?', from: 'after the day they’re expected' },

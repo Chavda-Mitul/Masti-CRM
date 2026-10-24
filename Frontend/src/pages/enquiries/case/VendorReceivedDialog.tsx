@@ -45,7 +45,7 @@ export function VendorReceivedDialog({ visaCase: c, onClose }: { visaCase: VisaC
           <p className="muted small" style={{ margin: 0 }}>
             The file comes back due {c.owner && <>on {firstName(c.owner.name)}’s desk </>}
             <strong>{dayTime(check.data.dueAt)}</strong>
-            {check.data.dueReason === 'APPOINTMENT' ? ', at the embassy appointment,' : ''} to get the file number.
+            {check.data.dueReason === 'APPOINTMENT' ? ', after the embassy appointment,' : ''} to get the file number.
           </p>
         )}
 
