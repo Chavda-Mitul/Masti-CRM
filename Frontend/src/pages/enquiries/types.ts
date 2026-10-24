@@ -277,7 +277,10 @@ export type CaseConsent =
 /** The embassy's decision on one traveller (docs/decisions/0012-visa-decision.md Decision 2). */
 export type VisaOutcome = 'APPROVED' | 'REFUSED'
 
-/** Approved with the sticker (or e-visa) number and the dates it's valid (YYYY-MM-DD), or Refused with none. */
+/**
+ * Approved, with the sticker (or e-visa) number and the dates it's valid (YYYY-MM-DD) once added with Change (each
+ * optional, amended 23 Oct 2026), or Refused with none.
+ */
 export interface TravellerDecision {
   outcome: VisaOutcome
   visaNo: string | null

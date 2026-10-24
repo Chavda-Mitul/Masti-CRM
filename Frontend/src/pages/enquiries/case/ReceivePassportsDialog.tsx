@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { useMe } from '../../../auth/useAuth'
 import { RequiredMark } from '../../../components/FormField'
 import { errorBody, errorText } from '../../../lib/apiErrors'
-import { formatDate } from '../../../lib/format'
 import { useToast } from '../../../lib/toast'
 import { useReceivePassports } from '../queries'
 import type { StickerCheck, VisaCase } from '../types'
-import { bookletsSent, bookletsText, bookletsVsIntake } from './labels'
+import { bookletsSent, bookletsText, bookletsVsIntake, visaDetails } from './labels'
 
 /**
  * "Mark received" (docs/decisions/0013-visa-passport-back.md Decision 5): the packet is opened at our office and the
@@ -102,7 +101,7 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
           ) : (
             <>
               <span className="hint" style={{ marginTop: 0 }}>
-                Against the passport’s name and the dates recorded at the decision.
+                Against the passport’s name, and the number and dates if they were added at the decision.
               </span>
               {c.travellers.map((t) => {
                 const name = t.name ?? t.label
@@ -117,13 +116,17 @@ export function ReceivePassportsDialog({ visaCase: c, onClose }: { visaCase: Vis
                 }
                 const check = checks[t.id]
                 const pick = (value: StickerCheck) => setChecks((all) => ({ ...all, [t.id]: value }))
+                // Only what was added: the number and dates are optional (0012, amended 23 Oct 2026).
+                const details = visaDetails(d, false)
                 return (
                   <div key={t.id} className="decision-row">
                     <span>
                       <strong>{name}</strong>
-                      <span className="mono small muted" style={{ display: 'block' }}>
-                        Sticker {d.visaNo} · valid {formatDate(d.validFrom)} – {formatDate(d.validTo)}
-                      </span>
+                      {details && (
+                        <span className="mono small muted" style={{ display: 'block' }}>
+                          {details}
+                        </span>
+                      )}
                     </span>
                     <span className="seg-btn" role="radiogroup" aria-label={`${name}: sticker`}>
                       <button

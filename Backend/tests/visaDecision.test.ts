@@ -7,8 +7,9 @@ import { createUser, loginAs, prisma, resetDb } from "./helpers";
 import { appointmentsHeld, dispatchCase, makeInvoiceable, mastiReady, type Agent } from "./visaHelpers";
 
 // Visa Step 6, the decision (docs/decisions/0012-visa-decision.md): once the file was submitted (at the embassy, or
-// online for an e-visa), every traveller's outcome is recorded at once, an approved one with the sticker (or e-visa)
-// number and its dates. The case moves to Decision, due the next open office day at 11:00 ⚠️.
+// online for an e-visa), every traveller's outcome is recorded at once, Approved or Refused, with nothing typed (amended
+// 23 Oct 2026, change request 21). The case moves to Decision, due the next open office day at 11:00 ⚠️. Change then
+// adds an approved one's sticker (or e-visa) number and its dates, each optional.
 
 beforeEach(async () => {
   await resetDb();
@@ -94,8 +95,10 @@ async function record(agent: Agent, caseNo: string, outcomes: Outcome[], updated
   return agent.post(`/api/visa/cases/${caseNo}/decision`).send({ outcomes, updatedAt: seen });
 }
 
-const approved = (travellerId: string, visaNo = "0182 4471"): Outcome => ({ travellerId, outcome: "APPROVED", visaNo, validFrom: FROM, validTo: TO });
+const approved = (travellerId: string): Outcome => ({ travellerId, outcome: "APPROVED" });
 const refused = (travellerId: string): Outcome => ({ travellerId, outcome: "REFUSED" });
+/** An approved one's details, as Change adds them. */
+const details = (visaNo = "0182 4471") => ({ outcome: "APPROVED", visaNo, validFrom: FROM, validTo: TO });
 
 /** The case's updatedAt now, read from the database (so it works for users who can't open the case too). */
 const caseUpdatedAt = async (caseNo: string) =>
@@ -109,29 +112,28 @@ async function change(agent: Agent, caseNo: string, travellerId: string, body: O
 }
 
 describe("Record the decision (Decisions 2, 3 and 6)", () => {
-  it("saves everyone at once and moves the case to Decision, due the next open office day at 11:00", async () => {
+  it("saves everyone at once, with nothing typed, and moves the case to Decision, due the next open office day at 11:00", async () => {
     const { c, processor, adult, child } = await atVendor();
-    const res = await record(processor, c.caseNo, [approved(adult, "  fra 0182   4471 "), refused(child)]);
+    // A number or dates sent along are ignored: they're added with Change (amended 23 Oct 2026).
+    const res = await record(processor, c.caseNo, [{ ...approved(adult), visaNo: "0182 4471", validFrom: FROM, validTo: TO }, refused(child)]);
     expect(res.status).toBe(200);
     const after = res.body.case as CaseDto;
     expect(after.stage.code).toBe("DECISION");
     expect(after.decision).toMatchObject({ by: { name: "Neha Joshi" } });
     expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 1), { office: true }), "11:00").toISOString());
     expect(after.travellers.map((t) => t.decision)).toEqual([
-      { outcome: "APPROVED", visaNo: "FRA 0182 4471", validFrom: FROM, validTo: TO },
+      { outcome: "APPROVED", visaNo: null, validFrom: null, validTo: null },
       { outcome: "REFUSED", visaNo: null, validFrom: null, validTo: null },
     ]);
 
     const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.decision.record" } });
     expect(row).toMatchObject({ entityType: "Enquiry", entityId: c.id, clientId: c.client.id });
     expect(row.before).toMatchObject({ stage: "AT_VENDOR" });
-    expect(row.after).toMatchObject({
-      stage: "DECISION",
-      travellers: [
-        { name: "Rakesh Mehta", outcome: "APPROVED", visaNo: "FRA 0182 4471", validFrom: FROM, validTo: TO },
-        { name: "Aarav Mehta", outcome: "REFUSED", visaNo: null },
-      ],
-    });
+    expect(row.after).toMatchObject({ stage: "DECISION" });
+    expect((row.after as { travellers: unknown }).travellers).toEqual([
+      { name: "Rakesh Mehta", outcome: "APPROVED" },
+      { name: "Aarav Mehta", outcome: "REFUSED" },
+    ]);
     // A refusal changes no money: no credit note.
     expect(await prisma.creditNote.count()).toBe(0);
   });
@@ -147,7 +149,7 @@ describe("Record the decision (Decisions 2, 3 and 6)", () => {
     expect(after.dueAt).toBe(istDateTimeToUtc(await nextOpenDay(addDays(istToday(), 3), { office: true }), "10:00").toISOString());
   });
 
-  it("an e-visa, after Submitted online, records its e-visa number", async () => {
+  it("an e-visa, after Submitted online, records Approved with no number; Change adds its e-visa number", async () => {
     await mastiReady();
     const c = await dispatchCase();
     const { offeringId } = await prisma.visaCase.findUniqueOrThrow({ where: { enquiryId: c.id }, select: { offeringId: true } });
@@ -159,17 +161,21 @@ describe("Record the decision (Decisions 2, 3 and 6)", () => {
     expect((await processor.post(`/api/visa/cases/${c.caseNo}/submit-online`).send({ updatedAt: seen })).status).toBe(200);
     const { adult, child } = await name(c);
 
-    expect((await record(processor, c.caseNo, [{ ...approved(adult), visaNo: null }, approved(child)])).body.issues.outcomes).toEqual([
-      "Enter Rakesh Mehta's e-visa number.",
-    ]);
-    const res = await record(processor, c.caseNo, [approved(adult, "EV-2026/88213"), approved(child, "EV-2026/88214")]);
+    const res = await record(processor, c.caseNo, [approved(adult), approved(child)]);
     expect(res.status).toBe(200);
-    expect((res.body.case as CaseDto).travellers.map((t) => t.decision?.visaNo)).toEqual(["EV-2026/88213", "EV-2026/88214"]);
+    expect((res.body.case as CaseDto).travellers.map((t) => t.decision?.visaNo)).toEqual([null, null]);
+    const added = await change(processor, c.caseNo, adult, details("EV-2026/88213"));
+    expect(added.status).toBe(200);
+    expect((added.body.case as CaseDto).travellers.map((t) => t.decision?.visaNo)).toEqual(["EV-2026/88213", null]);
+    // The words name an e-visa's number.
+    expect((await change(processor, c.caseNo, child, { outcome: "REFUSED", visaNo: "EV-2026/88214" })).body.issues.decision).toEqual([
+      "Aarav Mehta was refused: leave the e-visa number and dates empty.",
+    ]);
   });
 });
 
 describe("what is refused", () => {
-  it("a missing, unknown or repeated traveller, and details that don't fit the outcome", async () => {
+  it("a missing, unknown or repeated traveller, or no outcome", async () => {
     const { c, processor, adult, child } = await atVendor();
     const issue = async (outcomes: Outcome[]) => {
       const res = await record(processor, c.caseNo, outcomes);
@@ -179,12 +185,6 @@ describe("what is refused", () => {
     expect(await issue([approved(adult)])).toEqual(["Record Aarav Mehta's decision too."]);
     expect(await issue([approved(adult), refused("not-a-traveller")])).toEqual(["Someone on this list isn't on the case. Reload and try again."]);
     expect(await issue([approved(adult), refused(adult), refused(child)])).toEqual(["Rakesh Mehta is on the list twice."]);
-    expect(await issue([{ ...approved(adult), visaNo: null }, refused(child)])).toEqual(["Enter Rakesh Mehta's sticker number."]);
-    expect(await issue([{ ...approved(adult), validTo: null }, refused(child)])).toEqual(["Enter the dates Rakesh Mehta's visa is valid."]);
-    expect(await issue([{ ...approved(adult), validFrom: TO, validTo: FROM }, refused(child)])).toEqual(["Rakesh Mehta's visa can't end before it starts."]);
-    expect(await issue([approved(adult), { ...refused(child), visaNo: "0182 4472" }])).toEqual(["Aarav Mehta was refused: leave the sticker number and dates empty."]);
-    expect(await issue([approved(adult, "01"), refused(child)])).toEqual(["Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."]);
-    expect(await issue([approved(adult, "0182 4471-"), refused(child)])).toHaveLength(1);
     expect(await issue([{ travellerId: adult, outcome: "MAYBE" }, refused(child)])).toEqual(["Pick Approved or Refused for everyone."]);
     expect(await issue([])).toEqual(["Record a decision for everyone."]);
     expect(await prisma.visaCaseTraveller.count({ where: { outcome: { not: null } } })).toBe(0);
@@ -239,22 +239,27 @@ describe("who may record it", () => {
     expect((hod.body.case as CaseDto).decision!.by!.name).toBe("Riya");
 
     const other = await atVendor({ extra: { mobile: "98250 41237", clientName: "Sunil Shah" }, vendorId: c.vendor.id, clientName: "Sunil Shah" });
-    expect((await record(await loginAs("vimal@masti.test"), other.c.caseNo, [approved(other.adult, "0182 4481"), approved(other.child, "0182 4482")])).status).toBe(200);
+    expect((await record(await loginAs("vimal@masti.test"), other.c.caseNo, [approved(other.adult), approved(other.child)])).status).toBe(200);
   });
 });
 
 describe("the database", () => {
-  it("keeps an approved traveller's details whole, the number's format, and decides only a submitted, unrecalled file", async () => {
+  it("keeps an approved traveller's details optional but in order, the number's format, and decides only a submitted, unrecalled file", async () => {
     const { c, adult } = await atVendor({ submitted: false });
     const set = (data: Record<string, unknown>) => prisma.visaCaseTraveller.update({ where: { id: adult }, data });
     const day = (d: string) => toDbDate(d);
-    await expect(set({ outcome: "APPROVED", visaNo: "0182 4471" })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
-    await expect(set({ outcome: "APPROVED", visaNo: "0182 4471", validFrom: day(TO), validTo: day(FROM) })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
-    await expect(set({ outcome: "REFUSED", visaNo: "0182 4471" })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
+    // Undecided or refused: none of them.
     await expect(set({ visaNo: "0182 4471" })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
+    await expect(set({ outcome: "REFUSED", visaNo: "0182 4471" })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
+    await expect(set({ outcome: "REFUSED", validFrom: day(FROM) })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
+    // Approved: each optional (amended 23 Oct 2026), but never ending before it starts.
+    await expect(set({ outcome: "APPROVED", visaNo: "0182 4471", validFrom: day(TO), validTo: day(FROM) })).rejects.toThrow(/VisaCaseTraveller_outcome_details/);
     await expect(set({ outcome: "APPROVED", visaNo: "0182  4471", validFrom: day(FROM), validTo: day(TO) })).rejects.toThrow(/VisaCaseTraveller_visa_no_format/);
     await expect(set({ outcome: "APPROVED", visaNo: "fra 0182", validFrom: day(FROM), validTo: day(TO) })).rejects.toThrow(/VisaCaseTraveller_visa_no_format/);
-    await set({ outcome: "APPROVED", visaNo: "FRA 0182/4471-A", validFrom: day(FROM), validTo: day(FROM) });
+    await set({ outcome: "APPROVED" });
+    await set({ visaNo: "FRA 0182/4471-A" });
+    await set({ validFrom: day(FROM) });
+    await set({ visaNo: null, validTo: day(FROM) });
 
     const neha = await prisma.user.findUniqueOrThrow({ where: { email: "neha@masti.test" } });
     const decide = (data: Record<string, unknown>) => prisma.visaCase.update({ where: { enquiryId: c.id }, data });
@@ -272,24 +277,29 @@ describe("the database", () => {
 });
 
 describe("Change a traveller's decision (Decision 6)", () => {
-  /** Mehta's file at Step 6: Rakesh approved with sticker 0182 4471, Aarav refused. */
+  /** Mehta's file at Step 6: Rakesh approved, Aarav refused, nothing typed. */
   async function decided() {
     const at = await atVendor();
     expect((await record(at.processor, at.c.caseNo, [approved(at.adult), refused(at.child)])).status).toBe(200);
     return at;
   }
 
-  it("corrects the outcome, or just the number, and the audit log keeps the old and new values", async () => {
+  it("adds the number and dates, corrects the outcome or just the number, and the audit log keeps the old and new values", async () => {
     const { c, processor, adult, child } = await decided();
     const before = await load(processor, c.caseNo);
 
-    // Refused → Approved: the number and dates are needed, cleaned up as when recorded.
-    const approve = await change(processor, c.caseNo, child, { outcome: "APPROVED", visaNo: " fra 0182   4472 ", validFrom: FROM, validTo: TO });
+    // After recording: Rakesh's sticker number and dates, cleaned up.
+    const added = await change(processor, c.caseNo, adult, details(" fra 0182   4471 "));
+    expect(added.status).toBe(200);
+    expect((added.body.case as CaseDto).travellers[0]!.decision).toEqual({ outcome: "APPROVED", visaNo: "FRA 0182 4471", validFrom: FROM, validTo: TO });
+
+    // Refused → Approved, with nothing typed yet.
+    const approve = await change(processor, c.caseNo, child, { outcome: "APPROVED" });
     expect(approve.status).toBe(200);
-    expect((approve.body.case as CaseDto).travellers[1]!.decision).toEqual({ outcome: "APPROVED", visaNo: "FRA 0182 4472", validFrom: FROM, validTo: TO });
+    expect((approve.body.case as CaseDto).travellers[1]!.decision).toEqual({ outcome: "APPROVED", visaNo: null, validFrom: null, validTo: null });
 
     // Only the number.
-    const renumber = await change(processor, c.caseNo, adult, { outcome: "APPROVED", visaNo: "0182 4479", validFrom: FROM, validTo: TO });
+    const renumber = await change(processor, c.caseNo, adult, details("0182 4479"));
     expect((renumber.body.case as CaseDto).travellers[0]!.decision!.visaNo).toBe("0182 4479");
 
     // Approved → Refused clears the number and dates.
@@ -304,25 +314,49 @@ describe("Change a traveller's decision (Decision 6)", () => {
     expect(after.decision).toEqual(before.decision);
 
     const rows = await prisma.auditLog.findMany({ where: { action: "visa.decision.change" }, orderBy: { id: "asc" } });
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(rows[0]).toMatchObject({
       entityType: "VisaCaseTraveller",
-      entityId: child,
+      entityId: adult,
       clientId: c.client.id,
-      before: { name: "Aarav Mehta", outcome: "REFUSED", visaNo: null, validFrom: null, validTo: null },
-      after: { name: "Aarav Mehta", outcome: "APPROVED", visaNo: "FRA 0182 4472", validFrom: FROM, validTo: TO },
+      before: { name: "Rakesh Mehta", outcome: "APPROVED", visaNo: null, validFrom: null, validTo: null },
+      after: { name: "Rakesh Mehta", outcome: "APPROVED", visaNo: "FRA 0182 4471", validFrom: FROM, validTo: TO },
     });
-    expect(rows[1]).toMatchObject({ before: { name: "Rakesh Mehta", visaNo: "0182 4471" }, after: { visaNo: "0182 4479" } });
-    expect(rows[2]).toMatchObject({
+    expect(rows[1]).toMatchObject({
+      entityId: child,
+      before: { name: "Aarav Mehta", outcome: "REFUSED" },
+      after: { name: "Aarav Mehta", outcome: "APPROVED", visaNo: null, validFrom: null, validTo: null },
+    });
+    expect(rows[2]).toMatchObject({ before: { name: "Rakesh Mehta", visaNo: "FRA 0182 4471" }, after: { visaNo: "0182 4479" } });
+    expect(rows[3]).toMatchObject({
       before: { outcome: "APPROVED", visaNo: "0182 4479" },
       after: { name: "Rakesh Mehta", outcome: "REFUSED", visaNo: null, validFrom: null, validTo: null },
     });
 
     // Saving what's already there writes nothing.
     expect((await change(processor, c.caseNo, adult, { outcome: "REFUSED" })).status).toBe(200);
-    expect(await prisma.auditLog.count({ where: { action: "visa.decision.change" } })).toBe(3);
+    expect(await prisma.auditLog.count({ where: { action: "visa.decision.change" } })).toBe(4);
     // A change moves no money.
     expect(await prisma.creditNote.count()).toBe(0);
+  });
+
+  it("takes each detail on its own: a number alone, one date, or clearing the number again", async () => {
+    const { c, processor, adult } = await decided();
+    const decision = async (body: Omit<Outcome, "travellerId">) => {
+      const res = await change(processor, c.caseNo, adult, body);
+      expect(res.status).toBe(200);
+      return (res.body.case as CaseDto).travellers[0]!.decision;
+    };
+    expect(await decision({ outcome: "APPROVED", visaNo: "0182 4471" })).toEqual({ outcome: "APPROVED", visaNo: "0182 4471", validFrom: null, validTo: null });
+    expect(await decision({ outcome: "APPROVED", visaNo: "0182 4471", validFrom: FROM })).toEqual({
+      outcome: "APPROVED",
+      visaNo: "0182 4471",
+      validFrom: FROM,
+      validTo: null,
+    });
+    // Left out or sent as null, a detail is cleared.
+    expect(await decision({ outcome: "APPROVED", visaNo: null, validFrom: FROM, validTo: TO })).toEqual({ outcome: "APPROVED", visaNo: null, validFrom: FROM, validTo: TO });
+    expect(await decision({ outcome: "APPROVED" })).toEqual({ outcome: "APPROVED", visaNo: null, validFrom: null, validTo: null });
   });
 
   it("refuses a change saved after someone else's (STALE), so two open dialogs can't undo each other", async () => {
@@ -343,21 +377,23 @@ describe("Change a traveller's decision (Decision 6)", () => {
     expect((await change(processor, c.caseNo, adult, { outcome: "REFUSED" })).status).toBe(200);
   });
 
-  it("refuses details that don't fit the outcome, as when recorded", async () => {
+  it("refuses details that don't fit the outcome", async () => {
     const { c, processor, adult, child } = await decided();
     const issue = async (travellerId: string, body: Omit<Outcome, "travellerId">) => {
       const res = await change(processor, c.caseNo, travellerId, body);
       expect(res.status).toBe(400);
       return res.body.issues.decision as string[];
     };
-    expect(await issue(child, { outcome: "APPROVED", validFrom: FROM, validTo: TO })).toEqual(["Enter Aarav Mehta's sticker number."]);
-    expect(await issue(child, { outcome: "APPROVED", visaNo: "0182 4472", validFrom: FROM })).toEqual(["Enter the dates Aarav Mehta's visa is valid."]);
     expect(await issue(child, { outcome: "APPROVED", visaNo: "0182 4472", validFrom: TO, validTo: FROM })).toEqual([
       "Aarav Mehta's visa can't end before it starts.",
     ]);
     expect(await issue(adult, { outcome: "REFUSED", visaNo: "0182 4471" })).toEqual(["Rakesh Mehta was refused: leave the sticker number and dates empty."]);
-    const badNumber = await change(processor, c.caseNo, adult, { outcome: "APPROVED", visaNo: "01", validFrom: FROM, validTo: TO });
+    expect(await issue(adult, { outcome: "REFUSED", validTo: TO })).toEqual(["Rakesh Mehta was refused: leave the sticker number and dates empty."]);
+    const badNumber = await change(processor, c.caseNo, adult, details("01"));
     expect(badNumber.body.issues.visaNo).toEqual(["Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."]);
+    expect((await change(processor, c.caseNo, adult, details("0182 4471-"))).body.issues.visaNo).toHaveLength(1);
+    // A blank number is a mistake in the request: the page sends null for an empty box.
+    expect((await change(processor, c.caseNo, adult, details("  "))).body.issues.visaNo).toHaveLength(1);
     const noOutcome = await change(processor, c.caseNo, adult, { outcome: "MAYBE" });
     expect(noOutcome.body.issues.outcome).toEqual(["Pick Approved or Refused."]);
 

@@ -129,10 +129,12 @@ describe("sending", () => {
       clientId: c.client.id,
       attachmentId: rakesh!.id,
       status: "QUEUED",
-      variables: expect.objectContaining({ traveller_name: "Rakesh Mehta", evisa_no: "EV-2026/88213", case_no: c.caseNo }),
+      variables: expect.objectContaining({ traveller_name: "Rakesh Mehta", case_no: c.caseNo }),
     });
-    expect(byTraveller.get(`${VISA_EVISA_READY}:${child}`)).toMatchObject({ attachmentId: aarav!.id, variables: expect.objectContaining({ evisa_no: "EV-2026/88214" }) });
-    expect(byTraveller.get(`${VISA_EVISA_READY}:${adult}`)!.body).toContain("Good news! The France tourist visa is approved for Rakesh Mehta");
+    expect(byTraveller.get(`${VISA_EVISA_READY}:${child}`)).toMatchObject({ attachmentId: aarav!.id, variables: expect.objectContaining({ traveller_name: "Aarav Mehta" }) });
+    // The number and dates are optional (0012, amended 23 Oct 2026): the words don't carry them; the PDF does.
+    expect(byTraveller.get(`${VISA_EVISA_READY}:${adult}`)!.variables).not.toHaveProperty("evisa_no");
+    expect(byTraveller.get(`${VISA_EVISA_READY}:${adult}`)!.body).toContain(`Good news! The France tourist visa is approved for Rakesh Mehta (${c.caseNo}). The e-visa is attached.`);
 
     const entry = await prisma.auditLog.findFirstOrThrow({ where: { action: "visa.evisa.sent", entityId: c.id } });
     expect(entry).toMatchObject({
@@ -149,6 +151,16 @@ describe("sending", () => {
         ],
       },
     });
+  });
+
+  it("goes with no e-visa number or dates added: they're optional (0012, amended 23 Oct 2026)", async () => {
+    const { c, processor, adult, child } = await evisaCase();
+    // As recorded, before anyone adds them with Change.
+    await prisma.visaCaseTraveller.updateMany({ where: { caseId: c.id }, data: { visaNo: null, validFrom: null, validTo: null } });
+    await ready(processor, c.caseNo, [adult, child]);
+    expect((await send(processor, c.caseNo)).status).toBe(200);
+    const messages = await prisma.outboundMessage.findMany({ where: { template: { code: VISA_EVISA_READY } } });
+    expect(messages.map((m) => m.status)).toEqual(["QUEUED", "QUEUED"]);
   });
 
   it("with passports held: it stays at Decision, open, due for the handover, and the list says so", async () => {

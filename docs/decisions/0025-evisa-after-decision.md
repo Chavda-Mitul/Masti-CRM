@@ -84,7 +84,8 @@ Each part is planned in plan mode, built, tested, checked in the browser and mer
 ### 3. Its check against the passport (part 1)
 
 - **Matches or Doesn't match:** the PDF against the passport (name, passport number) and what was recorded at Step 6
-  (the e-visa number and dates).
+  (the e-visa number and dates). *Since 23 Oct 2026 the number and dates are optional, added with Change
+  ([0012](0012-visa-decision.md) Decision 3, amended; change request 21): they're compared when they were added.*
 - **It reuses the sticker's check** (`VisaCaseTraveller.stickerCheck`): an e-visa never reaches Step 7, where a sticker
   is checked, and the database already keeps it to an approved traveller.
 - **A newer PDF clears it:** it hasn't been looked at.
@@ -146,9 +147,12 @@ S3 pre-signed one.
 - **What goes:** message 19, **"Your e-visa"** ⚠️ (our draft, for M1), one per approved traveller, each carrying their
   current PDF (Decision 4):
   > Dear {{client_name}}, Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is
-  > attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}. Please print it and keep it with the passport when
-  > you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away. – Masti Tours &
-  > Travels
+  > attached. Please print it and keep it with the passport when you travel. If anything on it doesn't match the
+  > passport, call us on {{office_phone}} straight away. – Masti Tours & Travels
+
+  *Changed 23 Oct 2026 (change request 21, part 1):* the words no longer name the e-visa's number and dates ("no.
+  {{evisa_no}}, valid {{valid_from}} to {{valid_to}}"). They're optional now, added with Change
+  ([0012](0012-visa-decision.md) Decision 3, amended), and the PDF shows them.
 - **Then:**
   - **No passports held** (no booklets counted at intake, the usual e-visa): the case moves to **Delivered** and
     **closes**, with no due time.

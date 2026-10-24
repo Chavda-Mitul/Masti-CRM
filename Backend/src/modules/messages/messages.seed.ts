@@ -318,7 +318,7 @@ export const MESSAGE_TEMPLATES = [
     body: [
       "Dear {{client_name}},",
       "",
-      "Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is attached: no. {{evisa_no}}, valid {{valid_from}} to {{valid_to}}.",
+      "Good news! The {{visa}} is approved for {{traveller_name}} ({{case_no}}). The e-visa is attached.",
       "",
       "Please print it and keep it with the passport when you travel. If anything on it doesn't match the passport, call us on {{office_phone}} straight away.",
       "",

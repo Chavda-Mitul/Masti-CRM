@@ -1,6 +1,6 @@
 import type { VisaOutcome } from '../types'
 
-/** One traveller's entry in the decision forms, as typed. */
+/** One traveller's entry in the decision forms, as typed. Record takes only the outcome; Change adds the details. */
 export interface DecisionRowValue {
   outcome: VisaOutcome | null
   visaNo: string
@@ -16,19 +16,20 @@ export const numberLabel = (online: boolean) => (online ? 'e-Visa no.' : 'Sticke
 /** "sticker number" / "e-visa number", for the messages. */
 export const numberWords = (online: boolean) => (online ? 'e-visa number' : 'sticker number')
 
-/** What's missing before the row can be saved (Decision 3), or null. The server checks it again. */
-export function rowProblem(r: DecisionRowValue, online: boolean) {
+/**
+ * What's wrong before the row can be saved (Decision 3), or null. The server checks it again. Only the outcome is
+ * needed: an approved one's number and dates are optional, added with Change (amended 23 Oct 2026), but the visa can't
+ * end before it starts.
+ */
+export function rowProblem(r: DecisionRowValue) {
   if (!r.outcome) return 'Pick Approved or Refused.'
-  if (r.outcome === 'REFUSED') return null
-  if (!r.visaNo.trim()) return `Enter the ${numberWords(online)}.`
-  if (!r.validFrom || !r.validTo) return 'Enter both dates.'
-  if (r.validTo < r.validFrom) return 'It can’t end before it starts.'
+  if (r.outcome === 'APPROVED' && r.validFrom && r.validTo && r.validTo < r.validFrom) return 'It can’t end before it starts.'
   return null
 }
 
-/** The row as the API takes it: an approved one with its number and dates, a refused one without. */
+/** The row as Change sends it: an approved one with its details, empty ones as null; a refused one without. */
 export function rowBody(r: DecisionRowValue) {
   return r.outcome === 'APPROVED'
-    ? { outcome: r.outcome, visaNo: r.visaNo, validFrom: r.validFrom, validTo: r.validTo }
+    ? { outcome: r.outcome, visaNo: r.visaNo.trim() || null, validFrom: r.validFrom || null, validTo: r.validTo || null }
     : { outcome: r.outcome! }
 }

@@ -1446,9 +1446,9 @@ enum VisaOutcome {
   REFUSED
 }
 
-/// An approved traveller's visa sticker, checked against the passport's name and the dates recorded at Step 6 when the
-/// passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). For an e-visa, its PDF checked against
-/// the passport and what was recorded at Step 6 (docs/decisions/0025-evisa-after-decision.md).
+/// An approved traveller's visa sticker, checked against the passport's name, and the number and dates if they were
+/// recorded, when the passports are received (docs/decisions/0013-visa-passport-back.md Decision 5). For an e-visa, its
+/// PDF checked against the passport and anything recorded at Step 6 (docs/decisions/0025-evisa-after-decision.md).
 enum StickerCheck {
   MATCHES
   MISMATCH
@@ -1472,8 +1472,9 @@ model VisaCaseTraveller {
   appointmentAt      DateTime?          @db.Timestamptz(3)
   /// The embassy's decision (docs/decisions/0012-visa-decision.md): null until recorded.
   outcome            VisaOutcome?
-  /// An approved visa's sticker number (an e-visa's number), and the dates it's valid. All three set for APPROVED and
-  /// none otherwise; the number in capitals with single spaces; validTo on or after validFrom (checked in the migration).
+  /// An approved visa's sticker number (an e-visa's number), and the dates it's valid: optional for APPROVED, added
+  /// later with Change (0012, amended 23 Oct 2026), and none otherwise; the number in capitals with single spaces;
+  /// validTo on or after validFrom when both are set (checked in the migration).
   visaNo             String?
   validFrom          DateTime?          @db.Date
   validTo            DateTime?          @db.Date

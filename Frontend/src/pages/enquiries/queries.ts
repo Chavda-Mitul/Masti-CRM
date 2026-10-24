@@ -490,10 +490,13 @@ export function useSaveSubmission(caseNo: string) {
   )
 }
 
-/** "Record the decision" (0012 Decision 6): every traveller's outcome at once; the case moves to Decision. */
+/**
+ * "Record the decision" (0012 Decision 6): every traveller's outcome at once, nothing typed (amended 23 Oct 2026); the
+ * case moves to Decision.
+ */
 export function useRecordDecision(caseNo: string) {
   return useCaseAction<{
-    outcomes: { travellerId: string; outcome: VisaOutcome; visaNo?: string; validFrom?: string; validTo?: string }[]
+    outcomes: { travellerId: string; outcome: VisaOutcome }[]
     updatedAt: string
     confirmWarnings?: boolean
   }>(caseNo, (base, body) => api(`${base}/decision`, { method: 'POST', body }))
@@ -608,14 +611,17 @@ export function useChangePassportsBack(caseNo: string) {
   )
 }
 
-/** "Change" one traveller's decision while the case is at Decision (0012 Decision 6). 400 under `decision`. */
+/**
+ * "Change" one traveller's decision while the case is at Decision (0012 Decision 6): the outcome, or an approved one's
+ * number and dates, each optional (null clears it). 400 under `decision`.
+ */
 export function useChangeDecision(caseNo: string) {
   return useCaseAction<{
     travellerId: string
     outcome: VisaOutcome
-    visaNo?: string
-    validFrom?: string
-    validTo?: string
+    visaNo?: string | null
+    validFrom?: string | null
+    validTo?: string | null
     stickerCheck?: StickerCheck
     updatedAt: string
     confirmWarnings?: boolean

@@ -237,7 +237,8 @@ async function raiseInvoice(agent: Agent, caseNo: string) {
 
 /**
  * Mehta's file, Neha's, submitted at the embassy (unless `decided` is false, the decision recorded too: Rakesh approved,
- * valid 20–60 days from today, Aarav refused). `extra` and `vendorId` make another family's file. The first case's
+ * Aarav refused, then Rakesh's sticker number and dates, valid 20–60 days from today, saved as Change would add them:
+ * recording takes none, 0012 amended 23 Oct 2026). `extra` and `vendorId` make another family's file. The first case's
  * sticker is 0182 4471; each later one gets its own (0182 4481, 0182 4491…), as a number already on another case is a
  * warning (0012, amended 19 Oct 2026).
  */
@@ -267,19 +268,32 @@ export async function decidedCase({ decided = true, extra, vendorId }: { decided
   if (decided) {
     const earlier = await prisma.visaCaseTraveller.count({ where: { visaNo: { not: null } } });
     const outcomes = [
-      { travellerId: a!.id, outcome: "APPROVED", visaNo: `0182 ${4471 + earlier * 10}`, validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) },
+      { travellerId: a!.id, outcome: "APPROVED" },
       { travellerId: k!.id, outcome: "REFUSED" },
     ];
     const updatedAt = await updatedAtOf(processor, c.caseNo);
     expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt })).status).toBe(200);
+    await visaDetailsAdded(a!.id, `0182 ${4471 + earlier * 10}`);
   }
   return { c, processor, adult: a!.id, child: k!.id };
 }
 
 /**
+ * An approved traveller's number, valid 20–60 days from today, saved as Change would add it after recording (0012,
+ * amended 23 Oct 2026), without its audit row or a new updatedAt, so tests see the case as recording left it.
+ */
+async function visaDetailsAdded(travellerId: string, visaNo: string) {
+  await prisma.visaCaseTraveller.update({
+    where: { id: travellerId },
+    data: { visaNo, validFrom: toDbDate(addDays(istToday(), 20)), validTo: toDbDate(addDays(istToday(), 60)) },
+  });
+}
+
+/**
  * Mehta's file as an e-visa, Neha's (docs/decisions/0025-evisa-after-decision.md): France · Tourist with Vendor needed
- * off, invoiced, Submitted online, then decided as `outcomes` says for Rakesh and Aarav (approved by default: e-Visa
- * EV-2026/88213 and 88214, valid 20–60 days from today). `decided: false` leaves it At vendor. `held` booklets are
+ * off, invoiced, Submitted online, then decided as `outcomes` says for Rakesh and Aarav (approved by default), and each
+ * approved one's e-Visa EV-2026/88213 and 88214, valid 20–60 days from today, saved as Change would add them (recording
+ * takes none, 0012 amended 23 Oct 2026). `decided: false` leaves it At vendor. `held` booklets are
  * counted in at intake, passports we hold; with none, everyone refused closes the case, confirmed past its warning
  * (part 5).
  */
@@ -304,14 +318,14 @@ export async function evisaCase({
   await prisma.visaCaseTraveller.update({ where: { id: k!.id }, data: { name: "Aarav Mehta" } });
   if (held > 0) await prisma.visaCase.update({ where: { enquiryId: c.id }, data: { bookletsCurrent: held, bookletsOld: 0 } });
   if (decided) {
-    const outcome = (travellerId: string, i: number) =>
-      outcomes[i] === "APPROVED"
-        ? { travellerId, outcome: "APPROVED", visaNo: `EV-2026/${88213 + i}`, validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) }
-        : { travellerId, outcome: "REFUSED" };
+    const travellers = [a!.id, k!.id];
     const updatedAt = await updatedAtOf(processor, c.caseNo);
     const closes = held === 0 && outcomes.every((o) => o === "REFUSED");
-    const body = { outcomes: [outcome(a!.id, 0), outcome(k!.id, 1)], updatedAt, ...(closes ? { confirmWarnings: true } : {}) };
+    const body = { outcomes: travellers.map((travellerId, i) => ({ travellerId, outcome: outcomes[i] })), updatedAt, ...(closes ? { confirmWarnings: true } : {}) };
     expect((await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send(body)).status).toBe(200);
+    for (const [i, travellerId] of travellers.entries()) {
+      if (outcomes[i] === "APPROVED") await visaDetailsAdded(travellerId, `EV-2026/${88213 + i}`);
+    }
   }
   return { c, processor, adult: a!.id, child: k!.id };
 }
