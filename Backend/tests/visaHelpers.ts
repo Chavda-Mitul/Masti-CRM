@@ -231,7 +231,7 @@ export function aWednesday() {
 const updatedAtOf = async (agent: Agent, caseNo: string) => (await agent.get(`/api/visa/cases/${caseNo}`)).body.case.updatedAt as string;
 
 /** Raises the case's invoice from its quote, as the Raise dialog does. */
-async function raiseInvoice(agent: Agent, caseNo: string) {
+export async function raiseInvoice(agent: Agent, caseNo: string) {
   const { quoteUpdatedAt, taxType, gstRatePercent, totalPaise } = (await agent.get(`/api/visa/cases/${caseNo}/invoice/check`)).body.preview;
   expect((await agent.post(`/api/visa/cases/${caseNo}/invoice`).send({ quoteUpdatedAt, taxType, gstRatePercent, totalPaise })).status).toBe(200);
 }
