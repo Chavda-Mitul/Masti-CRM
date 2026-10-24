@@ -203,6 +203,24 @@ Masti changes words, the changed templates are edited, and Meta reviews them aga
 | --- | --- | --- |
 | `META_WHATSAPP_BUSINESS_ACCOUNT_ID` | empty | App Dashboard → WhatsApp → API Setup → WhatsApp Business Account ID. With it, the CRM makes and checks the templates |
 
+**Submitted 24 Oct 2026** (from a freshly seeded worktree database). The 20 utility templates are with Meta for review.
+What Meta said on the way:
+- **Messages 5 and 14 were rejected (`INCORRECT_CATEGORY`)** for "We will send you a code to tell our staff member at
+  the door": an ordinary template may not mention a code. The project lead had the sentence dropped from both. The
+  code itself still comes in message 16. A database seeded before this keeps the old words, so `check` leaves those
+  two off until it's reset and re-seeded.
+- **A change must repeat `parameter_format: "named"`.** Without it Meta rejected the edited words as `INVALID_FORMAT`.
+  `submit` now sends a rejected template again even in our words, so a fixed one is reviewed again.
+- **The door code (message 16) couldn't be made:** "This WhatsApp Business account does not have permission to create
+  message template" (code 10, subcode 2388185). Meta allows authentication templates only for a business it has
+  verified, and some guides add a higher daily limit than 250.
+  - Until then the code goes as plain words, which reach only a client who wrote to Masti in the last 24 hours.
+  - The project lead chose a stopgap. The field app's and the desk handover's code step first say "ask the client to
+    reply 'Hi' to any WhatsApp message from us", which opens those 24 hours.
+  - Remove that line once the code template is switched on.
+- **Masti's business verification** (Meta Business Settings → Security Centre) is now needed for the code template, and
+  to go past 250 clients a day. It needs Masti's business documents (inputs A3).
+
 **Cost:** Meta charges for each utility template message (about ₹0.1–0.2 in India); one inside the 24 hours is free.
 This goes on the running-cost sheet (golden rule 11). Outside production every message goes to the test number.
 

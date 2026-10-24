@@ -118,7 +118,9 @@ export async function syncTemplates({ submit }: { submit: boolean }): Promise<Te
   if (submit) {
     for (const draft of drafts) {
       const existing = found.get(draft.code) ?? null;
-      if (problems.get(draft.code)!.length > 0 || existing?.current) continue;
+      // A rejected template goes again even in our words, for Meta to review again (a rejected one may be changed any
+      // number of times). If its reason is about the words, change them first.
+      if (problems.get(draft.code)!.length > 0 || (existing?.current && existing.status !== "REJECTED")) continue;
       if (existing?.status === "PENDING") {
         notes.set(draft.code, "Its words changed while Meta reviews the old ones: submit again once the review is done.");
         continue;

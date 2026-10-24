@@ -137,7 +137,9 @@ describe("Meta's templates, with Meta stood in", () => {
     expect(create).toMatchObject({ url: "https://graph.facebook.com/v26.0/1800835597791897/message_templates", method: "POST" });
     expect(JSON.parse(String(create!.body))).toMatchObject({ name: "visa_test", category: "utility", parameter_format: "named" });
     expect(change).toMatchObject({ url: "https://graph.facebook.com/v26.0/11", method: "POST" });
-    expect(Object.keys(JSON.parse(String(change!.body)))).toEqual(["components"]);
+    // A change says again that the values are named, or Meta rejects it as INVALID_FORMAT.
+    expect(Object.keys(JSON.parse(String(change!.body)))).toEqual(["parameter_format", "components"]);
+    expect(JSON.parse(String(change!.body)).parameter_format).toBe("named");
   });
 
   it("uploads a sample PDF for a template with a file, to the token's app, and sends its handle", async () => {
@@ -224,6 +226,12 @@ describe("switching the wordings on", () => {
     expect(submitted.map((s) => s.code)).not.toContain(FIELD_DOOR_CODE);
     expect(reports.find((r) => r.code === FIELD_DOOR_CODE)!.note).toMatch(/while Meta reviews the old ones/);
     expect(reports.find((r) => r.code === VISA_PRICE)!.note).toBe("Changed words sent for review.");
+  });
+
+  it("sends a rejected template again even in our words, for Meta to review again", async () => {
+    theirs.set(VISA_PRICE, { name: "visa_price", id: "id-price", status: "REJECTED", reason: "INVALID_FORMAT", current: true });
+    await syncTemplates({ submit: true });
+    expect(submit.mock.calls.map(([d, existing]) => ({ code: d.code, existing: existing?.id ?? null }))).toContainEqual({ code: VISA_PRICE, existing: "id-price" });
   });
 
   it("says plainly when the provider can't make templates", async () => {

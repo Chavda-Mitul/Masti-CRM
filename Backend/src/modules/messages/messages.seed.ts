@@ -170,7 +170,8 @@ export const MESSAGE_TEMPLATES = [
       "",
       "Our staff member {{staff_name}} will come to collect the documents for {{case_no}} on {{visit_day}}, {{visit_slot}}, at: {{address}}.",
       "",
-      "Please keep the documents and your phone ready. We will send you a code to tell our staff member at the door.",
+      // No word of the door code: Meta refuses a code in an ordinary template (INCORRECT_CATEGORY, 0020 Amendment 2).
+      "Please keep the documents and your phone ready.",
       "",
       "To change the time, call us on {{office_phone}}.",
       "",
@@ -274,7 +275,8 @@ export const MESSAGE_TEMPLATES = [
       "",
       "Our staff member {{staff_name}} will bring your passports for {{case_no}} on {{visit_day}}, {{visit_slot}}, to: {{address}}.",
       "",
-      "Please be available with your phone. We will send you a code to tell our staff member at the door, and they will take a photo of the person receiving the passports.",
+      // No word of the door code: Meta refuses a code in an ordinary template (INCORRECT_CATEGORY, 0020 Amendment 2).
+      "Please be available with your phone. Our staff member will take a photo of the person receiving the passports.",
       "",
       "To change the time, call us on {{office_phone}}.",
       "",

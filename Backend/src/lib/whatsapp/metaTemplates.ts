@@ -97,12 +97,19 @@ export function metaTemplates(settings: MetaTemplateSettings): WhatsAppTemplates
       throw new WhatsAppError(`Couldn't reach Meta: ${cause instanceof Error ? cause.message : error instanceof Error ? error.message : String(error)}`, true, { cause: error });
     }
     const answer = (await response.json().catch(() => null)) as
-      | (T & { error?: { code?: number; error_subcode?: number; message?: string; error_user_msg?: string; error_data?: { details?: string } } })
+      | (T & {
+          error?: { code?: number; error_subcode?: number; message?: string; error_user_title?: string; error_user_msg?: string; error_data?: { details?: string } };
+        })
       | null;
     if (!response.ok || !answer || answer.error) {
       const error = answer?.error;
       if (error?.code === undefined) throw new WhatsAppError(`Meta answered ${response.status} without saying why.`, response.status >= 500);
-      throw new WhatsAppError(metaFailure(error.code, error.error_subcode, error.error_user_msg ?? error.error_data?.details ?? error.message ?? "no details"), false);
+      // Meta explains a template refusal in its own words (e.g. "Cannot create message template: This WhatsApp Business
+      // account does not have permission…"), which say more than the sending ones in metaErrors.ts.
+      if (error.error_user_msg) {
+        throw new WhatsAppError(`${error.error_user_title ? `${error.error_user_title}: ` : ""}${error.error_user_msg} (Meta error ${error.code})`, false);
+      }
+      throw new WhatsAppError(metaFailure(error.code, error.error_subcode, error.error_data?.details ?? error.message ?? "no details"), false);
     }
     return answer;
   }
@@ -159,7 +166,11 @@ export function metaTemplates(settings: MetaTemplateSettings): WhatsAppTemplates
                 name: template.name,
                 id: template.id,
                 status: template.status,
-                reason: template.rejected_reason && template.rejected_reason !== "NONE" ? template.rejected_reason : null,
+                // Meta keeps the last rejection's reason through a new review; it only matters while it stands.
+                reason:
+                  template.rejected_reason && template.rejected_reason !== "NONE" && ["REJECTED", "PAUSED", "DISABLED"].includes(template.status)
+                    ? template.rejected_reason
+                    : null,
                 current: isCurrent(template, draft),
               }
             : null,
@@ -171,7 +182,10 @@ export function metaTemplates(settings: MetaTemplateSettings): WhatsAppTemplates
     async submit(draft, existing) {
       const request = metaTemplateRequest(draft, language, draft.withDocument ? await documentHandle() : undefined);
       if (existing) {
-        await graph(`${GRAPH_API}/${existing.id}`, { method: "POST", body: { components: request.components } });
+        // A change replaces every component. Named values need their format said again, or Meta rejects the words
+        // (INVALID_FORMAT, seen 24 Oct 2026).
+        const format = "parameter_format" in request ? { parameter_format: request.parameter_format } : {};
+        await graph(`${GRAPH_API}/${existing.id}`, { method: "POST", body: { ...format, components: request.components } });
       } else {
         await graph(`${GRAPH_API}/${businessAccountId}/message_templates`, { method: "POST", body: request });
       }
