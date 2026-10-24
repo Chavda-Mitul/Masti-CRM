@@ -1,4 +1,5 @@
-import type { CaseDocument, CaseTraveller, DocumentRequirement, ReceivedAs, VisaCase } from '../types'
+import { formatDate } from '../../../lib/format'
+import type { CaseDocument, CaseTraveller, DocumentRequirement, ReceivedAs, TravellerDecision, VisaCase } from '../types'
 
 // Wording shared by the case page's cards (demo screen 07 ⚠️).
 
@@ -111,6 +112,23 @@ export const heldAtOffice = (c: VisaCase) =>
   !c.handover &&
   (c.booklets.current ?? 0) + (c.booklets.old ?? 0) > 0 &&
   (PRE_DISPATCH.includes(c.stage.code) || (!!c.submittedOnline && EVISA_AFTER_SUBMISSION.includes(c.stage.code)))
+
+/**
+ * An approved visa's line on the Decision card and at Mark received: "Sticker 0182 4471 · valid 1 Dec 2026 – 14 Jan
+ * 2027" (an e-visa: "e-Visa …"), with only what was added, or null when nothing was: the number and dates are optional,
+ * added with Change (docs/decisions/0012-visa-decision.md, amended 23 Oct 2026).
+ */
+export function visaDetails(d: TravellerDecision, online: boolean): string | null {
+  const number = d.visaNo && `${online ? 'e-Visa' : 'Sticker'} ${d.visaNo}`
+  const dates =
+    d.validFrom && d.validTo
+      ? `valid ${formatDate(d.validFrom)} – ${formatDate(d.validTo)}`
+      : d.validFrom
+        ? `valid from ${formatDate(d.validFrom)}`
+        : d.validTo && `valid to ${formatDate(d.validTo)}`
+  const line = [number, dates].filter(Boolean).join(' · ')
+  return line ? line.charAt(0).toUpperCase() + line.slice(1) : null
+}
 
 /** Every traveller was refused (0025, part 5): an e-visa then has nothing to send. */
 export const everyoneRefused = (c: VisaCase) => c.travellers.every((t) => t.decision?.outcome === 'REFUSED')

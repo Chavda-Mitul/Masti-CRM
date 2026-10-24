@@ -2,7 +2,9 @@
 
 - **Status:** decided (15 Oct 2026, project lead). Being built one component at a time (Decision 1). Built: recording
   the decision (15 Oct 2026, component 1); changing a traveller's decision (16 Oct 2026, component 2); the refusal
-  letter (16 Oct 2026, component 3). A "Built" note is added under each part as its component lands.
+  letter (16 Oct 2026, component 3). A "Built" note is added under each part as its component lands. **Amended 23 Oct
+  2026** ([change request 21](../change-requests.md), part 1): recording takes no typing; the number and dates are
+  optional, added with Change (Decision 3).
 - **Date:** 15 Oct 2026
 - **Scope:** recording whether each traveller's visa was approved or refused, from the moment the file was submitted
   (at the embassy, or online for an e-visa) until the passports start back (Step 7):
@@ -74,6 +76,24 @@ required. Step 7 checks each sticker against the passport's name and dates when 
 - **Visa dates that don't cover the trip are a warning:** valid from after the departure day, or valid to before the
   return. An embassy sometimes grants less, so it can be right. A change warns only when the dates changed.
 
+**Amended 23 Oct 2026 (project lead, [change request 21](../change-requests.md), part 1):** "Record the decision"
+takes **no typing**, only Approved or Refused per traveller. An approved one's number and dates are **optional**, each
+on its own, and added later with **Change** on the Decision card. While none is there, the row's button reads "Add
+sticker no." ("Add e-visa no."). Step 7 checks the sticker against the passport's name, and against the number and
+dates when they were added.
+- **Still checked:**
+  - the number's format, in the code and a CHECK
+  - valid-to on or after valid-from, when both are there
+  - a refused traveller has none
+  - the CHECK `VisaCaseTraveller_outcome_details` is relaxed by migration `20261024100000_decision_details_optional`
+- **The same-number check and both warnings come with Change,** when a number or date is added or changed. Each date
+  is checked on its own.
+- **The e-visa's message (19, [0025](0025-evisa-after-decision.md)) no longer names the number and dates:** they may
+  not be there, and the PDF shows them.
+- **Next, parts 2–3:**
+  - each traveller's file in the same dialog (the refusal letter, or an approved one's visa copy or e-visa)
+  - sent to the client on WhatsApp
+
 ### 4. A refused traveller: the refusal letter
 
 **Decided 15 Oct 2026 (project lead):** the letter is a **scanned PDF** kept with the case in our storage (rule 4),
@@ -122,7 +142,8 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
 **Decided 15 Oct 2026 (project lead):**
 - **One form for the whole family.** At Step 5, once the file is submitted (at the embassy, or online),
   **Record the decision →** opens it: each traveller's outcome, with the number and dates for an approved one.
-  Saving it moves the case to **Step 6 · Decision**, where the demo's card shows the results.
+  Saving it moves the case to **Step 6 · Decision**, where the demo's card shows the results. *Since 23 Oct 2026 the
+  form is the outcome only; the number and dates come with Change (Decision 3, amended).*
 - **Who:** the case's processor, the Visa HOD or the Head.
 - **Corrections:** "Change" on a traveller's row while the case is at Step 6, by the same people, recorded in the
   audit log. Locked once the case moves on.
@@ -145,6 +166,9 @@ dates in place of a sticker. Nothing else differs for now; M39 may change the e-
   - 409 before the submission ("Mark it submitted at the embassy first"), at another step, STALE, postponed
   - 400 under `outcomes`, naming the traveller: missing, unknown or repeated; an approved one without its number or
     dates, or ending before it starts; a refused one with them; a badly formed number
+  - *Since 23 Oct 2026 (Decision 3, amended): `{ outcomes: [{ travellerId, outcome }], updatedAt }`, anything else
+    ignored; the 400s are missing, unknown or repeated travellers and no outcome; the details' checks and warnings are
+    Change's.*
 - **In one transaction under the case lock:** each traveller's outcome; who and when; the case moves to Decision, due
   the next open office day at 11:00 ⚠️ (`visa.passportsBackCheck`); audit `visa.decision.record`.
 - **The case** sends `decision { at, by }` and each traveller's `decision`.

@@ -686,7 +686,10 @@ export function toVisaCaseDto(
         /** Step 3, from the government portal (0007 Decision 5). */
         ackNo: t.ackNo,
         appointmentAt: t.appointmentAt,
-        /** Step 6 (0012): Approved with the sticker (or e-visa) number and dates, or Refused; null until recorded. */
+        /**
+         * Step 6 (0012): Approved, with the sticker (or e-visa) number and dates once added with Change (each optional,
+         * amended 23 Oct 2026), or Refused; null until recorded.
+         */
         decision: t.outcome && {
           outcome: t.outcome,
           visaNo: t.visaNo,

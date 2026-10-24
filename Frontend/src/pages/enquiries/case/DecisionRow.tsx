@@ -1,14 +1,15 @@
 import { numberLabel, type DecisionRowValue } from './decisionValues'
-import { RequiredMark } from '../../../components/FormField'
 
 /**
  * One traveller in "Record the decision" and "Change the decision" (Decisions 3 and 6): the demo's Approved / Refused
- * toggle (green / red, screen 11), and for Approved the sticker (or e-visa) number with the dates it's valid.
+ * toggle (green / red, screen 11). Recording stops there (amended 23 Oct 2026, change request 21); Change also takes an
+ * approved one's sticker (or e-visa) number and the dates it's valid, each optional.
  */
 export function DecisionRow({
   name,
   row: r,
   online,
+  details,
   disabled,
   error,
   onChange,
@@ -17,6 +18,8 @@ export function DecisionRow({
   row: DecisionRowValue
   /** An e-visa (Submitted online): its e-visa number in place of a sticker. */
   online: boolean
+  /** Change: an approved one's number and dates, optional. Recording has none. */
+  details: boolean
   disabled: boolean
   error: string | undefined
   onChange: (patch: Partial<DecisionRowValue>) => void
@@ -46,10 +49,10 @@ export function DecisionRow({
           Refused
         </button>
       </span>
-      {r.outcome === 'APPROVED' && (
+      {details && r.outcome === 'APPROVED' && (
         <div className="decision-details">
           <label className="field">
-            <span className="lbl">{numberLabel(online)}<RequiredMark /></span>
+            <span className="lbl">{numberLabel(online)} (optional)</span>
             <input
               className="input mono upper"
               value={r.visaNo}
@@ -60,7 +63,7 @@ export function DecisionRow({
             />
           </label>
           <label className="field">
-            <span className="lbl">Valid from<RequiredMark /></span>
+            <span className="lbl">Valid from (optional)</span>
             <input
               className="input"
               type="date"
@@ -70,7 +73,7 @@ export function DecisionRow({
             />
           </label>
           <label className="field">
-            <span className="lbl">Valid to<RequiredMark /></span>
+            <span className="lbl">Valid to (optional)</span>
             <input
               className="input"
               type="date"

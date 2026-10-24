@@ -159,7 +159,7 @@ describe("a case cancelled after its file went to the vendor (0006 amendment 15)
     expect(changed.status).toBe(409);
     expect(changed.body.message).toMatch(/closed/);
     const outcomes = [
-      { travellerId: adult, outcome: "APPROVED", visaNo: "0182 4471", validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) },
+      { travellerId: adult, outcome: "APPROVED" },
       { travellerId: child, outcome: "REFUSED" },
     ];
     const decided = await processor.post(`/api/visa/cases/${c.caseNo}/decision`).send({ outcomes, updatedAt });

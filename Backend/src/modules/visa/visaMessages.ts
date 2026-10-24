@@ -1,6 +1,6 @@
 import type { DocumentRequirement, TravellerGroup, VisaOutcome } from "../../../generated/prisma/enums";
 import type { Db } from "../../config/prisma";
-import { dateLabel, dayLabel, istToday, timeLabel } from "../../lib/dates";
+import { dayLabel, istToday, timeLabel } from "../../lib/dates";
 import { rupeesText } from "../../lib/money";
 import { getCompanyDetails } from "../company/company.settings";
 import {
@@ -203,13 +203,10 @@ export function fitList(items: string[], maxChars = LIST_MAX_CHARS): string {
 
 /**
  * Message 19, "Your e-visa" (docs/decisions/0025-evisa-after-decision.md, part 3): one approved traveller's e-visa,
- * with its PDF, in the transaction of "Send the e-visa". Once per traveller, as an e-visa is sent once.
+ * with its PDF, in the transaction of "Send the e-visa". Once per traveller, as an e-visa is sent once. The e-visa's
+ * number and dates aren't in the words: they're optional (0012, amended 23 Oct 2026), and printed on the PDF.
  */
-export async function queueEvisaMessage(
-  tx: Db,
-  enquiryId: string,
-  traveller: { id: string; name: string; visaNo: string; validFrom: string; validTo: string; fileId: string },
-) {
+export async function queueEvisaMessage(tx: Db, enquiryId: string, traveller: { id: string; name: string; fileId: string }) {
   const basics = await visaMessageBasics(tx, enquiryId);
   await queueMessage(tx, {
     template: VISA_EVISA_READY,
@@ -217,13 +214,7 @@ export async function queueEvisaMessage(
     key: `${VISA_EVISA_READY}:${traveller.id}`,
     clientId: basics.clientId,
     attachmentId: traveller.fileId,
-    variables: {
-      ...basics.variables,
-      traveller_name: traveller.name,
-      evisa_no: traveller.visaNo,
-      valid_from: dateLabel(traveller.validFrom),
-      valid_to: dateLabel(traveller.validTo),
-    },
+    variables: { ...basics.variables, traveller_name: traveller.name },
   });
 }
 

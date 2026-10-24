@@ -14,14 +14,15 @@ import { deliverCase } from "./visaHandover.service";
 import { queueDecisionMessage } from "./visaMessages";
 
 // Visa Step 6, the decision (docs/decisions/0012-visa-decision.md). Once the file was submitted (at the embassy, or
-// online for an e-visa), "Record the decision" saves every traveller's outcome at once (Decision 6): Approved, with the
-// sticker (or e-visa) number and the dates it's valid (Decisions 3 and 5), or Refused. The case moves to Decision, due
-// the next open office day at 11:00 ⚠️ (visa.passportsBackCheck) to check the passports are on their way back. A refusal
-// changes no money. While the case is at Decision, or at Passport back until the handover, "Change" corrects one
-// traveller's entry; once the passports are received it checks the sticker again (amended 19 Oct 2026). The audit log
-// keeps both. An e-visa where everyone is refused has nothing to send (docs/decisions/0025-evisa-after-decision.md part
-// 5): with no passports held it closes, after a warning, whether recorded so or changed so; with passports held it's
-// due for their handover.
+// online for an e-visa), "Record the decision" saves every traveller's outcome at once (Decision 6), Approved or
+// Refused, with nothing typed (amended 23 Oct 2026, change request 21). The case moves to Decision, due the next open
+// office day at 11:00 ⚠️ (visa.passportsBackCheck) to check the passports are on their way back. A refusal changes no
+// money. While the case is at Decision, or at Passport back until the handover, "Change" corrects one traveller's
+// entry, or adds an approved one's sticker (or e-visa) number and the dates it's valid, each optional (Decisions 3 and
+// 5); once the passports are received it checks the sticker again (amended 19 Oct 2026). The audit log keeps both. An
+// e-visa where everyone is refused has nothing to send (docs/decisions/0025-evisa-after-decision.md part 5): with no
+// passports held it closes, after a warning, whether recorded so or changed so; with passports held it's due for their
+// handover.
 
 /** What recording checks, read again under the lock. */
 async function gather(db: Db, enquiryId: string) {
@@ -78,16 +79,14 @@ function wording(g: Gathered) {
 }
 
 /**
- * One traveller's outcome (Decision 3): an approved one with the number and both dates (valid-to on or after
- * valid-from), a refused one with none. The message names the traveller and goes under `field`.
+ * One traveller's entry in Change (Decision 3, amended 23 Oct 2026): an approved one's number and dates are each
+ * optional, but valid-to can't come before valid-from; a refused one has none. The message names the traveller.
  */
-function checkOne(field: string, name: string, number: string, o: Pick<ChangeDecisionInput, "outcome" | "visaNo" | "validFrom" | "validTo">) {
+function checkOne(name: string, number: string, o: ChangeDecisionInput) {
   if (o.outcome === "APPROVED") {
-    if (!o.visaNo) throw fieldError(field, `Enter ${name}'s ${number}.`);
-    if (!o.validFrom || !o.validTo) throw fieldError(field, `Enter the dates ${name}'s visa is valid.`);
-    if (o.validTo < o.validFrom) throw fieldError(field, `${name}'s visa can't end before it starts.`);
+    if (o.validFrom && o.validTo && o.validTo < o.validFrom) throw fieldError("decision", `${name}'s visa can't end before it starts.`);
   } else if (o.visaNo || o.validFrom || o.validTo) {
-    throw fieldError(field, `${name} was refused: leave the ${number} and dates empty.`);
+    throw fieldError("decision", `${name} was refused: leave the ${number} and dates empty.`);
   }
 }
 
@@ -109,12 +108,9 @@ function checkSticker(g: Gathered, name: string, o: ChangeDecisionInput) {
   }
 }
 
-/**
- * Every traveller of the case exactly once, each checked by checkOne. Messages name the traveller, as the dialog lists
- * them.
- */
+/** Every traveller of the case exactly once. Messages name the traveller, as the dialog lists them. */
 function checkOutcomes(g: Gathered, outcomes: RecordDecisionInput["outcomes"]) {
-  const { who, number } = wording(g);
+  const { who } = wording(g);
   const byId = new Map(g.travellers.map((t) => [t.id, t]));
   const seen = new Set<string>();
   for (const o of outcomes) {
@@ -122,24 +118,14 @@ function checkOutcomes(g: Gathered, outcomes: RecordDecisionInput["outcomes"]) {
     if (!t) throw fieldError("outcomes", "Someone on this list isn't on the case. Reload and try again.");
     if (seen.has(t.id)) throw fieldError("outcomes", `${who(t)} is on the list twice.`);
     seen.add(t.id);
-    checkOne("outcomes", who(t), number, o);
   }
   const missing = g.travellers.find((t) => !seen.has(t.id));
   if (missing) throw fieldError("outcomes", `Record ${who(missing)}'s decision too.`);
-  // Each visa has its own number: the same one twice on the case is a typo (decided 19 Oct 2026).
-  const numbered = new Map<string, string>();
-  for (const o of outcomes) {
-    if (o.outcome !== "APPROVED" || !o.visaNo) continue;
-    const name = who(byId.get(o.travellerId)!);
-    const first = numbered.get(o.visaNo);
-    if (first) throw fieldError("outcomes", `${first} and ${name} have the same ${number}: each visa has its own.`);
-    numbered.set(o.visaNo, name);
-  }
   return who;
 }
 
 /**
- * What a decision may have wrong but can be right (soft warnings, decided 19 Oct 2026; lib/warnings.ts): an approved
+ * What a change may have wrong but can be right (soft warnings, decided 19 Oct 2026; lib/warnings.ts): an approved
  * visa's number already on another case.
  */
 async function decisionWarnings(db: Db, enquiryId: string, g: Gathered, outcomes: { outcome: string; visaNo?: string | null | undefined }[]): Promise<Warning[]> {
@@ -160,8 +146,9 @@ async function decisionWarnings(db: Db, enquiryId: string, g: Gathered, outcomes
 }
 
 /**
- * Visa dates that don't cover the trip (a soft warning, decided 19 Oct 2026): valid from after the departure day, or valid
- * to before the return. An embassy sometimes grants less, so it can be right.
+ * Visa dates that don't cover the trip (a soft warning in Change, decided 19 Oct 2026): valid from after the departure
+ * day, or valid to before the return. An embassy sometimes grants less, so it can be right. Each date is checked when
+ * it's there: either can be added alone (amended 23 Oct 2026).
  */
 function tripWarnings(
   g: Gathered,
@@ -172,12 +159,12 @@ function tripWarnings(
   const back = g.returnOn ? fromDbDate(g.returnOn) : null;
   return outcomes.flatMap((o) => {
     const t = g.travellers.find((x) => x.id === o.travellerId);
-    if (!t || o.outcome !== "APPROVED" || !o.validFrom || !o.validTo) return [];
+    if (!t || o.outcome !== "APPROVED") return [];
     const found: Warning[] = [];
-    if (depart && o.validFrom > depart) {
+    if (depart && o.validFrom && o.validFrom > depart) {
       found.push({ code: "VISA_STARTS_AFTER_DEPARTURE", message: `${who(t)}'s visa starts ${dayLabel(o.validFrom)}, after the trip begins (${dayLabel(depart)}).` });
     }
-    if (back && o.validTo < back) {
+    if (back && o.validTo && o.validTo < back) {
       found.push({ code: "VISA_ENDS_BEFORE_RETURN", message: `${who(t)}'s visa ends ${dayLabel(o.validTo)}, before the trip ends (${dayLabel(back)}).` });
     }
     return found;
@@ -186,9 +173,10 @@ function tripWarnings(
 
 /**
  * "Record the decision" (Decision 6), by whoever can act on the case, at At vendor once the file was submitted. In one
- * transaction under the case lock: each traveller's outcome, who recorded it and when, the move to Decision with its due
- * time, and the audit (visa.decision.record). An e-visa where everyone is refused is due for the handover of the
- * passports we hold, or, with none held, moves on to Delivered and closes (0025, part 5).
+ * transaction under the case lock: each traveller's outcome (nothing typed, amended 23 Oct 2026), who recorded it and
+ * when, the move to Decision with its due time, and the audit (visa.decision.record). An e-visa where everyone is
+ * refused is due for the handover of the passports we hold, or, with none held, moves on to Delivered and closes, after
+ * a warning (0025, part 5).
  */
 export async function recordDecision(caseNo: string, input: RecordDecisionInput, actor: Actor) {
   const enquiry = await loadCase(caseNo, actor, DECIDING);
@@ -196,12 +184,8 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
   const pre = await gather(prisma, enquiry.id);
   assertSubmitted(pre);
   checkOutcomes(pre, input.outcomes);
-  const warnings = async (db: Db, g: Gathered) => [
-    ...(await decisionWarnings(db, enquiry.id, g, input.outcomes)),
-    ...tripWarnings(g, input.outcomes),
-    ...(closesCase(g, input.outcomes) ? [CLOSES_CASE] : []),
-  ];
-  checkWarnings(await warnings(prisma, pre), input.confirmWarnings);
+  const warnings = (g: Gathered) => (closesCase(g, input.outcomes) ? [CLOSES_CASE] : []);
+  checkWarnings(warnings(pre), input.confirmWarnings);
 
   await prisma.$transaction(async (tx) => {
     const locked = await lockCase(tx, enquiry.id, actor, DECIDING);
@@ -209,7 +193,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
     const g = await gather(tx, enquiry.id);
     assertSubmitted(g);
     const who = checkOutcomes(g, input.outcomes);
-    const confirmed = checkWarnings(await warnings(tx, g), input.confirmWarnings);
+    const confirmed = checkWarnings(warnings(g), input.confirmWarnings);
 
     const settings = await getVisaSettings(tx);
     const evisa = !!g.submittedOnlineAt;
@@ -220,16 +204,9 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
     const decision = await visaStage(tx, locked.departmentId, "DECISION");
     await tx.enquiry.update({ where: { id: enquiry.id }, data: { stageId: decision.id, dueAt } });
     await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { decidedAt: new Date(), decidedById: actor.user.id } });
+    // An undecided traveller has no number or dates (the database's CHECK): they're added later with Change.
     for (const o of input.outcomes) {
-      await tx.visaCaseTraveller.update({
-        where: { id: o.travellerId },
-        data: {
-          outcome: o.outcome,
-          visaNo: o.visaNo ?? null,
-          validFrom: o.validFrom ? toDbDate(o.validFrom) : null,
-          validTo: o.validTo ? toDbDate(o.validTo) : null,
-        },
-      });
+      await tx.visaCaseTraveller.update({ where: { id: o.travellerId }, data: { outcome: o.outcome } });
     }
     // Nothing to send or hand back: on to Delivered, closed, as a sent e-visa with no passports held (part 3).
     const closed = closing ? (await deliverCase(tx, { ...locked, stage: decision }, actor, "everyone was refused", { evisa: true })).closes : false;
@@ -246,10 +223,7 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
           stage: closed ? "DELIVERED" : "DECISION",
           ...(closed ? { status: "CLOSED" } : {}),
           dueAt,
-          travellers: g.travellers.map((t) => {
-            const o = outcomes.get(t.id)!;
-            return { name: who(t), outcome: o.outcome, visaNo: o.visaNo ?? null, validFrom: o.validFrom ?? null, validTo: o.validTo ?? null };
-          }),
+          travellers: g.travellers.map((t) => ({ name: who(t), outcome: outcomes.get(t.id)!.outcome })),
           ...confirmedWarningsNote(confirmed),
         },
         ip: actor.ip,
@@ -265,11 +239,13 @@ export async function recordDecision(caseNo: string, input: RecordDecisionInput,
 
 /**
  * "Change" on one traveller's row (Decision 6), by whoever can act on the case, while it's at Decision or at Passport
- * back until the handover (amended 19 Oct 2026): the outcome, or just the number or dates, and once the passports are
- * received an approved traveller's sticker check (checkSticker); a refused one's is cleared. An e-visa's check (0025)
- * stands while the entry stays as it was, and is cleared when it changes: the PDF must be looked at against it again.
- * In one transaction under the case lock: the traveller's entry, the case's updatedAt and the
- * audit (visa.decision.change, with the old and new values). It sends the case's updatedAt from when the dialog opened,
+ * back until the handover (amended 19 Oct 2026): the outcome, or just an approved one's number or dates, each optional
+ * and added here after recording (amended 23 Oct 2026); a number already elsewhere, or dates that don't cover the trip,
+ * warn first when they change (lib/warnings.ts). Once the passports are received, an approved traveller's change carries
+ * the sticker check (checkSticker); a refused one's is cleared. An e-visa's check (0025) stands while the entry stays as
+ * it was, and is cleared when it changes: the PDF must be looked at against it again. In one transaction under the case
+ * lock: the traveller's entry, the case's updatedAt and the audit (visa.decision.change, with the old and new values).
+ * It sends the case's updatedAt from when the dialog opened,
  * so a save after someone else's change is refused (409 STALE) instead of undoing it (amended 19 Oct 2026). The case's
  * step, due time and "recorded by" stay, except that an e-visa the change leaves with everyone refused, and no passports
  * held, moves on to Delivered and closes, after a warning (0025, part 5). A save that changes nothing writes nothing.
@@ -285,7 +261,7 @@ export async function changeDecision(caseNo: string, travellerId: string, input:
     const t = g.travellers.find((x) => x.id === travellerId);
     if (!t) throw notFound("Traveller not found on this case.");
     const { who, number } = wording(g);
-    checkOne("decision", who(t), number, input);
+    checkOne(who(t), number, input);
     // Each visa has its own number (decided 19 Oct 2026).
     const twin = input.outcome === "APPROVED" && input.visaNo ? g.travellers.find((x) => x.id !== travellerId && x.visaNo === input.visaNo) : undefined;
     if (twin) throw fieldError("decision", `${who(twin)} already has this ${number}: each visa has its own.`);

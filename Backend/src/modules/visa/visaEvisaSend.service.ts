@@ -1,7 +1,7 @@
 import { prisma, type Db } from "../../config/prisma";
 import { audit } from "../../lib/audit";
 import { assertFresh } from "../../lib/changes";
-import { dayLabel, fromDbDate, istToday, timeLabel } from "../../lib/dates";
+import { dayLabel, istToday, timeLabel } from "../../lib/dates";
 import { conflict, HttpError } from "../../lib/httpError";
 import type { Actor, UserWithDepartments } from "../users/user";
 import { CHECKING_EVISA, findVisibleCase, loadCase, lockCase } from "./caseLock";
@@ -36,9 +36,6 @@ async function gather(db: Db, enquiryId: string) {
           isChild: true,
           name: true,
           outcome: true,
-          visaNo: true,
-          validFrom: true,
-          validTo: true,
           stickerCheck: true,
           files: { where: { kind: "EVISA" }, orderBy: [{ uploadedAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, fileName: true } },
         },
@@ -125,14 +122,7 @@ export async function sendEvisa(caseNo: string, input: SendEvisaInput, actor: Ac
     await tx.visaCase.update({ where: { enquiryId: enquiry.id }, data: { evisaSentAt: new Date(), evisaSentById: actor.user.id } });
     const sent = approvedOf(g);
     for (const t of sent) {
-      await queueEvisaMessage(tx, enquiry.id, {
-        id: t.id,
-        name: t.label,
-        visaNo: t.visaNo!,
-        validFrom: fromDbDate(t.validFrom!),
-        validTo: fromDbDate(t.validTo!),
-        fileId: t.file!.id,
-      });
+      await queueEvisaMessage(tx, enquiry.id, { id: t.id, name: t.label, fileId: t.file!.id });
     }
 
     const held = heldBooklets(g);

@@ -5,17 +5,18 @@ import { useWarningGuard } from '../../../lib/useWarningGuard'
 import { useRecordDecision } from '../queries'
 import type { VisaCase } from '../types'
 import { DecisionRow } from './DecisionRow'
-import { emptyRow, numberWords, rowBody, rowProblem, type DecisionRowValue } from './decisionValues'
+import { emptyRow, numberWords, rowProblem, type DecisionRowValue } from './decisionValues'
 
 /**
  * "Record the decision" (docs/decisions/0012-visa-decision.md Decision 6): one form for the whole family once the file
- * was submitted. Each traveller is Approved or Refused (demo screen 11); an approved one needs the sticker number (an
- * e-visa's number) and the dates it's valid (Decision 3). Saving moves the case to Step 6 · Decision.
+ * was submitted. Each traveller is Approved or Refused (demo screen 11), with nothing typed (amended 23 Oct 2026, change
+ * request 21): an approved one's sticker number (an e-visa's number) and dates are added later with Change on the
+ * Decision card. Saving moves the case to Step 6 · Decision.
  */
 export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; onClose: () => void }) {
   const toast = useToast()
   const record = useRecordDecision(c.caseNo)
-  // A number already on another case, or visa dates that don't cover the trip: check, then save anyway.
+  // An e-visa where everyone is refused and we hold no passports closes the case (0025, part 5): check, then save.
   const guard = useWarningGuard()
   const [rows, setRows] = useState<Record<string, DecisionRowValue>>(() => Object.fromEntries(c.travellers.map((t) => [t.id, emptyRow])))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -28,12 +29,12 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
   const press = () => {
     const missing: Record<string, string> = {}
     for (const t of c.travellers) {
-      const problem = rowProblem(rows[t.id]!, !!c.submittedOnline)
+      const problem = rowProblem(rows[t.id]!)
       if (problem) missing[t.id] = problem
     }
     setErrors(missing)
     if (Object.keys(missing).length) return
-    const outcomes = c.travellers.map((t) => ({ travellerId: t.id, ...rowBody(rows[t.id]!) }))
+    const outcomes = c.travellers.map((t) => ({ travellerId: t.id, outcome: rows[t.id]!.outcome! }))
     const send = (confirmWarnings: boolean) =>
       record.mutate(
         { outcomes, updatedAt: c.updatedAt, ...(confirmWarnings ? { confirmWarnings } : {}) },
@@ -63,8 +64,8 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
             Record the decision
           </h2>
           <p className="muted small" style={{ margin: 0 }}>
-            Two outcomes, per traveller. An approved visa needs its {numberWords(!!c.submittedOnline)} and the dates it’s valid. Saving moves the
-            case to Decision.
+            Approved or Refused, per traveller. Saving moves the case to Decision. The {numberWords(!!c.submittedOnline)} and dates can be added
+            later on the Decision card.
           </p>
 
           {c.travellers.map((t) => (
@@ -73,6 +74,7 @@ export function DecisionDialog({ visaCase: c, onClose }: { visaCase: VisaCase; o
               name={t.name ?? t.label}
               row={rows[t.id]!}
               online={!!c.submittedOnline}
+              details={false}
               disabled={record.isPending}
               error={errors[t.id]}
               onChange={(patch) => setRow(t.id, patch)}

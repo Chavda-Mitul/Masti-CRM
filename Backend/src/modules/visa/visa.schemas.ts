@@ -541,20 +541,10 @@ export const recallSchema = z.object({
  */
 export const VISA_NO_PATTERN = /^[A-Z0-9][A-Z0-9 /-]{1,38}[A-Z0-9]$/;
 
-/** An approved visa's details (Decision 3), as typed: the number cleaned up, and the dates it's valid. */
-const decisionDetails = {
-  visaNo: z
-    .string()
-    .transform((s) => s.trim().replace(/\s+/g, " ").toUpperCase())
-    .pipe(z.string().regex(VISA_NO_PATTERN, "Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."))
-    .nullish(),
-  validFrom: z.iso.date("Pick the date the visa is valid from.").nullish(),
-  validTo: z.iso.date("Pick the date the visa is valid to.").nullish(),
-};
-
 /**
- * "Record the decision" (Decisions 2, 3 and 6): every traveller's outcome at once, with an approved one's number and
- * dates. The service checks each traveller is the case's, once, and that the details match the outcome.
+ * "Record the decision" (Decisions 2 and 6): every traveller's outcome at once, Approved or Refused, with nothing typed
+ * (amended 23 Oct 2026, change request 21): an approved one's number and dates are added later with Change. The service
+ * checks each traveller is the case's, once.
  */
 export const recordDecisionSchema = z.object({
   outcomes: z
@@ -562,23 +552,29 @@ export const recordDecisionSchema = z.object({
       z.object({
         travellerId: z.string().trim().min(1).max(64),
         outcome: z.enum(VisaOutcome, "Pick Approved or Refused for everyone."),
-        ...decisionDetails,
       }),
     )
     .min(1, "Record a decision for everyone.")
     .max(60),
   updatedAt: z.iso.datetime("Reload and try again."),
-  /** Saving again past a warning (a number already on another case, visa dates that don't cover the trip). */
+  /** Saving again past a warning (an e-visa where everyone is refused closes the case, 0025 part 5). */
   confirmWarnings,
 });
 
 /**
- * "Change" on one traveller's row at Step 6 (Decision 6): the outcome and details, checked as when recorded. Sends the
- * case's updatedAt as the dialog opened with it: a change by someone else since is a 409 STALE.
+ * "Change" on one traveller's row at Step 6 (Decision 6): the outcome, and for an approved one the number (cleaned up)
+ * and the dates it's valid, each optional (Decision 3, amended 23 Oct 2026). Sends the case's updatedAt as the dialog
+ * opened with it: a change by someone else since is a 409 STALE.
  */
 export const changeDecisionSchema = z.object({
   outcome: z.enum(VisaOutcome, "Pick Approved or Refused."),
-  ...decisionDetails,
+  visaNo: z
+    .string()
+    .transform((s) => s.trim().replace(/\s+/g, " ").toUpperCase())
+    .pipe(z.string().regex(VISA_NO_PATTERN, "Use 3–40 letters, digits, spaces, - or /, starting and ending with a letter or digit."))
+    .nullish(),
+  validFrom: z.iso.date("Pick the date the visa is valid from.").nullish(),
+  validTo: z.iso.date("Pick the date the visa is valid to.").nullish(),
   /** Once the passports are received, an approved traveller's sticker checked again (0013 Decision 5, amended 19 Oct). */
   stickerCheck: z.enum(StickerCheck, "Pick Matches or Doesn't match.").nullish(),
   updatedAt: z.iso.datetime("Reload and try again."),

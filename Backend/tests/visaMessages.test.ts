@@ -375,14 +375,11 @@ describe("message 9, applied online", () => {
 describe("messages 10–12, the decision", () => {
   type Outcome = "APPROVED" | "REFUSED";
 
-  /** "Record the decision": each traveller, in order, approved (with a sticker and dates covering the trip) or refused. */
+  /** "Record the decision": each traveller, in order, approved or refused (nothing typed, 0012 amended 23 Oct 2026). */
   async function decide(agent: Agent, caseNo: string, travellerIds: string[], outcomes: Outcome[]) {
-    const valid = { validFrom: addDays(istToday(), 20), validTo: addDays(istToday(), 60) };
     const { updatedAt } = await caseOf(agent, caseNo);
     return agent.post(`/api/visa/cases/${caseNo}/decision`).send({
-      outcomes: travellerIds.map((travellerId, i) =>
-        outcomes[i] === "APPROVED" ? { travellerId, outcome: "APPROVED", visaNo: `0182 447${i}`, ...valid } : { travellerId, outcome: "REFUSED" },
-      ),
+      outcomes: travellerIds.map((travellerId, i) => ({ travellerId, outcome: outcomes[i] })),
       updatedAt,
     });
   }

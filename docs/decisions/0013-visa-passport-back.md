@@ -165,7 +165,10 @@ closes on its own; passports we hold are handed back first).
   intake"), and the audit log keeps it. No reason list.
 - **Stickers checked** for each **approved** traveller: **Matches** or **Doesn't match** the passport's name and the
   dates recorded at Step 6. A mismatch is recorded and shown in red; the passports still go into stock. Fixing it with
-  the embassy stays outside the CRM. A refused traveller and a recalled file have no sticker to check.
+  the embassy stays outside the CRM. A refused traveller and a recalled file have no sticker to check. *Since 23 Oct
+  2026 the number and dates are optional, added with Change ([0012](0012-visa-decision.md) Decision 3, amended; change
+  request 21): the dialog shows them when they were added, and the sticker is checked against the passport's name
+  either way.*
   **Amended 19 Oct 2026 (project lead, review finding 3):** a mismatch that is our typing (a wrong number or date at
   Step 6) is corrected with "Change" on the Decision card, which works at Passport back until the handover and checks
   the sticker again ([0012](0012-visa-decision.md) Decision 6). A sticker the embassy got wrong is still fixed with the

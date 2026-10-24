@@ -10,10 +10,10 @@ import { rowBody, rowProblem, type DecisionRowValue } from './decisionValues'
 
 /**
  * "Change" on one traveller's row of the Decision card (docs/decisions/0012-visa-decision.md Decision 6), while the case
- * is at Step 6, or at Step 7 until the handover: the outcome, or just the number or dates. Once the passports are
- * received, an approved traveller's sticker is checked again, as at Mark received (amended 19 Oct 2026). It's checked
- * as when recorded, and the audit log keeps the old and new values. A save after someone else's change is refused
- * (STALE), so it can't undo theirs.
+ * is at Step 6, or at Step 7 until the handover: the outcome, or an approved one's number or dates, each optional and
+ * added here after recording (amended 23 Oct 2026, change request 21). Once the passports are received, an approved
+ * traveller's sticker is checked again, as at Mark received (amended 19 Oct 2026). The audit log keeps the old and new
+ * values. A save after someone else's change is refused (STALE), so it can't undo theirs.
  */
 export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { visaCase: VisaCase; traveller: CaseTraveller; onClose: () => void }) {
   const toast = useToast()
@@ -38,7 +38,7 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
   const checking = !!c.passportsReceived && row.outcome === 'APPROVED'
 
   const press = () => {
-    const problem = rowProblem(row, online) ?? (checking && !sticker ? 'Check the sticker against the passport: Matches or Doesn’t match.' : null)
+    const problem = rowProblem(row) ?? (checking && !sticker ? 'Check the sticker against the passport: Matches or Doesn’t match.' : null)
     setError(problem ?? undefined)
     if (problem) return
     const body = rowBody(row)
@@ -59,7 +59,12 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
           onSuccess: (saved) => {
             // An e-visa this leaves with everyone refused, and no passports held, closes (0025, part 5).
             const closed = saved.status === 'CLOSED' ? ' The case is closed.' : ''
-            toast({ tone: 'ok', message: `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.${closed}` })
+            // Still approved: only the number, the dates or the sticker check were saved.
+            const what =
+              body.outcome === 'APPROVED' && was.outcome === 'APPROVED'
+                ? `${name}’s ${online ? 'e-visa' : 'sticker'} details are saved.`
+                : `${name}’s decision is changed: ${body.outcome === 'APPROVED' ? 'Approved' : 'Refused'}.`
+            toast({ tone: 'ok', message: `${what}${closed}` })
             onClose()
           },
           onError: (err) => {
@@ -83,13 +88,15 @@ export function ChangeDecisionDialog({ visaCase: c, traveller: t, onClose }: { v
             Change the decision
           </h2>
           <p className="muted small" style={{ margin: 0 }}>
-            Correct the outcome, or the {online ? 'e-visa' : 'sticker'} number and dates. The change is kept in the case’s history.
+            Correct the outcome, or add the {online ? 'e-visa' : 'sticker'} number and the dates it’s valid (optional). The change is kept in
+            the case’s history.
           </p>
 
           <DecisionRow
             name={name}
             row={row}
             online={online}
+            details
             disabled={change.isPending}
             error={error ?? issue}
             onChange={(patch) => {
