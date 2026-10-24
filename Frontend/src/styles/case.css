@@ -1266,6 +1266,22 @@ button.tick:focus-visible {
 .decision-error {
   grid-column: 1 / -1;
 }
+/* "Record the decision": each traveller's optional file, under their outcome (change request 21, part 2). */
+.decision-file {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.decision-file .lbl {
+  flex-basis: 100%;
+  margin: 0;
+}
+.decision-file .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
 .decision-card {
   display: flex;
   flex-direction: column;
@@ -1380,8 +1396,11 @@ button.tick:focus-visible {
 .booklets-vs.is-bad {
   color: var(--bad);
 }
-/* A refused traveller's refusal letter (0012 Decision 4): the chip, its pages, Open and Upload / Replace. */
-.refusal-letter {
+/*
+ * A traveller's letter on the Decision card: a refused one's refusal letter (0012 Decision 4), an approved paper visa's
+ * visa copy (change request 21). The chip, its pages, Open and Upload / Replace.
+ */
+.traveller-file {
   display: flex;
   align-items: center;
   gap: 8px;

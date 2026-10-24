@@ -59,7 +59,7 @@ import * as dispatchService from "./visaDispatch.service";
 import * as filePrepService from "./visaFilePrep.service";
 import * as additionalInvoiceService from "./visaAdditionalInvoice.service";
 import * as decisionService from "./visaDecision.service";
-import * as refusalLetterService from "./visaRefusalLetter.service";
+import * as lettersService from "./visaLetters.service";
 import * as evisaService from "./visaEvisa.service";
 import * as evisaSendService from "./visaEvisaSend.service";
 import * as creditNoteService from "./visaCreditNote.service";
@@ -528,37 +528,58 @@ router.post("/cases/:caseNo/files/final", visaEdit, async (req, res) => {
 });
 
 /**
- * Upload a refused traveller's refusal letter (0012 Decision 4): the PDF itself is the body, as for the final file. Any
- * time once the traveller is refused, whatever the case's status. The case, the traveller and the size limit are
- * checked before the body is read.
+ * A traveller's file after the decision (0012, amended 24 Oct 2026, change request 21, part 2), as the body: a PDF, or
+ * a JPEG or PNG photo that's kept as a PDF.
+ */
+function decisionFileType(header: string | undefined) {
+  const contentType = (header ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!isScanType(contentType)) throw new HttpError(415, "Upload a PDF, JPEG or PNG.");
+  return contentType;
+}
+
+/**
+ * Upload a refused traveller's refusal letter (0012 Decision 4): the file itself is the body. Any time once the
+ * traveller is refused, whatever the case's status. The case, the traveller and the size limit are checked before the
+ * body is read.
  */
 router.post("/cases/:caseNo/travellers/:travellerId/refusal-letter", visaEdit, async (req, res) => {
-  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
-    throw new HttpError(415, "Upload the file as a PDF.");
-  }
+  const contentType = decisionFileType(req.headers["content-type"]);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   const travellerId = idParam.parse(req.params.travellerId);
   const actor = actorOf(req);
-  const { maxBytes, tooBig } = await refusalLetterService.refusalLetterLimit(caseNo, travellerId, actor);
+  const { maxBytes, tooBig } = await lettersService.letterLimit(caseNo, travellerId, "REFUSAL_LETTER", actor);
   const bytes = await readBody(req, maxBytes, tooBig);
-  res.json({ case: await refusalLetterService.uploadRefusalLetter(caseNo, travellerId, bytes, actor) });
+  res.json({ case: await lettersService.uploadLetter(caseNo, travellerId, "REFUSAL_LETTER", contentType, bytes, actor) });
 });
 
 /**
- * Upload an approved e-visa traveller's e-visa (docs/decisions/0025-evisa-after-decision.md, part 1): the PDF itself
+ * Upload an approved paper visa's visa copy, the passport's visa page or the approval letter (0012 Decision 3, amended
+ * 24 Oct 2026): the file itself is the body. Any time once the traveller is approved, whatever the case's status. The
+ * case, the traveller and the size limit are checked before the body is read.
+ */
+router.post("/cases/:caseNo/travellers/:travellerId/visa-copy", visaEdit, async (req, res) => {
+  const contentType = decisionFileType(req.headers["content-type"]);
+  const caseNo = caseNoParam.parse(req.params.caseNo);
+  const travellerId = idParam.parse(req.params.travellerId);
+  const actor = actorOf(req);
+  const { maxBytes, tooBig } = await lettersService.letterLimit(caseNo, travellerId, "VISA_COPY", actor);
+  const bytes = await readBody(req, maxBytes, tooBig);
+  res.json({ case: await lettersService.uploadLetter(caseNo, travellerId, "VISA_COPY", contentType, bytes, actor) });
+});
+
+/**
+ * Upload an approved e-visa traveller's e-visa (docs/decisions/0025-evisa-after-decision.md, part 1): the file itself
  * is the body, as for the refusal letter. At Decision, by whoever can act on the case. The case, the traveller and the
  * size limit are checked before the body is read.
  */
 router.post("/cases/:caseNo/travellers/:travellerId/evisa", visaEdit, async (req, res) => {
-  if (!(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
-    throw new HttpError(415, "Upload the file as a PDF.");
-  }
+  const contentType = decisionFileType(req.headers["content-type"]);
   const caseNo = caseNoParam.parse(req.params.caseNo);
   const travellerId = idParam.parse(req.params.travellerId);
   const actor = actorOf(req);
   const { maxBytes, tooBig } = await evisaService.evisaLimit(caseNo, travellerId, actor);
   const bytes = await readBody(req, maxBytes, tooBig);
-  res.json({ case: await evisaService.uploadEvisa(caseNo, travellerId, bytes, actor) });
+  res.json({ case: await evisaService.uploadEvisa(caseNo, travellerId, contentType, bytes, actor) });
 });
 
 /**

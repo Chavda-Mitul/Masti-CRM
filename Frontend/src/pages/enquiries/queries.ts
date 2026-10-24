@@ -4,6 +4,7 @@ import { isStale } from '../../lib/apiErrors'
 import { useOpenSignedLink } from '../../lib/signedLinks'
 import { useToast } from '../../lib/toast'
 import type { ScanType } from '../clients/scanFiles'
+import { decisionFileType, type DecisionFileKind } from './case/decisionFiles'
 import type {
   CaseMessage,
   CaseMessages,
@@ -304,17 +305,22 @@ export function useUploadFinalFile(caseNo: string) {
   return useCaseAction<{ file: File }>(caseNo, (base, { file }) => uploadPdf(`${base}/files/final`, file))
 }
 
-/** A refused traveller's refusal letter (0012 Decision 4): any time once refused, whatever the case's status. */
-export function useUploadRefusalLetter(caseNo: string) {
-  return useCaseAction<{ travellerId: string; file: File }>(caseNo, (base, { travellerId, file }) =>
-    uploadPdf(`${base}/travellers/${travellerId}/refusal-letter`, file),
-  )
+/** Where each of a traveller's files after the decision goes (0012, amended 24 Oct 2026, change request 21). */
+const DECISION_FILE_PATH: Record<DecisionFileKind, string> = {
+  REFUSAL_LETTER: 'refusal-letter',
+  VISA_COPY: 'visa-copy',
+  EVISA: 'evisa',
 }
 
-/** Uploads an approved traveller's e-visa (0025, one PDF). A newer upload becomes the current one and clears the check. */
-export function useUploadEvisa(caseNo: string) {
-  return useCaseAction<{ travellerId: string; file: File }>(caseNo, (base, { travellerId, file }) =>
-    uploadPdf(`${base}/travellers/${travellerId}/evisa`, file),
+/**
+ * Uploads a traveller's file after the decision, a PDF, JPEG or PNG (a photo is kept as a one-page PDF): a refused
+ * one's refusal letter (0012 Decision 4) or an approved paper visa's visa copy, any time once decided, whatever the
+ * case's status; an approved e-visa's e-visa (0025), at Decision, clearing its check. A newer upload becomes the current
+ * one; older ones are kept.
+ */
+export function useUploadDecisionFile(caseNo: string) {
+  return useCaseAction<{ travellerId: string; kind: DecisionFileKind; file: File }>(caseNo, (base, { travellerId, kind, file }) =>
+    uploadFile(`${base}/travellers/${travellerId}/${DECISION_FILE_PATH[kind]}`, file, decisionFileType(file) ?? file.type),
   )
 }
 

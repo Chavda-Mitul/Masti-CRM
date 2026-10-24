@@ -1,5 +1,5 @@
-// Scanned PDFs kept with a case: the final file (0007 Decision 8) and a refused traveller's refusal letter (0012
-// Decision 4). The server checks them again.
+// Scanned PDFs kept with a case: the final file (0007 Decision 8). A traveller's files after the decision also take a
+// photo (decisionFiles.ts). The server checks them again.
 
 export const MB = 1024 * 1024
 

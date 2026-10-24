@@ -94,6 +94,33 @@ dates when they were added.
   - each traveller's file in the same dialog (the refusal letter, or an approved one's visa copy or e-visa)
   - sent to the client on WhatsApp
 
+**Amended 24 Oct 2026 (project lead, change request 21, part 2): each traveller's file.** Once Approved or Refused is
+picked, "Record the decision" takes each traveller's file, if staff have it. The same files can also be added later on
+the Decision card. Nothing is sent to the client yet: that's part 3.
+
+| Traveller | Their file | When | Name ⚠️ |
+| --- | --- | --- | --- |
+| Refused | The **refusal letter** (Decision 4) | any time once refused, whatever the status | `…_refusal.pdf` |
+| Approved, paper visa | The **visa copy**: the passport's visa page, or the approval letter | any time once approved (Decision, Passport back, Delivered), whatever the status | `…_visa.pdf` |
+| Approved, e-visa | The **e-visa** ([0025](0025-evisa-after-decision.md)) | at Decision, open, until it's sent | `…_evisa.pdf` |
+
+- **A PDF, JPG or PNG.** A photo is kept as a one-page A4 PDF:
+  - portrait or landscape to match the picture
+  - turned upright from the JPEG's EXIF orientation, which PDF viewers ignore (`lib/photoPdf.ts`)
+  - the audit notes `photo` with its type
+- **One limit for all three** ⚠️: 16 MB, under WhatsApp's 20, or the final file's limit when that's lower
+  (`decisionFileMaxMb`). A photo whose PDF grows past it is refused. The refusal letter's limit drops from 50 MB to 16.
+- **The visa copy** (decided 24 Oct 2026):
+  - follows the refusal letter's rules: optional, the newest one current, kept but not shown if the outcome changes
+  - the case kind is `VISA_COPY`, and migration `20261024140000_visa_copy` adds it to `CaseFile_traveller`
+  - an e-visa's file is its e-visa: "This is an e-visa: add its PDF as the e-visa."
+  - before the decision: "A visa copy is added once the decision is recorded."
+- **Routes:** `POST …/travellers/:id/visa-copy` is new. All three routes take `application/pdf`, `image/jpeg` or
+  `image/png`; anything else gets 415 "Upload a PDF, JPEG or PNG.".
+- **Saving the dialog:** the decision saves first, then each picked file is uploaded in turn, since the server checks
+  the outcome. One toast says what was saved, or which file to add on the card. Changing a traveller's outcome in the
+  dialog drops the file picked for them.
+
 ### 4. A refused traveller: the refusal letter
 
 **Decided 15 Oct 2026 (project lead):** the letter is a **scanned PDF** kept with the case in our storage (rule 4),
@@ -125,7 +152,8 @@ later. One letter per refused traveller; a newer upload becomes the current one 
   traveller is refused.
 - **Defaults (not asked; say if any is wrong):**
   - **Who:** the processor, the Visa HOD or the Head.
-  - **Size limit:** the final file's setting, `visa.finalFile.maxMb` (50 MB); no new setting.
+  - **Size limit:** the final file's setting, `visa.finalFile.maxMb` (50 MB); no new setting. *Since 24 Oct 2026
+    (Decision 3, part 2): 16 MB, or the final file's when lower; a PDF, JPG or PNG, a photo kept as a PDF.*
   - **File name** ⚠️: `VISA-2026-0001_Aarav-Mehta_refusal.pdf`.
   - A letter changes no money and sends no message.
 - **Screen:** on a refused traveller's row of the Decision card, the demo's "Refusal letter" chip with its pages and

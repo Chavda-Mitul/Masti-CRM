@@ -5,7 +5,7 @@ import type { VisaCase } from '../types'
 import { ChangeDecisionDialog } from './ChangeDecisionDialog'
 import { dayTime, evisaDone, firstName, visaDetails, weekdayDay, windingDown } from './labels'
 import { EvisaLine } from './EvisaLine'
-import { RefusalLetterLine } from './RefusalLetterLine'
+import { TravellerFileLine } from './TravellerFileLine'
 
 /**
  * "Decision" (demo screen 11 ⚠️, docs/decisions/0012-visa-decision.md), once it's recorded: each traveller Approved,
@@ -13,8 +13,9 @@ import { RefusalLetterLine } from './RefusalLetterLine'
  * Refused. While the case is at Step 6 it's due back to check the passports are on their way (an e-visa: to let the
  * client know), and whoever can act on the case can correct a traveller's entry or add the number and dates (Change,
  * Decision 6; "Add sticker no." while there are none), at Passport back too until the handover. A refused traveller's
- * refusal letter is uploaded and opened on their row, at any step and status once decided (Decision 4). An approved
- * e-visa's PDF is uploaded and checked against the passport on its row (docs/decisions/0025-evisa-after-decision.md).
+ * refusal letter, and an approved paper visa's visa copy (amended 24 Oct 2026, change request 21), are uploaded and
+ * opened on their row, at any step and status once decided (Decision 4). An approved e-visa's PDF is uploaded and
+ * checked against the passport on its row (docs/decisions/0025-evisa-after-decision.md).
  */
 export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
   const { data: me } = useMe()
@@ -49,13 +50,17 @@ export function DecisionCard({ visaCase: c }: { visaCase: VisaCase }) {
                 <span className="chip chip-ok">Approved</span>
                 <span className="decision-detail">
                   {details && <span className="mono small">{details}</span>}
-                  {online && <EvisaLine visaCase={c} traveller={t} canAct={canEvisa} />}
+                  {online ? (
+                    <EvisaLine visaCase={c} traveller={t} canAct={canEvisa} />
+                  ) : (
+                    <TravellerFileLine visaCase={c} traveller={t} kind="VISA_COPY" file={t.visaCopy} canUpload={canAct} />
+                  )}
                 </span>
               </>
             ) : t.decision?.outcome === 'REFUSED' ? (
               <>
                 <span className="chip chip-bad">Refused</span>
-                <RefusalLetterLine visaCase={c} traveller={t} canUpload={canAct} />
+                <TravellerFileLine visaCase={c} traveller={t} kind="REFUSAL_LETTER" file={t.refusalLetter} canUpload={canAct} />
               </>
             ) : (
               <span className="muted small">Not recorded</span>

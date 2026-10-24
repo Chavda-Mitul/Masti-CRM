@@ -50,7 +50,8 @@ function jpegSize(bytes: Buffer) {
 
 /**
  * How a JPEG must be turned to show upright: its EXIF orientation, 1 (as stored) to 8; 1 when it doesn't say. For
- * drawing the photo on a page (the scans combined into a visa case's saved file).
+ * drawing the photo on a PDF page (lib/photoPdf.ts): the scans combined into a visa case's saved file, and a traveller's
+ * file after the decision kept as a PDF.
  */
 export function jpegOrientation(bytes: Buffer): number {
   return jpegHeaders(bytes)?.orientation ?? 1;

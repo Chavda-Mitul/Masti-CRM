@@ -1,8 +1,8 @@
-import { degrees, PageSizes, PDFDocument, type PDFImage } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import type { DocumentStatus, ReceivedAs } from "../../../generated/prisma/enums";
 import { badRequest, HttpError } from "../../lib/httpError";
-import { jpegOrientation } from "../../lib/images";
 import { logger } from "../../lib/logger";
+import { addPhotoPage, embedPhoto, photoTurn } from "../../lib/photoPdf";
 import { scanKey, type CurrentScans } from "../clients/clientDocuments.service";
 
 // The case's scans combined into its saved file at Docket & dispatch (docs/decisions/0008-visa-docket-dispatch.md
@@ -96,11 +96,7 @@ export async function scansPdf(scans: ScanSource[], title: string) {
     const bytes = await scan.load();
     try {
       if (scan.contentType === "application/pdf") await addPdfPages(doc, bytes, scan.what);
-      else {
-        // pdf-lib reads a JPEG from the start of its memory, so a Buffer cut from Node's shared pool needs its own copy.
-        const own = new Uint8Array(bytes);
-        addPhotoPage(doc, scan.contentType === "image/png" ? await doc.embedPng(own) : await doc.embedJpg(own), scanTurn(scan.contentType, bytes));
-      }
+      else addPhotoPage(doc, await embedPhoto(doc, bytes, scan.contentType), photoTurn(scan.contentType, bytes));
     } catch (err) {
       if (err instanceof HttpError) throw err;
       logger.warn({ err, scan: scan.what }, "A scan couldn't be put in the combined file.");
@@ -120,44 +116,4 @@ async function addPdfPages(doc: PDFDocument, bytes: Buffer, what: string) {
   if (source.isEncrypted) throw badRequest(`${what} is password-protected, so the scans can't be combined.`);
   if (source.getPageCount() === 0) throw new Error("The PDF has no pages.");
   for (const page of await doc.copyPages(source, source.getPageIndices())) doc.addPage(page);
-}
-
-/**
- * How far a photo is turned to show upright, anticlockwise in degrees: a JPEG's EXIF orientation 3, 6 or 8, as a phone
- * writes it. The mirrored ones (2, 4, 5, 7), which phones and scanners don't write, are drawn as stored.
- */
-function scanTurn(contentType: string, bytes: Buffer) {
-  if (contentType !== "image/jpeg") return 0;
-  return ({ 3: 180, 6: -90, 8: 90 } as Record<number, number>)[jpegOrientation(bytes)] ?? 0;
-}
-
-/** The white edge kept round a photo, in points (about 8 mm). */
-const PHOTO_MARGIN = 24;
-
-/**
- * A photo on an A4 page of its own, upright, centred, the page turned to suit it (landscape for a wide photo). It's shrunk
- * to fit inside the margin, never enlarged past one point a pixel.
- */
-function addPhotoPage(doc: PDFDocument, image: PDFImage, turn: number) {
-  const quarter = turn === 90 || turn === -90;
-  const shownWidth = quarter ? image.height : image.width;
-  const shownHeight = quarter ? image.width : image.height;
-  const [short, long] = PageSizes.A4;
-  const page = doc.addPage(shownWidth > shownHeight ? [long, short] : [short, long]);
-  const { width: pageWidth, height: pageHeight } = page.getSize();
-  const scale = Math.min(1, (pageWidth - 2 * PHOTO_MARGIN) / shownWidth, (pageHeight - 2 * PHOTO_MARGIN) / shownHeight);
-  const boxWidth = shownWidth * scale;
-  const boxHeight = shownHeight * scale;
-  const left = (pageWidth - boxWidth) / 2;
-  const bottom = (pageHeight - boxHeight) / 2;
-  // The picture turns about its own bottom-left corner, so that corner moves for the turned picture to fill the box.
-  const corner =
-    turn === 90
-      ? { x: left + boxWidth, y: bottom }
-      : turn === -90
-        ? { x: left, y: bottom + boxHeight }
-        : turn === 180
-          ? { x: left + boxWidth, y: bottom + boxHeight }
-          : { x: left, y: bottom };
-  page.drawImage(image, { ...corner, width: image.width * scale, height: image.height * scale, rotate: degrees(turn) });
 }

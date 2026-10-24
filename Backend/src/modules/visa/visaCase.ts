@@ -11,6 +11,7 @@ import { countryLabel, offeringInclude } from "../visaMasters/visaMasters.servic
 import type { DocumentRemindersSetting } from "./visa.schemas";
 import { scansForFile, type PaperScanRow, type TravellerScanRow } from "./scansPdf";
 import { missingBooklets } from "./shortfall";
+import { decisionFileMaxMb } from "./travellerFiles";
 
 // The visa case as the browser sees it (0003 "VisaCaseDto", extended for Step 2 by 0006). Its messages to the client
 // come separately (GET /cases/:caseNo/messages, 0021), so their card can refresh by itself.
@@ -262,15 +263,6 @@ export function fileSafeFamilyName(clientName: string | null) {
   return familyName(clientName).normalize("NFKD").replace(/[^A-Za-z0-9-]/g, "");
 }
 
-/**
- * The largest e-visa PDF taken (docs/decisions/0025-evisa-after-decision.md): WhatsApp's own limit on a file Twilio
- * sends (Twilio gives 20 MB; part 2 sends the e-visa that way), with room to spare ⚠️, or the final file's limit
- * (visa.finalFile.maxMb) when that's lower.
- */
-export function evisaMaxMb(finalFileMaxMb: number) {
-  return Math.min(finalFileMaxMb, 16);
-}
-
 /** Adults and children among a case's travellers. */
 export function countTravellers(travellers: { isChild: boolean }[]) {
   const children = travellers.filter((t) => t.isChild).length;
@@ -311,7 +303,7 @@ export function travellersLabel(adults: number, children: number) {
 type TravellerRow = NonNullable<VisaCaseRow["visa"]>["travellers"][number];
 
 /** A traveller's current file of one kind, the newest upload, and how many of that kind were uploaded. */
-function currentFileOf(t: TravellerRow, kind: "REFUSAL_LETTER" | "EVISA") {
+function currentFileOf(t: TravellerRow, kind: "REFUSAL_LETTER" | "EVISA" | "VISA_COPY") {
   const all = t.files.filter((f) => f.kind === kind);
   const file = all[0];
   if (!file) return null;
@@ -340,6 +332,15 @@ function refusalLetterOf(t: TravellerRow) {
  */
 function evisaOf(t: TravellerRow, isEvisa: boolean) {
   return isEvisa && t.outcome === "APPROVED" ? currentFileOf(t, "EVISA") : null;
+}
+
+/**
+ * An approved paper visa's current visa copy, the passport's visa page or the approval letter, and how many were
+ * uploaded (0012, amended 24 Oct 2026, change request 21). Kept, like a refusal letter, when the outcome changes; shown
+ * only while they're approved. An e-visa's is its e-visa.
+ */
+function visaCopyOf(t: TravellerRow, isEvisa: boolean) {
+  return !isEvisa && t.outcome === "APPROVED" ? currentFileOf(t, "VISA_COPY") : null;
 }
 
 type VendorRow = NonNullable<NonNullable<VisaCaseRow["visa"]>["vendor"]>;
@@ -599,8 +600,8 @@ export function toVisaCaseDto(
       : null,
     finalFileCopies: row._count.files,
     finalFileMaxMb,
-    /** The largest e-visa PDF taken (0025): the page checks it first. */
-    evisaMaxMb: evisaMaxMb(finalFileMaxMb),
+    /** The largest refusal letter, visa copy or e-visa taken (travellerFiles.ts): the page checks it first. */
+    decisionFileMaxMb: decisionFileMaxMb(finalFileMaxMb),
     /** The largest scan "Save scan" takes (clients.documents.maxMb, 0016 Decision 5): the page checks it first. */
     scanMaxMb: clientSettings.documents.maxMb,
     /**
@@ -738,6 +739,8 @@ export function toVisaCaseDto(
         refusalLetter: refusalLetterOf(t),
         /** An e-visa's PDF (0025): the current upload, shown only while the traveller is approved. */
         evisa: evisaOf(t, !!visa.submittedOnlineAt),
+        /** A paper visa's visa copy (0012, amended 24 Oct 2026): the current upload, shown only while approved. */
+        visaCopy: visaCopyOf(t, !!visa.submittedOnlineAt),
         documents: t.documents.map((d) => {
           const onFile = (t.memberId && scans.get(scanKey(t.memberId, d.documentId))) || null;
           return {
