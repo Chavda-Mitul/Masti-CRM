@@ -6,19 +6,20 @@ import { logger } from "../../lib/logger";
 import { deleteObject, getObject, putObject } from "../../lib/storage";
 import { currentScansOf } from "../clients/clientDocuments.service";
 import type { Actor } from "../users/user";
-import { DISPATCHING, loadCase, lockCase } from "./caseLock";
+import { COMBINING, loadCase, lockCase } from "./caseLock";
 import { missingScansText, scansForFile, scansPdf } from "./scansPdf";
 import { getVisaCaseById } from "./visa.service";
 import { fileSafeFamilyName, scanTravellersOf } from "./visaCase";
 
-// The case's scans combined into its saved file at Docket & dispatch (docs/decisions/0008-visa-docket-dispatch.md
-// Amendment 1, change request 20). "File ready" queues a job that does it (visaCombineScans.worker.ts), and "Combine
-// again" on the Docket or Submit online card tries again, for whoever can act on the case. Every paper that came in
-// needs a scan from this case (scansPdf.ts); if any is missing, nothing is made. The PDF becomes the newest saved file,
-// so the processor's own upload stays as an earlier copy. It's made once: under the case's lock a second look sees a
-// copy made meanwhile, so a job and a press at the same moment save one.
+// The case's scans combined into its saved file (docs/decisions/0008-visa-docket-dispatch.md Amendment 1, change
+// request 20). "Mark documents complete" queues a job that does it (visaCombineScans.worker.ts), so File preparation
+// starts with the saved file; "File ready" queues it again in case it couldn't. "Combine again" on the Saved file card
+// (File preparation) and the Docket or Submit online card (Docket & dispatch) tries again, for whoever can act on the
+// case. Every paper that came in needs a scan, the person's newest on file (scansPdf.ts); if any is missing, nothing is
+// made. The PDF becomes the newest saved file; an upload already there stays as an earlier copy. It's made once: under
+// the case's lock a second look sees a copy made meanwhile, so a job and a press at the same moment save one.
 
-/** The job "File ready" queues: the case, and who pressed it (the combined file is saved as theirs). */
+/** The job "Mark documents complete" and "File ready" queue: the case, and who pressed it (the file is saved as theirs). */
 export interface CombineScansJob {
   enquiryId: string;
   userId: string;
@@ -44,7 +45,6 @@ function papersOf(enquiryId: string) {
     select: {
       caseNo: true,
       clientId: true,
-      createdAt: true,
       client: { select: { name: true } },
       visa: {
         select: {
@@ -79,7 +79,7 @@ async function combine(enquiryId: string, by: { userId: string; ip: string | nul
   const c = await papersOf(enquiryId);
   const travellers = scanTravellersOf(c.visa!.travellers);
   const current = await currentScansOf(travellers.flatMap((t) => (t.memberId ? [t.memberId] : [])));
-  const { found, missing } = scansForFile(travellers, current, c.createdAt);
+  const { found, missing } = scansForFile(travellers, current);
   if (missing.length > 0) throw new HttpError(409, `Not combined: ${missingScansText(missing)}.`, { code: "SCANS_MISSING", missing });
   if (found.length === 0) throw conflict("No paper came in, so there are no scans to combine.");
 
@@ -145,20 +145,20 @@ async function combine(enquiryId: string, by: { userId: string; ip: string | nul
 }
 
 /**
- * For the job: the case still waits for dispatch, open (not postponed, cancelled or closed). Who may isn't asked again:
- * the job acts for whoever pressed "File ready".
+ * For the job: the case is still at file preparation or waiting for dispatch, and open (not postponed, cancelled or
+ * closed). Who may isn't asked again: the job acts for whoever pressed the button that queued it.
  */
 async function assertWaiting(db: Db, enquiryId: string) {
   const enquiry = await db.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, select: { status: true, stage: { select: { code: true } } } });
-  if (enquiry.status !== "OPEN" || !DISPATCHING.stages.includes(enquiry.stage.code)) throw conflict("The case isn't waiting for dispatch any more.");
+  if (enquiry.status !== "OPEN" || !COMBINING.stages.includes(enquiry.stage.code)) throw conflict(COMBINING.wrongStage);
 }
 
 /**
- * The job "File ready" queued. A refusal (scans missing, already combined, a scan that can't be opened, the case moved
- * on) is logged and the job ends: trying again wouldn't change it, and the card shows what's missing. Any other error
- * (the bucket, the database) is thrown, so pg-boss tries again.
+ * The job "Mark documents complete" or "File ready" queued. A refusal (scans missing, already combined, a scan that
+ * can't be opened, the case moved on) is logged and the job ends: trying again wouldn't change it, and the card shows
+ * what's missing. Any other error (the bucket, the database) is thrown, so pg-boss tries again.
  */
-export async function combineScansAfterFileReady({ enquiryId, userId }: CombineScansJob) {
+export async function runCombineScansJob({ enquiryId, userId }: CombineScansJob) {
   try {
     await assertWaiting(prisma, enquiryId);
     await combine(enquiryId, { userId, ip: null }, true, async (tx) => {
@@ -171,9 +171,12 @@ export async function combineScansAfterFileReady({ enquiryId, userId }: CombineS
   }
 }
 
-/** "Combine again" (0008 Amendment 1): whoever can act on the case, while it waits for dispatch. Returns the case. */
+/**
+ * "Combine again" (0008 Amendment 1): whoever can act on the case, during file preparation or while it waits for
+ * dispatch. Returns the case.
+ */
 export async function combineScansNow(caseNo: string, actor: Actor) {
-  const enquiry = await loadCase(caseNo, actor, DISPATCHING);
-  await combine(enquiry.id, { userId: actor.user.id, ip: actor.ip }, false, (tx) => lockCase(tx, enquiry.id, actor, DISPATCHING));
+  const enquiry = await loadCase(caseNo, actor, COMBINING);
+  await combine(enquiry.id, { userId: actor.user.id, ip: actor.ip }, false, (tx) => lockCase(tx, enquiry.id, actor, COMBINING));
   return getVisaCaseById(enquiry.id);
 }

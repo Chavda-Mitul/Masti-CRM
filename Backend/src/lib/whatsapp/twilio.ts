@@ -14,8 +14,11 @@ export interface TwilioSettings {
 /** Twilio gives up on a request after this long, well inside the send job's 2 minutes (src/lib/jobs.ts). */
 const TIMEOUT_MS = 30_000;
 
-/** Twilio can be asked where a message has got to; its status webhook isn't built (0020's step 5). */
-export function twilioProvider(settings: TwilioSettings): Required<Omit<WhatsAppProvider, "webhook">> {
+/**
+ * Twilio can be asked where a message has got to. Its status webhook isn't built (0020's step 5), and its templates
+ * are made in its own Console (Content Template Builder), not by the CRM.
+ */
+export function twilioProvider(settings: TwilioSettings): Required<Omit<WhatsAppProvider, "webhook" | "templates">> {
   const client = twilio(settings.accountSid, settings.authToken, { timeout: TIMEOUT_MS });
   return {
     name: "twilio",

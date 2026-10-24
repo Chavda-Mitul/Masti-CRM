@@ -287,6 +287,9 @@ describe("message 7, the invoice", () => {
     const [main] = await sent(VISA_INVOICE);
     expect(main!.body).toContain(`Your invoice MVI00000001 for the France tourist visa (${c.caseNo}) is ready. Amount: ₹6,000.`);
     expect(main!.body).toContain("You can pay by bank transfer or at our office. Our bank details are on the invoice.");
+    // With the invoice's own PDF (24 Oct 2026), whose bank details the words point to.
+    const raised = await prisma.invoice.findUniqueOrThrow({ where: { invoiceNo: "MVI00000001" } });
+    expect(main!.attachmentId).toBe(raised.fileId);
 
     // Cancelled with a credit note, the service charge corrected to ₹600, and raised again.
     const shown = (await aarti.get(`/api/visa/cases/${c.caseNo}/invoice/cancel/check`)).body;
@@ -487,7 +490,9 @@ describe("message 14, the delivery visit", () => {
     expect((await bookVisit(processor, c.caseNo, ramesh.id, "DELIVERY")).status).toBe(200);
     const [first] = await sent(VISA_DELIVERY_VISIT);
     expect(first!.body).toContain(`Our staff member Ramesh will bring your passports for ${c.caseNo} on ${dayLabel(await visitDay())}, 4–6 pm, to: ${HOME}.`);
-    expect(first!.body).toContain("they will take a photo of the person receiving the passports.");
+    expect(first!.body).toContain("Please be available with your phone. Our staff member will take a photo of the person receiving the passports.");
+    // No word of the code, which Meta refuses in an ordinary template (0020 Amendment 2).
+    expect(first!.body).not.toContain("code");
     expect(first!.body).toContain(`To change the time, call us on ${PHONE}.`);
 
     const morning = await prisma.fieldSlot.findUniqueOrThrow({ where: { code: "MORNING" } });
@@ -592,7 +597,8 @@ describe("message 18, the credit note", () => {
     expect(cancel.status).toBe(200);
 
     const [m] = await sent(VISA_CREDIT_NOTE);
-    expect(m).toMatchObject({ enquiryId: c.id });
+    const note = await prisma.creditNote.findUniqueOrThrow({ where: { creditNoteNo: "MCN00000001" } });
+    expect(m).toMatchObject({ enquiryId: c.id, attachmentId: note.fileId });
     expect(m!.body).toContain(`We have issued credit note MCN00000001 for ₹6,000 against invoice MVI00000001 (${c.caseNo}).`);
     expect(m!.body).toContain(`For any question, call us on ${PHONE}.`);
 

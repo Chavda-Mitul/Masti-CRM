@@ -25,7 +25,7 @@ export const VISA_DOCUMENT_REMINDER = "visa.document_reminder";
 /** Message 5: the collection boy is booked, or the visit changes. A suggestion beyond the demo (change request 12). */
 export const VISA_COLLECTION_VISIT = "visa.collection_visit";
 
-/** Message 7: an invoice is raised (the main, the additional or a corrected one). Words only for now: no PDF. */
+/** Message 7: an invoice is raised (the main, the additional or a corrected one), with its PDF (24 Oct 2026). */
 export const VISA_INVOICE = "visa.invoice";
 
 /** Message 8: the file is first marked submitted at the embassy (Step 5). */
@@ -65,7 +65,7 @@ export const FIELD_DOOR_CODE = "field.door_code";
 /** Message 17: the first scan is saved for a client (docs/decisions/0016-client-documents.md Decision 6). Once, ever. */
 export const CLIENT_DOCUMENTS_KEPT = "client.documents_kept";
 
-/** Message 18: a credit note is issued. Words only for now: no PDF. A suggestion beyond the demo (change request 13). */
+/** Message 18: a credit note is issued, with its PDF (24 Oct 2026). A suggestion beyond the demo (change request 13). */
 export const VISA_CREDIT_NOTE = "visa.credit_note";
 
 /**
@@ -91,6 +91,24 @@ export const VISA_EVISA_PARTLY_APPROVED = "visa.evisa_partly_approved";
  */
 export const VISA_REFUSAL_LETTER = "visa.refusal_letter";
 export const VISA_VISA_COPY = "visa.visa_copy";
+
+/**
+ * The wordings that are a one-time code (0020 Amendment 2): their template's words are the provider's own (Meta's
+ * authentication template), and the code goes in them and in a Copy code button.
+ */
+export const ONE_TIME_CODE_TEMPLATES: ReadonlySet<string> = new Set([FIELD_DOOR_CODE]);
+
+/**
+ * The wordings whose message carries one of the case's files, so their template has a document header (0020
+ * Amendment 2): the e-visa, the invoice, the credit note, the refusal letter and the visa copy.
+ */
+export const TEMPLATES_WITH_FILE: ReadonlySet<string> = new Set([
+  VISA_EVISA_READY,
+  VISA_INVOICE,
+  VISA_CREDIT_NOTE,
+  VISA_REFUSAL_LETTER,
+  VISA_VISA_COPY,
+]);
 
 export const MESSAGE_TEMPLATES = [
   {
@@ -167,7 +185,8 @@ export const MESSAGE_TEMPLATES = [
       "",
       "Our staff member {{staff_name}} will come to collect the documents for {{case_no}} on {{visit_day}}, {{visit_slot}}, at: {{address}}.",
       "",
-      "Please keep the documents and your phone ready. We will send you a code to tell our staff member at the door.",
+      // No word of the door code: Meta refuses a code in an ordinary template (INCORRECT_CATEGORY, 0020 Amendment 2).
+      "Please keep the documents and your phone ready.",
       "",
       "To change the time, call us on {{office_phone}}.",
       "",
@@ -271,7 +290,8 @@ export const MESSAGE_TEMPLATES = [
       "",
       "Our staff member {{staff_name}} will bring your passports for {{case_no}} on {{visit_day}}, {{visit_slot}}, to: {{address}}.",
       "",
-      "Please be available with your phone. We will send you a code to tell our staff member at the door, and they will take a photo of the person receiving the passports.",
+      // No word of the door code: Meta refuses a code in an ordinary template (INCORRECT_CATEGORY, 0020 Amendment 2).
+      "Please be available with your phone. Our staff member will take a photo of the person receiving the passports.",
       "",
       "To change the time, call us on {{office_phone}}.",
       "",

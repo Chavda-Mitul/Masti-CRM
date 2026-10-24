@@ -90,7 +90,9 @@ export function CodeStep({ n, jobId, otp, disabled }: { n: number; jobId: string
           ? `Confirmed by the client at ${timeOf(confirmedAt)}`
           : otp
             ? `Sent on WhatsApp to ${otp.sentTo} at ${timeOf(otp.sentAt)}. Ask the client to read it out.`
-            : 'It goes to the client’s WhatsApp; they read it out to you.'
+            : // Until Meta allows the code template (Masti's business verified, 0020 Amendment 2), the code goes as plain
+              // words, which reach only a client who wrote to us in the last 24 hours: their reply opens that.
+              'First ask the client to reply “Hi” to any WhatsApp message from us, so the code can reach them. It goes to their WhatsApp; they read it out to you.'
       }
     >
       {status && <span className={status.bad ? 'field-step-error' : 'field-step-hint'}>{status.text}</span>}

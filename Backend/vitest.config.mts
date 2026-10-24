@@ -28,6 +28,7 @@ const testEnv = {
   META_PHONE_NUMBER_ID: "",
   META_APP_SECRET: "",
   META_WEBHOOK_VERIFY_TOKEN: "",
+  META_WHATSAPP_BUSINESS_ACCOUNT_ID: "",
   WHATSAPP_TEST_NUMBER: "",
   // Nor does AI: tests check the providers with a stand-in for Anthropic (docs/decisions/0023-ai.md).
   AI_PROVIDER: "off",

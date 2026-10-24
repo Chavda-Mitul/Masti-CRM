@@ -93,14 +93,23 @@ export const enquiryKeys = {
   coveringLetterPrint: (caseNo: string) => ['enquiries', 'covering-letter-print', caseNo.toUpperCase()] as const,
 }
 
-/** How long after "File ready" the case page waits for its scans to be combined (0008 Amendment 1): the job takes seconds. */
+/**
+ * How long after "Mark documents complete" or "File ready" the case page waits for its scans to be combined (0008
+ * Amendment 1): the job takes seconds.
+ */
 export const COMBINING_FOR_MS = 60_000
 
-/** Whether the case's scans are being combined now: marked file ready under a minute ago, every scan there, none made yet. */
+/** When the job that combines the scans was queued: "Mark documents complete" in Step 3, "File ready" in Step 4. */
+export function combiningSince(c: VisaCase) {
+  return c.stage.code === 'DISPATCH' ? c.fileReadyAt : c.maturedAt
+}
+
+/** Whether the case's scans are being combined now: the job queued under a minute ago, every scan there, none made yet. */
 export function combiningScans(c: VisaCase) {
   const s = c.combinedScans
-  if (!s || s.file || s.missing.length > 0 || s.needed === 0 || !c.fileReadyAt) return false
-  return Date.now() - Date.parse(c.fileReadyAt) < COMBINING_FOR_MS
+  const since = combiningSince(c)
+  if (!s || s.file || s.missing.length > 0 || s.needed === 0 || !since) return false
+  return Date.now() - Date.parse(since) < COMBINING_FOR_MS
 }
 
 /**

@@ -336,6 +336,28 @@ describe("Meta", () => {
     expect(asked().message).toEqual({ ...request, type: "template", template: { name: "hello_world", language: { code: "en_US" } } });
   });
 
+  it("sends a one-time code as Meta's authentication template: the code in its words and in its Copy code button", async () => {
+    fetchMock.mockResolvedValue(taken("wamid.HBgM7"));
+    await metaProvider(meta).send({
+      to,
+      body: "482915 is your verification code.\n\nThis code expires in 10 minutes.",
+      template: { id: "field_door_code", variables: { code: "482915", minutes: "10" }, oneTimeCode: "482915" },
+      secrets: ["482915"],
+    });
+    expect(asked().message).toEqual({
+      ...request,
+      type: "template",
+      template: {
+        name: "field_door_code",
+        language: { code: "en_US" },
+        components: [
+          { type: "body", parameters: [{ type: "text", text: "482915" }] },
+          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "482915" }] },
+        ],
+      },
+    });
+  });
+
   it("puts a file in the document header of an approved template", async () => {
     fetchMock.mockResolvedValue(taken("wamid.HBgM6"));
     const url = "https://crm.masti.in/api/public/message-files/m1/evisa.pdf?key=k";
@@ -381,6 +403,53 @@ describe("Meta", () => {
       message: "Meta error 135000: Generic user error (https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes)",
       retryable: false,
     });
+  });
+
+  it("sends a file it can read to Meta first, then names it by Meta's id, so no link need be reachable (0020 amendment 2)", async () => {
+    const pdf = Buffer.from("%PDF-1.7\n% an invoice\n%%EOF\n");
+    const attachment = { url: "http://localhost:5173/api/public/message-files/m1/MVI00000001.pdf?key=k", fileName: "MVI00000001.pdf", contentType: "application/pdf", read: async () => pdf };
+    fetchMock.mockResolvedValueOnce(answer(200, { id: "media-1" })).mockResolvedValueOnce(taken("wamid.HBgM8"));
+    const provider = metaProvider(meta);
+    await provider.send({ to, body: "Your invoice is ready.", attachment });
+
+    const [upload, send] = fetchMock.mock.calls;
+    expect(upload![0]).toBe("https://graph.facebook.com/v26.0/1433814799810645/media");
+    const form = upload![1]!.body as FormData;
+    expect(form.get("messaging_product")).toBe("whatsapp");
+    expect(form.get("type")).toBe("application/pdf");
+    const file = form.get("file") as File;
+    expect(file.name).toBe("MVI00000001.pdf");
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(pdf);
+    expect(JSON.parse(String(send![1]!.body))).toEqual({
+      ...request,
+      type: "document",
+      document: { id: "media-1", filename: "MVI00000001.pdf", caption: "Your invoice is ready." },
+    });
+
+    // With an approved template, the uploaded file goes in its document header.
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce(answer(200, { id: "media-2" })).mockResolvedValueOnce(taken("wamid.HBgM9"));
+    await provider.send({ to, body: "Dear Rakesh Mehta, …", template: { id: "visa_invoice", variables: { client_name: "Rakesh Mehta" } }, attachment });
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]!.body)).template.components[0]).toEqual({
+      type: "header",
+      parameters: [{ type: "document", document: { id: "media-2", filename: "MVI00000001.pdf" } }],
+    });
+  });
+
+  it("tries a failed upload again, since nothing went; not when Meta refuses the file itself", async () => {
+    const attachment = { url: "http://localhost/x.pdf", fileName: "x.pdf", contentType: "application/pdf", read: async () => Buffer.from("%PDF-") };
+    const provider = metaProvider(meta);
+    fetchMock.mockRejectedValueOnce(new TypeError("fetch failed", { cause: networkError("other side closed", "UND_ERR_SOCKET") }));
+    expect(await refusal(provider.send({ to, body: "Hi", attachment }))).toMatchObject({
+      message: "Couldn't send the file to Meta (other side closed). Nothing went, so it's tried again.",
+      retryable: true,
+    });
+    fetchMock.mockResolvedValueOnce(refused(400, 131053, "Media upload error"));
+    expect(await refusal(provider.send({ to, body: "Hi", attachment }))).toMatchObject({
+      message: expect.stringContaining("Meta couldn't fetch or use the attached file"),
+      retryable: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("tries again later only when Meta was down or busy", async () => {

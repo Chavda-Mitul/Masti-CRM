@@ -38,6 +38,12 @@ export const PREPARING: StepRule = { stages: ["FILE_PREPARATION"], wrongStage: "
 /** Step 4 (docs/decisions/0008-visa-docket-dispatch.md): adding a file-ready case to a docket, or taking it out. */
 export const DISPATCHING: StepRule = { stages: ["DISPATCH"], wrongStage: "This can only be changed while the case waits for dispatch." };
 
+/** The case's scans combined into its saved file (0008 Amendment 1): during file preparation, or while it waits for dispatch. */
+export const COMBINING: StepRule = {
+  stages: ["FILE_PREPARATION", "DISPATCH"],
+  wrongStage: "The scans are combined during file preparation or while the case waits for dispatch.",
+};
+
 /** Step 5 (docs/decisions/0011-visa-at-vendor.md): the file is with the vendor, until the decision is recorded. */
 export const WITH_VENDOR: StepRule = { stages: ["AT_VENDOR"], wrongStage: "This can only be changed while the file is with the vendor." };
 

@@ -120,6 +120,16 @@ describe("sending a file", () => {
     expect(minutes).toBeLessThan(30.1);
   });
 
+  it("also gives the file itself, from storage, for a provider sent the file rather than the link (0020 amendment 2)", async () => {
+    const { c, fileId } = await caseWithFile();
+    const m = await queueWithFile(c.id, fileId);
+    await deliverMessage(m.id, { lastTry: false });
+
+    const { message } = linkSent();
+    expect(message.attachment!.contentType).toBe("application/pdf");
+    expect(await message.attachment!.read!()).toEqual(PDF);
+  });
+
   it("makes a new link at each try: an earlier try's stops working", async () => {
     const { c, fileId } = await caseWithFile();
     const m = await queueWithFile(c.id, fileId);

@@ -602,8 +602,9 @@ router.get("/cases/:caseNo/documents/:documentId/scan/link", visaView, async (re
 });
 
 /**
- * "Combine again" (0008 Amendment 1): the case's scans, combined into its saved file at Docket & dispatch, when "File
- * ready" couldn't. 409 SCANS_MISSING with details.missing while a paper has no scan; 409 once combined.
+ * "Combine again" (0008 Amendment 1): the case's scans, combined into its saved file during file preparation or at
+ * Docket & dispatch, when the job couldn't. 409 SCANS_MISSING with details.missing while a paper has no scan; 409 once
+ * combined.
  */
 router.post("/cases/:caseNo/scans/combine", visaEdit, async (req, res) => {
   res.json({ case: await combineScansService.combineScansNow(caseNoParam.parse(req.params.caseNo), actorOf(req)) });
